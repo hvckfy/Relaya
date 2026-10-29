@@ -14,7 +14,7 @@ struct Session: Identifiable, Hashable {
 
 /// Раздел в основной области окна.
 enum Screen: Hashable {
-    case hosts, keys, tunnels, snippets, desktops
+    case hosts, keys, tunnels, snippets, desktops, agents
 }
 
 /// Запуск мастера «Вход по ключу».

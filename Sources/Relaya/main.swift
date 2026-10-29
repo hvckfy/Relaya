@@ -18,4 +18,11 @@ if let account = env["RELAYA_ASKPASS_ACCOUNT"] {
     exit(1)
 }
 
+// MCP-режим для AI-агентов: `Relaya --mcp` — JSON-RPC через stdin/stdout, без окна.
+if CommandLine.arguments.contains("--mcp") {
+    let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
+    await MCPServer.standard(askpassExecutable: executable).run()
+    exit(0)
+}
+
 RelayaApp.main()

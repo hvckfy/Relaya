@@ -71,7 +71,8 @@ struct SidebarView: View {
                        selected: model.screen == .desktops) { model.screen = model.screen == .desktops ? .hosts : .desktops }
                 NavRow(label: "Сниппеты", systemImage: "text.badge.plus", meta: "\(model.snippets.count)",
                        selected: model.screen == .snippets) { model.screen = model.screen == .snippets ? .hosts : .snippets }
-                NavRow(label: "Агенты (MCP)", systemImage: "sparkles", meta: "скоро")
+                NavRow(label: "Агенты (MCP)", systemImage: "sparkles", meta: nil,
+                       selected: model.screen == .agents) { model.screen = model.screen == .agents ? .hosts : .agents }
             }
             .padding(8)
         }
