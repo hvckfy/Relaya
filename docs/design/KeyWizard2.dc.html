@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Мастер ключа — шаг 2, превью изменений</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--redtint:rgba(196,22,28,.08);--org:#A84B00;--orgtint:rgba(168,75,0,.1);--grn:#1B7A33;--grntint:rgba(27,122,51,.1);--field:#FFFFFF}
+.dk{--bg:#262628;--bg2:#2E2E31;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--redtint:rgba(255,107,107,.14);--org:#FFB347;--orgtint:rgba(255,179,71,.14);--grn:#5ED47A;--grntint:rgba(94,212,122,.14);--field:#1E1E20}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 14px;border-radius:6px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff}
+.add{display:block;background:var(--grntint);color:var(--grn)}
+.ctx{display:block;color:var(--tx2)}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" role="dialog" aria-label="Настроить вход по ключу" style="width: 680px; height: 620px; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; overflow: hidden; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <header style="padding: 20px 24px 0; display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-size: 17px; font-weight: 700">Настроить вход по ключу</h1>
+    <p style="margin: 0; color: var(--tx2)">Хост <span class="mono" style="color: var(--tx)">ubuntu@staging.example.com</span></p>
+  </header>
+  <ol aria-label="Шаги" style="list-style: none; margin: 18px 24px 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+    <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+      <li style="display: flex; flex-direction: column; gap: 6px">
+        <span style="height: 3px; border-radius: 2px; background: {{s.bar}}"></span>
+        <span style="font-size: 12px; font-weight: {{s.weight}}; color: {{s.color}}">{{s.n}}. {{s.label}}</span>
+      </li>
+    </sc-for>
+  </ol>
+
+  <main style="flex: 1; min-height: 0; padding: 18px 24px; display: flex; flex-direction: column; gap: 12px">
+    <p style="margin: 0; color: var(--tx2)">Вот что изменится. Ничего не записано, пока вы не нажмёте «Применить».</p>
+
+    <section style="border: 0.5px solid var(--line); border-radius: 8px; overflow: hidden">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--bg2); border-bottom: 0.5px solid var(--line2)">
+        <span style="font-weight: 600">Локально</span><span class="mono" style="font-size: 12px; color: var(--tx2)">~/.ssh/</span>
+        <span style="flex: 1"></span><span style="font-size: 11px; color: var(--grn)">+2 файла</span>
+      </div>
+      <pre class="mono" style="margin: 0; padding: 6px 0; font-size: 12px; line-height: 1.6"><span class="add">  + id_ed25519_staging-web       600  -rw-------</span><span class="add">  + id_ed25519_staging-web.pub   644  -rw-r--r--</span></pre>
+    </section>
+
+    <section style="border: 0.5px solid var(--line); border-radius: 8px; overflow: hidden">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--bg2); border-bottom: 0.5px solid var(--line2)">
+        <span style="font-weight: 600">Config</span><span class="mono" style="font-size: 12px; color: var(--tx2)">~/.ssh/config</span>
+        <span style="flex: 1"></span><span style="font-size: 11px; color: var(--tx2)">бэкап → config.bak</span>
+      </div>
+      <pre class="mono" style="margin: 0; padding: 6px 0; font-size: 12px; line-height: 1.6"><span class="ctx">    Host staging-web</span><span class="ctx">      HostName staging.example.com</span><span class="ctx">      User ubuntu</span><span class="add">  +   IdentityFile ~/.ssh/id_ed25519_staging-web</span><span class="add">  +   UseKeychain yes</span><span class="add">  +   AddKeysToAgent yes</span></pre>
+    </section>
+
+    <section style="border: 0.5px solid var(--line); border-radius: 8px; overflow: hidden">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--bg2); border-bottom: 0.5px solid var(--line2)">
+        <span style="font-weight: 600">Сервер</span><span class="mono" style="font-size: 12px; color: var(--tx2)">ubuntu@staging-web:~/.ssh/authorized_keys</span>
+        <span style="flex: 1"></span><span style="font-size: 11px; color: var(--grn)">+1 строка</span>
+      </div>
+      <pre class="mono" style="margin: 0; padding: 6px 0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all"><span class="add">  + ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK7n…q3Vx heckfy@macbook-air · staging-web</span></pre>
+    </section>
+  </main>
+
+  <footer style="display: flex; align-items: center; gap: 8px; padding: 14px 24px; border-top: 0.5px solid var(--line)">
+    <button class="btn">Отмена</button>
+    <span style="flex: 1"></span>
+    <a class="btn" href="KeyWizard1.dc.html">Назад</a>
+    <a class="btn pri" href="KeyWizard3.dc.html">Применить</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":680,"height":620}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const cur = 2;
+    const labels = ['Ключ', 'Превью', 'Применение', 'Готово'];
+    return {
+      theme: this.props.dark ? 'dk' : 'lt',
+      steps: labels.map((label, i) => ({
+        n: i + 1, label,
+        bar: i + 1 <= cur ? 'var(--acc)' : 'var(--line)',
+        color: i + 1 === cur ? 'var(--tx)' : 'var(--tx2)',
+        weight: i + 1 === cur ? 600 : 400
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

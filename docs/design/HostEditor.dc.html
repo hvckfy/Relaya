@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Редактор хоста</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#F5F5F7;--bg2:#FFFFFF;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.07);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--redtint:rgba(196,22,28,.08);--org:#A84B00;--orgtint:rgba(168,75,0,.1);--grn:#1B7A33;--grntint:rgba(27,122,51,.1);--field:#FFFFFF;--code:#F5F5F7}
+.dk{--bg:#232325;--bg2:#2E2E31;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--redtint:rgba(255,107,107,.14);--org:#FFB347;--orgtint:rgba(255,179,71,.14);--grn:#5ED47A;--grntint:rgba(94,212,122,.14);--field:#1E1E20;--code:#1E1E20}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 14px;border-radius:6px;border:.5px solid var(--line);background:var(--bg2);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff}
+.field{height:24px;border:.5px solid var(--line);border-radius:5px;background:var(--field);color:var(--tx);padding:0 8px;font:inherit;font-size:13px;box-sizing:border-box}
+.grp{background:var(--bg2);border:.5px solid var(--line);border-radius:8px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:32px;padding:0 12px;border-bottom:.5px solid var(--line2)}
+.row:last-child{border-bottom:0}
+.row>label:first-child,.row>span:first-child{flex:1}
+.cap{font-size:12px;font-weight:600;color:var(--tx2);margin:0 0 6px 4px}
+.add{display:block;background:var(--grntint);color:var(--grn)}
+.ctx{display:block;color:var(--tx2)}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" role="dialog" aria-label="Редактор хоста" style="width: 720px; height: 900px; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; overflow: hidden; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <header style="display: flex; align-items: center; gap: 12px; padding: 18px 24px 14px">
+    <h1 style="margin: 0; font-size: 17px; font-weight: 700; flex: 1">Изменить хост</h1>
+    <div role="radiogroup" aria-label="Протокол" style="display: inline-flex; padding: 2px; border-radius: 7px; background: var(--sel)">
+      <button role="radio" aria-checked="true" style="height: 24px; padding: 0 14px; border: 0; border-radius: 5px; background: var(--bg2); color: var(--tx); font: inherit; font-size: 12px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12)">SSH</button>
+      <button role="radio" aria-checked="false" style="height: 24px; padding: 0 14px; border: 0; border-radius: 5px; background: transparent; color: var(--tx2); font: inherit; font-size: 12px">VNC</button>
+      <button role="radio" aria-checked="false" style="height: 24px; padding: 0 14px; border: 0; border-radius: 5px; background: transparent; color: var(--tx2); font: inherit; font-size: 12px">RDP</button>
+    </div>
+  </header>
+
+  <form style="flex: 1; min-height: 0; overflow: hidden; padding: 0 24px; display: flex; flex-direction: column; gap: 14px">
+    <div>
+      <h2 class="cap">Основное</h2>
+      <div class="grp">
+        <div class="row"><label for="he-alias">Алиас (Host)</label><input id="he-alias" class="field mono" value="staging-web" style="width: 300px"></div>
+        <div class="row"><label for="he-addr">Адрес (HostName)</label><input id="he-addr" class="field mono" value="staging.example.com" style="width: 300px"></div>
+        <div class="row"><label for="he-port">Порт</label><input id="he-port" class="field mono" value="22" style="width: 80px"></div>
+        <div class="row"><label for="he-user">Пользователь</label><input id="he-user" class="field mono" value="ubuntu" style="width: 300px"></div>
+        <div class="row"><label for="he-group">Группа</label><select id="he-group" class="field" style="width: 300px"><option>staging</option></select></div>
+        <div class="row"><span>Окружение</span>
+          <div role="radiogroup" aria-label="Окружение" style="display: flex; gap: 6px">
+            <button type="button" role="radio" aria-checked="false" style="height: 24px; padding: 0 10px; border-radius: 12px; border: 0.5px solid var(--line); background: transparent; color: var(--tx2); font: inherit; font-size: 12px; display: inline-flex; align-items: center; gap: 5px"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--red)"></span>prod</button>
+            <button type="button" role="radio" aria-checked="true" style="height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--org); background: var(--orgtint); color: var(--tx); font: inherit; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--org)"></span>staging</button>
+            <button type="button" role="radio" aria-checked="false" style="height: 24px; padding: 0 10px; border-radius: 12px; border: 0.5px solid var(--line); background: transparent; color: var(--tx2); font: inherit; font-size: 12px; display: inline-flex; align-items: center; gap: 5px"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--grn)"></span>dev</button>
+          </div>
+        </div>
+        <div class="row"><span>Цвет</span>
+          <div role="radiogroup" aria-label="Цвет хоста" style="display: flex; gap: 8px">
+            <button type="button" role="radio" aria-checked="false" aria-label="Без цвета" style="width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); background: transparent; padding: 0"></button>
+            <button type="button" role="radio" aria-checked="false" aria-label="Синий" style="width: 18px; height: 18px; border-radius: 50%; border: 0; background: #0A7AFF; padding: 0"></button>
+            <button type="button" role="radio" aria-checked="true" aria-label="Оранжевый" style="width: 18px; height: 18px; border-radius: 50%; border: 0; background: #F08A00; padding: 0; box-shadow: 0 0 0 2px var(--bg2), 0 0 0 3.5px #F08A00"></button>
+            <button type="button" role="radio" aria-checked="false" aria-label="Фиолетовый" style="width: 18px; height: 18px; border-radius: 50%; border: 0; background: #8E4EC6; padding: 0"></button>
+            <button type="button" role="radio" aria-checked="false" aria-label="Серый" style="width: 18px; height: 18px; border-radius: 50%; border: 0; background: #8E8E93; padding: 0"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="cap">Аутентификация</h2>
+      <div class="grp">
+        <div class="row"><label for="he-key">Ключ</label>
+          <select id="he-key" class="field mono" style="width: 230px"><option>~/.ssh/id_ed25519_staging-web</option></select>
+          <button type="button" class="btn" style="height: 24px; padding: 0 10px; font-size: 12px">Сгенерировать…</button>
+        </div>
+        <div class="row"><label for="he-pass">Пароль</label><span style="font-size: 12px; color: var(--tx2)">хранится в Keychain</span><input id="he-pass" type="password" class="field" value="xxxxxxxx" style="width: 140px"></div>
+        <div class="row"><label for="he-fwd">Агент-форвардинг</label><input id="he-fwd" type="checkbox"></div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="cap">Сеть</h2>
+      <div class="grp">
+        <div class="row"><label for="he-jump">ProxyJump</label><select id="he-jump" class="field" style="width: 300px"><option>bastion (deploy@bastion.example.com)</option></select></div>
+        <div class="row"><label for="he-ka">Keepalive</label><input id="he-ka" class="field mono" value="30" style="width: 60px"><span style="font-size: 12px; color: var(--tx2)">сек</span></div>
+        <div class="row"><label for="he-comp">Сжатие</label><input id="he-comp" type="checkbox"></div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="cap">Терминал</h2>
+      <div class="grp">
+        <div class="row"><span>Тема, шрифт, кодировка</span><span style="font-size: 12px; color: var(--tx2)">из глобальных настроек</span><button type="button" class="btn" style="height: 24px; padding: 0 10px; font-size: 12px">Переопределить…</button></div>
+      </div>
+    </div>
+
+    <details open style="border: 0.5px solid var(--line); border-radius: 8px; background: var(--bg2); overflow: hidden">
+      <summary style="cursor: pointer; padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 0.5px solid var(--line2)">
+        <b>Превью ~/.ssh/config</b><span style="flex: 1"></span><span style="font-size: 11px; color: var(--grn)">+2 строки</span>
+      </summary>
+      <pre class="mono" style="margin: 0; padding: 6px 0; font-size: 12px; line-height: 1.6; background: var(--code)"><span class="ctx">    Host staging-web</span><span class="ctx">      HostName staging.example.com</span><span class="ctx">      User ubuntu</span><span class="ctx">      IdentityFile ~/.ssh/id_ed25519_staging-web</span><span class="add">  +   ProxyJump bastion</span><span class="add">  +   ServerAliveInterval 30</span></pre>
+    </details>
+  </form>
+
+  <footer style="display: flex; align-items: center; gap: 8px; padding: 14px 24px; border-top: 0.5px solid var(--line); margin-top: 14px">
+    <span class="mono" style="font-size: 11px; color: var(--tx2)">~/.ssh/config : строка 42</span>
+    <span style="flex: 1"></span>
+    <button class="btn">Отмена</button>
+    <button class="btn pri">Сохранить</button>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":720,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dk' : 'lt' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Relaya — нет хостов</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--side:#ECECEF;--bar:#F6F6F7;--line:rgba(0,0,0,.12);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08)}
+.dk{--bg:#1E1E20;--bg2:#252527;--side:#2A2A2D;--bar:#2C2C2E;--line:rgba(255,255,255,.13);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1)}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 16px;border-radius:7px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff;font-weight:600}
+.cap{display:flex;align-items:center;gap:6px;padding:10px 8px 4px;font-size:11px;font-weight:600;color:var(--tx2)}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" style="width: 1280px; height: 800px; display: flex; background: var(--bg); overflow: hidden; border-radius: 10px; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <aside aria-label="Хосты" style="width: 260px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--side); border-right: 0.5px solid var(--line); padding: 0 8px; box-sizing: border-box">
+    <div style="height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 8px" aria-hidden="true">
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
+    </div>
+    <div class="cap">Избранное</div>
+    <div style="padding: 2px 8px 6px; font-size: 12px; color: var(--tx2)">Пусто</div>
+    <div class="cap">Группы</div>
+    <div style="padding: 2px 8px 6px; font-size: 12px; color: var(--tx2)">Пусто</div>
+  </aside>
+  <div style="flex: 1; display: flex; flex-direction: column">
+    <header style="height: 52px; background: var(--bar); border-bottom: 0.5px solid var(--line)"></header>
+    <main style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; text-align: center; padding: 40px">
+      <div aria-hidden="true" style="position: relative; width: 160px; height: 120px">
+        <span style="position: absolute; left: 10px; top: 18px; width: 120px; height: 84px; border-radius: 10px; background: var(--bg2); border: 0.5px solid var(--line)"></span>
+        <span style="position: absolute; left: 30px; top: 6px; width: 120px; height: 84px; border-radius: 10px; background: var(--bg); border: 0.5px solid var(--line); display: flex; flex-direction: column; gap: 8px; padding: 18px 14px; box-sizing: border-box">
+          <span style="height: 6px; width: 60%; border-radius: 3px; background: var(--acc)"></span>
+          <span style="height: 6px; width: 85%; border-radius: 3px; background: var(--line)"></span>
+          <span style="height: 6px; width: 45%; border-radius: 3px; background: var(--line)"></span>
+        </span>
+        <span style="position: absolute; right: 0; bottom: 6px; width: 40px; height: 40px; border-radius: 50%; background: var(--accbg); color: #fff; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <h1 style="margin: 28px 0 0; font-size: 20px; font-weight: 700">Пока нет хостов</h1>
+      <p style="margin: 8px 0 0; max-width: 380px; color: var(--tx2); font-size: 14px; line-height: 1.5">Добавьте сервер вручную или подтяните уже настроенные из <span class="mono">~/.ssh/config</span> — файл останется как есть.</p>
+      <div style="display: flex; gap: 10px; margin-top: 22px">
+        <button class="btn pri">Добавить хост</button>
+        <button class="btn">Импортировать из ~/.ssh/config</button>
+      </div>
+      <p style="margin: 18px 0 0; font-size: 12px; color: var(--tx2)">Быстрое подключение: <span class="mono" style="padding: 1px 5px; border-radius: 4px; border: 0.5px solid var(--line)">⌘⇧K</span></p>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dk' : 'lt' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Подтверждение команды агента</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--red:#C4161C;--redtint:rgba(196,22,28,.1);--org:#A84B00;--orgtint:rgba(168,75,0,.1);--code:#F5F5F7}
+.dk{--bg:#2A2A2D;--bg2:#323235;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--red:#FF6B6B;--redtint:rgba(255,107,107,.16);--org:#FFB347;--orgtint:rgba(255,179,71,.14);--code:#1C1C1E}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 14px;border-radius:6px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff;font-weight:600}
+.hl{background:var(--redtint);color:var(--red);border-radius:3px;padding:0 2px;font-weight:600}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" role="alertdialog" aria-label="Агент просит выполнить команду" style="width: 520px; height: 560px; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; overflow: hidden; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <header style="display: flex; align-items: center; gap: 12px; padding: 18px 20px 14px">
+    <span style="width: 36px; height: 36px; border-radius: 9px; background: var(--acctint); color: var(--acc); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8zM19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z"/></svg>
+    </span>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 700">Агент просит выполнить команду</h1>
+      <span style="color: var(--tx2); font-size: 12px">Relaya MCP · 14:52:07</span>
+    </div>
+  </header>
+
+  <dl style="margin: 0 20px; display: grid; grid-template-columns: 90px 1fr; gap: 8px 12px; align-items: center">
+    <dt style="color: var(--tx2)">Агент</dt><dd style="margin: 0; font-weight: 500">Claude Desktop</dd>
+    <dt style="color: var(--tx2)">Хост</dt>
+    <dd style="margin: 0; display: flex; align-items: center; gap: 8px">
+      <span style="font-weight: 500">prod-api-1</span>
+      <span class="mono" style="font-size: 12px; color: var(--tx2)">deploy@10.0.1.12</span>
+      <span style="font-size: 11px; font-weight: 700; color: var(--red); background: var(--redtint); padding: 1px 6px; border-radius: 4px">PROD</span>
+    </dd>
+    <dt style="color: var(--tx2)">Режим</dt><dd style="margin: 0">С подтверждением</dd>
+  </dl>
+
+  <div style="margin: 16px 20px 0; display: flex; flex-direction: column; gap: 6px">
+    <span style="font-size: 11px; font-weight: 600; color: var(--tx2)">КОМАНДА</span>
+    <pre class="mono" style="margin: 0; padding: 12px; border-radius: 8px; background: var(--code); border: 0.5px solid var(--line); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap">cd /srv/api &amp;&amp; <span class="hl">sudo rm -rf</span> ./cache/* \
+  &amp;&amp; <span class="hl">sudo systemctl restart</span> api</pre>
+  </div>
+
+  <ul style="margin: 12px 20px 0; padding: 10px 12px 10px 30px; border-radius: 8px; background: var(--redtint); color: var(--tx); display: flex; flex-direction: column; gap: 4px; font-size: 12px">
+    <li><b style="color: var(--red)">rm -rf</b> — рекурсивное удаление файлов с sudo</li>
+    <li><b style="color: var(--red)">systemctl restart</b> — перезапуск сервиса на prod</li>
+  </ul>
+
+  <div style="margin: auto 20px 0; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; font-size: 12px; color: var(--tx2)"><span style="flex: 1">Без ответа команда будет запрещена</span><span class="mono">0:42</span></div>
+    <div role="progressbar" aria-label="Время до автозапрета" aria-valuemin="0" aria-valuemax="60" aria-valuenow="42" style="height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><span style="display: block; width: 70%; height: 100%; background: var(--acc)"></span></div>
+  </div>
+
+  <footer style="display: flex; align-items: center; gap: 8px; padding: 16px 20px; margin-top: 14px; border-top: 0.5px solid var(--line)">
+    <button class="btn">Разрешить для сессии</button>
+    <button class="btn">Разрешить один раз</button>
+    <span style="flex: 1"></span>
+    <button class="btn pri" autofocus>Запретить</button>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":520,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dk' : 'lt' };
+  }
+}
+</script>
+</body>
+</html>

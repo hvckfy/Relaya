@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Онбординг — разрешения</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--grn:#1B7A33;--grntint:rgba(27,122,51,.1)}
+.dk{--bg:#262628;--bg2:#2E2E31;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--grn:#5ED47A;--grntint:rgba(94,212,122,.14)}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 20px;border-radius:7px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff;font-weight:600}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" role="dialog" aria-label="Разрешения" style="width: 600px; height: 540px; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; overflow: hidden; box-sizing: border-box; border: 0.5px solid var(--line); padding: 32px 36px 28px">
+  <h1 style="margin: 0; font-size: 20px; font-weight: 700">Разрешения</h1>
+  <p style="margin: 6px 0 0; color: var(--tx2)">Можно выдать сейчас или позже в Системных настройках.</p>
+
+  <ul style="list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+    <li style="display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 10px; border: 0.5px solid var(--line)">
+      <span style="width: 40px; height: 40px; border-radius: 10px; background: var(--acctint); color: var(--acc); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z"/></svg></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+        <b>Доступ к <span class="mono">~/.ssh</span></b>
+        <span style="color: var(--tx2); font-size: 12px">Читать config и ключи, записывать изменения после вашего подтверждения.</span>
+      </div>
+      <span style="display: inline-flex; align-items: center; gap: 5px; color: var(--grn); font-size: 12px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Выдано</span>
+    </li>
+    <li style="display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 10px; border: 0.5px solid var(--line)">
+      <span style="width: 40px; height: 40px; border-radius: 10px; background: var(--acctint); color: var(--acc); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"/></svg></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+        <b>Уведомления</b>
+        <span style="color: var(--tx2); font-size: 12px">Разрывы соединения и запросы агентов на подтверждение команд.</span>
+      </div>
+      <button class="btn" style="height: 28px; padding: 0 12px">Разрешить</button>
+    </li>
+  </ul>
+
+  <a href="#why" style="margin-top: 14px; font-size: 12px; align-self: flex-start">Почему это нужно</a>
+
+  <div style="flex: 1"></div>
+  <div style="display: flex; align-items: center; gap: 8px">
+    <div aria-label="Шаг 3 из 3" style="display: flex; gap: 6px; flex: 1">
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line)"></span>
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line)"></span>
+      <span style="width: 18px; height: 6px; border-radius: 3px; background: var(--acc)"></span>
+    </div>
+    <a class="btn" href="Onboarding2.dc.html">Назад</a>
+    <a class="btn pri" href="Main.dc.html">Начать работу</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":600,"height":540}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dk' : 'lt' };
+  }
+}
+</script>
+</body>
+</html>

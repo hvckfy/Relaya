@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Relaya — удалённый экран</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--side:#ECECEF;--bar:#F6F6F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--org:#A84B00;--grn:#1B7A33}
+.dk{--bg:#1E1E20;--bg2:#252527;--side:#2A2A2D;--bar:#2C2C2E;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--org:#FFB347;--grn:#5ED47A}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.pb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:#F5F5F7;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+.pb.on{background:rgba(255,255,255,.18)}
+.pb.end{color:#FF8A8A}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" style="width: 1280px; height: 800px; display: flex; background: var(--bg); overflow: hidden; border-radius: 10px; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <dc-import name="Sidebar" active="win-build" hint-size="260px,800px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <nav aria-label="Вкладки сессий" style="height: 52px; display: flex; align-items: flex-end; gap: 0; padding: 0 12px; background: var(--bar); border-bottom: 0.5px solid var(--line)">
+      <div style="height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 14px; min-width: 190px; background: var(--bg); border: 0.5px solid var(--line); border-bottom: 0; border-radius: 7px 7px 0 0; font-weight: 600; box-sizing: border-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg>
+        win-build <span style="font-size: 11px; font-weight: 600; color: var(--tx2)">RDP</span>
+      </div>
+      <div style="height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 14px; min-width: 160px; color: var(--tx2); box-sizing: border-box">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--org)"></span>staging-web
+      </div>
+    </nav>
+
+    <main style="flex: 1; min-height: 0; position: relative; background: #0F1115; display: flex; align-items: center; justify-content: center">
+      <div role="img" aria-label="Удалённый экран win-build, режим Fit" style="width: 880px; height: 495px; border-radius: 2px; background: #1C2A3A; border: 1px dashed rgba(255,255,255,.25); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: rgba(255,255,255,.75)">
+        <span style="font-size: 15px; font-weight: 600">[Удалённый рабочий стол win-build]</span>
+        <span class="mono" style="font-size: 12px; color: rgba(255,255,255,.6)">1920 × 1080 · масштаб Fit</span>
+      </div>
+
+      <div role="toolbar" aria-label="Панель удалённого сеанса" style="position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 10px; background: rgba(40,40,44,.82); backdrop-filter: blur(20px); box-shadow: 0 8px 24px rgba(0,0,0,.35)">
+        <button class="pb">Ctrl-Alt-Del</button>
+        <button class="pb" aria-label="Экранная клавиатура"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></button>
+        <button class="pb" aria-label="Буфер обмена"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8v3H8zM6 5H5v16h14V5h-1"/></svg></button>
+        <span aria-hidden="true" style="width: 1px; height: 18px; background: rgba(255,255,255,.2); margin: 0 4px"></span>
+        <div role="radiogroup" aria-label="Масштаб" style="display: flex; gap: 2px">
+          <button class="pb on" role="radio" aria-checked="true">Fit</button>
+          <button class="pb" role="radio" aria-checked="false">1:1</button>
+          <button class="pb" role="radio" aria-checked="false">Retina</button>
+        </div>
+        <span aria-hidden="true" style="width: 1px; height: 18px; background: rgba(255,255,255,.2); margin: 0 4px"></span>
+        <button class="pb">Качество: Авто</button>
+        <button class="pb" aria-label="Полный экран"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <button class="pb end">Отключить</button>
+      </div>
+    </main>
+
+    <footer class="mono" style="height: 24px; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--bar); border-top: 0.5px solid var(--line); color: var(--tx2); font-size: 11px">
+      <span>Administrator@192.168.1.40</span>
+      <span>RDP · NLA</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--grn)"></span>отличное · 12 ms · 60 fps</span>
+      <span style="flex: 1"></span>
+      <span>звук: локально</span>
+      <span>общие папки: ~/Shared</span>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dk' : 'lt' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Мастер ключа — шаг 3, применение</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--redtint:rgba(196,22,28,.08);--org:#A84B00;--orgtint:rgba(168,75,0,.1);--grn:#1B7A33;--grntint:rgba(27,122,51,.1);--field:#FFFFFF}
+.dk{--bg:#262628;--bg2:#2E2E31;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--redtint:rgba(255,107,107,.14);--org:#FFB347;--orgtint:rgba(255,179,71,.14);--grn:#5ED47A;--grntint:rgba(94,212,122,.14);--field:#1E1E20}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 14px;border-radius:6px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation:none!important}}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" role="dialog" aria-label="Настроить вход по ключу" style="width: 680px; height: 620px; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; overflow: hidden; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <header style="padding: 20px 24px 0; display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-size: 17px; font-weight: 700">Настроить вход по ключу</h1>
+    <p style="margin: 0; color: var(--tx2)">Хост <span class="mono" style="color: var(--tx)">ubuntu@staging.example.com</span></p>
+  </header>
+  <ol aria-label="Шаги" style="list-style: none; margin: 18px 24px 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+    <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+      <li style="display: flex; flex-direction: column; gap: 6px">
+        <span style="height: 3px; border-radius: 2px; background: {{s.bar}}"></span>
+        <span style="font-size: 12px; font-weight: {{s.weight}}; color: {{s.color}}">{{s.n}}. {{s.label}}</span>
+      </li>
+    </sc-for>
+  </ol>
+
+  <main style="flex: 1; min-height: 0; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px">
+    <ul aria-live="polite" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 0.5px solid var(--line); border-radius: 8px; overflow: hidden">
+      <sc-for list="{{tasks}}" as="t" hint-placeholder-count="4">
+        <li style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 0.5px solid var(--line2)">
+          <span style="width: 22px; height: 22px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: {{t.dotBg}}; color: {{t.dotFg}}">
+            <sc-if value="{{t.done}}" hint-placeholder-val="{{true}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Готово"><path d="M5 12l5 5 9-10"/></svg></sc-if>
+            <sc-if value="{{t.run}}" hint-placeholder-val="{{false}}"><span class="spin" role="img" aria-label="Выполняется" style="width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--acc); box-sizing: border-box; animation: spin .8s linear infinite"></span></sc-if>
+            <sc-if value="{{t.fail}}" hint-placeholder-val="{{false}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" role="img" aria-label="Ошибка"><path d="M6 6l12 12M18 6L6 18"/></svg></sc-if>
+            <sc-if value="{{t.wait}}" hint-placeholder-val="{{false}}"><span role="img" aria-label="Ожидает" style="width: 6px; height: 6px; border-radius: 50%; background: var(--tx2)"></span></sc-if>
+          </span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+            <span style="color: {{t.color}}">{{t.label}}</span>
+            <span class="mono" style="font-size: 11px; color: var(--tx2)">{{t.detail}}</span>
+          </span>
+          <span style="font-size: 11px; color: var(--tx2)">{{t.time}}</span>
+        </li>
+      </sc-for>
+    </ul>
+
+    <sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+      <div role="alert" style="display: flex; gap: 10px; padding: 12px 14px; border-radius: 8px; background: var(--redtint); border: 0.5px solid var(--line)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px"><path d="M12 3l10 18H2zM12 10v5M12 18h.01"/></svg>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <b>Не удалось добавить ключ на сервер: Permission denied (~/.ssh недоступна для записи)</b>
+          <span style="color: var(--tx2)">Откатили: восстановлен <span class="mono">~/.ssh/config</span> из <span class="mono">config.bak</span>, удалены локальные файлы <span class="mono">id_ed25519_staging-web*</span>. На сервере ничего не изменено.</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <details style="margin-top: auto">
+      <summary style="cursor: pointer; color: var(--tx2)">Показать лог</summary>
+      <pre class="mono" style="margin: 8px 0 0; padding: 10px 12px; background: var(--bg2); border-radius: 6px; font-size: 11px; line-height: 1.5; color: var(--tx2)">14:41:02 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_staging-web
+14:41:02 backup ~/.ssh/config → ~/.ssh/config.bak
+14:41:03 append authorized_keys on staging-web</pre>
+    </details>
+  </main>
+
+  <footer style="display: flex; align-items: center; gap: 8px; padding: 14px 24px; border-top: 0.5px solid var(--line)">
+    <button class="btn">Отмена</button>
+    <span style="flex: 1"></span>
+    <sc-if value="{{isError}}" hint-placeholder-val="{{false}}"><button class="btn">Повторить</button></sc-if>
+    <a class="btn pri" href="KeyWizard4.dc.html">Далее</a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["progress","error"],"default":"progress"},"$preview":{"width":680,"height":620}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const cur = 3;
+    const labels = ['Ключ', 'Превью', 'Применение', 'Готово'];
+    const st = this.props.state ?? 'progress';
+    const base = [
+      { label: 'Ключ создан', detail: '~/.ssh/id_ed25519_staging-web · SHA256:Xq3v…8kP2', time: '0.2 с' },
+      { label: 'Config обновлён', detail: 'бэкап: ~/.ssh/config.bak', time: '0.1 с' },
+      { label: 'Ключ добавлен на сервер', detail: 'ubuntu@staging-web:~/.ssh/authorized_keys', time: '' },
+      { label: 'Проверка входа по ключу', detail: 'ssh -o PasswordAuthentication=no staging-web true', time: '' }
+    ];
+    const statuses = st === 'error' ? ['undo', 'undo', 'fail', 'wait'] : ['done', 'done', 'done', 'run'];
+    if (st !== 'error') base[2].time = '0.6 с';
+    const tasks = base.map((t, i) => {
+      const s = statuses[i];
+      return {
+        ...t,
+        done: s === 'done', run: s === 'run', fail: s === 'fail', wait: s === 'wait' || s === 'undo',
+        label: s === 'undo' ? t.label + ' — откачено' : t.label,
+        dotBg: s === 'done' ? 'var(--grntint)' : s === 'fail' ? 'var(--redtint)' : 'var(--bg2)',
+        dotFg: s === 'done' ? 'var(--grn)' : s === 'fail' ? 'var(--red)' : 'var(--tx2)',
+        color: s === 'fail' ? 'var(--red)' : (s === 'wait' || s === 'undo') ? 'var(--tx2)' : 'var(--tx)'
+      };
+    });
+    return {
+      theme: this.props.dark ? 'dk' : 'lt',
+      isError: st === 'error',
+      tasks,
+      steps: labels.map((label, i) => ({
+        n: i + 1, label,
+        bar: i + 1 <= cur ? 'var(--acc)' : 'var(--line)',
+        color: i + 1 === cur ? 'var(--tx)' : 'var(--tx2)',
+        weight: i + 1 === cur ? 600 : 400
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

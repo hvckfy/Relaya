@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Онбординг — импорт</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--red:#C4161C;--org:#A84B00;--grn:#1B7A33}
+.dk{--bg:#262628;--bg2:#2E2E31;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--red:#FF6B6B;--org:#FFB347;--grn:#5ED47A}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 20px;border-radius:7px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff;font-weight:600}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" role="dialog" aria-label="Импорт из ~/.ssh" style="width: 600px; height: 540px; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; overflow: hidden; box-sizing: border-box; border: 0.5px solid var(--line); padding: 32px 36px 28px">
+  <h1 style="margin: 0; font-size: 20px; font-weight: 700">Нашли в <span class="mono" style="font-size: 18px">~/.ssh</span></h1>
+  <p style="margin: 6px 0 0; color: var(--tx2)">6 хостов в <span class="mono">~/.ssh/config</span> и 5 ключей. Только чтение: ничего не копируется.</p>
+
+  <div style="margin-top: 18px; display: flex; align-items: center; gap: 8px">
+    <span style="font-size: 11px; font-weight: 600; color: var(--tx2); flex: 1">ХОСТЫ</span>
+    <button class="btn" style="height: 22px; padding: 0 8px; font-size: 11px">Снять все</button>
+  </div>
+  <ul style="list-style: none; margin: 6px 0 0; padding: 0; border: 0.5px solid var(--line); border-radius: 8px; overflow: hidden">
+    <sc-for list="{{hosts}}" as="h" hint-placeholder-count="6">
+      <li style="border-bottom: 0.5px solid var(--line2)">
+        <label style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px">
+          <input type="checkbox" checked>
+          <span style="font-weight: 500; width: 110px">{{h.alias}}</span>
+          <span class="mono" style="font-size: 12px; color: var(--tx2); flex: 1">{{h.sub}}</span>
+          <span style="font-size: 11px; color: {{h.authColor}}">{{h.auth}}</span>
+        </label>
+      </li>
+    </sc-for>
+  </ul>
+
+  <label style="display: flex; align-items: center; gap: 10px; margin-top: 12px"><input type="checkbox" checked>Показать 5 ключей из <span class="mono">~/.ssh</span> в разделе «Ключи»</label>
+
+  <div style="flex: 1"></div>
+  <div style="display: flex; align-items: center; gap: 8px">
+    <div aria-label="Шаг 2 из 3" style="display: flex; gap: 6px; flex: 1">
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line)"></span>
+      <span style="width: 18px; height: 6px; border-radius: 3px; background: var(--acc)"></span>
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line)"></span>
+    </div>
+    <a class="btn" href="Onboarding1.dc.html">Назад</a>
+    <a class="btn pri" href="Onboarding3.dc.html">Готово</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":600,"height":540}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const H = [
+      ['prod-api-1', 'deploy@10.0.1.12', 'ключ'],
+      ['prod-api-2', 'deploy@10.0.1.13', 'ключ'],
+      ['db-main', 'postgres@db.internal', 'ключ'],
+      ['bastion', 'deploy@bastion.example.com', 'ключ'],
+      ['staging-web', 'ubuntu@staging.example.com', 'пароль'],
+      ['mac-mini', 'heckfy@mac-mini.local', 'ключ']
+    ];
+    return {
+      theme: this.props.dark ? 'dk' : 'lt',
+      hosts: H.map(([alias, sub, auth]) => ({ alias, sub, auth, authColor: auth === 'пароль' ? 'var(--org)' : 'var(--tx2)' }))
+    };
+  }
+}
+</script>
+</body>
+</html>

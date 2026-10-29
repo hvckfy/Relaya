@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Relaya — ключи</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--side:#ECECEF;--bar:#F6F6F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--redtint:rgba(196,22,28,.08);--org:#A84B00;--orgtint:rgba(168,75,0,.1);--grn:#1B7A33;--grntint:rgba(27,122,51,.1);--field:#FFFFFF}
+.dk{--bg:#1E1E20;--bg2:#252527;--side:#2A2A2D;--bar:#2C2C2E;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--redtint:rgba(255,107,107,.14);--org:#FFB347;--orgtint:rgba(255,179,71,.14);--grn:#5ED47A;--grntint:rgba(94,212,122,.14);--field:#2E2E31}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;border-radius:6px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff}
+.btn.danger{color:var(--red)}
+th{font-weight:600;font-size:11px;color:var(--tx2);text-align:left;padding:6px 10px;border-bottom:.5px solid var(--line);white-space:nowrap}
+td{padding:0 10px;height:30px;white-space:nowrap}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" style="width: 1280px; height: 800px; display: flex; background: var(--bg); overflow: hidden; border-radius: 10px; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <dc-import name="Sidebar" active="keys" hint-size="260px,800px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; background: var(--bar); border-bottom: 0.5px solid var(--line)">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 700">Ключи</h1>
+      <span class="mono" style="font-size: 12px; color: var(--tx2)">~/.ssh · 5</span>
+      <span style="flex: 1"></span>
+      <button class="btn pri"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Сгенерировать</button>
+      <button class="btn">Импортировать</button>
+      <button class="btn">Показать в Finder</button>
+    </header>
+
+    <div style="flex: 1; min-height: 0; display: flex">
+      <div style="flex: 1; min-width: 0; overflow-x: auto">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+          <thead><tr><th>Имя файла</th><th>Тип</th><th>Отпечаток</th><th>Комментарий</th><th>Passphrase</th><th>В агенте</th><th style="text-align: right">Хосты</th></tr></thead>
+          <tbody>
+            <sc-for list="{{keys}}" as="k" hint-placeholder-count="5">
+              <tr style="{{k.rowStyle}}">
+                <td class="mono" style="font-weight: 500">{{k.file}}</td>
+                <td><span style="font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: {{k.typeBg}}; color: {{k.typeFg}}">{{k.type}}</span></td>
+                <td class="mono" style="font-size: 12px; color: var(--tx2)">{{k.fp}}</td>
+                <td style="color: var(--tx2); max-width: 160px; overflow: hidden; text-overflow: ellipsis">{{k.comment}}</td>
+                <td>{{k.pass}}</td>
+                <td>{{k.agent}}</td>
+                <td style="text-align: right; font-variant-numeric: tabular-nums">{{k.hosts}}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+
+      <aside aria-label="Детали ключа" style="width: 300px; flex-shrink: 0; border-left: 0.5px solid var(--line); background: var(--bg2); padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; overflow: hidden">
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <h2 class="mono" style="margin: 0; font-size: 14px; font-weight: 600">id_ed25519</h2>
+          <span style="color: var(--tx2); font-size: 12px">ed25519 · создан 12 мар 2025 · passphrase в Keychain</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; align-items: center"><span style="font-size: 11px; font-weight: 600; color: var(--tx2); flex: 1">ПУБЛИЧНЫЙ КЛЮЧ</span><button class="btn" style="height: 22px; padding: 0 8px; font-size: 11px">Копировать</button></div>
+          <code class="mono" style="display: block; font-size: 11px; line-height: 1.5; padding: 8px; border-radius: 6px; background: var(--bg); border: 0.5px solid var(--line); word-break: break-all">ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMv2…H7tQ heckfy@macbook-air</code>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11px; font-weight: 600; color: var(--tx2)">ИСПОЛЬЗУЕТСЯ ХОСТАМИ · 5</span>
+          <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: 6px; border: 0.5px solid var(--line); background: var(--bg); overflow: hidden">
+            <sc-for list="{{usedBy}}" as="u" hint-placeholder-count="5">
+              <li style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border-bottom: 0.5px solid var(--line2)"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{u.c}}"></span><span style="flex: 1">{{u.name}}</span><span class="mono" style="font-size: 11px; color: var(--tx2)">{{u.user}}</span></li>
+            </sc-for>
+          </ul>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: auto">
+          <button class="btn" style="justify-content: flex-start">Разложить на хосты…</button>
+          <button class="btn" style="justify-content: flex-start">Добавить в агент</button>
+          <button class="btn danger" style="justify-content: flex-start">Удалить…</button>
+          <span style="font-size: 11px; color: var(--tx2)">При удалении покажем, какие хосты перестанут подключаться.</span>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const tc = {
+      ed25519: ['var(--grntint)', 'var(--grn)'],
+      rsa: ['var(--orgtint)', 'var(--org)'],
+      ecdsa: ['var(--sel)', 'var(--tx2)'],
+      SE: ['var(--acctint)', 'var(--acc)']
+    };
+    const raw = [
+      { file: 'id_ed25519', type: 'ed25519', fp: 'SHA256:mK2v…9QxT', comment: 'heckfy@macbook-air', pass: 'да', agent: 'да', hosts: 5, sel: true },
+      { file: 'id_ed25519_staging-web', type: 'ed25519', fp: 'SHA256:Xq3v…8kP2', comment: 'staging-web', pass: 'да', agent: 'да', hosts: 1 },
+      { file: 'id_rsa_legacy', type: 'rsa', fp: 'SHA256:a7Ff…Lw01', comment: 'old-laptop', pass: 'нет', agent: 'нет', hosts: 2 },
+      { file: 'id_ecdsa_gitlab', type: 'ecdsa', fp: 'SHA256:Pp0c…3nVe', comment: 'gitlab', pass: 'нет', agent: 'да', hosts: 0 },
+      { file: 'relaya-se-1', type: 'SE', fp: 'SHA256:Zt9k…eW4m', comment: 'Secure Enclave', pass: '—', agent: 'да', hosts: 1 }
+    ];
+    return {
+      theme: this.props.dark ? 'dk' : 'lt',
+      keys: raw.map(k => ({ ...k, typeBg: tc[k.type][0], typeFg: tc[k.type][1], rowStyle: k.sel ? 'background: var(--acctint);' : 'border-bottom: 0.5px solid var(--line2);' })),
+      usedBy: [
+        { name: 'prod-api-1', user: 'deploy', c: 'var(--red)' },
+        { name: 'prod-api-2', user: 'deploy', c: 'var(--red)' },
+        { name: 'db-main', user: 'postgres', c: 'var(--red)' },
+        { name: 'bastion', user: 'deploy', c: 'var(--red)' },
+        { name: 'mac-mini', user: 'heckfy', c: 'var(--grn)' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

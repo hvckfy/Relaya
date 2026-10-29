@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Relaya — главное окно</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--side:#ECECEF;--bar:#F6F6F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--redtint:rgba(196,22,28,.08);--org:#A84B00;--orgtint:rgba(168,75,0,.1);--grn:#1B7A33;--grntint:rgba(27,122,51,.1);--term:#FFFFFF;--termtx:#1D1D1F;--field:#FFFFFF}
+.dk{--bg:#1E1E20;--bg2:#252527;--side:#2A2A2D;--bar:#2C2C2E;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--redtint:rgba(255,107,107,.14);--org:#FFB347;--orgtint:rgba(255,179,71,.14);--grn:#5ED47A;--grntint:rgba(94,212,122,.14);--term:#161618;--termtx:#E8E8EA;--field:#2E2E31}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:6px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--tx2)}
+.ib{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--tx2);border-radius:6px;cursor:pointer;padding:0}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" style="width: 1280px; height: 800px; display: flex; background: var(--bg); overflow: hidden; border-radius: 10px; box-sizing: border-box; border: 0.5px solid var(--line)">
+  <dc-import name="Sidebar" active="staging-web" hint-size="260px,800px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--bar); border-bottom: 0.5px solid var(--line)">
+      <button class="ib" aria-label="Скрыть боковую панель"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM9 5v14"/></svg></button>
+      <button class="ib" aria-label="Назад"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button class="ib" aria-label="Вперёд"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+      <div style="flex: 1; display: flex; justify-content: center">
+        <label style="width: 380px; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 7px; background: var(--sel); color: var(--tx2); box-sizing: border-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5"/></svg>
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden">Поиск</span>
+          <input placeholder="Хосты, действия, сниппеты…" style="flex: 1; border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--tx); outline: none">
+          <span class="mono" style="font-size: 11px; padding: 1px 5px; border-radius: 4px; border: 0.5px solid var(--line); color: var(--tx2)">⌘K</span>
+        </label>
+      </div>
+      <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Хост</button>
+      <button class="btn pri"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Подключить</button>
+    </header>
+
+    <nav aria-label="Вкладки сессий" style="height: 34px; display: flex; align-items: stretch; background: var(--bar); border-bottom: 0.5px solid var(--line)">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; min-width: 170px; background: var(--bg); border-right: 0.5px solid var(--line); font-weight: 600">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--org)"></span>staging-web
+        <span style="flex: 1"></span>
+        <button class="ib" style="width: 20px; height: 20px" aria-label="Закрыть вкладку staging-web"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; min-width: 170px; border-right: 0.5px solid var(--line); color: var(--tx2)">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--red)"></span>prod-api-1
+        <span style="flex: 1"></span>
+        <button class="ib" style="width: 20px; height: 20px" aria-label="Закрыть вкладку prod-api-1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; min-width: 170px; border-right: 0.5px solid var(--line); color: var(--tx2)">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--red)"></span>db-main
+        <span style="flex: 1"></span>
+        <button class="ib" style="width: 20px; height: 20px" aria-label="Закрыть вкладку db-main"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <button class="ib" style="height: 34px; width: 34px" aria-label="Новая вкладка"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    </nav>
+
+    <div style="height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 14px; border-bottom: 0.5px solid var(--line2); color: var(--tx2); font-size: 12px">
+      <span>staging</span><span aria-hidden="true">›</span><span style="color: var(--tx); font-weight: 600">staging-web</span>
+      <span style="flex: 1"></span>
+      <button class="btn ghost" style="height: 24px; padding: 0 8px; font-size: 12px">SFTP</button>
+      <button class="btn ghost" style="height: 24px; padding: 0 8px; font-size: 12px">Туннели</button>
+      <button class="btn ghost" style="height: 24px; padding: 0 8px; font-size: 12px">Сниппеты</button>
+      <button class="ib" style="width: 24px; height: 24px" aria-label="Разделить вертикально"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM12 5v14"/></svg></button>
+    </div>
+
+    <div role="status" style="display: flex; align-items: center; gap: 10px; margin: 10px 12px 0; padding: 8px 10px 8px 12px; border-radius: 8px; background: var(--acctint); border: 0.5px solid var(--line)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4a5.5 5.5 0 1 1-4.9 8L3 18.6V21h3v-2h2v-2h2l1.6-1.6A5.5 5.5 0 0 1 14.5 4zM16 8h.01"/></svg>
+      <span style="flex: 1">Вы вошли по паролю. Настроить вход по ключу?</span>
+      <a class="btn pri" href="KeyWizard1.dc.html" style="height: 24px; font-size: 12px">Настроить</a>
+      <button class="btn" style="height: 24px; font-size: 12px">Не сейчас</button>
+      <button class="btn ghost" style="height: 24px; font-size: 12px">Не спрашивать для этого хоста</button>
+    </div>
+
+    <pre class="mono" style="flex: 1; margin: 0; padding: 12px 16px; background: var(--term); color: var(--termtx); font-size: 12.5px; line-height: 1.55; overflow: hidden">Last login: Thu Oct 29 14:02:11 2026 from 10.0.0.5
+<span style="color: var(--grn)">ubuntu@staging-web</span>:<span style="color: var(--acc)">~</span>$ systemctl status nginx --no-pager
+<span style="color: var(--grn)">●</span> nginx.service - A high performance web server
+     Loaded: loaded (/lib/systemd/system/nginx.service; enabled)
+     Active: <span style="color: var(--grn)">active (running)</span> since Tue 2026-10-27 09:14:03 UTC; 2 days ago
+   Main PID: 1183 (nginx)
+      Tasks: 3 (limit: 2283)
+     Memory: 6.1M
+<span style="color: var(--grn)">ubuntu@staging-web</span>:<span style="color: var(--acc)">~</span>$ df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda1        40G   18G   21G  47% /
+<span style="color: var(--grn)">ubuntu@staging-web</span>:<span style="color: var(--acc)">~</span>$ <span style="background: var(--termtx); color: var(--term)"> </span></pre>
+
+    <footer class="mono" style="height: 24px; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--bar); border-top: 0.5px solid var(--line); color: var(--tx2); font-size: 11px">
+      <span>ubuntu@staging.example.com</span>
+      <span style="color: var(--org)">пароль</span>
+      <span>23 ms</span>
+      <span>↑ 1.2 KB/s ↓ 4.8 KB/s</span>
+      <span style="flex: 1"></span>
+      <span>UTF-8</span>
+      <span>xterm-256color</span>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dk' : 'lt' };
+  }
+}
+</script>
+</body>
+</html>

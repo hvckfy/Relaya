@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Онбординг — приветствие</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--line:rgba(0,0,0,.12);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--grn:#1B7A33;--grntint:rgba(27,122,51,.1)}
+.dk{--bg:#262628;--bg2:#2E2E31;--line:rgba(255,255,255,.13);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--grn:#5ED47A;--grntint:rgba(94,212,122,.14)}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 20px;border-radius:7px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;box-sizing:border-box}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff;font-weight:600}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" role="dialog" aria-label="Добро пожаловать в Relaya" style="width: 600px; height: 540px; display: flex; flex-direction: column; align-items: center; background: var(--bg); border-radius: 12px; overflow: hidden; box-sizing: border-box; border: 0.5px solid var(--line); padding: 48px 56px 28px; text-align: center">
+  <div aria-hidden="true" style="display: flex; align-items: center; gap: 14px">
+    <span style="width: 72px; height: 72px; border-radius: 18px; background: var(--acctint); color: var(--acc); display: inline-flex; align-items: center; justify-content: center">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4a5.5 5.5 0 1 1-4.9 8L3 18.6V21h3v-2h2v-2h2l1.6-1.6A5.5 5.5 0 0 1 14.5 4zM16 8h.01"/></svg>
+    </span>
+    <svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="var(--tx2)" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 4"><path d="M2 6h36"/></svg>
+    <span style="width: 72px; height: 72px; border-radius: 18px; background: var(--bg2); border: 0.5px solid var(--line); color: var(--tx2); display: inline-flex; align-items: center; justify-content: center">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 6h6l2 2h10v11H3z"/></svg>
+    </span>
+  </div>
+  <h1 style="margin: 28px 0 0; font-size: 24px; font-weight: 700; line-height: 1.25">Ваши ключи живут в <span class="mono" style="font-size: 22px">~/.ssh</span>, а не у нас</h1>
+  <p style="margin: 12px 0 0; max-width: 420px; color: var(--tx2); font-size: 14px; line-height: 1.5">Relaya читает ваш <span class="mono">~/.ssh/config</span> и ключи как есть. Любое изменение файлов или сервера мы покажем заранее и применим только после подтверждения.</p>
+  <ul style="list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; text-align: left">
+    <li style="display: flex; align-items: center; gap: 10px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--grn)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Нет своего хранилища и облачной синхронизации</li>
+    <li style="display: flex; align-items: center; gap: 10px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--grn)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Пароли и passphrase — только в Keychain</li>
+    <li style="display: flex; align-items: center; gap: 10px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--grn)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Diff и бэкап перед каждой правкой config</li>
+  </ul>
+  <div style="flex: 1"></div>
+  <div style="display: flex; align-items: center; width: 100%">
+    <div aria-label="Шаг 1 из 3" style="display: flex; gap: 6px; flex: 1">
+      <span style="width: 18px; height: 6px; border-radius: 3px; background: var(--acc)"></span>
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line)"></span>
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--line)"></span>
+    </div>
+    <a class="btn pri" href="Onboarding2.dc.html">Продолжить</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":600,"height":540}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dk' : 'lt' };
+  }
+}
+</script>
+</body>
+</html>

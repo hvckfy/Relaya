@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Relaya — туннели</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--side:#ECECEF;--bar:#F6F6F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--org:#A84B00;--grn:#1B7A33;--grnbg:#2C9F4B;--off:#C7C7CC;--field:#FFFFFF;--pop:#FFFFFF}
+.dk{--bg:#1E1E20;--bg2:#252527;--side:#2A2A2D;--bar:#2C2C2E;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--org:#FFB347;--grn:#5ED47A;--grnbg:#2C9F4B;--off:#48484C;--field:#1E1E20;--pop:#323235}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;border-radius:6px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.btn.pri{background:var(--accbg);border-color:transparent;color:#fff}
+.field{height:24px;border:.5px solid var(--line);border-radius:5px;background:var(--field);color:var(--tx);padding:0 8px;font:inherit;font-size:13px;box-sizing:border-box}
+th{font-weight:600;font-size:11px;color:var(--tx2);text-align:left;padding:6px 12px;border-bottom:.5px solid var(--line)}
+td{padding:0 12px;height:40px;white-space:nowrap;border-bottom:.5px solid var(--line2)}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" style="width: 1280px; height: 800px; display: flex; background: var(--bg); overflow: hidden; border-radius: 10px; box-sizing: border-box; border: 0.5px solid var(--line); position: relative">
+  <dc-import name="Sidebar" active="tunnels" hint-size="260px,800px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; background: var(--bar); border-bottom: 0.5px solid var(--line)">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 700">Туннели</h1>
+      <span style="font-size: 12px; color: var(--tx2)">2 активных из 4</span>
+      <span style="flex: 1"></span>
+      <button class="btn pri" aria-haspopup="dialog" aria-expanded="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Новый туннель</button>
+    </header>
+    <div style="flex: 1; overflow-x: auto">
+      <table style="width: 100%; border-collapse: collapse">
+        <thead><tr><th style="width: 40px">Тип</th><th>Название</th><th>Проброс</th><th>Через хост</th><th>При подключении</th><th style="text-align: right">Статус</th></tr></thead>
+        <tbody>
+          <sc-for list="{{tunnels}}" as="t" hint-placeholder-count="4">
+            <tr>
+              <td><span class="mono" title="{{t.typeTitle}}" style="display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 5px; font-size: 12px; font-weight: 700; background: var(--acctint); color: var(--acc)">{{t.type}}</span></td>
+              <td style="font-weight: 500">{{t.name}}</td>
+              <td class="mono" style="font-size: 12px">{{t.map}}</td>
+              <td><span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{t.envColor}}"></span>{{t.via}}</span></td>
+              <td style="color: var(--tx2)">{{t.auto}}</td>
+              <td style="text-align: right">
+                <span style="display: inline-flex; align-items: center; gap: 10px">
+                  <span style="font-size: 12px; color: {{t.stColor}}">{{t.stLabel}}</span>
+                  <button role="switch" aria-checked="{{t.onStr}}" aria-label="Туннель {{t.name}}" style="width: 32px; height: 18px; border-radius: 9px; border: 0; padding: 2px; background: {{t.trackBg}}; display: inline-flex; justify-content: {{t.knob}}; cursor: pointer"><span style="width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3)"></span></button>
+                </span>
+              </td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div role="dialog" aria-label="Новый туннель" style="position: absolute; top: 46px; right: 12px; width: 360px; background: var(--pop); border: 0.5px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.22); padding: 14px; display: flex; flex-direction: column; gap: 10px">
+    <b>Новый туннель</b>
+    <div role="radiogroup" aria-label="Тип" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 2px; border-radius: 7px; background: var(--sel)">
+      <button role="radio" aria-checked="true" style="height: 24px; border: 0; border-radius: 5px; background: var(--bg); color: var(--tx); font: inherit; font-size: 12px; font-weight: 600">Local (L)</button>
+      <button role="radio" aria-checked="false" style="height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--tx2); font: inherit; font-size: 12px">Remote (R)</button>
+      <button role="radio" aria-checked="false" style="height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--tx2); font: inherit; font-size: 12px">SOCKS (D)</button>
+    </div>
+    <div style="display: grid; grid-template-columns: 110px 1fr; gap: 8px 10px; align-items: center">
+      <label for="tn-lp" style="color: var(--tx2)">Локальный порт</label><input id="tn-lp" class="field mono" value="15432">
+      <label for="tn-dst" style="color: var(--tx2)">Назначение</label><input id="tn-dst" class="field mono" value="db.internal:5432">
+      <label for="tn-via" style="color: var(--tx2)">Через хост</label><select id="tn-via" class="field"><option>bastion</option></select>
+    </div>
+    <label style="display: flex; align-items: center; gap: 8px"><input type="checkbox" checked>Запускать при подключении к хосту</label>
+    <label style="display: flex; align-items: center; gap: 8px"><input type="checkbox" checked>Показывать в меню-баре</label>
+    <div style="display: flex; justify-content: flex-end; gap: 8px"><button class="btn">Отмена</button><button class="btn pri">Создать</button></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const env = { prod: 'var(--red)', staging: 'var(--org)', dev: 'var(--grn)' };
+    const titles = { L: 'Local forward', R: 'Remote forward', D: 'Dynamic (SOCKS)' };
+    const raw = [
+      { type: 'L', name: 'Postgres prod', map: 'localhost:15432 → db.internal:5432', via: 'bastion', env: 'prod', auto: 'да', on: true },
+      { type: 'L', name: 'Grafana', map: 'localhost:3000 → 10.0.2.20:3000', via: 'prod-api-1', env: 'prod', auto: 'нет', on: true },
+      { type: 'R', name: 'Webhook dev', map: 'staging-web:9000 → localhost:8080', via: 'staging-web', env: 'staging', auto: 'нет', on: false },
+      { type: 'D', name: 'SOCKS офис', map: 'localhost:1080', via: 'mac-mini', env: 'dev', auto: 'нет', on: false }
+    ];
+    return {
+      theme: this.props.dark ? 'dk' : 'lt',
+      tunnels: raw.map(t => ({
+        ...t, typeTitle: titles[t.type], envColor: env[t.env], onStr: t.on ? 'true' : 'false',
+        trackBg: t.on ? 'var(--grnbg)' : 'var(--off)', knob: t.on ? 'flex-end' : 'flex-start',
+        stLabel: t.on ? 'работает' : 'выключен', stColor: t.on ? 'var(--grn)' : 'var(--tx2)'
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

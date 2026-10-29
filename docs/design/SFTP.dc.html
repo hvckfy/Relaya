@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Relaya — SFTP</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lt{--bg:#FFFFFF;--bg2:#F5F5F7;--side:#ECECEF;--bar:#F6F6F7;--line:rgba(0,0,0,.12);--line2:rgba(0,0,0,.06);--tx:#1D1D1F;--tx2:#5F5F64;--acc:#0066CC;--accbg:#0066CC;--acctint:rgba(0,102,204,.1);--sel:rgba(0,0,0,.08);--red:#C4161C;--redtint:rgba(196,22,28,.08);--org:#A84B00;--grn:#1B7A33;--grntint:rgba(27,122,51,.1);--pop:#FFFFFF}
+.dk{--bg:#1E1E20;--bg2:#252527;--side:#2A2A2D;--bar:#2C2C2E;--line:rgba(255,255,255,.13);--line2:rgba(255,255,255,.07);--tx:#F5F5F7;--tx2:#A8A8AE;--acc:#5AA9FF;--accbg:#0B6BD3;--acctint:rgba(90,169,255,.16);--sel:rgba(255,255,255,.1);--red:#FF6B6B;--redtint:rgba(255,107,107,.14);--org:#FFB347;--grn:#5ED47A;--grntint:rgba(94,212,122,.14);--pop:#323235}
+.root{font-family:-apple-system,"SF Pro Text",system-ui,"Helvetica Neue",sans-serif;color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;border-radius:6px;border:.5px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;font-size:13px;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+th{font-weight:600;font-size:11px;color:var(--tx2);text-align:left;padding:5px 10px;border-bottom:.5px solid var(--line)}
+td{padding:0 10px;height:26px;white-space:nowrap}
+a{color:var(--acc)}a:hover{color:var(--acc)}
+</style>
+</helmet>
+<div class="root {{theme}}" style="width: 1280px; height: 800px; display: flex; background: var(--bg); overflow: hidden; border-radius: 10px; box-sizing: border-box; border: 0.5px solid var(--line); position: relative">
+  <dc-import name="Sidebar" active="prod-api-1" hint-size="260px,800px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; background: var(--bar); border-bottom: 0.5px solid var(--line)">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 700">prod-api-1</h1>
+      <span style="font-size: 11px; font-weight: 700; color: var(--red); background: var(--redtint); padding: 1px 6px; border-radius: 4px">PROD</span>
+      <span style="color: var(--tx2)">SFTP</span>
+      <span style="flex: 1"></span>
+      <button class="btn" aria-haspopup="dialog" aria-expanded="true" style="background: var(--sel)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>
+        Передачи · 2
+      </button>
+      <button class="btn">Терминал</button>
+    </header>
+
+    <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))">
+      <sc-for list="{{panes}}" as="p" hint-placeholder-count="2">
+        <section aria-label="{{p.title}}" style="display: flex; flex-direction: column; min-width: 0; border-right: 0.5px solid var(--line)">
+          <div style="height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 0.5px solid var(--line2); background: var(--bg2)">
+            <b style="font-size: 12px">{{p.title}}</b>
+            <span class="mono" style="font-size: 12px; color: var(--tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{p.path}}</span>
+          </div>
+          <div style="flex: 1; overflow: hidden">
+            <table style="width: 100%; border-collapse: collapse">
+              <thead><tr><th>Имя</th><th style="text-align: right">Размер</th><th>Изменён</th></tr></thead>
+              <tbody>
+                <sc-for list="{{p.files}}" as="f" hint-placeholder-count="8">
+                  <tr style="{{f.rowStyle}}">
+                    <td><span style="display: inline-flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{f.iconColor}}" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="{{f.icon}}"/></svg>{{f.name}}</span></td>
+                    <td style="text-align: right; color: var(--tx2); font-variant-numeric: tabular-nums">{{f.size}}</td>
+                    <td style="color: var(--tx2)">{{f.date}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </sc-for>
+    </div>
+    <footer style="height: 24px; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--bar); border-top: 0.5px solid var(--line); color: var(--tx2); font-size: 11px">
+      <span>Перетащите файлы между панелями или из Finder · Пробел — быстрый просмотр</span>
+    </footer>
+  </div>
+
+  <div role="dialog" aria-label="Очередь передач" style="position: absolute; top: 46px; right: 104px; width: 340px; background: var(--pop); border: 0.5px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.2); padding: 12px; display: flex; flex-direction: column; gap: 12px">
+    <b>Передачи</b>
+    <sc-for list="{{queue}}" as="q" hint-placeholder-count="2">
+      <div style="display: flex; flex-direction: column; gap: 5px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span style="font-size: 12px; color: var(--tx2)">{{q.dir}}</span>
+          <span class="mono" style="flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{q.name}}</span>
+          <button class="btn" style="height: 20px; width: 20px; padding: 0; border-radius: 50%" aria-label="Отменить передачу"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{q.pct}}" style="height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden"><span style="display: block; height: 100%; width: {{q.pct}}%; background: var(--acc)"></span></div>
+        <span style="font-size: 11px; color: var(--tx2)">{{q.meta}}</span>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const DIR = 'M3 6h6l2 2h10v11H3z';
+    const FILE = 'M6 3h8l4 4v14H6zM14 3v4h4';
+    const mk = (rows, selIdx) => rows.map(([name, size, date], i) => {
+      const isDir = size === '—';
+      return { name, size, date, icon: isDir ? DIR : FILE, iconColor: isDir ? 'var(--acc)' : 'var(--tx2)', rowStyle: i === selIdx ? 'background: var(--acctint);' : '' };
+    });
+    return {
+      theme: this.props.dark ? 'dk' : 'lt',
+      panes: [
+        { title: 'Локально', path: '~/Projects/api/build', files: mk([
+          ['..', '—', ''], ['assets', '—', 'Сегодня, 14:10'], ['migrations', '—', 'Вчера, 19:02'],
+          ['api-linux-amd64', '18,4 МБ', 'Сегодня, 14:12'], ['api.env.example', '1 КБ', '21 окт'],
+          ['CHANGELOG.md', '12 КБ', 'Сегодня, 13:58'], ['checksums.txt', '1 КБ', 'Сегодня, 14:12']
+        ], 3) },
+        { title: 'prod-api-1', path: 'deploy@10.0.1.12:/srv/api', files: mk([
+          ['..', '—', ''], ['cache', '—', 'Сегодня, 14:31'], ['logs', '—', 'Сегодня, 14:31'], ['releases', '—', '27 окт'],
+          ['api', '18,1 МБ', '27 окт'], ['api.env', '2 КБ', '3 сен'], ['Caddyfile', '1 КБ', '3 сен']
+        ], -1) }
+      ],
+      queue: [
+        { dir: '↑', name: 'api-linux-amd64', pct: 64, meta: '11,8 из 18,4 МБ · 4,2 МБ/с · ~2 с' },
+        { dir: '↓', name: 'logs/api-2026-10-29.log', pct: 22, meta: '3,1 из 14 МБ · 2,8 МБ/с · ~4 с' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
