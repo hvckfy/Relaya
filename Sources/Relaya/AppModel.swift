@@ -45,6 +45,7 @@ final class AppModel {
 
     var screen: Screen = .hosts
     var keyWizard: KeyWizardRequest?
+    var sftpHost: SSHHost?
     var showOnboarding = !UserDefaults.standard.bool(forKey: "onboardingDone")
 
     var hosts: [SSHHost] = []

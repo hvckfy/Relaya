@@ -121,6 +121,7 @@ struct HostRow: View {
         .simultaneousGesture(TapGesture(count: 2).onEnded { model.connect(host) })
         .contextMenu {
             Button("Подключить") { model.connect(host) }
+            Button("Файлы (SFTP)…") { model.sftpHost = host }
             Button("Изменить…") { model.editor = EditorRequest(original: host) }
             Button("Настроить вход по ключу…") { model.keyWizard = KeyWizardRequest(host: host) }
             Button("Определить ОС") { Task { await model.detectOS(for: host.alias) } }

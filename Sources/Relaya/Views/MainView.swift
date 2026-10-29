@@ -45,6 +45,9 @@ struct MainView: View {
             }
         }
         .toolbarBackground(Theme.bar, for: .windowToolbar)
+        .sheet(item: $model.sftpHost) { host in
+            SFTPView(host: host).environment(model)
+        }
         .sheet(item: $model.keyWizard) { request in
             KeyWizardView(host: request.host, model: model)
                 .environment(model)

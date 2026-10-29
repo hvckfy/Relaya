@@ -21,6 +21,8 @@ struct HostDetailView: View {
                     }
                     Spacer()
                     // «Подключить» — в тулбаре окна (⌘T), здесь не дублируем.
+                    Button("Файлы") { model.sftpHost = host }
+                        .buttonStyle(.relaya)
                     Button("Изменить") { model.editor = EditorRequest(original: host) }
                         .buttonStyle(.relaya)
                 }

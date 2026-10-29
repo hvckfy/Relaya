@@ -34,6 +34,9 @@ struct SessionView: View {
             Text(session.host.alias).fontWeight(.semibold).foregroundStyle(Theme.tx)
             Spacer()
             OSActionsMenu(os: host.os, user: host.user) { c.insert($0) }
+            Button("SFTP") { model.sftpHost = host }
+                .buttonStyle(.relaya(.ghost, height: 24))
+                .help("Файлы на сервере")
             Button("Найти") { c.showFind() }
                 .buttonStyle(.relaya(.ghost, height: 24))
                 .help("Поиск в терминале (⌘F)")
