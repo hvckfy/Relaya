@@ -68,7 +68,7 @@ public struct SSHConfigDocument: Sendable {
     public func renderedLines(for host: SSHHost, replacing originalAlias: String?) -> [String] {
         var out: [String] = []
         var meta: [String] = []
-        if let g = host.group, !g.isEmpty { meta.append("group=\(g)") }
+        if let g = host.group, !g.isEmpty { meta.append("group=\(SSHConfigParser.metaValue(g))") }
         if let e = host.environment { meta.append("env=\(e.rawValue)") }
         if let c = host.color, !c.isEmpty { meta.append("color=\(c)") }
         if !meta.isEmpty { out.append("# relaya: " + meta.joined(separator: " ")) }

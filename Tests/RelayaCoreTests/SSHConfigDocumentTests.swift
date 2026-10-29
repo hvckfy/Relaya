@@ -69,6 +69,24 @@ import Testing
         #expect(SSHConfigParser.parse(doc.text) == [host])
     }
 
+    @Test func groupWithSpacesRoundTrips() throws {
+        var doc = SSHConfigDocument(text: "")
+        let host = SSHHost(alias: "nas", hostName: "192.168.1.10", group: "мои сервера", environment: .dev)
+        try doc.upsert(host, originalAlias: nil)
+        #expect(doc.text.hasPrefix("# relaya: group=\"мои сервера\" env=dev\n"))
+        #expect(SSHConfigParser.parse(doc.text) == [host])
+    }
+
+    @Test func movingToGroupChangesOnlyMeta() throws {
+        var doc = SSHConfigDocument(text: Self.sample)
+        var host = try #require(SSHConfigParser.parse(Self.sample).first { $0.alias == "db-main" })
+        host.group = "работа"
+        try doc.upsert(host, originalAlias: "db-main")
+        let diff = LineDiff.diff(SSHConfigDocument(text: Self.sample).lines, doc.lines)
+        #expect(diff.filter { $0.kind == .added }.map(\.text) == ["# relaya: group=работа env=prod"])
+        #expect(diff.filter { $0.kind == .removed }.map(\.text) == ["# relaya: group=prod env=prod"])
+    }
+
     @Test func rejectsDuplicateAlias() {
         var doc = SSHConfigDocument(text: Self.sample)
         #expect(throws: SSHConfigDocument.EditError.aliasTaken("db-main")) {

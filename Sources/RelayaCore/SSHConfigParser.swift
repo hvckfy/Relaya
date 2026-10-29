@@ -104,12 +104,12 @@ public enum SSHConfigParser {
         return (key, value)
     }
 
-    /// `# relaya: group=prod env=prod color=orange`
+    /// `# relaya: group="мои сервера" env=prod color=orange`
     static func parseMeta(_ line: String) -> Meta? {
         let body = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
         guard body.lowercased().hasPrefix("relaya:") else { return nil }
         var meta = Meta()
-        for pair in body.dropFirst("relaya:".count).split(whereSeparator: \.isWhitespace) {
+        for pair in metaTokens(String(body.dropFirst("relaya:".count))) {
             let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
             guard kv.count == 2 else { continue }
             switch kv[0].lowercased() {
@@ -120,5 +120,29 @@ public enum SSHConfigParser {
             }
         }
         return meta
+    }
+
+    /// Делит по пробелам, но не внутри кавычек; кавычки снимает.
+    private static func metaTokens(_ s: String) -> [String] {
+        var tokens: [String] = []
+        var current = ""
+        var quoted = false
+        for ch in s {
+            if ch == "\"" {
+                quoted.toggle()
+            } else if ch.isWhitespace, !quoted {
+                if !current.isEmpty { tokens.append(current); current = "" }
+            } else {
+                current.append(ch)
+            }
+        }
+        if !current.isEmpty { tokens.append(current) }
+        return tokens
+    }
+
+    /// Значение для `# relaya:`: в кавычках, если в нём есть пробелы.
+    static func metaValue(_ s: String) -> String {
+        let clean = s.replacingOccurrences(of: "\"", with: "")
+        return clean.contains(where: \.isWhitespace) ? "\"\(clean)\"" : clean
     }
 }
