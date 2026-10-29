@@ -12,6 +12,8 @@ final class SessionController {
     private let keychain = KeychainStore()
 
     @ObservationIgnored weak var terminal: RelayaTerminalView?
+    /// Живой терминал этой сессии: при перерисовке окна (смена темы) берём его, а не запускаем ssh заново.
+    @ObservationIgnored var liveView: (view: RelayaTerminalView, generation: Int)?
     /// Вызывается, когда ОС удалось угадать по приветствию сервера.
     @ObservationIgnored var onOSGuessed: ((ServerOS) -> Void)?
     @ObservationIgnored private var osGuessed = false
@@ -191,6 +193,7 @@ final class SessionController {
 
     func terminate() {
         cancelReconnect()
+        defer { liveView = nil }
         terminal?.terminate()
     }
 
@@ -240,7 +243,12 @@ struct TerminalView: NSViewRepresentable {
     let controller: SessionController
 
     func makeNSView(context: Context) -> RelayaTerminalView {
+        if let live = controller.liveView, live.generation == controller.generation {
+            apply(to: live.view)
+            return live.view
+        }
         let view = RelayaTerminalView(frame: .zero)
+        controller.liveView = (view, controller.generation)
         apply(to: view)
         controller.terminal = view
         view.onOutput = { [weak controller] text in controller?.handleOutput(text) }
