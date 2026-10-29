@@ -15,6 +15,7 @@ struct HostEditorView: View {
     @State private var password = ""
     @State private var passwordEdited = false
     @State private var hasSavedPassword = false
+    @State private var storeInKeychain = true
 
     init(original: SSHHost?, draft: SSHHost) {
         self.original = original
@@ -46,6 +47,8 @@ struct HostEditorView: View {
         .background(Theme.bg)
         .onAppear {
             if let original { hasSavedPassword = model.keychain.hasPassword(for: original.keychainAccount) }
+            // У нового хоста без сохранённого пароля галочка включена — достаточно ввести пароль.
+            storeInKeychain = true
         }
     }
 
@@ -127,6 +130,10 @@ struct HostEditorView: View {
                 .labelsHidden()
                 .frame(width: 300)
             }
+            FieldRow("Хранить пароль в Keychain") {
+                Toggle("", isOn: $storeInKeychain).labelsHidden().toggleStyle(.checkbox)
+                    .help("Включено — Relaya сама подставит пароль при подключении. Выключено — пароль не сохраняется, ssh спросит его в терминале.")
+            }
             FieldRow("Пароль") {
                 HStack(spacing: 6) {
                     Text(passwordStatus)
@@ -135,12 +142,18 @@ struct HostEditorView: View {
                     SecureField(hasSavedPassword ? "••••••••" : "не сохранён", text: $password)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 160)
+                        .disabled(!storeInKeychain)
                         .onChange(of: password) { passwordEdited = true }
-                    if hasSavedPassword {
-                        Button("Удалить") {
-                            password = ""
-                            passwordEdited = true
-                            hasSavedPassword = false
+                    if hasSavedPassword, let original {
+                        Button("Удалить из Keychain") {
+                            do {
+                                try model.keychain.deletePassword(for: original.keychainAccount)
+                                hasSavedPassword = false
+                                password = ""
+                                passwordEdited = false
+                            } catch {
+                                self.error = error.localizedDescription
+                            }
                         }
                         .buttonStyle(.relaya(.ghost, height: 24))
                     }
@@ -316,20 +329,20 @@ struct HostEditorView: View {
     }
 
     private var passwordStatus: String {
-        if passwordEdited { return password.isEmpty ? "будет удалён" : "сохраним в Keychain" }
+        if !storeInKeychain { return hasSavedPassword ? "удалим из Keychain" : "не храним" }
+        if passwordEdited, !password.isEmpty { return "сохраним в Keychain" }
         return hasSavedPassword ? "в Keychain" : ""
     }
 
     private func save() {
         do {
             try model.save(normalized, originalAlias: original?.alias)
-            if passwordEdited {
-                let account = normalized.keychainAccount
-                if password.isEmpty {
-                    try model.keychain.deletePassword(for: account)
-                } else {
-                    try model.keychain.setPassword(password, for: account)
-                }
+            let account = normalized.keychainAccount
+            if !storeInKeychain {
+                // Галочка снята — в Keychain для этого хоста ничего не остаётся.
+                try model.keychain.deletePassword(for: account)
+            } else if passwordEdited, !password.isEmpty {
+                try model.keychain.setPassword(password, for: account)
             }
             dismiss()
         } catch {
