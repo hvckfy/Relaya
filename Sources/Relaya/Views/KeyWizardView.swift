@@ -445,7 +445,7 @@ private struct DoneStep: View {
 
     /// Команда под ОС сервера (на OpenWrt — Dropbear через uci).
     private var disableCommand: String {
-        (wizard.model.current(wizard.host).os ?? .linux).disablePasswordCommand
+        (wizard.model.current(wizard.host).os ?? .linux).passwordLoginCommand(enabled: false)
     }
 
     var body: some View {
@@ -464,10 +464,13 @@ private struct DoneStep: View {
             Field("Бэкап config") { Mono("~/.ssh/config.bak") }
         }
 
-        BannerRow(tint: Theme.orgTint, border: Theme.org) {
+        Text("Вход по паролю на сервере остаётся включённым — Relaya его не трогает. Пароль из Keychain по-прежнему работает, если ключ будет недоступен.")
+            .foregroundStyle(Theme.tx2)
+            .fixedSize(horizontal: false, vertical: true)
+
+        DisclosureGroup("Отключить вход по паролю…", isExpanded: $showDisable) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Отключить вход по паролю на сервере").fontWeight(.semibold)
-                Text("Безопаснее, но если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Relaya не меняет sshd_config сама: выполните команду на сервере, когда будете готовы.")
+                Text("Безопаснее, но если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Relaya не выполняет эту команду сама: запустите её на сервере, если решите. Вернуть вход по паролю можно в меню «Действия» в сессии.")
                     .fixedSize(horizontal: false, vertical: true)
                 if showDisable {
                     Text(disableCommand)
@@ -480,11 +483,12 @@ private struct DoneStep: View {
                         NSPasteboard.general.setString(disableCommand, forType: .string)
                     }
                     .buttonStyle(.relaya(.normal, height: 24))
-                } else {
-                    Button("Показать команду…") { showDisable = true }.buttonStyle(.relaya(.normal, height: 24))
                 }
             }
+            .padding(10)
+            .background(Theme.orgTint, in: .rect(cornerRadius: 8))
         }
+        .foregroundStyle(Theme.tx)
     }
 }
 

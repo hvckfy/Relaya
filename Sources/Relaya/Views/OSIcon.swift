@@ -76,6 +76,13 @@ struct OSActionsMenu: View {
                         Button(action.title) { insert(command(for: action)) }
                     }
                 }
+                if !os.passwordLoginActions.isEmpty {
+                    Section("Вход по паролю на сервере") {
+                        ForEach(os.passwordLoginActions, id: \.self) { action in
+                            Button(action.title + "…") { insert(command(for: action)) }
+                        }
+                    }
+                }
             } else {
                 Text("ОС ещё не определена")
             }
