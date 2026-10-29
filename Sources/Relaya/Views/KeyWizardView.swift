@@ -39,6 +39,8 @@ final class KeyWizardModel {
     var rollbackNote: String?
     var result: SSHKey?
     var running = false
+    /// Выбор на последнем шаге. По умолчанию вход по паролю не трогаем.
+    var passwordLogin = true
 
     static let applySteps = ["Ключ", "Сервер", "Агент", "Проверка", "Config"]
 
@@ -278,7 +280,14 @@ struct KeyWizardView: View {
                 Button("Повторить") { Task { await wizard.apply() } }
                     .buttonStyle(.relayaPrimary).disabled(wizard.running)
             case .done:
-                Button("Готово") { dismiss() }.buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
+                Button("Готово") {
+                    if !wizard.passwordLogin {
+                        let host = wizard.model.current(wizard.host)
+                        wizard.model.run((host.os ?? .linux).passwordLoginCommand(enabled: false), on: host)
+                    }
+                    dismiss()
+                }
+                .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
             }
         }
         .padding(.horizontal, 24)
@@ -440,13 +449,7 @@ private struct ApplyStep: View {
 }
 
 private struct DoneStep: View {
-    let wizard: KeyWizardModel
-    @State private var showDisable = false
-
-    /// Команда под ОС сервера (на OpenWrt — Dropbear через uci).
-    private var disableCommand: String {
-        (wizard.model.current(wizard.host).os ?? .linux).passwordLoginCommand(enabled: false)
-    }
+    @Bindable var wizard: KeyWizardModel
 
     var body: some View {
         HStack(spacing: 12) {
@@ -464,31 +467,20 @@ private struct DoneStep: View {
             Field("Бэкап config") { Mono("~/.ssh/config.bak") }
         }
 
-        Text("Вход по паролю на сервере остаётся включённым — Relaya его не трогает. Пароль из Keychain по-прежнему работает, если ключ будет недоступен.")
-            .foregroundStyle(Theme.tx2)
-            .fixedSize(horizontal: false, vertical: true)
-
-        DisclosureGroup("Отключить вход по паролю…", isExpanded: $showDisable) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Безопаснее, но если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Relaya не выполняет эту команду сама: запустите её на сервере, если решите. Вернуть вход по паролю можно в меню «Действия» в сессии.")
-                    .fixedSize(horizontal: false, vertical: true)
-                if showDisable {
-                    Text(disableCommand)
-                        .font(.system(size: 11.5, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .background(Theme.bg, in: .rect(cornerRadius: 6))
-                    Button("Скопировать команду") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(disableCommand, forType: .string)
-                    }
-                    .buttonStyle(.relaya(.normal, height: 24))
-                }
+        Section2(title: "Вход по паролю на сервере") {
+            Picker("", selection: $wizard.passwordLogin) {
+                Text("Включён — можно входить и по паролю, и по ключу").tag(true)
+                Text("Отключён — только по ключу").tag(false)
             }
-            .padding(10)
-            .background(Theme.orgTint, in: .rect(cornerRadius: 8))
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+            Text(wizard.passwordLogin
+                 ? "На сервере ничего не меняем."
+                 : "После «Готово» откроется вкладка терминала и выполнит команду на сервере. Если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Вернуть вход по паролю: меню «Действия» в сессии.")
+                .font(.system(size: 12))
+                .foregroundStyle(wizard.passwordLogin ? Theme.tx2 : Theme.org)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(Theme.tx)
     }
 }
 

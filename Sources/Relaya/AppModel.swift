@@ -183,6 +183,14 @@ final class AppModel {
         }
     }
 
+    /// Открывает вкладку и выполняет команду, как только появится приглашение shell.
+    /// Только по явному действию пользователя. Под root `sudo` убирается.
+    func run(_ command: String, on host: SSHHost) {
+        connect(host)
+        let cmd = host.user == "root" ? command.replacingOccurrences(of: "sudo ", with: "") : command
+        sessions.last?.controller.pendingCommand = cmd
+    }
+
     func closeActiveSession() {
         if let activeSession { close(activeSession) }
     }
