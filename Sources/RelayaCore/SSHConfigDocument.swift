@@ -10,7 +10,7 @@ public struct SSHConfigDocument: Sendable {
     /// Директивы, которыми управляет редактор Relaya. Остальные строки блока не трогаются.
     static let managedKeys: Set<String> = [
         "hostname", "user", "port", "identityfile", "proxyjump",
-        "forwardagent", "serveraliveinterval", "compression",
+        "forwardagent", "serveraliveinterval", "compression", "usekeychain", "addkeystoagent",
     ]
 
     public init(text: String) {
@@ -82,6 +82,11 @@ public struct SSHConfigDocument: Sendable {
         add("User", host.user)
         add("Port", host.port.map(String.init))
         add("IdentityFile", host.identityFile)
+        if host.identityFile?.isEmpty == false {
+            // passphrase ключа — в системный Keychain, ключ — в ssh-agent при первом использовании.
+            add("UseKeychain", "yes")
+            add("AddKeysToAgent", "yes")
+        }
         add("ProxyJump", host.proxyJump)
         if host.forwardAgent == true { add("ForwardAgent", "yes") }
         add("ServerAliveInterval", host.serverAliveInterval.map(String.init))
