@@ -31,16 +31,7 @@ struct KeysView: View {
             .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 0.5) }
 
             HStack(spacing: 0) {
-                Table(keys, selection: $selection) {
-                    TableColumn("Имя файла") { k in Text(k.name).font(.system(size: 12.5, design: .monospaced)) }
-                    TableColumn("Тип") { k in Text(k.type) }.width(70)
-                    TableColumn("Отпечаток") { k in
-                        Text(k.fingerprint).font(.system(size: 11.5, design: .monospaced)).lineLimit(1).truncationMode(.middle)
-                    }
-                    TableColumn("Passphrase") { k in Text(k.hasPassphrase ? "да" : "нет") }.width(80)
-                    TableColumn("В агенте") { k in Text(inAgent.contains(k.fingerprint) ? "да" : "нет") }.width(70)
-                    TableColumn("Хосты") { k in Text("\(hosts(using: k).count)") }.width(50)
-                }
+                keysTable
                 .overlay {
                     if loading { ProgressView() }
                     else if keys.isEmpty {
@@ -92,6 +83,22 @@ struct KeysView: View {
         } message: { Text(message ?? "") }
     }
 
+    // Отдельно от body: иначе компилятор не успевает вывести типы всего экрана.
+    private var keysTable: some View {
+        Table(keys, selection: $selection) {
+            TableColumn("Имя файла") { (k: SSHKey) in Text(k.name).font(.system(size: 12.5, design: .monospaced)) }
+            TableColumn("Тип") { (k: SSHKey) in Text(k.type) }.width(70)
+            TableColumn("Отпечаток") { (k: SSHKey) in
+                Text(k.fingerprint).font(.system(size: 11.5, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+            }
+            TableColumn("Passphrase") { (k: SSHKey) in Text(k.hasPassphrase ? "да" : "нет") }.width(80)
+            TableColumn("В агенте ⓘ") { (k: SSHKey) in AgentCell(inAgent: inAgent.contains(k.fingerprint)) }.width(80)
+            TableColumn("Хосты") { (k: SSHKey) in Text("\(hosts(using: k).count)") }.width(50)
+        }
+        // Заголовки Table не показывают свои подсказки — даём её всей таблице, ячейкам «В агенте» — свою.
+        .help(Self.agentHelp)
+    }
+
     private func inspector(_ key: SSHKey) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -137,11 +144,22 @@ struct KeysView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Button("Разложить на хосты…") { deploy = key }.buttonStyle(.relayaPrimary)
-                    Button(inAgent.contains(key.fingerprint) ? "Уже в агенте" : "Добавить в агент") {
-                        if key.hasPassphrase { askPassphrase = key } else { Task { await addToAgent(key, passphrase: nil) } }
+                    HStack(spacing: 6) {
+                        if inAgent.contains(key.fingerprint) {
+                            Label("В агенте", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(Theme.grn)
+                                .help(Self.agentHelp)
+                            Button("Убрать из агента") { Task { await removeFromAgent(key) } }
+                                .buttonStyle(.relaya)
+                                .help("ssh-add -d: выгрузить ключ из памяти ssh-agent. Файлы ключа и passphrase в Keychain остаются.")
+                        } else {
+                            Button("Добавить в агент") {
+                                if key.hasPassphrase { askPassphrase = key } else { Task { await addToAgent(key, passphrase: nil) } }
+                            }
+                            .buttonStyle(.relaya)
+                            .help(Self.agentHelp)
+                        }
                     }
-                    .buttonStyle(.relaya)
-                    .disabled(inAgent.contains(key.fingerprint))
                     Button("В Корзину…", role: .destructive) { confirmDelete = key }.buttonStyle(.relaya(.ghost))
                 }
                 Text("При удалении покажем, какие хосты перестанут подключаться.")
@@ -173,6 +191,21 @@ struct KeysView: View {
         if selection == nil { selection = keys.first?.id }
     }
 
+    static let agentHelp = """
+    ssh-agent — системная служба macOS, которая держит ключи расшифрованными в памяти.
+    Ключ «в агенте»: ssh использует его без ввода passphrase (она сохраняется в Keychain),     и его можно пробросить на сервер через ForwardAgent.
+    Минус: если в агенте много ключей, ssh перебирает их все, и сервер может оборвать вход     («Too many authentication failures») раньше, чем спросит пароль.
+    """
+
+    private func removeFromAgent(_ key: SSHKey) async {
+        do {
+            try await KeyInstaller(askpassExecutable: model.askpassExecutable).removeFromAgent(keyPath: key.path)
+            inAgent = await KeyScanner.agentFingerprints()
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func addToAgent(_ key: SSHKey, passphrase: String?) async {
         let installer = KeyInstaller(askpassExecutable: model.askpassExecutable)
         let temp = KeyInstaller.temporaryKeychain
@@ -201,6 +234,16 @@ struct KeysView: View {
         } catch {
             message = error.localizedDescription
         }
+    }
+}
+
+private struct AgentCell: View {
+    let inAgent: Bool
+
+    var body: some View {
+        Text(inAgent ? "да" : "нет")
+            .foregroundStyle(inAgent ? Theme.grn : Theme.tx2)
+            .help(KeysView.agentHelp)
     }
 }
 

@@ -109,6 +109,12 @@ public struct KeyInstaller: Sendable {
         guard r.succeeded else { throw Failure("ssh-add: \(r.message)") }
     }
 
+    /// Выгружает ключ из ssh-agent. Файлы ключа и запись в Keychain не трогаются.
+    public func removeFromAgent(keyPath: String) async throws {
+        let r = try await ProcessRunner.run("/usr/bin/ssh-add", ["-d", keyPath])
+        guard r.succeeded else { throw Failure("ssh-add -d: \(r.message)") }
+    }
+
     /// Вход только этим ключом, без пароля.
     public func verify(alias: String, keyPath: String) async throws {
         let r = try await ProcessRunner.run("/usr/bin/ssh", [
