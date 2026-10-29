@@ -9,7 +9,8 @@ let package = Package(
         .library(name: "RelayaCore", targets: ["RelayaCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.2.0"),
+        // 1.99+ требует Swift 6.2; держим 1.20.x, пока CI на Xcode 16.
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", .upToNextMinor(from: "1.20.0")),
     ],
     targets: [
         // UI-независимая логика: ~/.ssh/config, ключи, хосты.
