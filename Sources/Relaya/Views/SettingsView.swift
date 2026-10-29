@@ -99,7 +99,7 @@ private struct ThemePreview: View {
             Text("error: disk 91% full").foregroundColor(ansi[1])
             HStack(spacing: 3) {
                 ForEach(0..<16, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 2).fill(ansi[i]).frame(width: 14, height: 10)
+                    RoundedRectangle(cornerRadius: 2, style: .continuous).fill(ansi[i]).frame(width: 14, height: 10)
                 }
             }
             .padding(.top, 4)
@@ -108,7 +108,7 @@ private struct ThemePreview: View {
         .foregroundColor(Color(nsColor: theme.foregroundColor))
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: theme.backgroundColor), in: .rect(cornerRadius: 8))
+        .background(Color(nsColor: theme.backgroundColor), in: .rect(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -166,7 +166,7 @@ private struct RuleRow: View {
                         Button { rule.color = i } label: { Text(Self.colorNames[i]) }
                     }
                 } label: {
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
                         .fill(Color(hex: palette[min(rule.color, palette.count - 1)]))
                         .frame(width: 22, height: 14)
                 }
@@ -217,13 +217,13 @@ private struct ThemeCard: View {
                 mini(theme.light)
                 mini(theme.dark)
             }
-            .clipShape(.rect(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator, lineWidth: 0.5))
+            .clipShape(.rect(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator, lineWidth: 0.5))
             Text(theme.name).font(.system(size: 12, weight: selected ? .semibold : .regular)).lineLimit(1)
         }
         .padding(6)
-        .background(selected ? Color.accentColor.opacity(0.15) : .clear, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
+        .background(selected ? Color.accentColor.opacity(0.15) : .clear, in: .rect(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
         .contentShape(.rect)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel(theme.name)
@@ -234,9 +234,9 @@ private struct ThemeCard: View {
             Rectangle().fill(Color(hex: c.side)).frame(width: 14)
             VStack(alignment: .leading, spacing: 3) {
                 Rectangle().fill(Color(hex: c.bar)).frame(height: 8)
-                RoundedRectangle(cornerRadius: 1).fill(Color(hex: c.tx)).frame(width: 22, height: 3).padding(.leading, 4)
-                RoundedRectangle(cornerRadius: 1).fill(Color(hex: c.tx2)).frame(width: 16, height: 3).padding(.leading, 4)
-                RoundedRectangle(cornerRadius: 2).fill(Color(hex: c.accBg)).frame(width: 18, height: 7).padding(.leading, 4)
+                RoundedRectangle(cornerRadius: 1, style: .continuous).fill(Color(hex: c.tx)).frame(width: 22, height: 3).padding(.leading, 4)
+                RoundedRectangle(cornerRadius: 1, style: .continuous).fill(Color(hex: c.tx2)).frame(width: 16, height: 3).padding(.leading, 4)
+                RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Color(hex: c.accBg)).frame(width: 18, height: 7).padding(.leading, 4)
                 Spacer(minLength: 0)
             }
             .background(Color(hex: c.bg))

@@ -215,8 +215,8 @@ struct HostEditorView: View {
                 .textSelection(.enabled)
             }
         }
-        .background(Theme.bg2, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+        .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
     }
 
     private var footer: some View {
@@ -361,8 +361,8 @@ private struct FormGroup<Content: View>: View {
                 .foregroundStyle(Theme.tx2)
                 .padding(.leading, 4)
             VStack(spacing: 0) { content }
-                .background(Theme.bg2, in: .rect(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+                .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
         }
     }
 }
@@ -543,6 +543,6 @@ struct Banner: View {
         .font(.system(size: 12))
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint, in: .rect(cornerRadius: 8))
+        .background(tint, in: .rect(cornerRadius: 12, style: .continuous))
     }
 }

@@ -117,7 +117,7 @@ struct KeysView: View {
                     .lineLimit(4)
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.bg2, in: .rect(cornerRadius: 6))
+                    .background(Theme.bg2, in: .rect(cornerRadius: 8, style: .continuous))
 
                 caption("Отпечаток") { EmptyView() }
                 Text(key.fingerprint).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)

@@ -498,8 +498,8 @@ private struct Section2<Content: View>: View {
             VStack(alignment: .leading, spacing: 10) { content }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.bg2, in: .rect(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+                .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
         }
         .font(.system(size: 13))
         .foregroundStyle(Theme.tx)
@@ -552,8 +552,8 @@ private struct ChangeBlock<Content: View>: View {
         }
         .font(.system(size: 13))
         .foregroundStyle(Theme.tx)
-        .background(Theme.bg2, in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+        .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
     }
 }
 

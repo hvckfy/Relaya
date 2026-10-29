@@ -9,7 +9,7 @@ struct SessionTabBar: View {
     var body: some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
+                HStack(spacing: 4) {
                     ForEach(model.sessions) { session in
                         SessionTab(session: session, active: session.id == model.activeSessionID)
                     }
@@ -20,7 +20,8 @@ struct SessionTabBar: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(height: 34)
+        .padding(.horizontal, 6)
+        .frame(height: 38)
         .background(Theme.bar)
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 0.5) }
     }
@@ -47,11 +48,16 @@ private struct SessionTab: View {
         }
         .font(.system(size: 13))
         .foregroundStyle(active ? Theme.tx : Theme.tx2)
-        .padding(.leading, 14)
-        .padding(.trailing, 6)
-        .frame(minWidth: 170, maxHeight: .infinity)
-        .background(active ? Theme.bg : .clear)
-        .overlay(alignment: .trailing) { Rectangle().fill(Theme.line).frame(width: 0.5) }
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .frame(minWidth: 160, maxHeight: .infinity)
+        .background {
+            // Вкладка-«таблетка»: активная — приподнята над панелью, неактивные — плоские.
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(active ? Theme.bg : .clear)
+                .shadow(color: .black.opacity(active ? 0.08 : 0), radius: 2, y: 1)
+        }
+        .padding(.vertical, 4)
         .contentShape(.rect)
         .onTapGesture { model.activeSessionID = session.id; model.screen = .hosts }
     }

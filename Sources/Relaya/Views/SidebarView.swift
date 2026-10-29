@@ -111,7 +111,7 @@ struct HostRow: View {
         .padding(.leading, 8)
         .padding(.trailing, 8)
         .frame(height: 36)
-        .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 6))
+        .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         // Выбор — сразу по первому клику; двойной клик дополнительно подключает.
         // (Пара onTapGesture(count: 2) + onTapGesture заставляла SwiftUI ждать второго клика.)
@@ -209,7 +209,7 @@ private struct NavRow: View {
         .foregroundStyle(action == nil ? Theme.tx2 : Theme.tx)
         .padding(.horizontal, 8)
         .frame(height: 28)
-        .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 6))
+        .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         .onTapGesture { action?() }
     }

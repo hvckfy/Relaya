@@ -35,8 +35,8 @@ struct HostDetailView: View {
                     .font(.system(size: 13))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
-                    .background(Theme.accTint, in: .rect(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+                    .background(Theme.accTint, in: .rect(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
                 }
 
                 HStack(spacing: 10) {
@@ -56,8 +56,8 @@ struct HostDetailView: View {
                 .font(.system(size: 13))
                 .padding(.horizontal, 12)
                 .frame(height: 40)
-                .background(Theme.bg2, in: .rect(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+                .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
 
                 InfoGroup(title: "Подключение", rows: [
                     ("Адрес", host.hostName ?? host.alias),
@@ -107,8 +107,8 @@ private struct InfoGroup: View {
                     }
                 }
             }
-            .background(Theme.bg2, in: .rect(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+            .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
         }
     }
 }

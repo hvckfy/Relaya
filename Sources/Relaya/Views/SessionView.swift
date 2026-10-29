@@ -177,8 +177,8 @@ struct BannerRow<Content: View>: View {
             .padding(.leading, 12)
             .padding(.trailing, 10)
             .padding(.vertical, 8)
-            .background(tint, in: .rect(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(border, lineWidth: 0.5))
+            .background(tint, in: .rect(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(border, lineWidth: 0.5))
     }
 }
 
@@ -248,7 +248,7 @@ private struct EndedOverlay: View {
         .font(.system(size: 13))
         .foregroundStyle(Theme.tx)
         .padding(20)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
+        .background(.ultraThinMaterial, in: .rect(cornerRadius: 12, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.opacity(0.15))
     }

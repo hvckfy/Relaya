@@ -127,12 +127,17 @@ struct RelayaButtonStyle: ButtonStyle {
             .padding(.horizontal, height < 28 ? 8 : 12)
             .frame(height: height)
             .foregroundStyle(kind == .primary ? Color.white : kind == .ghost ? Theme.tx2 : Theme.tx)
-            .background(background, in: .rect(cornerRadius: 6))
+            .background(background, in: shape)
             .overlay {
-                if kind == .normal { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.line, lineWidth: 0.5) }
+                if kind == .normal { shape.stroke(Theme.line, lineWidth: 0.5) }
             }
             .opacity(configuration.isPressed ? 0.75 : 1)
             .contentShape(.rect)
+    }
+
+    /// По HIG: главные действия — капсула, обычные элементы управления — скруглённый прямоугольник.
+    private var shape: AnyShape {
+        kind == .primary ? AnyShape(Capsule()) : AnyShape(RoundedRectangle(cornerRadius: height < 28 ? 7 : 8, style: .continuous))
     }
 
     private var background: Color {

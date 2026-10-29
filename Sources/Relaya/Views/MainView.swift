@@ -142,11 +142,11 @@ private struct SearchField: View {
                 .font(.system(size: 11, design: .monospaced))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
-                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.line, lineWidth: 0.5))
+                .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 0.5))
         }
         .foregroundStyle(Theme.tx2)
         .padding(.horizontal, 10)
         .frame(width: 380, height: 28)
-        .background(Theme.sel, in: .rect(cornerRadius: 7))
+        .background(Theme.sel, in: .capsule)
     }
 }

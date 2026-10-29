@@ -87,7 +87,7 @@ struct OnboardingView: View {
                     .padding(12)
                 }
                 .frame(maxHeight: 200)
-                .background(Theme.bg2, in: .rect(cornerRadius: 8))
+                .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
             }
         }
     }
