@@ -68,7 +68,7 @@ public struct KeyInstaller: Sendable {
 
     /// Дописывает ключ в `~/.ssh/authorized_keys` на сервере, если его там ещё нет.
     public func install(publicKey: String, alias: String, password: SecretRef?) async throws {
-        let remote = #"sh -c 'umask 077; mkdir -p ~/.ssh && read -r k && (grep -qxF "$k" ~/.ssh/authorized_keys 2>/dev/null || printf "%s\n" "$k" >> ~/.ssh/authorized_keys)'"#
+        let remote = Self.installScript
         var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "-o", "NumberOfPasswordPrompts=1"]
         var env: [String: String] = [:]
         if let password {
@@ -80,6 +80,11 @@ public struct KeyInstaller: Sendable {
                                             environment: env, input: publicKey + "\n")
         guard r.succeeded else { throw Failure(Self.explain(r)) }
     }
+
+    /// Удалённый скрипт установки ключа (POSIX sh, работает и в busybox).
+    /// Ключ читается из stdin. Дописывается в `~/.ssh/authorized_keys`, а для root на системах
+    /// с Dropbear (OpenWrt и др.) — ещё и в `/etc/dropbear/authorized_keys`: Dropbear читает ключи root оттуда.
+    static let installScript = #"sh -c 'umask 077; read -r k || exit 1; add() { mkdir -p "${1%/*}" && touch "$1" && chmod 600 "$1" && { grep -qxF "$k" "$1" 2>/dev/null || printf "%s\n" "$k" >> "$1"; }; }; add "$HOME/.ssh/authorized_keys" && chmod 700 "$HOME/.ssh" || exit 1; if [ "$(id -u)" = 0 ] && [ -d /etc/dropbear ]; then add /etc/dropbear/authorized_keys || exit 1; fi'"#
 
     /// Загружает ключ в ssh-agent и сохраняет passphrase в системный Keychain (`--apple-use-keychain`).
     public func addToAgent(keyPath: String, passphrase: SecretRef?) async throws {
@@ -95,7 +100,13 @@ public struct KeyInstaller: Sendable {
             "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15",
             "-i", keyPath, alias, "true",
         ])
-        guard r.succeeded else { throw Failure("Проверочный вход по ключу не прошёл: \(Self.explain(r))") }
+        guard r.succeeded else {
+            var msg = "Проверочный вход по ключу не прошёл: \(Self.explain(r))"
+            if r.message.contains("Permission denied") {
+                msg += ". Ключ на сервер добавлен, но сервер его не принимает — проверьте права (~/.ssh 700, authorized_keys 600, домашний каталог без записи для группы) и не отключён ли вход по ключу в настройках sshd."
+            }
+            throw Failure(msg)
+        }
     }
 
     static func explain(_ r: ProcessResult) -> String {
