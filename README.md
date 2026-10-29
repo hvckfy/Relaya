@@ -40,6 +40,22 @@ Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansib
 - Auto-reconnect after a dropped connection, find in terminal (⌘F).
 - Light/dark/system appearance, terminal color schemes, font settings.
 
+**Files, tunnels, snippets**
+- SFTP browser: navigate, download, upload (drag files from Finder), create folders, delete.
+- Port forwarding: local (`-L`), remote (`-R`) and SOCKS (`-D`) tunnels with start/stop and auto-start.
+- Snippets with `{{variables}}`: insert with ⇧⌘P or run on several hosts at once.
+
+**Remote desktops**
+- VNC opens in the built-in macOS Screen Sharing, RDP in Microsoft's free Windows App — optionally through an SSH tunnel.
+
+**AI agents (MCP)**
+- `Relaya --mcp` is a local MCP server for Claude, Cursor and other clients: `list_hosts`, `run_command`, `read_file`.
+- Per-host access: off, read-only (safe commands only), confirm each command in a system dialog, or trusted. Every call is logged.
+- Agents never see your keys — commands run through your own ssh.
+
+**Server awareness**
+- Detects the server OS (Ubuntu, Debian, OpenWrt, macOS…), shows its icon and offers OS-specific actions.
+
 **Plain system ssh**
 - Sessions run `/usr/bin/ssh`, so ProxyJump, ssh-agent, FIDO keys and every config option behave exactly like in Terminal.app.
 
@@ -65,6 +81,7 @@ Requires macOS 14 Sonoma or later. Universal binary (Apple Silicon and Intel).
 | Switch tab | ⌘1 … ⌘9 |
 | Reconnect | ⌘R |
 | Find in terminal | ⌘F |
+| Snippets | ⇧⌘P |
 | Reload `~/.ssh/config` | ⇧⌘R |
 | Settings | ⌘, |
 
@@ -96,10 +113,11 @@ The result is `build/Relaya.app`. Releases are built by GitHub Actions on every 
 ## Roadmap
 
 - [x] **v0.1** — hosts, groups, tags, Keychain, key wizard, keys screen, themes
-- [ ] **v0.2** — SFTP browser, port forwarding, snippets
-- [ ] **v0.3** — VNC
-- [ ] **v0.4** — RDP
-- [ ] **v0.5** — local MCP server so AI agents can work with your servers safely
+- [x] **v0.2** — SFTP browser, port forwarding, snippets
+- [x] **v0.3** — VNC (via macOS Screen Sharing)
+- [x] **v0.4** — RDP (via Windows App)
+- [x] **v0.5** — local MCP server so AI agents can work with your servers safely
+- [ ] Next — signed & notarized builds, Homebrew cask, built-in VNC/RDP viewer, Relaya Cloud
 
 See [docs/UI_SPEC.md](docs/UI_SPEC.md) for the full UI specification (in Russian).
 
