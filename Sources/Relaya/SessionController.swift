@@ -15,6 +15,8 @@ final class SessionController {
     /// Вызывается, когда ОС удалось угадать по приветствию сервера.
     @ObservationIgnored var onOSGuessed: ((ServerOS) -> Void)?
     @ObservationIgnored private var osGuessed = false
+    /// Команда, которую нужно выполнить после входа (например, из мастера ключей).
+    @ObservationIgnored var pendingCommand: String?
 
     /// Меняется при переподключении — пересоздаёт терминал.
     private(set) var generation = 0
@@ -68,6 +70,11 @@ final class SessionController {
             return
         }
 
+        if let cmd = pendingCommand, Self.looksLikeShellPrompt(tail) {
+            pendingCommand = nil
+            terminal?.send(txt: cmd + "\r")
+        }
+
         // Первый осмысленный вывод после ввода пароля — значит, вошли.
         if sawPasswordPrompt, !loggedIn,
            text.contains(where: \.isLetter), !text.contains("Permission denied") {
@@ -91,6 +98,14 @@ final class SessionController {
         } else {
             passwordPromptWithoutSaved = true
         }
+    }
+
+    /// Последняя строка заканчивается на `$`, `#`, `%` или `>` — shell ждёт ввода.
+    static func looksLikeShellPrompt(_ text: String) -> Bool {
+        let stripped = text.replacingOccurrences(of: #"\x1B\[[0-9;?]*[A-Za-z]"#, with: "", options: .regularExpression)
+        let last = stripped.split(whereSeparator: \.isNewline).last.map(String.init) ?? ""
+        let t = last.trimmingCharacters(in: .whitespaces)
+        return ["$", "#", "%", ">"].contains { t.hasSuffix($0) }
     }
 
     static func fingerprint(in text: String) -> String? {
@@ -183,9 +198,19 @@ final class SessionController {
 final class RelayaTerminalView: LocalProcessTerminalView {
     var onOutput: ((String) -> Void)?
     var onExit: ((Int32?) -> Void)?
+    var highlighter = TerminalHighlighter(rules: [])
+    /// Набор правил, уже переданный в highlighter (чтобы не перекомпилировать на каждом обновлении).
+    var appliedRules: [HighlightRule]?
 
     override func dataReceived(slice: ArraySlice<UInt8>) {
-        super.dataReceived(slice: slice)
+        // Подсвечиваем только целые UTF-8 куски; если символ разорван на границе — выводим как есть.
+        if highlighter.isActive, let text = String(bytes: slice, encoding: .utf8) {
+            feed(text: highlighter.process(text))
+        } else {
+            let pending = highlighter.flush()
+            if !pending.isEmpty { feed(text: pending) }
+            super.dataReceived(slice: slice)
+        }
         onOutput?(String(decoding: slice, as: UTF8.self))
     }
 
@@ -225,5 +250,10 @@ struct TerminalView: NSViewRepresentable {
         view.caretColor = theme.foregroundColor
         view.optionAsMetaKey = settings.optionAsMeta
         view.installColors(theme.ansiColors)
+        let rules = settings.highlightEnabled ? settings.highlightRules : []
+        if view.appliedRules != rules {
+            view.highlighter.setRules(rules)
+            view.appliedRules = rules
+        }
     }
 }
