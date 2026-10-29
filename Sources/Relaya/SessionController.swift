@@ -15,6 +15,7 @@ final class SessionController {
     /// Вызывается, когда ОС удалось угадать по приветствию сервера.
     @ObservationIgnored var onOSGuessed: ((ServerOS) -> Void)?
     @ObservationIgnored private var osGuessed = false
+    @ObservationIgnored private var retryPasswordOnly = false
     /// Команда, которую нужно выполнить после входа (например, из мастера ключей).
     @ObservationIgnored var pendingCommand: String?
 
@@ -24,6 +25,8 @@ final class SessionController {
     /// Отпечаток нового сервера, ждущий решения пользователя.
     var hostKeyPrompt: String?
     var hostKeyChanged = false
+    /// Сервер оборвал вход после перебора ключей — переподключились сразу по паролю.
+    private(set) var passwordOnly = false
     /// ssh спрашивает пароль, а в Keychain его нет.
     var passwordPromptWithoutSaved = false
     /// Сохранённый пароль не подошёл.
@@ -56,6 +59,11 @@ final class SessionController {
             onOSGuessed?(os)
         }
 
+        if !passwordOnly, text.contains("Too many authentication failures") {
+            // ssh перебрал ключи из агента, и сервер закрыл соединение до запроса пароля.
+            passwordOnly = true
+            retryPasswordOnly = true
+        }
         if text.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") {
             hostKeyChanged = true
         }
@@ -133,6 +141,11 @@ final class SessionController {
     // MARK: - Завершение и переподключение
 
     func processEnded(code: Int32?, autoReconnect: Bool) {
+        if retryPasswordOnly {
+            retryPasswordOnly = false
+            reconnect()
+            return
+        }
         ended = true
         exitCode = code
         hostKeyPrompt = nil
@@ -233,7 +246,8 @@ struct TerminalView: NSViewRepresentable {
         view.onOutput = { [weak controller] text in controller?.handleOutput(text) }
         let autoReconnect = settings.autoReconnect
         view.onExit = { [weak controller] code in controller?.processEnded(code: code, autoReconnect: autoReconnect) }
-        view.startProcess(executable: "/usr/bin/ssh", args: [controller.host.alias])
+        let options = controller.passwordOnly ? KeyInstaller.passwordOnlyOptions : []
+        view.startProcess(executable: "/usr/bin/ssh", args: options + [controller.host.alias])
         DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
         return view
     }

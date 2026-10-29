@@ -93,6 +93,13 @@ private struct SessionBanners: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if controller.passwordOnly {
+                BannerRow(tint: Theme.accTint, border: Theme.line) {
+                    Image(systemName: "key.slash").foregroundStyle(Theme.acc)
+                    Text("Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if let fp = controller.hostKeyPrompt {
                 BannerRow(tint: Theme.orgTint, border: Theme.org) {
                     Image(systemName: "checkmark.shield").foregroundStyle(Theme.org)
@@ -153,7 +160,7 @@ private struct SessionBanners: View {
     }
 
     private var anyVisible: Bool {
-        controller.hostKeyChanged || controller.hostKeyPrompt != nil || controller.savedPasswordRejected
+        controller.passwordOnly || controller.hostKeyChanged || controller.hostKeyPrompt != nil || controller.savedPasswordRejected
             || controller.passwordPromptWithoutSaved || (controller.offerKeySetup && settings.offerKeySetup)
     }
 }
