@@ -10,6 +10,8 @@ struct RelayaApp: App {
             MainView()
                 .environment(model)
                 .environment(model.settings)
+                // Смена темы перерисовывает окно; терминалы при этом переиспользуются (см. TerminalView).
+                .id(model.settings.themeRevision)
                 .frame(minWidth: 900, minHeight: 560)
                 .task {
                     model.settings.applyAppearance()

@@ -1,29 +1,38 @@
 import SwiftUI
 import RelayaCore
 
-/// Токены из docs/design (`.lt` / `.dk`). Каждый цвет меняется вместе с темой системы.
+/// Цвета интерфейса. Каждый токен — динамический NSColor: берёт значение из текущей
+/// темы оформления (`ThemeStore.current`) и её светлого или тёмного варианта.
 enum Theme {
-    static let bg = dynamic(0xFFFFFF, 0x1E1E20)
-    static let bg2 = dynamic(0xF5F5F7, 0x252527)
-    static let side = dynamic(0xECECEF, 0x2A2A2D)
-    static let bar = dynamic(0xF6F6F7, 0x2C2C2E)
-    static let line = dynamic(0x000000, 0xFFFFFF, lightAlpha: 0.12, darkAlpha: 0.13)
-    static let line2 = dynamic(0x000000, 0xFFFFFF, lightAlpha: 0.06, darkAlpha: 0.07)
-    static let tx = dynamic(0x1D1D1F, 0xF5F5F7)
-    static let tx2 = dynamic(0x5F5F64, 0xA8A8AE)
-    static let acc = dynamic(0x0066CC, 0x5AA9FF)
-    static let accBg = dynamic(0x0066CC, 0x0B6BD3)
-    static let accTint = dynamic(0x0066CC, 0x5AA9FF, lightAlpha: 0.1, darkAlpha: 0.16)
-    static let sel = dynamic(0x000000, 0xFFFFFF, lightAlpha: 0.08, darkAlpha: 0.1)
-    static let red = dynamic(0xC4161C, 0xFF6B6B)
-    static let org = dynamic(0xA84B00, 0xFFB347)
-    static let orgTint = dynamic(0xA84B00, 0xFFB347, lightAlpha: 0.1, darkAlpha: 0.14)
-    static let grn = dynamic(0x1B7A33, 0x5ED47A)
-    static let grnTint = dynamic(0x1B7A33, 0x5ED47A, lightAlpha: 0.1, darkAlpha: 0.14)
-    static let redTint = dynamic(0xC4161C, 0xFF6B6B, lightAlpha: 0.08, darkAlpha: 0.14)
+    static let bg = token(\.bg)
+    static let bg2 = token(\.bg2)
+    static let side = token(\.side)
+    static let bar = token(\.bar)
+    static let line = token(\.tx, light: 0.12, dark: 0.13)
+    static let line2 = token(\.tx, light: 0.06, dark: 0.07)
+    static let tx = token(\.tx)
+    static let tx2 = token(\.tx2)
+    static let acc = token(\.acc)
+    static let accBg = token(\.accBg)
+    static let accTint = token(\.acc, light: 0.1, dark: 0.16)
+    static let sel = token(\.tx, light: 0.08, dark: 0.1)
+    static let red = token(\.red)
+    static let org = token(\.org)
+    static let orgTint = token(\.org, light: 0.1, dark: 0.14)
+    static let grn = token(\.grn)
+    static let grnTint = token(\.grn, light: 0.1, dark: 0.14)
+    static let redTint = token(\.red, light: 0.08, dark: 0.14)
 
     static let termBg = dynamicNS(0xFFFFFF, 0x161618)
     static let termTx = dynamicNS(0x1D1D1F, 0xE8E8EA)
+
+    static func token(_ key: KeyPath<UIColors, UInt32> & Sendable, light: Double = 1, dark: Double = 1) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let theme = ThemeStore.current
+            return NSColor(hex: (isDark ? theme.dark : theme.light)[keyPath: key], alpha: isDark ? dark : light)
+        })
+    }
 
     /// Палитра «Цвет хоста» из редактора.
     static let hostColors: [(name: String, label: String, color: Color)] = [

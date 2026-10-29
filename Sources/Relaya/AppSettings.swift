@@ -20,6 +20,42 @@ final class AppSettings {
 
     private let defaults = UserDefaults.standard
 
+    /// Тема оформления интерфейса (встроенная или своя).
+    var uiThemeID: String {
+        didSet { defaults.set(uiThemeID, forKey: "uiTheme"); applyUITheme() }
+    }
+    var customThemes: [UITheme] {
+        didSet {
+            defaults.set(try? JSONEncoder().encode(customThemes), forKey: "customThemes")
+            applyUITheme()
+        }
+    }
+    /// Меняется при любой правке темы — корневые view перерисовываются по нему.
+    private(set) var themeRevision = 0
+
+    var allUIThemes: [UITheme] { UITheme.builtIns + customThemes }
+    var uiTheme: UITheme { allUIThemes.first { $0.id == uiThemeID } ?? .relaya }
+
+    func applyUITheme() {
+        ThemeStore.current = uiTheme
+        themeRevision += 1
+    }
+
+    /// Новая своя тема — копия текущей.
+    func duplicateCurrentTheme() {
+        var copy = uiTheme
+        copy.id = "custom-" + UUID().uuidString
+        copy.name = uiTheme.name + " (копия)"
+        copy.builtIn = false
+        customThemes.append(copy)
+        uiThemeID = copy.id
+    }
+
+    func deleteCustomTheme(_ id: String) {
+        customThemes.removeAll { $0.id == id }
+        if uiThemeID == id { uiThemeID = UITheme.relaya.id }
+    }
+
     var appearance: Appearance {
         didSet { defaults.set(appearance.rawValue, forKey: "appearance"); applyAppearance() }
     }
@@ -50,6 +86,9 @@ final class AppSettings {
 
     init() {
         appearance = Appearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
+        uiThemeID = defaults.string(forKey: "uiTheme") ?? UITheme.relaya.id
+        customThemes = defaults.data(forKey: "customThemes")
+            .flatMap { try? JSONDecoder().decode([UITheme].self, from: $0) } ?? []
         terminalTheme = defaults.string(forKey: "terminalTheme") ?? TerminalTheme.relayaDark.id
         fontName = defaults.string(forKey: "fontName") ?? "SF Mono"
         fontSize = defaults.object(forKey: "fontSize") as? Double ?? 12.5
@@ -59,6 +98,7 @@ final class AppSettings {
         highlightEnabled = defaults.object(forKey: "highlightEnabled") as? Bool ?? true
         highlightRules = defaults.data(forKey: "highlightRules")
             .flatMap { try? JSONDecoder().decode([HighlightRule].self, from: $0) } ?? HighlightRule.defaults
+        ThemeStore.current = uiTheme
     }
 
     func applyAppearance() {
