@@ -45,6 +45,15 @@ struct MainView: View {
             }
         }
         .toolbarBackground(Theme.bar, for: .windowToolbar)
+        .sheet(item: $model.keyWizard) { request in
+            KeyWizardView(host: request.host, model: model)
+                .environment(model)
+        }
+        .sheet(isPresented: $model.showOnboarding) {
+            OnboardingView()
+                .environment(model)
+                .interactiveDismissDisabled()
+        }
         .sheet(item: $model.editor) { request in
             HostEditorView(original: request.original, draft: request.draft)
                 .environment(model)
@@ -78,7 +87,9 @@ struct MainView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let session = model.activeSession {
+        if model.screen == .keys {
+            KeysView()
+        } else if let session = model.activeSession {
             SessionView(session: session)
                 // id привязывает терминал к сессии — при переключении вкладок процесс не пересоздаётся.
                 .id(session.id)

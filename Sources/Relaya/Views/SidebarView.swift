@@ -62,9 +62,10 @@ struct SidebarView: View {
 
             Divider().overlay(Theme.line)
             VStack(spacing: 2) {
-                NavRow(label: "Ключи", systemImage: "key")
-                NavRow(label: "Туннели", systemImage: "arrow.left.arrow.right")
-                NavRow(label: "Агенты (MCP)", systemImage: "sparkles")
+                NavRow(label: "Ключи", systemImage: "key", meta: nil,
+                       selected: model.screen == .keys) { model.screen = model.screen == .keys ? .hosts : .keys }
+                NavRow(label: "Туннели", systemImage: "arrow.left.arrow.right", meta: "скоро")
+                NavRow(label: "Агенты (MCP)", systemImage: "sparkles", meta: "скоро")
             }
             .padding(8)
         }
@@ -116,10 +117,11 @@ struct HostRow: View {
         .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 6))
         .contentShape(.rect)
         .onTapGesture(count: 2) { model.connect(host) }
-        .onTapGesture { model.selectedHostID = host.id; model.activeSessionID = nil }
+        .onTapGesture { model.selectedHostID = host.id; model.activeSessionID = nil; model.screen = .hosts }
         .contextMenu {
             Button("Подключить") { model.connect(host) }
             Button("Изменить…") { model.editor = EditorRequest(original: host) }
+            Button("Настроить вход по ключу…") { model.keyWizard = KeyWizardRequest(host: host) }
             Button("Дублировать…") {
                 var copy = host
                 copy.alias += "-copy"
@@ -180,6 +182,9 @@ private struct TagFilterBar: View {
 private struct NavRow: View {
     let label: String
     let systemImage: String
+    var meta: String?
+    var selected = false
+    var action: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -188,13 +193,18 @@ private struct NavRow: View {
                 .foregroundStyle(Theme.tx2)
             Text(label)
             Spacer()
-            Text("скоро")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.tx2)
+            if let meta {
+                Text(meta)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.tx2)
+            }
         }
         .font(.system(size: 13))
-        .foregroundStyle(Theme.tx2)
+        .foregroundStyle(action == nil ? Theme.tx2 : Theme.tx)
         .padding(.horizontal, 8)
         .frame(height: 28)
+        .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 6))
+        .contentShape(.rect)
+        .onTapGesture { action?() }
     }
 }

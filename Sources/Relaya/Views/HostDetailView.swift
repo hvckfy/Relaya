@@ -32,8 +32,10 @@ struct HostDetailView: View {
 
                 if !host.usesKey {
                     HStack(spacing: 10) {
-                        Text("Ключ не указан — скорее всего, вход по паролю. Мастер настройки ключа появится в v0.1.")
+                        Text("Ключ не указан — скорее всего, вход по паролю.")
                             .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Настроить вход по ключу") { model.keyWizard = KeyWizardRequest(host: host) }
+                            .buttonStyle(.relaya(.primary, height: 24))
                     }
                     .font(.system(size: 13))
                     .padding(.horizontal, 12)
