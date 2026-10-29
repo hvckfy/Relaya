@@ -133,6 +133,12 @@ public struct KeyInstaller: Sendable {
 
     static func explain(_ r: ProcessResult) -> String {
         let m = r.message
+        if m.contains("Connection refused") {
+            return "сервер отклонил подключение к SSH (Connection refused). Обычно это значит, что sshd не запущен или ваш IP временно заблокирован после неудачных входов (fail2ban) — подождите 10–60 минут или проверьте сервер через консоль хостинга"
+        }
+        if m.contains("Operation timed out") || m.contains("Connection timed out") {
+            return "сервер не отвечает (таймаут) — проверьте адрес, порт и файрвол"
+        }
         if m.contains("Too many authentication failures") {
             return "сервер оборвал вход после перебора ключей из ssh-agent (Too many authentication failures). Введите пароль сервера на первом шаге — тогда вход пойдёт сразу по паролю"
         }
