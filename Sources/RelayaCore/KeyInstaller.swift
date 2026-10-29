@@ -38,7 +38,7 @@ public struct KeyInstaller: Sendable {
         }
     }
 
-    func askpassEnvironment(_ secret: SecretRef) -> [String: String] {
+    public func askpassEnvironment(_ secret: SecretRef) -> [String: String] {
         [
             "SSH_ASKPASS": askpassExecutable,
             "SSH_ASKPASS_REQUIRE": "force",
