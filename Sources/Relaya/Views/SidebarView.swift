@@ -64,7 +64,9 @@ struct SidebarView: View {
             VStack(spacing: 2) {
                 NavRow(label: "Ключи", systemImage: "key", meta: nil,
                        selected: model.screen == .keys) { model.screen = model.screen == .keys ? .hosts : .keys }
-                NavRow(label: "Туннели", systemImage: "arrow.left.arrow.right", meta: "скоро")
+                NavRow(label: "Туннели", systemImage: "arrow.left.arrow.right",
+                       meta: model.tunnels.activeCount > 0 ? "\(model.tunnels.activeCount) акт." : nil,
+                       selected: model.screen == .tunnels) { model.screen = model.screen == .tunnels ? .hosts : .tunnels }
                 NavRow(label: "Агенты (MCP)", systemImage: "sparkles", meta: "скоро")
             }
             .padding(8)

@@ -14,7 +14,7 @@ struct Session: Identifiable, Hashable {
 
 /// Раздел в основной области окна.
 enum Screen: Hashable {
-    case hosts, keys
+    case hosts, keys, tunnels
 }
 
 /// Запуск мастера «Вход по ключу».
@@ -41,6 +41,7 @@ final class AppModel {
     let store = SSHConfigStore()
     let keychain = KeychainStore()
     let settings = AppSettings()
+    @ObservationIgnored lazy var tunnels = TunnelManager(askpassExecutable: askpassExecutable)
 
     var screen: Screen = .hosts
     var keyWizard: KeyWizardRequest?

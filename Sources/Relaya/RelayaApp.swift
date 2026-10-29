@@ -16,6 +16,7 @@ struct RelayaApp: App {
                 .task {
                     model.settings.applyAppearance()
                     model.reloadHosts()
+                    model.tunnels.startAutoStart(hosts: model.hosts)
                 }
         }
         .windowToolbarStyle(.unified)

@@ -101,6 +101,8 @@ struct MainView: View {
     @ViewBuilder private var content: some View {
         if model.screen == .keys {
             KeysView()
+        } else if model.screen == .tunnels {
+            TunnelsView()
         } else if let session = model.activeSession {
             SessionView(session: session)
                 // id привязывает терминал к сессии — при переключении вкладок процесс не пересоздаётся.
