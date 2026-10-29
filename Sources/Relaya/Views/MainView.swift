@@ -111,6 +111,8 @@ struct MainView: View {
             TunnelsView()
         } else if model.screen == .snippets {
             SnippetsView()
+        } else if model.screen == .desktops {
+            DesktopsView()
         } else if let session = model.activeSession {
             SessionView(session: session)
                 // id привязывает терминал к сессии — при переключении вкладок процесс не пересоздаётся.

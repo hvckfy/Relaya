@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 import RelayaCore
 
@@ -14,7 +14,7 @@ struct Session: Identifiable, Hashable {
 
 /// Раздел в основной области окна.
 enum Screen: Hashable {
-    case hosts, keys, tunnels, snippets
+    case hosts, keys, tunnels, snippets, desktops
 }
 
 /// Запуск мастера «Вход по ключу».
@@ -47,6 +47,10 @@ final class AppModel {
     var keyWizard: KeyWizardRequest?
     var sftpHost: SSHHost?
     var snippetPalette = false
+    var desktops: [RemoteDesktop] = RemoteDesktopStore().load() {
+        didSet { try? RemoteDesktopStore().save(desktops) }
+    }
+    var desktopStatus: [RemoteDesktop.ID: String] = [:]
     var snippets: [Snippet] = SnippetStore().load() {
         didSet { try? SnippetStore().save(snippets) }
     }
@@ -203,6 +207,48 @@ final class AppModel {
     func setPasswordLogin(_ enabled: Bool, on host: SSHHost) {
         let host = current(host)
         run((host.os ?? .linux).passwordLoginCommand(enabled: enabled), on: host)
+    }
+
+    /// Открывает VNC в «Общем экране», RDP — в Windows App; при необходимости через SSH-туннель.
+    func open(_ desktop: RemoteDesktop) async {
+        desktopStatus[desktop.id] = nil
+        var host = desktop.address
+        var port = desktop.port
+        let localPort = RemoteDesktop.freeLocalPort()
+        if let tunnel = desktop.tunnel(localPort: localPort) {
+            desktopStatus[desktop.id] = "Поднимаю SSH-туннель…"
+            tunnels.start(tunnel, hosts: hosts)
+            for _ in 0..<20 {
+                try? await Task.sleep(for: .milliseconds(250))
+                if case .failed(let m) = tunnels.status(of: tunnel) { desktopStatus[desktop.id] = "Туннель: \(m)"; return }
+                if tunnels.status(of: tunnel) == .running { break }
+            }
+            host = "localhost"
+            port = localPort
+        }
+        switch desktop.kind {
+        case .vnc:
+            guard let url = desktop.vncURL(host: host, port: port) else { return }
+            NSWorkspace.shared.open(url)
+            desktopStatus[desktop.id] = nil
+        case .rdp:
+            let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "Relaya")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let file = dir.appending(path: "\(desktop.name.isEmpty ? "desktop" : desktop.name).rdp")
+            do {
+                try desktop.rdpFile(host: host, port: port).write(to: file, atomically: true, encoding: .utf8)
+            } catch {
+                desktopStatus[desktop.id] = error.localizedDescription
+                return
+            }
+            if NSWorkspace.shared.urlForApplication(toOpen: file) == nil {
+                desktopStatus[desktop.id] = "Нет приложения для RDP. Установите бесплатное Windows App от Microsoft из App Store."
+                if let store = URL(string: "macappstore://apps.apple.com/app/id1295203466") { NSWorkspace.shared.open(store) }
+                return
+            }
+            NSWorkspace.shared.open(file)
+            desktopStatus[desktop.id] = nil
+        }
     }
 
     func closeActiveSession() {
