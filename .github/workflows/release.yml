@@ -1,0 +1,33 @@
+name: Release
+
+# Тег вида v0.1.0 → собранный Relaya.zip в GitHub Release.
+# Пока без подписи и нотаризации: при первом запуске macOS попросит подтвердить открытие.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
+
+      - name: Build app bundle
+        run: scripts/bundle.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Ad-hoc sign
+        run: codesign --force --deep --sign - build/Relaya.app
+
+      - name: Package
+        run: ditto -c -k --keepParent build/Relaya.app "build/Relaya-${GITHUB_REF_NAME}.zip"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "build/Relaya-${GITHUB_REF_NAME}.zip" --generate-notes
