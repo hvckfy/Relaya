@@ -72,6 +72,7 @@ public struct SSHConfigDocument: Sendable {
         let tags = SSHConfigParser.splitTags(host.tags.joined(separator: ","))
         if !tags.isEmpty { meta.append("tags=\(SSHConfigParser.metaValue(tags.joined(separator: ",")))") }
         if let c = host.color, !c.isEmpty { meta.append("color=\(c)") }
+        if let os = host.os { meta.append("os=\(os.rawValue)") }
         if !meta.isEmpty { out.append("# relaya: " + meta.joined(separator: " ")) }
 
         out.append("Host \(host.alias)")

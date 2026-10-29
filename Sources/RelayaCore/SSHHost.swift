@@ -19,6 +19,8 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
     /// Метки для фильтрации; порядок — как ввёл пользователь.
     public var tags: [String]
     public var color: String?
+    /// ОС сервера — определяется автоматически после подключения.
+    public var os: ServerOS?
 
     public init(
         alias: String,
@@ -32,7 +34,8 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
         compression: Bool? = nil,
         group: String? = nil,
         tags: [String] = [],
-        color: String? = nil
+        color: String? = nil,
+        os: ServerOS? = nil
     ) {
         self.alias = alias
         self.hostName = hostName
@@ -46,6 +49,7 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
         self.group = group
         self.tags = tags
         self.color = color
+        self.os = os
     }
 
     /// Подпись `user@hostname:port` для списка хостов.

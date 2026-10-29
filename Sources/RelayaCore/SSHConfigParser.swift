@@ -44,7 +44,7 @@ public enum SSHConfigParser {
                     .filter { !isPattern($0) }
                     .map {
                         SSHHost(alias: $0, group: pendingMeta.group,
-                                tags: pendingMeta.tags, color: pendingMeta.color)
+                                tags: pendingMeta.tags, color: pendingMeta.color, os: pendingMeta.os)
                     }
                 pendingMeta = Meta()
             case "match":
@@ -67,6 +67,7 @@ public enum SSHConfigParser {
         var group: String?
         var tags: [String] = []
         var color: String?
+        var os: ServerOS?
     }
 
     static func aliases(in value: String) -> [String] {
@@ -118,6 +119,7 @@ public enum SSHConfigParser {
             // Старый формат v0.0.2: окружение становится меткой.
             case "env": meta.tags.append(kv[1].lowercased())
             case "color": meta.color = kv[1].lowercased()
+            case "os": meta.os = ServerOS(rawValue: kv[1].lowercased())
             default: break
             }
         }

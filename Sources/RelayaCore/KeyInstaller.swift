@@ -86,6 +86,16 @@ public struct KeyInstaller: Sendable {
     /// с Dropbear (OpenWrt и др.) — ещё и в `/etc/dropbear/authorized_keys`: Dropbear читает ключи root оттуда.
     static let installScript = #"sh -c 'umask 077; read -r k || exit 1; add() { mkdir -p "${1%/*}" && touch "$1" && chmod 600 "$1" && { grep -qxF "$k" "$1" 2>/dev/null || printf "%s\n" "$k" >> "$1"; }; }; add "$HOME/.ssh/authorized_keys" && chmod 700 "$HOME/.ssh" || exit 1; if [ "$(id -u)" = 0 ] && [ -d /etc/dropbear ]; then add /etc/dropbear/authorized_keys || exit 1; fi'"#
 
+    /// Определяет ОС сервера отдельным неинтерактивным входом (ключ, агент или пароль из Keychain).
+    public func detectOS(alias: String, password: SecretRef?) async -> ServerOS? {
+        var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10", "-o", "NumberOfPasswordPrompts=1"]
+        var env: [String: String] = [:]
+        if let password { env = askpassEnvironment(password) } else { args += ["-o", "BatchMode=yes"] }
+        guard let r = try? await ProcessRunner.run("/usr/bin/ssh", args + [alias, ServerOS.probeCommand], environment: env)
+        else { return nil }
+        return ServerOS.parse(probe: r.stdout + "\n" + r.stderr)
+    }
+
     /// Загружает ключ в ssh-agent и сохраняет passphrase в системный Keychain (`--apple-use-keychain`).
     public func addToAgent(keyPath: String, passphrase: SecretRef?) async throws {
         let env = passphrase.map(askpassEnvironment) ?? [:]
