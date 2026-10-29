@@ -36,9 +36,18 @@ final class AppModel {
     var editor: EditorRequest?
     var pendingDelete: SSHHost?
     var alertMessage: String?
+    /// Хост, для которого запрошено имя новой группы.
+    var newGroupFor: SSHHost?
+
+    /// Свёрнутые группы в sidebar — удобство одного пользователя, поэтому в UserDefaults, а не в конфиге.
+    var collapsedGroups: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "collapsedGroups") ?? []) {
+        didSet { UserDefaults.standard.set(Array(collapsedGroups), forKey: "collapsedGroups") }
+    }
 
     var selectedHost: SSHHost? { hosts.first { $0.id == selectedHostID } }
     var activeSession: Session? { sessions.first { $0.id == activeSessionID } }
+
+    static let ungrouped = "Без группы"
 
     var groups: [String] {
         Array(Set(hosts.compactMap(\.group).filter { !$0.isEmpty })).sorted()
@@ -55,7 +64,7 @@ final class AppModel {
                 if lhs.key.isEmpty != rhs.key.isEmpty { return rhs.key.isEmpty }
                 return lhs.key < rhs.key
             }
-            .map { (name: $0.key.isEmpty ? "Без группы" : $0.key, hosts: $0.value) }
+            .map { (name: $0.key.isEmpty ? Self.ungrouped : $0.key, hosts: $0.value) }
     }
 
     func reloadHosts() {
@@ -75,6 +84,24 @@ final class AppModel {
         try store.save(doc)
         reloadHosts()
         selectedHostID = host.alias
+    }
+
+    /// Переносит хост в группу (`nil` — «Без группы»), меняя только комментарий `# relaya:` над блоком.
+    func move(_ host: SSHHost, toGroup group: String?) {
+        var updated = host
+        let trimmed = group?.trimmingCharacters(in: .whitespaces)
+        updated.group = trimmed?.isEmpty == false ? trimmed : nil
+        guard updated.group != host.group else { return }
+        do {
+            try save(updated, originalAlias: host.alias)
+            if let g = updated.group { collapsedGroups.remove(g) }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    func toggleCollapsed(_ group: String) {
+        if collapsedGroups.contains(group) { collapsedGroups.remove(group) } else { collapsedGroups.insert(group) }
     }
 
     func delete(_ host: SSHHost) {

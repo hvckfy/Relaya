@@ -59,6 +59,15 @@ struct MainView: View {
             Text("Блок Host будет удалён из ~/.ssh/config. Копия прежнего файла сохранится в config.bak.")
         }
         .alert(
+            "Новая группа",
+            isPresented: Binding(get: { model.newGroupFor != nil }, set: { if !$0 { model.newGroupFor = nil } }),
+            presenting: model.newGroupFor
+        ) { host in
+            NewGroupActions(host: host)
+        } message: { host in
+            Text("Хост «\(host.alias)» будет перенесён в неё.")
+        }
+        .alert(
             "Не получилось",
             isPresented: Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })
         ) {
@@ -78,6 +87,20 @@ struct MainView: View {
         } else {
             EmptyStateView()
         }
+    }
+}
+
+/// Поле имени и кнопки для алерта «Новая группа».
+private struct NewGroupActions: View {
+    @Environment(AppModel.self) private var model
+    let host: SSHHost
+    @State private var name = ""
+
+    var body: some View {
+        TextField("Например: личные, работа", text: $name)
+        Button("Создать") { model.move(host, toGroup: name) }
+            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+        Button("Отмена", role: .cancel) {}
     }
 }
 

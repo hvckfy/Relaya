@@ -10,21 +10,35 @@ struct SidebarView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(model.groupedHosts, id: \.name) { group in
-                        HStack {
-                            Text(group.name)
-                            Spacer()
-                            Text("\(group.hosts.count)")
+                        // При поиске группы раскрыты — иначе найденный хост можно не увидеть.
+                        let collapsed = model.searchText.isEmpty && model.collapsedGroups.contains(group.name)
+                        Button {
+                            withAnimation(.easeOut(duration: 0.15)) { model.toggleCollapsed(group.name) }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .rotationEffect(.degrees(collapsed ? 0 : 90))
+                                Text(group.name)
+                                Spacer()
+                                Text("\(group.hosts.count)")
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.tx2)
+                            .padding(.horizontal, 8)
+                            .padding(.top, 10)
+                            .padding(.bottom, 4)
+                            .contentShape(.rect)
                         }
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.tx2)
-                        .padding(.horizontal, 8)
-                        .padding(.top, 10)
-                        .padding(.bottom, 4)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(group.name), \(group.hosts.count) хостов, \(collapsed ? "свёрнута" : "развёрнута")")
 
-                        ForEach(group.hosts) { host in
-                            HostRow(host: host,
-                                    selected: model.selectedHostID == host.id,
-                                    connected: model.isConnected(host))
+                        if !collapsed {
+                            ForEach(group.hosts) { host in
+                                HostRow(host: host,
+                                        selected: model.selectedHostID == host.id,
+                                        connected: model.isConnected(host))
+                            }
                         }
                     }
                 }
@@ -103,6 +117,16 @@ struct HostRow: View {
                 var copy = host
                 copy.alias += "-copy"
                 model.editor = EditorRequest(original: nil, draft: copy)
+            }
+            Menu("Переместить в группу") {
+                ForEach(model.groups.filter { $0 != host.group }, id: \.self) { g in
+                    Button(g) { model.move(host, toGroup: g) }
+                }
+                if host.group != nil {
+                    Button(AppModel.ungrouped) { model.move(host, toGroup: nil) }
+                }
+                Divider()
+                Button("Новая группа…") { model.newGroupFor = host }
             }
             Button("Копировать ssh-команду") {
                 NSPasteboard.general.clearContents()
