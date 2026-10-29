@@ -1,9 +1,12 @@
 import SwiftUI
+import RelayaCore
 
+/// Главное окно (docs/design/Main): sidebar · вкладки · хлебные крошки · терминал · статус-бар.
 struct MainView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
@@ -11,33 +14,93 @@ struct MainView: View {
             VStack(spacing: 0) {
                 if !model.sessions.isEmpty {
                     SessionTabBar()
-                    Divider()
                 }
                 content
             }
+            .background(Theme.bg)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .principal) {
+                SearchField(text: $model.searchText)
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    model.editor = EditorRequest(original: nil)
+                } label: {
+                    Label("Хост", systemImage: "plus")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.relaya)
+                .help("Новый хост (⇧⌘N)")
+
                 Button {
                     if let host = model.selectedHost { model.connect(host) }
                 } label: {
                     Label("Подключить", systemImage: "bolt.fill")
+                        .labelStyle(.titleAndIcon)
                 }
+                .buttonStyle(.relayaPrimary)
                 .disabled(model.selectedHost == nil)
-                .keyboardShortcut(.return, modifiers: .command)
+                .help("Подключить (⌘T)")
             }
+        }
+        .toolbarBackground(Theme.bar, for: .windowToolbar)
+        .sheet(item: $model.editor) { request in
+            HostEditorView(original: request.original, draft: request.draft)
+                .environment(model)
+        }
+        .confirmationDialog(
+            "Удалить хост «\(model.pendingDelete?.alias ?? "")»?",
+            isPresented: Binding(get: { model.pendingDelete != nil }, set: { if !$0 { model.pendingDelete = nil } }),
+            presenting: model.pendingDelete
+        ) { host in
+            Button("Удалить из ~/.ssh/config", role: .destructive) { model.delete(host) }
+        } message: { _ in
+            Text("Блок Host будет удалён из ~/.ssh/config. Копия прежнего файла сохранится в config.bak.")
+        }
+        .alert(
+            "Не получилось",
+            isPresented: Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.alertMessage ?? "")
         }
     }
 
     @ViewBuilder private var content: some View {
-        if let session = model.sessions.first(where: { $0.id == model.activeSessionID }) {
-            // id привязывает терминал к сессии — при переключении вкладок процесс не пересоздаётся.
-            TerminalSessionView(session: session)
+        if let session = model.activeSession {
+            SessionView(session: session)
+                // id привязывает терминал к сессии — при переключении вкладок процесс не пересоздаётся.
                 .id(session.id)
         } else if let host = model.selectedHost {
             HostDetailView(host: host)
         } else {
             EmptyStateView()
         }
+    }
+}
+
+private struct SearchField: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+            TextField("Хосты, действия, сниппеты…", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.tx)
+            Text("⌘K")
+                .font(.system(size: 11, design: .monospaced))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.line, lineWidth: 0.5))
+        }
+        .foregroundStyle(Theme.tx2)
+        .padding(.horizontal, 10)
+        .frame(width: 380, height: 28)
+        .background(Theme.sel, in: .rect(cornerRadius: 7))
     }
 }

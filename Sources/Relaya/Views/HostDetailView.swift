@@ -7,31 +7,99 @@ struct HostDetailView: View {
     let host: SSHHost
 
     var body: some View {
-        Form {
-            Section {
-                LabeledContent("Адрес", value: host.hostName ?? host.alias)
-                LabeledContent("Пользователь", value: host.user ?? "—")
-                LabeledContent("Порт", value: String(host.port ?? 22))
-                if let jump = host.proxyJump { LabeledContent("ProxyJump", value: jump) }
-            } header: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(host.alias).font(.title2.bold())
-                    Text(host.subtitle).foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(host.alias).font(.system(size: 22, weight: .bold))
+                            if let env = host.environment {
+                                Text(env.rawValue)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(env.color)
+                                    .padding(.horizontal, 8)
+                                    .frame(height: 20)
+                                    .background(env.tint, in: .capsule)
+                            }
+                        }
+                        Text(host.subtitle)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(Theme.tx2)
+                    }
+                    Spacer()
+                    Button("Изменить") { model.editor = EditorRequest(original: host) }
+                        .buttonStyle(.relaya)
+                    Button {
+                        model.connect(host)
+                    } label: {
+                        Label("Подключить", systemImage: "bolt.fill")
+                    }
+                    .buttonStyle(.relayaPrimary)
                 }
-                .padding(.bottom, 8)
-            }
 
-            Section("Аутентификация") {
-                LabeledContent("Ключ", value: host.identityFile ?? "по умолчанию / пароль")
-            }
+                if !host.usesKey {
+                    HStack(spacing: 10) {
+                        Text("Ключ не указан — скорее всего, вход по паролю. Мастер настройки ключа появится в v0.1.")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .font(.system(size: 13))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(Theme.accTint, in: .rect(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+                }
 
-            Section {
-                Button("Подключить") { model.connect(host) }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                InfoGroup(title: "Подключение", rows: [
+                    ("Адрес", host.hostName ?? host.alias),
+                    ("Пользователь", host.user ?? "—"),
+                    ("Порт", String(host.port ?? 22)),
+                    ("ProxyJump", host.proxyJump ?? "—"),
+                ])
+                InfoGroup(title: "Аутентификация", rows: [
+                    ("Ключ", host.identityFile ?? "по умолчанию / пароль"),
+                    ("Агент-форвардинг", host.forwardAgent == true ? "да" : "нет"),
+                ])
+                InfoGroup(title: "ssh", rows: [("Команда", "ssh \(host.alias)")])
             }
+            .padding(24)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .formStyle(.grouped)
+        .foregroundStyle(Theme.tx)
+    }
+}
+
+private struct InfoGroup: View {
+    let title: String
+    let rows: [(String, String)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.tx2)
+                .padding(.leading, 4)
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                    HStack {
+                        Text(row.0)
+                        Spacer()
+                        Text(row.1)
+                            .font(.system(size: 12.5, design: .monospaced))
+                            .foregroundStyle(Theme.tx2)
+                            .textSelection(.enabled)
+                    }
+                    .font(.system(size: 13))
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .overlay(alignment: .bottom) {
+                        if i < rows.count - 1 { Divider().overlay(Theme.line2).padding(.leading, 12) }
+                    }
+                }
+            }
+            .background(Theme.bg2, in: .rect(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+        }
     }
 }
 
@@ -39,14 +107,24 @@ struct EmptyStateView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        ContentUnavailableView {
-            Label("Выберите хост", systemImage: "terminal")
-        } description: {
-            Text(model.hosts.isEmpty
-                 ? "Ваши хосты живут в ~/.ssh/config. Добавьте туда хост — Relaya подхватит его."
-                 : "Ваши ключи живут в ~/.ssh, а не у нас.")
-        } actions: {
-            Button("Перечитать ~/.ssh/config") { model.reloadHosts() }
+        VStack(spacing: 14) {
+            Image(systemName: "terminal")
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(Theme.tx2)
+            Text(model.hosts.isEmpty ? "Добавьте первый хост" : "Выберите хост")
+                .font(.system(size: 17, weight: .bold))
+            Text("Ваши ключи живут в ~/.ssh, а не у нас.\nХосты Relaya — это ваш ~/.ssh/config.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Theme.tx2)
+            HStack(spacing: 8) {
+                Button("Добавить хост") { model.editor = EditorRequest(original: nil) }
+                    .buttonStyle(.relayaPrimary)
+                Button("Перечитать ~/.ssh/config") { model.reloadHosts() }
+                    .buttonStyle(.relaya)
+            }
         }
+        .font(.system(size: 13))
+        .foregroundStyle(Theme.tx)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
