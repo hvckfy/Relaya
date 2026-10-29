@@ -81,10 +81,7 @@ struct HostRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "chevron.right.2")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.tx2)
-                .frame(width: 16)
+            OSIcon(os: host.os, size: 18)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
                     Text(host.alias).fontWeight(.medium)
@@ -122,6 +119,7 @@ struct HostRow: View {
             Button("Подключить") { model.connect(host) }
             Button("Изменить…") { model.editor = EditorRequest(original: host) }
             Button("Настроить вход по ключу…") { model.keyWizard = KeyWizardRequest(host: host) }
+            Button("Определить ОС") { Task { await model.detectOS(for: host.alias) } }
             Button("Дублировать…") {
                 var copy = host
                 copy.alias += "-copy"

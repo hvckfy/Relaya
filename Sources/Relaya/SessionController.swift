@@ -12,6 +12,9 @@ final class SessionController {
     private let keychain = KeychainStore()
 
     @ObservationIgnored weak var terminal: RelayaTerminalView?
+    /// Вызывается, когда ОС удалось угадать по приветствию сервера.
+    @ObservationIgnored var onOSGuessed: ((ServerOS) -> Void)?
+    @ObservationIgnored private var osGuessed = false
 
     /// Меняется при переподключении — пересоздаёт терминал.
     private(set) var generation = 0
@@ -45,6 +48,11 @@ final class SessionController {
 
     func handleOutput(_ text: String) {
         tail = String((tail + text).suffix(2000))
+
+        if !osGuessed, host.os == nil, let os = ServerOS.guess(fromBanner: tail) {
+            osGuessed = true
+            onOSGuessed?(os)
+        }
 
         if text.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") {
             hostKeyChanged = true
@@ -156,6 +164,12 @@ final class SessionController {
     func terminate() {
         cancelReconnect()
         terminal?.terminate()
+    }
+
+    /// Вставляет команду в терминал без Enter — пользователь проверяет и запускает сам.
+    func insert(_ command: String) {
+        terminal?.send(txt: command)
+        terminal?.window?.makeFirstResponder(terminal)
     }
 
     func showFind() {

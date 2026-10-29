@@ -180,6 +180,7 @@ final class KeyWizardModel {
             }
 
             result = await KeyScanner.inspect(path: keyPath)
+            await model.detectOS(for: host.alias)
             step = .done
         } catch {
             self.error = error.localizedDescription
@@ -442,6 +443,11 @@ private struct DoneStep: View {
     let wizard: KeyWizardModel
     @State private var showDisable = false
 
+    /// Команда под ОС сервера (на OpenWrt — Dropbear через uci).
+    private var disableCommand: String {
+        (wizard.model.current(wizard.host).os ?? .linux).disablePasswordCommand
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.seal.fill").font(.system(size: 30)).foregroundStyle(Theme.grn)
@@ -464,14 +470,14 @@ private struct DoneStep: View {
                 Text("Безопаснее, но если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Relaya не меняет sshd_config сама: выполните команду на сервере, когда будете готовы.")
                     .fixedSize(horizontal: false, vertical: true)
                 if showDisable {
-                    Text(KeyInstaller.disablePasswordCommand)
+                    Text(disableCommand)
                         .font(.system(size: 11.5, design: .monospaced))
                         .textSelection(.enabled)
                         .padding(8)
                         .background(Theme.bg, in: .rect(cornerRadius: 6))
                     Button("Скопировать команду") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(KeyInstaller.disablePasswordCommand, forType: .string)
+                        NSPasteboard.general.setString(disableCommand, forType: .string)
                     }
                     .buttonStyle(.relaya(.normal, height: 24))
                 } else {

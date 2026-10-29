@@ -24,13 +24,16 @@ struct SessionView: View {
     }
 
     private var breadcrumbs: some View {
-        HStack(spacing: 6) {
+        let host = model.current(session.host)
+        return HStack(spacing: 6) {
+            OSIcon(os: host.os, size: 16)
             if let group = session.host.group {
                 Text(group)
                 Text("›").accessibilityHidden(true)
             }
             Text(session.host.alias).fontWeight(.semibold).foregroundStyle(Theme.tx)
             Spacer()
+            OSActionsMenu(os: host.os, user: host.user) { c.insert($0) }
             Button("Найти") { c.showFind() }
                 .buttonStyle(.relaya(.ghost, height: 24))
                 .help("Поиск в терминале (⌘F)")

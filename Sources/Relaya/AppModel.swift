@@ -166,7 +166,10 @@ final class AppModel {
 
     func connect(_ host: SSHHost) {
         screen = .hosts
-        let session = Session(host: host, controller: SessionController(host: host))
+        let controller = SessionController(host: host)
+        controller.onOSGuessed = { [weak self] os in self?.setOS(os, for: host.alias, onlyIfUnknown: true) }
+        let session = Session(host: host, controller: controller)
+        if host.os == nil { Task { await detectOS(for: host.alias) } }
         sessions.append(session)
         activeSessionID = session.id
     }
@@ -187,6 +190,37 @@ final class AppModel {
     func selectSession(at index: Int) {
         guard sessions.indices.contains(index) else { return }
         activeSessionID = sessions[index].id
+    }
+
+    /// Актуальная версия хоста из config (во вкладке может лежать снимок на момент подключения).
+    func current(_ host: SSHHost) -> SSHHost {
+        hosts.first { $0.alias == host.alias } ?? host
+    }
+
+    var detectingOS: Set<String> = []
+
+    /// Фоновая проверка ОС: отдельный неинтерактивный вход по ключу/агенту или паролю из Keychain.
+    func detectOS(for alias: String) async {
+        guard let host = hosts.first(where: { $0.alias == alias }), !detectingOS.contains(alias) else { return }
+        detectingOS.insert(alias)
+        defer { detectingOS.remove(alias) }
+        let installer = KeyInstaller(askpassExecutable: askpassExecutable)
+        let secret: KeyInstaller.SecretRef? = keychain.hasPassword(for: host.keychainAccount)
+            ? .init(store: keychain, account: host.keychainAccount, kind: .password) : nil
+        if let os = await installer.detectOS(alias: alias, password: secret) {
+            setOS(os, for: alias, onlyIfUnknown: false)
+        }
+    }
+
+    func setOS(_ os: ServerOS, for alias: String, onlyIfUnknown: Bool) {
+        guard var host = hosts.first(where: { $0.alias == alias }), host.os != os else { return }
+        if onlyIfUnknown, host.os != nil { return }
+        host.os = os
+        do {
+            try save(host, originalAlias: alias)
+        } catch {
+            // Например, общий блок `Host a b` — ОС просто не запоминаем.
+        }
     }
 
     func finishOnboarding() {

@@ -44,6 +44,26 @@ struct HostDetailView: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
                 }
 
+                HStack(spacing: 10) {
+                    OSIcon(os: host.os, size: 22)
+                    Text(host.os?.title ?? "ОС не определена")
+                        .foregroundStyle(host.os == nil ? Theme.tx2 : Theme.tx)
+                    Spacer()
+                    if model.detectingOS.contains(host.alias) {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button(host.os == nil ? "Определить" : "Проверить снова") {
+                            Task { await model.detectOS(for: host.alias) }
+                        }
+                        .buttonStyle(.relaya(.normal, height: 24))
+                    }
+                }
+                .font(.system(size: 13))
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(Theme.bg2, in: .rect(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line, lineWidth: 0.5))
+
                 InfoGroup(title: "Подключение", rows: [
                     ("Адрес", host.hostName ?? host.alias),
                     ("Пользователь", host.user ?? "—"),
