@@ -61,6 +61,8 @@ final class AppModel {
     var alertMessage: String?
     /// Хост, для которого запрошено имя новой группы.
     var newGroupFor: SSHHost?
+    /// Ждёт подтверждения: запретить вход по паролю на хосте.
+    var pendingDisablePassword: SSHHost?
 
     /// Свёрнутые группы в sidebar — удобство одного пользователя, поэтому в UserDefaults, а не в конфиге.
     var collapsedGroups: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "collapsedGroups") ?? []) {
@@ -189,6 +191,12 @@ final class AppModel {
         connect(host)
         let cmd = host.user == "root" ? command.replacingOccurrences(of: "sudo ", with: "") : command
         sessions.last?.controller.pendingCommand = cmd
+    }
+
+    /// Включает или отключает вход по паролю на сервере командой под его ОС.
+    func setPasswordLogin(_ enabled: Bool, on host: SSHHost) {
+        let host = current(host)
+        run((host.os ?? .linux).passwordLoginCommand(enabled: enabled), on: host)
     }
 
     func closeActiveSession() {

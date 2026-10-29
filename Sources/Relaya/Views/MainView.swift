@@ -67,6 +67,18 @@ struct MainView: View {
         } message: { _ in
             Text("Блок Host будет удалён из ~/.ssh/config. Копия прежнего файла сохранится в config.bak.")
         }
+        .confirmationDialog(
+            "Запретить вход по паролю на «\(model.pendingDisablePassword?.alias ?? "")»?",
+            isPresented: Binding(get: { model.pendingDisablePassword != nil },
+                                 set: { if !$0 { model.pendingDisablePassword = nil } }),
+            presenting: model.pendingDisablePassword
+        ) { host in
+            Button("Запретить", role: .destructive) { model.setPasswordLogin(false, on: host) }
+        } message: { host in
+            Text(host.usesKey
+                 ? "Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу \(host.identityFile ?? "")."
+                 : "У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу.")
+        }
         .alert(
             "Новая группа",
             isPresented: Binding(get: { model.newGroupFor != nil }, set: { if !$0 { model.newGroupFor = nil } }),

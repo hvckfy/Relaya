@@ -120,6 +120,12 @@ struct HostRow: View {
             Button("Изменить…") { model.editor = EditorRequest(original: host) }
             Button("Настроить вход по ключу…") { model.keyWizard = KeyWizardRequest(host: host) }
             Button("Определить ОС") { Task { await model.detectOS(for: host.alias) } }
+            if host.os != .windows {
+                Menu("Вход по паролю на сервере") {
+                    Button("Разрешить") { model.setPasswordLogin(true, on: host) }
+                    Button("Запретить…") { model.pendingDisablePassword = host }
+                }
+            }
             Button("Дублировать…") {
                 var copy = host
                 copy.alias += "-copy"
