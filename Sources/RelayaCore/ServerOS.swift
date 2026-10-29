@@ -190,19 +190,34 @@ extension ServerOS {
         return list
     }
 
-    /// Как отключить вход по паролю (показываем, сами не выполняем).
-    public var disablePasswordCommand: String {
-        switch self {
-        case .openwrt:
-            "uci set dropbear.@dropbear[0].PasswordAuth='off' && uci set dropbear.@dropbear[0].RootPasswordAuth='off' && uci commit dropbear && /etc/init.d/dropbear restart"
-        case .alpine:
-            #"sed -i.bak -E 's/^#?\s*PasswordAuthentication\s+.*/PasswordAuthentication no/' /etc/ssh/sshd_config && sshd -t && rc-service sshd restart"#
-        case .macos:
-            #"sudo sed -i.bak -E 's/^#?\s*PasswordAuthentication\s+.*/PasswordAuthentication no/' /etc/ssh/sshd_config && sudo launchctl kickstart -k system/com.openssh.sshd"#
-        case .freebsd:
-            #"sudo sed -i.bak -E 's/^#?\s*PasswordAuthentication\s+.*/PasswordAuthentication no/' /etc/ssh/sshd_config && sudo sshd -t && sudo service sshd restart"#
-        default:
-            KeyInstaller.disablePasswordCommand
+    /// Команда, включающая или отключающая вход по паролю на сервере.
+    /// Relaya её не выполняет: только показывает или вставляет в терминал без Enter.
+    public func passwordLoginCommand(enabled: Bool) -> String {
+        if self == .openwrt {
+            let v = enabled ? "on" : "off"
+            return "uci set dropbear.@dropbear[0].PasswordAuth='\(v)' && uci set dropbear.@dropbear[0].RootPasswordAuth='\(v)' && uci commit dropbear && /etc/init.d/dropbear restart"
         }
+        let sudo = self == .alpine ? "" : "sudo "
+        let reload: String
+        switch self {
+        case .alpine: reload = "rc-service sshd restart"
+        case .macos: reload = "sudo launchctl kickstart -k system/com.openssh.sshd"
+        case .freebsd: reload = "sudo service sshd restart"
+        default: reload = "(sudo systemctl reload ssh || sudo systemctl reload sshd)"
+        }
+        let v = enabled ? "yes" : "no"
+        // Где есть sshd_config.d, пишем свой файл с префиксом 00: в sshd побеждает первое значение,
+        // так он перекрывает, например, 50-cloud-init.conf в Ubuntu. Иначе правим основной конфиг.
+        return "if grep -qsE '^Include /etc/ssh/sshd_config.d' /etc/ssh/sshd_config; then "
+            + "echo 'PasswordAuthentication \(v)' | \(sudo)tee /etc/ssh/sshd_config.d/00-relaya.conf >/dev/null; else "
+            + #"\#(sudo)sed -i.bak -E 's/^#?[[:space:]]*PasswordAuthentication[[:space:]].*/PasswordAuthentication \#(v)/' /etc/ssh/sshd_config; fi"#
+            + " && \(sudo)sshd -t && \(reload)"
+    }
+
+    /// Пункты меню «Вход по паролю».
+    public var passwordLoginActions: [OSAction] {
+        guard self != .windows else { return [] }
+        return [OSAction("Разрешить вход по паролю", passwordLoginCommand(enabled: true), needsRoot: true),
+                OSAction("Запретить вход по паролю", passwordLoginCommand(enabled: false), needsRoot: true)]
     }
 }

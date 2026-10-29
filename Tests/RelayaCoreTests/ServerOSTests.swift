@@ -38,3 +38,18 @@ import Testing
         for os in ServerOS.allCases { #expect(!os.actions.isEmpty) }
     }
 }
+
+@Suite struct PasswordLoginCommandTests {
+    @Test func linuxUsesDropInAndFallback() {
+        let off = ServerOS.ubuntu.passwordLoginCommand(enabled: false)
+        #expect(off.contains("sshd_config.d/00-relaya.conf"))
+        #expect(off.contains("PasswordAuthentication no"))
+        #expect(off.contains("sudo sshd -t"))
+        #expect(ServerOS.ubuntu.passwordLoginCommand(enabled: true).contains("PasswordAuthentication yes"))
+    }
+
+    @Test func openWrtUsesUci() {
+        #expect(ServerOS.openwrt.passwordLoginCommand(enabled: false).contains("PasswordAuth='off'"))
+        #expect(ServerOS.openwrt.passwordLoginCommand(enabled: true).contains("PasswordAuth='on'"))
+    }
+}

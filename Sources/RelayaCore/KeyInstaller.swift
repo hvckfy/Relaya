@@ -127,8 +127,4 @@ public struct KeyInstaller: Sendable {
         if m.contains("Permission denied") { return "доступ запрещён (неверный пароль или ключ): \(m)" }
         return m.isEmpty ? "ssh завершился с кодом \(r.status)" : m
     }
-
-    /// Команда, отключающая вход по паролю на сервере (показываем пользователю, сами не запускаем).
-    public static let disablePasswordCommand =
-        #"sudo sed -i.bak -E 's/^#?\s*PasswordAuthentication\s+.*/PasswordAuthentication no/' /etc/ssh/sshd_config && sudo sshd -t && (sudo systemctl reload ssh || sudo systemctl reload sshd)"#
 }
