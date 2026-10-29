@@ -13,14 +13,7 @@ struct HostDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Text(host.alias).font(.system(size: 22, weight: .bold))
-                            if let env = host.environment {
-                                Text(env.rawValue)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(env.color)
-                                    .padding(.horizontal, 8)
-                                    .frame(height: 20)
-                                    .background(env.tint, in: .capsule)
-                            }
+                            ForEach(host.tags, id: \.self) { TagChip(tag: $0) }
                         }
                         Text(host.subtitle)
                             .font(.system(size: 13, design: .monospaced))

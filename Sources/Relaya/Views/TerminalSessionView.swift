@@ -34,7 +34,7 @@ private struct SessionTab: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(session.host.environment?.color ?? Theme.tx2)
+                .fill(session.host.tags.first.map(TagStyle.color) ?? Theme.tx2)
                 .frame(width: 7, height: 7)
             Text(session.host.alias)
                 .fontWeight(active ? .semibold : .regular)

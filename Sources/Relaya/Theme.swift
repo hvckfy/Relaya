@@ -58,21 +58,51 @@ extension Color {
     init(hex: UInt32) { self.init(nsColor: NSColor(hex: hex)) }
 }
 
-extension HostEnvironment {
-    var color: Color {
-        switch self {
-        case .prod: Theme.red
-        case .staging: Theme.org
-        case .dev: Theme.grn
+/// Цвет метки: привычные окружения узнаются по имени, остальные — стабильно по хэшу имени.
+enum TagStyle {
+    private static let palette: [Color] = [
+        Color(hex: 0x0A7AFF), Color(hex: 0x8E4EC6), Color(hex: 0x0FA3A3),
+        Color(hex: 0xD6457F), Color(hex: 0x6E6E73), Color(hex: 0x3A9E5C),
+    ]
+
+    static func color(_ tag: String) -> Color {
+        switch tag.lowercased() {
+        case "prod", "production", "прод": return Theme.red
+        case "staging", "stage", "стейдж": return Theme.org
+        case "dev", "test", "тест": return Theme.grn
+        default:
+            // Свой хэш: String.hashValue меняется между запусками.
+            let h = tag.lowercased().unicodeScalars.reduce(5381) { ($0 &* 33 &+ Int($1.value)) & 0x7FFFFFFF }
+            return palette[h % palette.count]
         }
     }
+}
 
-    var tint: Color {
-        switch self {
-        case .prod: Theme.redTint
-        case .staging: Theme.orgTint
-        case .dev: Theme.grnTint
+/// Метка-«пилюля».
+struct TagChip: View {
+    let tag: String
+    var selected = true
+    var onRemove: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(TagStyle.color(tag)).frame(width: 6, height: 6)
+            Text(tag).lineLimit(1)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.tx2)
+                .accessibilityLabel("Убрать метку \(tag)")
+            }
         }
+        .font(.system(size: 11, weight: selected ? .semibold : .regular))
+        .foregroundStyle(selected ? Theme.tx : Theme.tx2)
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background(selected ? TagStyle.color(tag).opacity(0.15) : .clear, in: .capsule)
+        .overlay(Capsule().strokeBorder(selected ? TagStyle.color(tag).opacity(0.6) : Theme.line, lineWidth: 0.5))
     }
 }
 

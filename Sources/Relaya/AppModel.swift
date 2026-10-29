@@ -28,6 +28,8 @@ final class AppModel {
     var hosts: [SSHHost] = []
     var loadError: String?
     var searchText = ""
+    /// Выбранные метки: показываются хосты, у которых есть все из них.
+    var tagFilter: Set<String> = []
 
     var selectedHostID: SSHHost.ID?
     var sessions: [Session] = []
@@ -49,6 +51,19 @@ final class AppModel {
 
     static let ungrouped = "Без группы"
 
+    /// Все метки, в порядке частоты, без учёта регистра.
+    var allTags: [String] {
+        var counts: [String: (name: String, n: Int)] = [:]
+        for tag in hosts.flatMap(\.tags) {
+            counts[tag.lowercased(), default: (tag, 0)].n += 1
+        }
+        return counts.values.sorted { $0.n != $1.n ? $0.n > $1.n : $0.name < $1.name }.map(\.name)
+    }
+
+    func toggleTagFilter(_ tag: String) {
+        if tagFilter.contains(tag) { tagFilter.remove(tag) } else { tagFilter.insert(tag) }
+    }
+
     var groups: [String] {
         Array(Set(hosts.compactMap(\.group).filter { !$0.isEmpty })).sorted()
     }
@@ -56,8 +71,14 @@ final class AppModel {
     /// Хосты без группы идут в «Без группы», остальные — по имени группы.
     var groupedHosts: [(name: String, hosts: [SSHHost])] {
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        let visible = query.isEmpty ? hosts : hosts.filter {
-            $0.alias.lowercased().contains(query) || $0.subtitle.lowercased().contains(query)
+        let wanted = Set(tagFilter.map { $0.lowercased() })
+        let visible = hosts.filter { host in
+            let tags = Set(host.tags.map { $0.lowercased() })
+            guard wanted.isSubset(of: tags) else { return false }
+            return query.isEmpty
+                || host.alias.lowercased().contains(query)
+                || host.subtitle.lowercased().contains(query)
+                || tags.contains { $0.contains(query) }
         }
         return Dictionary(grouping: visible) { $0.group ?? "" }
             .sorted { lhs, rhs in

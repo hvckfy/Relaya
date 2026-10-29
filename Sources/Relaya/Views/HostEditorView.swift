@@ -95,17 +95,8 @@ struct HostEditorView: View {
                     .disabled(model.groups.isEmpty)
                 }
             }
-            FieldRow("Окружение") {
-                HStack(spacing: 6) {
-                    EnvChip(label: "нет", color: Theme.tx2, tint: Theme.sel, selected: host.environment == nil) {
-                        host.environment = nil
-                    }
-                    ForEach(HostEnvironment.allCases, id: \.self) { env in
-                        EnvChip(label: env.rawValue, color: env.color, tint: env.tint, selected: host.environment == env) {
-                            host.environment = env
-                        }
-                    }
-                }
+            FieldRow("Метки") {
+                TagEditor(tags: $host.tags, suggestions: model.allTags)
             }
             FieldRow("Цвет", last: true) {
                 HStack(spacing: 8) {
@@ -264,6 +255,7 @@ struct HostEditorView: View {
         let port = Int(portText.trimmingCharacters(in: .whitespaces))
         h.port = port == 22 ? nil : port
         h.serverAliveInterval = Int(keepAliveText.trimmingCharacters(in: .whitespaces))
+        h.tags = SSHConfigParser.splitTags(h.tags.joined(separator: ","))
         if h.forwardAgent == false { h.forwardAgent = nil }
         if h.compression == false { h.compression = nil }
         return h
@@ -382,29 +374,53 @@ private struct MonoField: View {
     }
 }
 
-private struct EnvChip: View {
-    let label: String
-    let color: Color
-    let tint: Color
-    let selected: Bool
-    let action: () -> Void
+/// Метки: пилюли с крестиком + поле ввода (Enter или запятая добавляют) + меню существующих.
+private struct TagEditor: View {
+    @Binding var tags: [String]
+    let suggestions: [String]
+    @State private var input = ""
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Circle().fill(color).frame(width: 7, height: 7)
-                Text(label)
+        VStack(alignment: .trailing, spacing: 6) {
+            if !tags.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(tags, id: \.self) { tag in
+                        TagChip(tag: tag) { tags.removeAll { $0 == tag } }
+                    }
+                }
             }
-            .font(.system(size: 12, weight: selected ? .semibold : .regular))
-            .foregroundStyle(selected ? Theme.tx : Theme.tx2)
-            .padding(.horizontal, 10)
-            .frame(height: 24)
-            .background(selected ? tint : .clear, in: .capsule)
-            .overlay(Capsule().strokeBorder(selected ? color : Theme.line, lineWidth: selected ? 1 : 0.5))
-            .contentShape(.capsule)
+            HStack(spacing: 4) {
+                TextField("prod, личное, db…", text: $input)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12.5))
+                    .frame(width: 270)
+                    .onSubmit(commit)
+                    .onChange(of: input) { _, new in
+                        if new.contains(",") { commit() }
+                    }
+                Menu {
+                    ForEach(available, id: \.self) { tag in
+                        Button(tag) { tags.append(tag) }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 26)
+                .disabled(available.isEmpty)
+                .help("Существующие метки")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var available: [String] {
+        let have = Set(tags.map { $0.lowercased() })
+        return suggestions.filter { !have.contains($0.lowercased()) }
+    }
+
+    private func commit() {
+        tags = SSHConfigParser.splitTags((tags + [input]).joined(separator: ","))
+        input = ""
     }
 }
 

@@ -7,6 +7,9 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if !model.allTags.isEmpty {
+                TagFilterBar()
+            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(model.groupedHosts, id: \.name) { group in
@@ -45,6 +48,9 @@ struct SidebarView: View {
                 .padding(.horizontal, 8)
             }
             .overlay {
+                if !model.hosts.isEmpty, model.groupedHosts.isEmpty {
+                    Text("Ничего не найдено").foregroundStyle(Theme.tx2)
+                }
                 if model.hosts.isEmpty {
                     VStack(spacing: 8) {
                         Text("Нет хостов").foregroundStyle(Theme.tx2)
@@ -81,9 +87,10 @@ struct HostRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
                     Text(host.alias).fontWeight(.medium)
-                    if let env = host.environment {
-                        Circle().fill(env.color).frame(width: 6, height: 6)
-                            .accessibilityLabel(env.rawValue)
+                    ForEach(host.tags.prefix(3), id: \.self) { tag in
+                        Circle().fill(TagStyle.color(tag)).frame(width: 6, height: 6)
+                            .help(tag)
+                            .accessibilityLabel("метка \(tag)")
                     }
                 }
                 Text(host.subtitle)
@@ -135,6 +142,38 @@ struct HostRow: View {
             Divider()
             Button("Удалить…", role: .destructive) { model.pendingDelete = host }
         }
+    }
+}
+
+/// Фильтр по меткам над списком хостов.
+private struct TagFilterBar: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(model.allTags, id: \.self) { tag in
+                        Button {
+                            model.toggleTagFilter(tag)
+                        } label: {
+                            TagChip(tag: tag, selected: model.tagFilter.contains(tag))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(model.tagFilter.contains(tag) ? .isSelected : [])
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+            if !model.tagFilter.isEmpty {
+                IconButton(systemImage: "xmark.circle.fill", label: "Сбросить фильтр меток", size: 22) {
+                    model.tagFilter = []
+                }
+                .padding(.trailing, 6)
+            }
+        }
+        .padding(.vertical, 6)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line2).frame(height: 0.5) }
     }
 }
 
