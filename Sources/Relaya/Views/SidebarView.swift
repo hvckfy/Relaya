@@ -113,8 +113,10 @@ struct HostRow: View {
         .frame(height: 36)
         .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 6))
         .contentShape(.rect)
-        .onTapGesture(count: 2) { model.connect(host) }
+        // Выбор — сразу по первому клику; двойной клик дополнительно подключает.
+        // (Пара onTapGesture(count: 2) + onTapGesture заставляла SwiftUI ждать второго клика.)
         .onTapGesture { model.selectedHostID = host.id; model.activeSessionID = nil; model.screen = .hosts }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { model.connect(host) })
         .contextMenu {
             Button("Подключить") { model.connect(host) }
             Button("Изменить…") { model.editor = EditorRequest(original: host) }
