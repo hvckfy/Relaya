@@ -12,6 +12,9 @@ struct HostEditorView: View {
     @State private var keepAliveText: String
     @State private var error: String?
     @State private var showPreview = true
+    @State private var password = ""
+    @State private var passwordEdited = false
+    @State private var hasSavedPassword = false
 
     init(original: SSHHost?, draft: SSHHost) {
         self.original = original
@@ -41,6 +44,9 @@ struct HostEditorView: View {
         }
         .frame(width: 640, height: 760)
         .background(Theme.bg)
+        .onAppear {
+            if let original { hasSavedPassword = model.keychain.hasPassword(for: original.keychainAccount) }
+        }
     }
 
     // MARK: - Разделы
@@ -121,9 +127,23 @@ struct HostEditorView: View {
                 .frame(width: 300)
             }
             FieldRow("Пароль") {
-                Text("ssh спросит его в терминале · Keychain — в v0.1")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.tx2)
+                HStack(spacing: 6) {
+                    Text(passwordStatus)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.tx2)
+                    SecureField(hasSavedPassword ? "••••••••" : "не сохранён", text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 160)
+                        .onChange(of: password) { passwordEdited = true }
+                    if hasSavedPassword {
+                        Button("Удалить") {
+                            password = ""
+                            passwordEdited = true
+                            hasSavedPassword = false
+                        }
+                        .buttonStyle(.relaya(.ghost, height: 24))
+                    }
+                }
             }
             FieldRow("Агент-форвардинг", last: true) {
                 Toggle("", isOn: flag(\.forwardAgent)).labelsHidden().toggleStyle(.checkbox)
@@ -294,9 +314,22 @@ struct HostEditorView: View {
             .map { "~/.ssh/\($0)" }
     }
 
+    private var passwordStatus: String {
+        if passwordEdited { return password.isEmpty ? "будет удалён" : "сохраним в Keychain" }
+        return hasSavedPassword ? "в Keychain" : ""
+    }
+
     private func save() {
         do {
             try model.save(normalized, originalAlias: original?.alias)
+            if passwordEdited {
+                let account = normalized.keychainAccount
+                if password.isEmpty {
+                    try model.keychain.deletePassword(for: account)
+                } else {
+                    try model.keychain.setPassword(password, for: account)
+                }
+            }
             dismiss()
         } catch {
             self.error = error.localizedDescription

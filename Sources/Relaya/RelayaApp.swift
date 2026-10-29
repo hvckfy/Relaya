@@ -1,6 +1,6 @@
 import SwiftUI
 
-@main
+// Точка входа — main.swift (там askpass-режим).
 struct RelayaApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var model = AppModel()
@@ -9,8 +9,12 @@ struct RelayaApp: App {
         WindowGroup("Relaya") {
             MainView()
                 .environment(model)
+                .environment(model.settings)
                 .frame(minWidth: 900, minHeight: 560)
-                .task { model.reloadHosts() }
+                .task {
+                    model.settings.applyAppearance()
+                    model.reloadHosts()
+                }
         }
         .windowToolbarStyle(.unified)
         .commands {
@@ -27,17 +31,30 @@ struct RelayaApp: App {
                 Button("Перечитать ~/.ssh/config") { model.reloadHosts() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
+            CommandGroup(after: .textEditing) {
+                Button("Найти в терминале…") { model.activeSession?.controller.showFind() }
+                    .keyboardShortcut("f", modifiers: .command)
+                    .disabled(model.activeSession == nil)
+            }
             CommandMenu("Вкладки") {
                 ForEach(1..<10) { n in
                     Button("Вкладка \(n)") { model.selectSession(at: n - 1) }
                         .keyboardShortcut(KeyEquivalent(Character(String(n))), modifiers: .command)
                 }
+                Divider()
+                Button("Переподключить") { model.activeSession?.controller.reconnect() }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(model.activeSession == nil)
             }
+        }
+
+        Settings {
+            SettingsView()
+                .environment(model.settings)
         }
     }
 }
 
-/// Запуск через `swift run` даёт процесс без бандла — делаем его обычным приложением с окном.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)

@@ -6,6 +6,21 @@ import RelayaCore
 struct Session: Identifiable, Hashable {
     let id = UUID()
     let host: SSHHost
+    let controller: SessionController
+
+    static func == (a: Session, b: Session) -> Bool { a.id == b.id }
+    func hash(into h: inout Hasher) { h.combine(id) }
+}
+
+/// Раздел в основной области окна.
+enum Screen: Hashable {
+    case hosts, keys
+}
+
+/// Запуск мастера «Вход по ключу».
+struct KeyWizardRequest: Identifiable {
+    let id = UUID()
+    let host: SSHHost
 }
 
 /// Открытие редактора хоста: `original == nil` — новый хост, `draft` — начальные значения полей.
@@ -24,6 +39,12 @@ struct EditorRequest: Identifiable {
 @Observable
 final class AppModel {
     let store = SSHConfigStore()
+    let keychain = KeychainStore()
+    let settings = AppSettings()
+
+    var screen: Screen = .hosts
+    var keyWizard: KeyWizardRequest?
+    var showOnboarding = !UserDefaults.standard.bool(forKey: "onboardingDone")
 
     var hosts: [SSHHost] = []
     var loadError: String?
@@ -103,6 +124,10 @@ final class AppModel {
         var doc = try store.loadDocument()
         try doc.upsert(host, originalAlias: originalAlias)
         try store.save(doc)
+        // Пароль привязан к адресу — при смене адреса/пользователя/порта переносим его.
+        if let originalAlias, let old = hosts.first(where: { $0.alias == originalAlias }) {
+            try? keychain.movePassword(from: old.keychainAccount, to: host.keychainAccount)
+        }
         reloadHosts()
         selectedHostID = host.alias
     }
@@ -140,13 +165,15 @@ final class AppModel {
     // MARK: - Сессии
 
     func connect(_ host: SSHHost) {
-        let session = Session(host: host)
+        screen = .hosts
+        let session = Session(host: host, controller: SessionController(host: host))
         sessions.append(session)
         activeSessionID = session.id
     }
 
     func close(_ session: Session) {
         guard let index = sessions.firstIndex(of: session) else { return }
+        session.controller.terminate()
         sessions.remove(at: index)
         if activeSessionID == session.id {
             activeSessionID = sessions.indices.contains(index) ? sessions[index].id : sessions.last?.id
@@ -161,6 +188,14 @@ final class AppModel {
         guard sessions.indices.contains(index) else { return }
         activeSessionID = sessions[index].id
     }
+
+    func finishOnboarding() {
+        UserDefaults.standard.set(true, forKey: "onboardingDone")
+        showOnboarding = false
+    }
+
+    /// Путь к самому Relaya — он же askpass-помощник для ssh.
+    var askpassExecutable: String { Bundle.main.executablePath ?? CommandLine.arguments[0] }
 
     func isConnected(_ host: SSHHost) -> Bool {
         sessions.contains { $0.host.id == host.id }
