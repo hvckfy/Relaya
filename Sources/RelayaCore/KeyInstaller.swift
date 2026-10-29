@@ -73,6 +73,7 @@ public struct KeyInstaller: Sendable {
         var env: [String: String] = [:]
         if let password {
             env = askpassEnvironment(password)
+            args += Self.passwordOnlyOptions
         } else {
             args += ["-o", "BatchMode=yes"]
         }
@@ -90,7 +91,12 @@ public struct KeyInstaller: Sendable {
     public func detectOS(alias: String, password: SecretRef?) async -> ServerOS? {
         var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10", "-o", "NumberOfPasswordPrompts=1"]
         var env: [String: String] = [:]
-        if let password { env = askpassEnvironment(password) } else { args += ["-o", "BatchMode=yes"] }
+        if let password {
+            env = askpassEnvironment(password)
+            args += Self.passwordOnlyOptions
+        } else {
+            args += ["-o", "BatchMode=yes"]
+        }
         guard let r = try? await ProcessRunner.run("/usr/bin/ssh", args + [alias, ServerOS.probeCommand], environment: env)
         else { return nil }
         return ServerOS.parse(probe: r.stdout + "\n" + r.stderr)
@@ -119,8 +125,17 @@ public struct KeyInstaller: Sendable {
         }
     }
 
+    /// Сразу пароль, без перебора ключей: иначе ssh пробует все ключи из агента,
+    /// и сервер рвёт соединение («Too many authentication failures») раньше, чем спросит пароль.
+    public static let passwordOnlyOptions = [
+        "-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no",
+    ]
+
     static func explain(_ r: ProcessResult) -> String {
         let m = r.message
+        if m.contains("Too many authentication failures") {
+            return "сервер оборвал вход после перебора ключей из ssh-agent (Too many authentication failures). Введите пароль сервера на первом шаге — тогда вход пойдёт сразу по паролю"
+        }
         if m.contains("Host key verification failed") {
             return "сервер ещё не в known_hosts — подключитесь к нему в терминале и подтвердите отпечаток"
         }
