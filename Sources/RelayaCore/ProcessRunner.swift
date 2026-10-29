@@ -19,7 +19,8 @@ public enum ProcessRunner {
         _ executable: String,
         _ arguments: [String],
         environment: [String: String] = [:],
-        input: String? = nil
+        input: String? = nil,
+        timeout: Duration? = nil
     ) async throws -> ProcessResult {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
@@ -46,6 +47,12 @@ public enum ProcessRunner {
             } catch {
                 continuation.resume(throwing: error)
                 return
+            }
+            if let timeout {
+                let seconds = Double(timeout.components.seconds) + Double(timeout.components.attoseconds) / 1e18
+                DispatchQueue.global().asyncAfter(deadline: .now() + seconds) {
+                    if process.isRunning { process.terminate() }
+                }
             }
             if let input {
                 inp.fileHandleForWriting.write(Data(input.utf8))
