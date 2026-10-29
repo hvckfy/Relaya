@@ -97,6 +97,7 @@ struct HostEditorView: View {
                         Image(systemName: "chevron.down")
                     }
                     .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
                     .frame(width: 26)
                     .disabled(model.groups.isEmpty)
                 }
@@ -439,6 +440,7 @@ private struct TagEditor: View {
                     Image(systemName: "chevron.down")
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .frame(width: 26)
                 .disabled(available.isEmpty)
                 .help("Существующие метки")

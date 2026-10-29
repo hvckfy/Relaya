@@ -151,6 +151,7 @@ private struct RuleRow: View {
                         .frame(width: 22, height: 14)
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Цвет: \(Self.colorNames[rule.color])")
                 Toggle("Жирный", isOn: $rule.bold).toggleStyle(.checkbox)
