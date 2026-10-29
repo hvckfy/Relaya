@@ -1,74 +1,114 @@
-<p align="center"><img src="docs/icon.png" width="128" alt=""></p>
+<p align="center"><img src="docs/icon.png" width="128" alt="Relaya icon"></p>
 
 <h1 align="center">Relaya</h1>
 
-<p align="center">Нативный SSH-клиент для macOS, в котором ваши ключи живут в <code>~/.ssh</code>, а не у нас.</p>
+<p align="center">
+  A native macOS SSH client where your keys live in <code>~/.ssh</code> — not in our vault.
+</p>
+
+<p align="center">
+  <a href="https://github.com/hvckfy/Relaya/releases/latest"><img src="https://img.shields.io/github/v/release/hvckfy/Relaya" alt="Latest release"></a>
+  <a href="https://github.com/hvckfy/Relaya/actions/workflows/ci.yml"><img src="https://github.com/hvckfy/Relaya/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
+</p>
 
 ---
 
-Relaya — бесплатный open source клиент в духе Termius, только без собственного хранилища и облака. Список хостов — это ваш `~/.ssh/config`, ключи — файлы в `~/.ssh`, пароли — в Keychain. Всё, что настроено в Relaya, работает и из обычного терминала, VS Code, git и Ansible.
+Relaya is a free, open source alternative to Termius-style SSH managers, built with SwiftUI. It has **no proprietary storage and no cloud sync**:
 
-## Возможности
+- your host list **is** your `~/.ssh/config`,
+- your keys are plain files in `~/.ssh`,
+- passwords and passphrases live in the macOS **Keychain**.
 
-- **Хосты из `~/.ssh/config`** — добавление, редактирование, дублирование, удаление. Перед каждой правкой — превью diff и бэкап в `config.bak`. Комментарии и незнакомые директивы сохраняются.
-- **Группы и метки** — хранятся комментарием над хостом (`# relaya: group=работа tags=prod,db`), ssh их игнорирует. Фильтр по меткам и поиск в sidebar.
-- **Пароли в Keychain** — Relaya подставляет пароль сама, когда сервер его спрашивает. Пароль не попадает ни в аргументы, ни в окружение процессов.
-- **Мастер «Вход по ключу»** — после входа по паролю: сгенерировать ed25519, показать все изменения, положить ключ на сервер, проверить вход и только потом обновить config.
-- **Ключи** — список ключей в `~/.ssh` с отпечатками, «разложить на хосты», добавить в ssh-agent, passphrase — в Keychain macOS (`UseKeychain`).
-- **Терминал** — вкладки, проверка отпечатка при первом подключении, предупреждение о смене ключа сервера, переподключение после обрыва, поиск (⌘F), темы.
-- **Системный ssh** — подключения идут через `/usr/bin/ssh`, поэтому ProxyJump, ssh-agent, FIDO-ключи и любые опции config работают как в Terminal.app.
+Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansible — anything that speaks SSH.
 
-## Установка
+## Features
 
-Скачайте `Relaya-vX.Y.Z.zip` из [Releases](https://github.com/hvckfy/Relaya/releases), распакуйте и перенесите в «Программы».
+**Hosts**
+- Add, edit, duplicate and delete hosts directly in `~/.ssh/config`.
+- Every change is shown as a diff first and backed up to `config.bak`. Comments and directives Relaya doesn't manage are preserved.
+- Groups and free-form tags, stored as a comment above the host (`# relaya: group=work tags=prod,db`) — ssh ignores it. Filter by tag, search across hosts.
 
-Сборки пока не подписаны, поэтому при первом запуске снимите карантин:
+**Passwords & keys**
+- Passwords are saved in Keychain and typed in automatically when the server asks. They never appear in process arguments or environment variables.
+- **"Set up key login" wizard**: after a password login, Relaya offers to generate an ed25519 key, shows every change up front, installs the key on the server, verifies a passwordless login — and only then updates your config.
+- **Keys screen**: all key pairs in `~/.ssh` with fingerprints, agent status and the hosts using them. Deploy a key to several hosts at once, add keys to ssh-agent, store passphrases in Keychain (`UseKeychain`).
+
+**Terminal**
+- Tabs, host-key fingerprint check on first connect, a loud warning when a server's key changes.
+- Auto-reconnect after a dropped connection, find in terminal (⌘F).
+- Light/dark/system appearance, terminal color schemes, font settings.
+
+**Plain system ssh**
+- Sessions run `/usr/bin/ssh`, so ProxyJump, ssh-agent, FIDO keys and every config option behave exactly like in Terminal.app.
+
+## Installation
+
+1. Download `Relaya-vX.Y.Z.zip` from [Releases](https://github.com/hvckfy/Relaya/releases/latest).
+2. Unzip and move `Relaya.app` to `/Applications`.
+3. Builds are not notarized yet, so remove the quarantine flag once:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Relaya.app
 ```
 
-Требуется macOS 14 или новее.
+Requires macOS 14 Sonoma or later. Universal binary (Apple Silicon and Intel).
 
-## Горячие клавиши
+## Keyboard shortcuts
 
-| Действие | Клавиши |
+| Action | Shortcut |
 |---|---|
-| Новый хост | ⇧⌘N |
-| Подключить выбранный | ⌘T или двойной клик |
-| Закрыть вкладку | ⌘W |
-| Переключить вкладку | ⌘1…9 |
-| Переподключить | ⌘R |
-| Поиск в терминале | ⌘F |
-| Перечитать `~/.ssh/config` | ⇧⌘R |
-| Настройки | ⌘, |
+| New host | ⇧⌘N |
+| Connect to selected host | ⌘T or double-click |
+| Close tab | ⌘W |
+| Switch tab | ⌘1 … ⌘9 |
+| Reconnect | ⌘R |
+| Find in terminal | ⌘F |
+| Reload `~/.ssh/config` | ⇧⌘R |
+| Settings | ⌘, |
 
-## Сборка из исходников
+## Security model
+
+- **Nothing is written without confirmation.** Config edits, new key files and server changes are previewed as a diff first.
+- **Secrets stay in Keychain.** For non-interactive operations (e.g. installing a key on a server) ssh receives the secret through an askpass helper — Relaya itself, launched by ssh, reads it from Keychain on demand.
+- **Known limitation:** `ssh-keygen` only accepts a new key's passphrase as an argument, so it is briefly visible in the process list while the key is generated.
+- **Relaya never edits `sshd_config`.** The wizard shows the command to disable password login; you run it yourself when ready.
+
+## Building from source
 
 ```bash
+git clone https://github.com/hvckfy/Relaya.git
+cd Relaya
 swift build
 swift test
 swift run Relaya
 ```
 
-Готовый `.app`: `scripts/bundle.sh 0.1.0` → `build/Relaya.app`.
+To produce a universal `.app` bundle:
 
-## Безопасность
+```bash
+scripts/bundle.sh 0.1.0
+```
 
-- Relaya не меняет файлы и серверы без подтверждения: перед записью показывается diff.
-- Пароли и passphrase хранятся только в Keychain. Для неинтерактивных операций (установка ключа на сервер) ssh получает секрет через askpass-помощник — сам Relaya читает его из Keychain по запросу ssh.
-- `sshd_config` Relaya не трогает: команду отключения входа по паролю мастер только показывает.
+The result is `build/Relaya.app`. Releases are built by GitHub Actions on every `v*` tag.
 
-## Дорожная карта
+## Roadmap
 
-- [x] v0.1 — хосты, группы, метки, Keychain, мастер ключей, экран ключей, темы
-- [ ] v0.2 — SFTP, проброс портов, сниппеты
-- [ ] v0.3 — VNC
-- [ ] v0.4 — RDP
-- [ ] v0.5 — локальный MCP-сервер для AI-агентов
+- [x] **v0.1** — hosts, groups, tags, Keychain, key wizard, keys screen, themes
+- [ ] **v0.2** — SFTP browser, port forwarding, snippets
+- [ ] **v0.3** — VNC
+- [ ] **v0.4** — RDP
+- [ ] **v0.5** — local MCP server so AI agents can work with your servers safely
 
-Подробнее — [docs/UI_SPEC.md](docs/UI_SPEC.md).
+See [docs/UI_SPEC.md](docs/UI_SPEC.md) for the full UI specification (in Russian).
 
-## Лицензия
+## Contributing
 
-Пока не выбрана.
+Issues and pull requests are welcome. Please keep the core idea intact: `~/.ssh` stays the source of truth, and every change to files or servers is shown before it is applied.
+
+## License
+
+[MIT](LICENSE) © 2026 hvckfy and Relaya contributors.
+
+Relaya uses [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (MIT).
