@@ -20,14 +20,9 @@ struct HostDetailView: View {
                             .foregroundStyle(Theme.tx2)
                     }
                     Spacer()
+                    // «Подключить» — в тулбаре окна (⌘T), здесь не дублируем.
                     Button("Изменить") { model.editor = EditorRequest(original: host) }
                         .buttonStyle(.relaya)
-                    Button {
-                        model.connect(host)
-                    } label: {
-                        Label("Подключить", systemImage: "bolt.fill")
-                    }
-                    .buttonStyle(.relayaPrimary)
                 }
 
                 if !host.usesKey {
