@@ -44,7 +44,7 @@ public enum SSHConfigParser {
                     .filter { !isPattern($0) }
                     .map {
                         SSHHost(alias: $0, group: pendingMeta.group,
-                                environment: pendingMeta.env, color: pendingMeta.color)
+                                tags: pendingMeta.tags, color: pendingMeta.color)
                     }
                 pendingMeta = Meta()
             case "match":
@@ -65,7 +65,7 @@ public enum SSHConfigParser {
 
     struct Meta {
         var group: String?
-        var env: HostEnvironment?
+        var tags: [String] = []
         var color: String?
     }
 
@@ -104,7 +104,7 @@ public enum SSHConfigParser {
         return (key, value)
     }
 
-    /// `# relaya: group="мои сервера" env=prod color=orange`
+    /// `# relaya: group="мои сервера" tags=prod,db color=orange`
     static func parseMeta(_ line: String) -> Meta? {
         let body = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
         guard body.lowercased().hasPrefix("relaya:") else { return nil }
@@ -114,7 +114,9 @@ public enum SSHConfigParser {
             guard kv.count == 2 else { continue }
             switch kv[0].lowercased() {
             case "group": meta.group = kv[1]
-            case "env": meta.env = HostEnvironment(rawValue: kv[1].lowercased())
+            case "tags": meta.tags += splitTags(kv[1])
+            // Старый формат v0.0.2: окружение становится меткой.
+            case "env": meta.tags.append(kv[1].lowercased())
             case "color": meta.color = kv[1].lowercased()
             default: break
             }
@@ -138,6 +140,14 @@ public enum SSHConfigParser {
         }
         if !current.isEmpty { tokens.append(current) }
         return tokens
+    }
+
+    /// `prod, db` → `["prod", "db"]` без пустых и повторов.
+    public static func splitTags(_ s: String) -> [String] {
+        var seen = Set<String>()
+        return s.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
     }
 
     /// Значение для `# relaya:`: в кавычках, если в нём есть пробелы.

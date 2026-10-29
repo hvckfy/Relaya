@@ -19,13 +19,13 @@ import Testing
 
     @Test func addsHostAtEnd() throws {
         var doc = SSHConfigDocument(text: "Host x\n    User u\n")
-        try doc.upsert(SSHHost(alias: "new", hostName: "1.2.3.4", user: "root", group: "dev", environment: .dev),
+        try doc.upsert(SSHHost(alias: "new", hostName: "1.2.3.4", user: "root", group: "dev", tags: ["dev"]),
                        originalAlias: nil)
         #expect(doc.text == """
         Host x
             User u
 
-        # relaya: group=dev env=dev
+        # relaya: group=dev tags=dev
         Host new
             HostName 1.2.3.4
             User root
@@ -48,7 +48,7 @@ import Testing
 
         #expect(doc.text.contains("# мои хосты\nHost *\n    ServerAliveInterval 60\n"))
         #expect(doc.text.contains("""
-        # relaya: group=prod env=prod
+        # relaya: group=prod tags=prod
         Host db-primary
             HostName db.internal
             User postgres
@@ -64,16 +64,16 @@ import Testing
         var doc = SSHConfigDocument(text: "")
         let host = SSHHost(alias: "h", hostName: "x", user: "u", port: 2200, identityFile: "~/.ssh/k",
                            proxyJump: "bastion", forwardAgent: true, serverAliveInterval: 30,
-                           compression: true, group: "g", environment: .staging, color: "orange")
+                           compression: true, group: "g", tags: ["staging", "web"], color: "orange")
         try doc.upsert(host, originalAlias: nil)
         #expect(SSHConfigParser.parse(doc.text) == [host])
     }
 
     @Test func groupWithSpacesRoundTrips() throws {
         var doc = SSHConfigDocument(text: "")
-        let host = SSHHost(alias: "nas", hostName: "192.168.1.10", group: "мои сервера", environment: .dev)
+        let host = SSHHost(alias: "nas", hostName: "192.168.1.10", group: "мои сервера", tags: ["дом", "nas box"])
         try doc.upsert(host, originalAlias: nil)
-        #expect(doc.text.hasPrefix("# relaya: group=\"мои сервера\" env=dev\n"))
+        #expect(doc.text.hasPrefix("# relaya: group=\"мои сервера\" tags=\"дом,nas box\"\n"))
         #expect(SSHConfigParser.parse(doc.text) == [host])
     }
 
@@ -83,7 +83,7 @@ import Testing
         host.group = "работа"
         try doc.upsert(host, originalAlias: "db-main")
         let diff = LineDiff.diff(SSHConfigDocument(text: Self.sample).lines, doc.lines)
-        #expect(diff.filter { $0.kind == .added }.map(\.text) == ["# relaya: group=работа env=prod"])
+        #expect(diff.filter { $0.kind == .added }.map(\.text) == ["# relaya: group=работа tags=prod"])
         #expect(diff.filter { $0.kind == .removed }.map(\.text) == ["# relaya: group=prod env=prod"])
     }
 

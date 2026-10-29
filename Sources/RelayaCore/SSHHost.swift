@@ -1,10 +1,5 @@
 import Foundation
 
-/// Окружение хоста — задаёт цветовую метку в UI.
-public enum HostEnvironment: String, Sendable, CaseIterable {
-    case prod, staging, dev
-}
-
 /// Хост из `~/.ssh/config`. Relaya не хранит хосты у себя — это проекция конфига.
 public struct SSHHost: Identifiable, Hashable, Sendable {
     public var id: String { alias }
@@ -19,9 +14,10 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
     public var serverAliveInterval: Int?
     public var compression: Bool?
 
-    /// Метаданные Relaya из комментария `# relaya: group=prod env=prod color=orange` перед блоком Host.
+    /// Метаданные Relaya из комментария `# relaya: group=работа tags=prod,db color=orange` перед блоком Host.
     public var group: String?
-    public var environment: HostEnvironment?
+    /// Метки для фильтрации; порядок — как ввёл пользователь.
+    public var tags: [String]
     public var color: String?
 
     public init(
@@ -35,7 +31,7 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
         serverAliveInterval: Int? = nil,
         compression: Bool? = nil,
         group: String? = nil,
-        environment: HostEnvironment? = nil,
+        tags: [String] = [],
         color: String? = nil
     ) {
         self.alias = alias
@@ -48,7 +44,7 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
         self.serverAliveInterval = serverAliveInterval
         self.compression = compression
         self.group = group
-        self.environment = environment
+        self.tags = tags
         self.color = color
     }
 

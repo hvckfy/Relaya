@@ -42,7 +42,21 @@ import Testing
         Host plain
         """)
         #expect(hosts[0].group == "prod")
-        #expect(hosts[0].environment == .prod)
+        #expect(hosts[0].tags == ["prod"])
         #expect(hosts[1].group == nil)
+    }
+}
+
+@Suite struct TagsTests {
+    @Test func parsesTagsAndLegacyEnv() {
+        let hosts = SSHConfigParser.parse("""
+        # relaya: tags=prod,db, prod env=work
+        Host a
+        """)
+        #expect(hosts[0].tags == ["prod", "db", "work"])
+    }
+
+    @Test func splitTagsDedupesCaseInsensitive() {
+        #expect(SSHConfigParser.splitTags(" Prod, ,prod,db ") == ["Prod", "db"])
     }
 }
