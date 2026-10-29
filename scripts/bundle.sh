@@ -8,12 +8,16 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build/Relaya.app"
 
 cd "$ROOT"
-swift build -c release --arch arm64 --arch x86_64
-BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/Relaya"
+# По архитектуре отдельно: мульти-arch сборка уходит в xcbuild, который не тянет плагин SwiftTerm.
+BINS=()
+for ARCH in arm64 x86_64; do
+  swift build -c release --triple "$ARCH-apple-macosx14.0"
+  BINS+=("$(swift build -c release --triple "$ARCH-apple-macosx14.0" --show-bin-path)/Relaya")
+done
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Relaya"
+lipo -create "${BINS[@]}" -output "$APP/Contents/MacOS/Relaya"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
