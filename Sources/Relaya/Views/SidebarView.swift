@@ -67,6 +67,8 @@ struct SidebarView: View {
                 NavRow(label: "Туннели", systemImage: "arrow.left.arrow.right",
                        meta: model.tunnels.activeCount > 0 ? "\(model.tunnels.activeCount) акт." : nil,
                        selected: model.screen == .tunnels) { model.screen = model.screen == .tunnels ? .hosts : .tunnels }
+                NavRow(label: "Сниппеты", systemImage: "text.badge.plus", meta: "\(model.snippets.count)",
+                       selected: model.screen == .snippets) { model.screen = model.screen == .snippets ? .hosts : .snippets }
                 NavRow(label: "Агенты (MCP)", systemImage: "sparkles", meta: "скоро")
             }
             .padding(8)

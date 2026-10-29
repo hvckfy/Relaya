@@ -45,6 +45,9 @@ struct RelayaApp: App {
                         .keyboardShortcut(KeyEquivalent(Character(String(n))), modifiers: .command)
                 }
                 Divider()
+                Button("Сниппеты…") { model.snippetPalette = true }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+                    .disabled(model.activeSession == nil)
                 Button("Переподключить") { model.activeSession?.controller.reconnect() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.activeSession == nil)

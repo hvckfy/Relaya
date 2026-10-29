@@ -34,6 +34,9 @@ struct SessionView: View {
             Text(session.host.alias).fontWeight(.semibold).foregroundStyle(Theme.tx)
             Spacer()
             OSActionsMenu(os: host.os, user: host.user) { c.insert($0) }
+            Button("Сниппеты") { model.snippetPalette = true }
+                .buttonStyle(.relaya(.ghost, height: 24))
+                .help("Вставить сохранённую команду (⇧⌘P)")
             Button("SFTP") { model.sftpHost = host }
                 .buttonStyle(.relaya(.ghost, height: 24))
                 .help("Файлы на сервере")

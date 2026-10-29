@@ -14,7 +14,7 @@ struct Session: Identifiable, Hashable {
 
 /// Раздел в основной области окна.
 enum Screen: Hashable {
-    case hosts, keys, tunnels
+    case hosts, keys, tunnels, snippets
 }
 
 /// Запуск мастера «Вход по ключу».
@@ -46,6 +46,10 @@ final class AppModel {
     var screen: Screen = .hosts
     var keyWizard: KeyWizardRequest?
     var sftpHost: SSHHost?
+    var snippetPalette = false
+    var snippets: [Snippet] = SnippetStore().load() {
+        didSet { try? SnippetStore().save(snippets) }
+    }
     var showOnboarding = !UserDefaults.standard.bool(forKey: "onboardingDone")
 
     var hosts: [SSHHost] = []

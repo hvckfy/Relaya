@@ -45,6 +45,9 @@ struct MainView: View {
             }
         }
         .toolbarBackground(Theme.bar, for: .windowToolbar)
+        .sheet(isPresented: $model.snippetPalette) {
+            SnippetPalette().environment(model)
+        }
         .sheet(item: $model.sftpHost) { host in
             SFTPView(host: host).environment(model)
         }
@@ -106,6 +109,8 @@ struct MainView: View {
             KeysView()
         } else if model.screen == .tunnels {
             TunnelsView()
+        } else if model.screen == .snippets {
+            SnippetsView()
         } else if let session = model.activeSession {
             SessionView(session: session)
                 // id привязывает терминал к сессии — при переключении вкладок процесс не пересоздаётся.
