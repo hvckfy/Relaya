@@ -425,6 +425,13 @@ final class AppModel {
     /// `interactive` — вызвано пользователем: можно спросить Touch ID; иначе пароль берём, только если уже подтверждён.
     func exec(_ command: String, on host: SSHHost, interactive: Bool, reason: String,
               timeout: Duration = .seconds(20)) async throws -> ProcessResult {
+        let ssh = await invocation(for: host, interactive: interactive, reason: reason)
+        return try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, command],
+                                           environment: ssh.environment, timeout: timeout)
+    }
+
+    /// Аргументы и окружение ssh для хоста — общие для exec и потоковых передач SFTP.
+    func invocation(for host: SSHHost, interactive: Bool, reason: String) async -> SSHInvocation {
         let h = current(host)
         var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10"]
         var env: [String: String] = [:]
@@ -440,7 +447,7 @@ final class AppModel {
         } else {
             args += ["-o", "BatchMode=yes"]
         }
-        return try await ProcessRunner.run("/usr/bin/ssh", args + [h.alias, command], environment: env, timeout: timeout)
+        return SSHInvocation(alias: h.alias, options: args, environment: env)
     }
 
     // MARK: - Docker

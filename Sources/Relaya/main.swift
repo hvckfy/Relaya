@@ -18,6 +18,9 @@ if let account = env["RELAYA_ASKPASS_ACCOUNT"] {
     exit(1)
 }
 
+// Потоковые передачи SFTP пишут в pipe ssh: при обрыве нужна ошибка записи, а не падение.
+signal(SIGPIPE, SIG_IGN)
+
 // MCP-режим для AI-агентов: `Relaya --mcp` — JSON-RPC через stdin/stdout, без окна.
 if CommandLine.arguments.contains("--mcp") {
     let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
