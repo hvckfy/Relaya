@@ -27,6 +27,8 @@ final class VNCSession: NSObject {
     private(set) var phase: Phase = .idle
     private(set) var framebufferView: NSView?
     var credentialRequest: CredentialRequest?
+    /// Почему введённый пароль не отправлен (показывается в окне ввода).
+    var credentialError: String?
 
     @ObservationIgnored private var connection: VNCConnection?
     @ObservationIgnored private var tunnel: Tunnel?
@@ -76,11 +78,25 @@ final class VNCSession: NSObject {
     /// Ответ из окна ввода пароля.
     func provide(username: String, password: String, save: Bool) {
         guard let request = credentialRequest else { return }
+        // Пароль VNC — до 8 байт Latin-1; RoyalVNCKit 1.1.0 падает на не-ASCII символах.
+        if !request.needsUsername, let problem = Self.vncPasswordProblem(password) {
+            credentialError = problem
+            return
+        }
+        credentialError = nil
         credentialRequest = nil
         if save { try? keychain.setPassword(password, for: account) }
         request.reply(request.needsUsername
             ? VNCUsernamePasswordCredential(username: username, password: password)
             : VNCPasswordCredential(password: password))
+    }
+
+    /// Почему пароль нельзя отправить как пароль VNC; nil — можно.
+    static func vncPasswordProblem(_ password: String) -> String? {
+        guard password.unicodeScalars.allSatisfy(\.isASCII) else {
+            return "Пароль VNC может содержать только латинские буквы, цифры и символы ASCII. Проверьте раскладку клавиатуры."
+        }
+        return nil
     }
 
     func cancelCredentials() {
@@ -107,7 +123,8 @@ final class VNCSession: NSObject {
     fileprivate func needCredential(_ type: VNCAuthenticationType, reply: @escaping (VNCCredential?) -> Void) {
         let needsUser = type.requiresUsername
         // Сначала пробуем сохранённый пароль; если сервер его отверг — спросим.
-        if !triedSaved, let saved = try? keychain.password(for: account), !(needsUser && desktop.user.isEmpty) {
+        if !triedSaved, let saved = try? keychain.password(for: account), !(needsUser && desktop.user.isEmpty),
+           needsUser || Self.vncPasswordProblem(saved) == nil {
             triedSaved = true
             reply(needsUser ? VNCUsernamePasswordCredential(username: desktop.user, password: saved)
                             : VNCPasswordCredential(password: saved))

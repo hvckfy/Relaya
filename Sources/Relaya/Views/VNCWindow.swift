@@ -72,6 +72,13 @@ private struct VNCContent: View {
                 }
                 SecureField("Пароль", text: $password).textFieldStyle(.roundedBorder)
                     .onSubmit { session.provide(username: username, password: password, save: save) }
+                if session.credentialRequest?.needsUsername == false {
+                    Text("VNC учитывает только первые 8 символов пароля.")
+                        .font(.system(size: 11)).foregroundStyle(Theme.tx2)
+                }
+                if let error = session.credentialError {
+                    Text(error).font(.system(size: 12)).foregroundStyle(Theme.red).fixedSize(horizontal: false, vertical: true)
+                }
                 Toggle("Сохранить в Keychain", isOn: $save)
                 HStack {
                     Spacer()
