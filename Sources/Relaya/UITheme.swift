@@ -73,4 +73,6 @@ struct UITheme: Codable, Hashable, Identifiable, Sendable {
 /// меняется только из AppSettings на главном потоке.
 enum ThemeStore {
     nonisolated(unsafe) static var current: UITheme = .relaya
+    /// Системный стиль окна: цвета macOS и акцентный цвет пользователя вместо темы Relaya.
+    nonisolated(unsafe) static var native = false
 }

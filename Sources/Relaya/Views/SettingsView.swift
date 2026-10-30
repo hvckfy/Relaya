@@ -27,6 +27,13 @@ private struct AppearanceSettings: View {
             }
             .pickerStyle(.segmented)
 
+            Picker(L("Стиль окна"), selection: $settings.nativeUI) {
+                Text("Relaya").tag(false)
+                Text(L("Системный macOS")).tag(true)
+            }
+            .pickerStyle(.segmented)
+
+            if !settings.nativeUI {
             Section(L("Оформление интерфейса")) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
                     ForEach(settings.allUIThemes) { theme in
@@ -45,6 +52,7 @@ private struct AppearanceSettings: View {
                 if let index = settings.customThemes.firstIndex(where: { $0.id == settings.uiThemeID }) {
                     CustomThemeEditor(theme: $settings.customThemes[index])
                 }
+            }
             }
 
             Picker(L("Цвета терминала"), selection: $settings.terminalTheme) {

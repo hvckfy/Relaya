@@ -29,10 +29,21 @@ enum Theme {
     static func token(_ key: KeyPath<UIColors, UInt32> & Sendable, light: Double = 1, dark: Double = 1) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            if ThemeStore.native, let system = systemColors[key] {
+                return system.withAlphaComponent(isDark ? dark : light)
+            }
             let theme = ThemeStore.current
             return NSColor(hex: (isDark ? theme.dark : theme.light)[keyPath: key], alpha: isDark ? dark : light)
         })
     }
+
+    /// Системные цвета macOS для каждого токена — в нативном стиле окна.
+    nonisolated(unsafe) private static let systemColors: [KeyPath<UIColors, UInt32>: NSColor] = [
+        \.bg: .windowBackgroundColor, \.bg2: .controlBackgroundColor, \.side: .windowBackgroundColor,
+        \.bar: .windowBackgroundColor, \.tx: .labelColor, \.tx2: .secondaryLabelColor,
+        \.acc: .controlAccentColor, \.accBg: .controlAccentColor,
+        \.red: .systemRed, \.org: .systemOrange, \.grn: .systemGreen,
+    ]
 
     /// Палитра «Цвет хоста» из редактора.
     static let hostColors: [(name: String, label: String, color: Color)] = [
@@ -149,11 +160,30 @@ struct RelayaButtonStyle: ButtonStyle {
     }
 }
 
-extension ButtonStyle where Self == RelayaButtonStyle {
-    static var relaya: RelayaButtonStyle { RelayaButtonStyle() }
-    static var relayaPrimary: RelayaButtonStyle { RelayaButtonStyle(kind: .primary) }
-    static func relaya(_ kind: RelayaButtonStyle.Kind, height: CGFloat = 28) -> RelayaButtonStyle {
-        RelayaButtonStyle(kind: kind, height: height)
+/// В стиле Relaya — кнопки из макетов; в системном стиле — стандартные кнопки macOS.
+struct AdaptiveButtonStyle: PrimitiveButtonStyle {
+    var kind: RelayaButtonStyle.Kind = .normal
+    var height: CGFloat = 28
+
+    @ViewBuilder func makeBody(configuration: Configuration) -> some View {
+        if ThemeStore.native {
+            let size: ControlSize = height < 24 ? .mini : height < 28 ? .small : .regular
+            switch kind {
+            case .primary: Button(configuration).buttonStyle(.borderedProminent).controlSize(size)
+            case .normal: Button(configuration).buttonStyle(.bordered).controlSize(size)
+            case .ghost: Button(configuration).buttonStyle(.borderless).controlSize(size)
+            }
+        } else {
+            Button(configuration).buttonStyle(RelayaButtonStyle(kind: kind, height: height))
+        }
+    }
+}
+
+extension PrimitiveButtonStyle where Self == AdaptiveButtonStyle {
+    static var relaya: AdaptiveButtonStyle { AdaptiveButtonStyle() }
+    static var relayaPrimary: AdaptiveButtonStyle { AdaptiveButtonStyle(kind: .primary) }
+    static func relaya(_ kind: RelayaButtonStyle.Kind, height: CGFloat = 28) -> AdaptiveButtonStyle {
+        AdaptiveButtonStyle(kind: kind, height: height)
     }
 }
 

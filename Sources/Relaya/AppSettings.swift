@@ -24,6 +24,10 @@ final class AppSettings {
     var uiThemeID: String {
         didSet { defaults.set(uiThemeID, forKey: "uiTheme"); applyUITheme() }
     }
+    /// Стиль окна: false — Relaya (темы оформления), true — системный macOS.
+    var nativeUI: Bool {
+        didSet { defaults.set(nativeUI, forKey: "nativeUI"); ThemeStore.native = nativeUI; themeRevision += 1 }
+    }
     var customThemes: [UITheme] {
         didSet {
             defaults.set(try? JSONEncoder().encode(customThemes), forKey: "customThemes")
@@ -94,6 +98,9 @@ final class AppSettings {
     init() {
         appearance = Appearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
         uiThemeID = defaults.string(forKey: "uiTheme") ?? UITheme.relaya.id
+        let native = defaults.bool(forKey: "nativeUI")
+        nativeUI = native
+        ThemeStore.native = native
         customThemes = defaults.data(forKey: "customThemes")
             .flatMap { try? JSONDecoder().decode([UITheme].self, from: $0) } ?? []
         terminalTheme = defaults.string(forKey: "terminalTheme") ?? TerminalTheme.relayaDark.id
