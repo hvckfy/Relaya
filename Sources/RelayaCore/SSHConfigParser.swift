@@ -43,8 +43,10 @@ public enum SSHConfigParser {
                 current = aliases(in: value)
                     .filter { !isPattern($0) }
                     .map {
-                        SSHHost(alias: $0, group: pendingMeta.group,
-                                tags: pendingMeta.tags, color: pendingMeta.color, os: pendingMeta.os)
+                        var h = SSHHost(alias: $0, group: pendingMeta.group,
+                                        tags: pendingMeta.tags, color: pendingMeta.color, os: pendingMeta.os)
+                        h.tmux = pendingMeta.tmux
+                        return h
                     }
                 pendingMeta = Meta()
             case "match":
@@ -68,6 +70,7 @@ public enum SSHConfigParser {
         var tags: [String] = []
         var color: String?
         var os: ServerOS?
+        var tmux = false
     }
 
     static func aliases(in value: String) -> [String] {
@@ -120,6 +123,7 @@ public enum SSHConfigParser {
             case "env": meta.tags.append(kv[1].lowercased())
             case "color": meta.color = kv[1].lowercased()
             case "os": meta.os = ServerOS(rawValue: kv[1].lowercased())
+            case "tmux": meta.tmux = ["on", "yes", "true", "1"].contains(kv[1].lowercased())
             default: break
             }
         }

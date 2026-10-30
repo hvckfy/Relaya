@@ -21,6 +21,8 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
     public var color: String?
     /// ОС сервера — определяется автоматически после подключения.
     public var os: ServerOS?
+    /// Постоянная сессия через tmux (`tmux=on`): переподключение возвращает в неё же.
+    public var tmux = false
 
     public init(
         alias: String,
