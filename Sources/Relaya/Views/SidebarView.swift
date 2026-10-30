@@ -95,7 +95,8 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(ThemeStore.native ? .automatic : .hidden)
-        .background(ThemeStore.native ? Color.clear : Theme.side)
+        // Фон темы — и под заголовком окна, иначе над поиском остаётся полоса системного цвета.
+        .background { if !ThemeStore.native { Theme.side.ignoresSafeArea() } }
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if items.count == 1, let item = items.first { menu(for: item) }
         } primaryAction: { items in
