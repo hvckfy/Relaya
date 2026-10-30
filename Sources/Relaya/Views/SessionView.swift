@@ -6,13 +6,14 @@ struct SessionView: View {
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
     let session: Session
+    let controller: SessionController
 
-    private var c: SessionController { session.controller }
+    private var c: SessionController { controller }
 
     var body: some View {
         VStack(spacing: 0) {
             breadcrumbs
-            SessionBanners(controller: c, host: session.host)
+            SessionBanners(controller: c, host: controller.host)
             TerminalView(controller: c)
                 .id("\(session.id)-\(c.generation)")
                 .padding(.horizontal, 8)
@@ -24,29 +25,30 @@ struct SessionView: View {
     }
 
     private var breadcrumbs: some View {
-        let host = model.current(session.host)
+        let host = model.current(controller.host)
         return HStack(spacing: 6) {
             OSIcon(os: host.os, size: 16)
-            if let group = session.host.group {
+            if let group = controller.host.group {
                 Text(group)
                 Text("›").accessibilityHidden(true)
             }
-            Text(session.host.alias).fontWeight(.semibold).foregroundStyle(Theme.tx)
+            Text(controller.host.alias).fontWeight(.semibold).foregroundStyle(Theme.tx)
             Spacer()
             OSActionsMenu(os: host.os, user: host.user) { c.insert($0) }
             Button(L("Сниппеты")) { model.snippetPalette = true }
                 .buttonStyle(.relaya(.ghost, height: 24))
                 .help(L("Вставить сохранённую команду (⇧⌘P)"))
-            Button("SFTP") { model.sftpHost = host }
+            PortsButton(host: host)
+            Button("SFTP") { model.openFiles(host) }
                 .buttonStyle(.relaya(.ghost, height: 24))
                 .help(L("Файлы на сервере"))
             Button(L("Найти")) { c.showFind() }
                 .buttonStyle(.relaya(.ghost, height: 24))
                 .help(L("Поиск в терминале (⌘F)"))
-            Button(L("Изменить хост")) { model.editor = EditorRequest(original: session.host) }
+            Button(L("Изменить хост")) { model.editor = EditorRequest(original: controller.host) }
                 .buttonStyle(.relaya(.ghost, height: 24))
-            if !session.host.usesKey {
-                Button(L("Вход по ключу…")) { model.keyWizard = KeyWizardRequest(host: session.host) }
+            if !controller.host.usesKey {
+                Button(L("Вход по ключу…")) { model.keyWizard = KeyWizardRequest(host: controller.host) }
                     .buttonStyle(.relaya(.ghost, height: 24))
             }
         }
@@ -60,10 +62,10 @@ struct SessionView: View {
 
     private var statusBar: some View {
         HStack(spacing: 14) {
-            Text(session.host.subtitle)
-            if session.host.usesKey {
+            Text(controller.host.subtitle)
+            if controller.host.usesKey {
                 Text(L("ключ")).foregroundStyle(Theme.grn)
-            } else if model.keychain.hasPassword(for: session.host.keychainAccount) {
+            } else if model.keychain.hasPassword(for: controller.host.keychainAccount) {
                 Text(L("пароль · Keychain")).foregroundStyle(Theme.org)
             } else {
                 Text(L("пароль")).foregroundStyle(Theme.org)
@@ -266,5 +268,24 @@ private struct EndedOverlay: View {
         case let code?: L("ssh завершился с кодом %@", "\(code)")
         case nil: L("Сессия завершена")
         }
+    }
+}
+
+/// «Порты» над терминалом: пробросы этого хоста во всплывающем окне.
+private struct PortsButton: View {
+    @Environment(AppModel.self) private var model
+    let host: SSHHost
+    @State private var shown = false
+
+    var body: some View {
+        let active = model.tunnels.tunnels.filter { $0.hostAlias == host.alias && model.tunnels.status(of: $0) == .running }.count
+        Button(active > 0 ? L("Порты · %@", "\(active)") : L("Порты")) { shown.toggle() }
+            .buttonStyle(.relaya(.ghost, height: 24))
+            .help(L("Проброс портов для этого хоста"))
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                PortsPanel(host: host)
+                    .padding(14)
+                    .frame(width: 420)
+            }
     }
 }

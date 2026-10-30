@@ -7,6 +7,38 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Picker("", selection: Binding(get: { model.sidebarMode }, set: { model.sidebarMode = $0; model.screen = .hosts })) {
+                ForEach(SidebarMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+
+            if model.sidebarMode == .vnc || model.sidebarMode == .rdp {
+                DesktopList()
+            } else {
+                hostList
+            }
+
+            Divider().overlay(Theme.line)
+            VStack(spacing: 2) {
+                NavRow(label: L("Ключи"), systemImage: "key", meta: nil,
+                       selected: model.screen == .keys) { model.screen = model.screen == .keys ? .hosts : .keys }
+                NavRow(label: L("Туннели"), systemImage: "arrow.left.arrow.right",
+                       meta: model.tunnels.activeCount > 0 ? L("%@ акт.", "\(model.tunnels.activeCount)") : nil,
+                       selected: model.screen == .tunnels) { model.screen = model.screen == .tunnels ? .hosts : .tunnels }
+                NavRow(label: L("Сниппеты"), systemImage: "text.badge.plus", meta: "\(model.snippets.count)",
+                       selected: model.screen == .snippets) { model.screen = model.screen == .snippets ? .hosts : .snippets }
+                NavRow(label: L("Агенты (MCP)"), systemImage: "sparkles", meta: nil,
+                       selected: model.screen == .agents) { model.screen = model.screen == .agents ? .hosts : .agents }
+            }
+            .padding(8)
+        }
+        .background(Theme.side)
+    }
+
+    @ViewBuilder private var hostList: some View {
             if !model.allTags.isEmpty {
                 TagFilterBar()
             }
@@ -60,23 +92,6 @@ struct SidebarView: View {
                 }
             }
 
-            Divider().overlay(Theme.line)
-            VStack(spacing: 2) {
-                NavRow(label: L("Ключи"), systemImage: "key", meta: nil,
-                       selected: model.screen == .keys) { model.screen = model.screen == .keys ? .hosts : .keys }
-                NavRow(label: L("Туннели"), systemImage: "arrow.left.arrow.right",
-                       meta: model.tunnels.activeCount > 0 ? L("%@ акт.", "\(model.tunnels.activeCount)") : nil,
-                       selected: model.screen == .tunnels) { model.screen = model.screen == .tunnels ? .hosts : .tunnels }
-                NavRow(label: L("Рабочие столы"), systemImage: "display.2", meta: model.desktops.isEmpty ? nil : "\(model.desktops.count)",
-                       selected: model.screen == .desktops) { model.screen = model.screen == .desktops ? .hosts : .desktops }
-                NavRow(label: L("Сниппеты"), systemImage: "text.badge.plus", meta: "\(model.snippets.count)",
-                       selected: model.screen == .snippets) { model.screen = model.screen == .snippets ? .hosts : .snippets }
-                NavRow(label: L("Агенты (MCP)"), systemImage: "sparkles", meta: nil,
-                       selected: model.screen == .agents) { model.screen = model.screen == .agents ? .hosts : .agents }
-            }
-            .padding(8)
-        }
-        .background(Theme.side)
     }
 }
 
@@ -123,10 +138,12 @@ struct HostRow: View {
         // Выбор — сразу по первому клику; двойной клик дополнительно подключает.
         // (Пара onTapGesture(count: 2) + onTapGesture заставляла SwiftUI ждать второго клика.)
         .onTapGesture { model.selectedHostID = host.id; model.activeSessionID = nil; model.screen = .hosts }
-        .simultaneousGesture(TapGesture(count: 2).onEnded { model.connect(host) })
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+            if model.sidebarMode == .sftp { model.openFiles(host) } else { model.connect(host) }
+        })
         .contextMenu {
             Button(L("Подключить")) { model.connect(host) }
-            Button(L("Файлы (SFTP)…")) { model.sftpHost = host }
+            Button(L("Файлы (SFTP)…")) { model.openFiles(host) }
             Button(L("Изменить…")) { model.editor = EditorRequest(original: host) }
             Button(L("Настроить вход по ключу…")) { model.keyWizard = KeyWizardRequest(host: host) }
             Button(L("Определить ОС")) { Task { await model.detectOS(for: host.alias) } }

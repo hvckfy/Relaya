@@ -25,26 +25,31 @@ struct MainView: View {
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    model.editor = EditorRequest(original: nil)
+                    model.addForCurrentMode()
                 } label: {
-                    Label(L("Хост"), systemImage: "plus")
+                    Label(model.sidebarMode == .vnc || model.sidebarMode == .rdp ? model.sidebarMode.title : L("Хост"),
+                          systemImage: "plus")
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(.relaya)
                 .help(L("Новый хост (⇧⌘N)"))
 
                 Button {
-                    if let host = model.selectedHost { model.connect(host) }
+                    model.connectSelection()
                 } label: {
-                    Label(L("Подключить"), systemImage: "bolt.fill")
+                    Label(model.sidebarMode == .sftp ? L("Открыть файлы") : L("Подключить"),
+                          systemImage: model.sidebarMode == .sftp ? "folder" : "bolt.fill")
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(.relayaPrimary)
-                .disabled(model.selectedHost == nil)
+                .disabled(!model.canConnectSelection)
                 .help(L("Подключить (⌘T)"))
             }
         }
         .toolbarBackground(Theme.bar, for: .windowToolbar)
+        .sheet(item: $model.desktopEditor) { d in
+            DesktopEditor(desktop: d).environment(model)
+        }
         .sheet(isPresented: $model.snippetPalette) {
             SnippetPalette().environment(model)
         }
@@ -116,9 +121,22 @@ struct MainView: View {
         } else if model.screen == .agents {
             AgentsView()
         } else if let session = model.activeSession {
-            SessionView(session: session)
-                // id привязывает терминал к сессии — при переключении вкладок процесс не пересоздаётся.
-                .id(session.id)
+            // id привязывает содержимое к вкладке — при переключении процессы не пересоздаются.
+            Group {
+                switch session.kind {
+                case .terminal(let c): SessionView(session: session, controller: c)
+                case .files(let h): SFTPView(host: h, embedded: true)
+                case .vnc(let s): VNCContent(session: s).background(Color.black)
+                case .rdp(let s): RDPContent(session: s).background(Color.black)
+                }
+            }
+            .id(session.id)
+        } else if model.sidebarMode == .vnc || model.sidebarMode == .rdp {
+            if let desktop = model.selectedDesktop {
+                DesktopDetailView(desktop: desktop)
+            } else {
+                DesktopsEmptyView(kind: model.sidebarMode == .vnc ? .vnc : .rdp)
+            }
         } else if let host = model.selectedHost {
             HostDetailView(host: host)
         } else {

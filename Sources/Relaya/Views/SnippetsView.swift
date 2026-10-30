@@ -186,7 +186,7 @@ struct SnippetPalette: View {
 
     private func send(_ s: Snippet, execute: Bool) {
         let cmd = s.filled(values)
-        model.activeSession?.controller.insert(execute ? cmd + "\r" : cmd)
+        model.activeSession?.controller?.insert(execute ? cmd + "\r" : cmd)
         dismiss()
     }
 }

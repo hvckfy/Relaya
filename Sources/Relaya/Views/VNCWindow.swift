@@ -29,7 +29,7 @@ struct VNCWindow: View {
     }
 }
 
-private struct VNCContent: View {
+struct VNCContent: View {
     @Bindable var session: VNCSession
     @State private var username = ""
     @State private var password = ""

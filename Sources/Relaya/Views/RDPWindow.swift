@@ -31,7 +31,7 @@ struct RDPWindow: View {
     }
 }
 
-private struct RDPContent: View {
+struct RDPContent: View {
     @Bindable var session: RDPSession
     @State private var user = ""
     @State private var password = ""

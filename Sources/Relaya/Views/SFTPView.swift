@@ -6,6 +6,8 @@ struct SFTPView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let host: SSHHost
+    /// Во вкладке окна, а не в отдельном листе: без кнопки «Готово» и фиксированного размера.
+    var embedded = false
 
     @State private var path = ""
     @State private var pathField = ""
@@ -75,7 +77,8 @@ struct SFTPView: View {
             } isTargeted: { dropTargeted = $0 }
             statusBar
         }
-        .frame(width: 860, height: 560)
+        .frame(width: embedded ? nil : 860, height: embedded ? nil : 560)
+        .frame(maxWidth: embedded ? .infinity : nil, maxHeight: embedded ? .infinity : nil)
         .background(Theme.bg)
         .task { await start() }
         .alert(L("Новая папка"), isPresented: $newFolder) {
@@ -109,7 +112,9 @@ struct SFTPView: View {
             Button(L("Загрузить…")) { chooseUpload() }.buttonStyle(.relaya)
             Button(L("Скачать…")) { download() }.buttonStyle(.relaya).disabled(selection.isEmpty)
             IconButton(systemImage: "folder.badge.plus", label: L("Новая папка")) { newFolderName = ""; newFolder = true }
-            Button(L("Готово")) { dismiss() }.buttonStyle(.relayaPrimary).keyboardShortcut(.cancelAction)
+            if !embedded {
+                Button(L("Готово")) { dismiss() }.buttonStyle(.relayaPrimary).keyboardShortcut(.cancelAction)
+            }
         }
         .font(.system(size: 13))
         .padding(.horizontal, 12)

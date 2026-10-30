@@ -21,7 +21,7 @@ struct HostDetailView: View {
                     }
                     Spacer()
                     // «Подключить» — в тулбаре окна (⌘T), здесь не дублируем.
-                    Button(L("Файлы")) { model.sftpHost = host }
+                    Button(L("Файлы")) { model.openFiles(host) }
                         .buttonStyle(.relaya)
                     Button(L("Изменить")) { model.editor = EditorRequest(original: host) }
                         .buttonStyle(.relaya)
@@ -60,6 +60,17 @@ struct HostDetailView: View {
                 .frame(height: 40)
                 .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L("Порты").uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.tx2)
+                        .padding(.leading, 4)
+                    PortsPanel(host: host)
+                        .padding(12)
+                        .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
+                }
 
                 InfoGroup(title: L("Подключение"), rows: [
                     (L("Адрес"), host.hostName ?? host.alias),

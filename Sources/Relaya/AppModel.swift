@@ -2,14 +2,59 @@ import AppKit
 import Observation
 import RelayaCore
 
-/// Открытая вкладка с SSH-сессией.
+/// Открытая вкладка: терминал, файлы (SFTP), VNC или RDP.
 struct Session: Identifiable, Hashable {
+    enum Kind {
+        case terminal(SessionController)
+        case files(SSHHost)
+        case vnc(VNCSession)
+        case rdp(RDPSession)
+    }
+
     let id = UUID()
-    let host: SSHHost
-    let controller: SessionController
+    let kind: Kind
+
+    /// SSH-хост вкладки (для терминала и файлов).
+    var host: SSHHost? {
+        switch kind {
+        case .terminal(let c): c.host
+        case .files(let h): h
+        case .vnc, .rdp: nil
+        }
+    }
+
+    var controller: SessionController? {
+        if case .terminal(let c) = kind { return c }
+        return nil
+    }
+
+    var title: String {
+        switch kind {
+        case .terminal(let c): c.host.alias
+        case .files(let h): h.alias
+        case .vnc(let s): s.desktop.name.isEmpty ? s.desktop.address : s.desktop.name
+        case .rdp(let s): s.desktop.name.isEmpty ? s.desktop.address : s.desktop.name
+        }
+    }
+
+    var systemImage: String {
+        switch kind {
+        case .terminal: "terminal"
+        case .files: "folder"
+        case .vnc: "display"
+        case .rdp: "pc"
+        }
+    }
 
     static func == (a: Session, b: Session) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }
+}
+
+/// Что показывает левое меню.
+enum SidebarMode: String, CaseIterable, Identifiable {
+    case ssh, sftp, vnc, rdp
+    var id: String { rawValue }
+    var title: String { rawValue.uppercased() }
 }
 
 /// Раздел в основной области окна.
@@ -45,6 +90,13 @@ final class AppModel {
 
     var screen: Screen = .hosts
     var keyWizard: KeyWizardRequest?
+    /// Режим левого меню: SSH, SFTP, VNC или RDP.
+    var sidebarMode: SidebarMode = SidebarMode(rawValue: UserDefaults.standard.string(forKey: "sidebarMode") ?? "") ?? .ssh {
+        didSet { UserDefaults.standard.set(sidebarMode.rawValue, forKey: "sidebarMode") }
+    }
+    var selectedDesktopID: RemoteDesktop.ID?
+    /// Редактор подключения VNC/RDP.
+    var desktopEditor: RemoteDesktop?
     var sftpHost: SSHHost?
     var snippetPalette = false
     var desktops: [RemoteDesktop] = RemoteDesktopStore().load() {
@@ -80,6 +132,38 @@ final class AppModel {
     }
 
     var selectedHost: SSHHost? { hosts.first { $0.id == selectedHostID } }
+    var selectedDesktop: RemoteDesktop? { desktops.first { $0.id == selectedDesktopID } }
+
+    /// Рабочие столы для текущего режима меню (с учётом поиска).
+    var visibleDesktops: [RemoteDesktop] {
+        let kind: RemoteDesktop.Kind = sidebarMode == .rdp ? .rdp : .vnc
+        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        return desktops.filter { d in
+            d.kind == kind && (q.isEmpty || d.name.lowercased().contains(q) || d.summary.lowercased().contains(q))
+        }
+    }
+
+    /// «Подключить» в тулбаре — по выбранному в текущем режиме.
+    func connectSelection() {
+        switch sidebarMode {
+        case .ssh: if let h = selectedHost { connect(h) }
+        case .sftp: if let h = selectedHost { openFiles(h) }
+        case .vnc, .rdp: if let d = selectedDesktop { openDesktop(d) }
+        }
+    }
+
+    var canConnectSelection: Bool {
+        sidebarMode == .vnc || sidebarMode == .rdp ? selectedDesktop != nil : selectedHost != nil
+    }
+
+    /// «+» в тулбаре — новое подключение текущего типа.
+    func addForCurrentMode() {
+        switch sidebarMode {
+        case .ssh, .sftp: editor = EditorRequest(original: nil)
+        case .vnc: desktopEditor = RemoteDesktop(name: "", kind: .vnc, address: "")
+        case .rdp: desktopEditor = RemoteDesktop(name: "", kind: .rdp, address: "")
+        }
+    }
     var activeSession: Session? { sessions.first { $0.id == activeSessionID } }
 
     static let ungrouped = L("Без группы")
@@ -180,7 +264,7 @@ final class AppModel {
         screen = .hosts
         let controller = SessionController(host: host)
         controller.onOSGuessed = { [weak self] os in self?.setOS(os, for: host.alias, onlyIfUnknown: true) }
-        let session = Session(host: host, controller: controller)
+        let session = Session(kind: .terminal(controller))
         if host.os == nil, !RelayaPaths.isDemo { Task { await detectOS(for: host.alias) } }
         sessions.append(session)
         activeSessionID = session.id
@@ -188,7 +272,12 @@ final class AppModel {
 
     func close(_ session: Session) {
         guard let index = sessions.firstIndex(of: session) else { return }
-        session.controller.terminate()
+        switch session.kind {
+        case .terminal(let c): c.terminate()
+        case .vnc(let s): s.disconnect()
+        case .rdp(let s): s.disconnect()
+        case .files: break
+        }
         sessions.remove(at: index)
         if activeSessionID == session.id {
             activeSessionID = sessions.indices.contains(index) ? sessions[index].id : sessions.last?.id
@@ -200,7 +289,7 @@ final class AppModel {
     func run(_ command: String, on host: SSHHost) {
         connect(host)
         let cmd = host.user == "root" ? command.replacingOccurrences(of: "sudo ", with: "") : command
-        sessions.last?.controller.pendingCommand = cmd
+        sessions.last?.controller?.pendingCommand = cmd
     }
 
     /// Включает или отключает вход по паролю на сервере командой под его ОС.
@@ -249,6 +338,40 @@ final class AppModel {
             NSWorkspace.shared.open(file)
             desktopStatus[desktop.id] = nil
         }
+    }
+
+    /// Файлы хоста во вкладке (уже открытая вкладка того же хоста — активируется).
+    func openFiles(_ host: SSHHost) {
+        screen = .hosts
+        if let existing = sessions.first(where: { if case .files(let h) = $0.kind { return h.alias == host.alias }; return false }) {
+            activeSessionID = existing.id
+            return
+        }
+        let session = Session(kind: .files(host))
+        sessions.append(session)
+        activeSessionID = session.id
+    }
+
+    /// VNC или RDP во вкладке окна.
+    func openDesktop(_ desktop: RemoteDesktop) {
+        screen = .hosts
+        let session: Session
+        switch desktop.kind {
+        case .vnc:
+            let s = VNCSession(desktop: desktop, model: self)
+            session = Session(kind: .vnc(s))
+            Task { await s.connect() }
+        case .rdp:
+            let s = RDPSession(desktop: desktop, model: self)
+            session = Session(kind: .rdp(s))
+            // Даём холсту разложиться: размер рабочего стола берётся из размера вкладки.
+            Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                await s.start()
+            }
+        }
+        sessions.append(session)
+        activeSessionID = session.id
     }
 
     func closeActiveSession() {
@@ -300,6 +423,6 @@ final class AppModel {
     var askpassExecutable: String { Bundle.main.executablePath ?? CommandLine.arguments[0] }
 
     func isConnected(_ host: SSHHost) -> Bool {
-        sessions.contains { $0.host.id == host.id }
+        sessions.contains { $0.controller?.host.id == host.id }
     }
 }

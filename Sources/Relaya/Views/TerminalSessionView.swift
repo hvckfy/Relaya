@@ -17,6 +17,7 @@ struct SessionTabBar: View {
             }
             IconButton(systemImage: "plus", label: L("Новая вкладка"), size: 34) {
                 if let host = model.activeSession?.host ?? model.selectedHost { model.connect(host) }
+                else if let d = model.selectedDesktop { model.openDesktop(d) }
             }
             Spacer(minLength: 0)
         }
@@ -34,15 +35,16 @@ private struct SessionTab: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(session.controller.ended ? Theme.tx2.opacity(0.4)
-                      : session.host.tags.first.map(TagStyle.color) ?? Theme.tx2)
-                .frame(width: 7, height: 7)
-            Text(session.host.alias)
+            Image(systemName: session.systemImage)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(session.controller?.ended == true ? Theme.tx2.opacity(0.4)
+                                 : session.host?.tags.first.map(TagStyle.color) ?? Theme.tx2)
+                .frame(width: 14)
+            Text(session.title)
                 .fontWeight(active ? .semibold : .regular)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            IconButton(systemImage: "xmark", label: L("Закрыть вкладку %@", "\(session.host.alias)"), size: 20) {
+            IconButton(systemImage: "xmark", label: L("Закрыть вкладку %@", "\(session.title)"), size: 20) {
                 model.close(session)
             }
         }

@@ -79,7 +79,7 @@ struct DesktopsView: View {
     }
 }
 
-private struct DesktopEditor: View {
+struct DesktopEditor: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State var desktop: RemoteDesktop
