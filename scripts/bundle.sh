@@ -36,6 +36,9 @@ for SIZE in 16 32 128 256 512; do
 done
 iconutil -c icns "$ROOT/build/Relaya.iconset" -o "$APP/Contents/Resources/Relaya.icns"
 
+# Переводы интерфейса: ключи — русские строки, en.lproj — английский (см. Sources/RelayaCore/Localization.swift).
+cp -R "$ROOT/Localization/"*.lproj "$APP/Contents/Resources/"
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -46,6 +49,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>Relaya</string>
   <key>CFBundleIconFile</key><string>Relaya</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleDevelopmentRegion</key><string>ru</string>
+  <key>CFBundleLocalizations</key><array><string>ru</string><string>en</string></array>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>

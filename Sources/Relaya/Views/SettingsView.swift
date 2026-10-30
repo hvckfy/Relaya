@@ -6,11 +6,11 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             AppearanceSettings()
-                .tabItem { Label("Оформление", systemImage: "paintpalette") }
+                .tabItem { Label(L("Оформление"), systemImage: "paintpalette") }
             HighlightSettings()
-                .tabItem { Label("Подсветка", systemImage: "highlighter") }
+                .tabItem { Label(L("Подсветка"), systemImage: "highlighter") }
             BehaviorSettings()
-                .tabItem { Label("Подключения", systemImage: "bolt.horizontal") }
+                .tabItem { Label(L("Подключения"), systemImage: "bolt.horizontal") }
         }
         .frame(width: 640)
     }
@@ -22,12 +22,12 @@ private struct AppearanceSettings: View {
     var body: some View {
         @Bindable var settings = settings
         Form {
-            Picker("Режим", selection: $settings.appearance) {
+            Picker(L("Режим"), selection: $settings.appearance) {
                 ForEach(AppSettings.Appearance.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
 
-            Section("Оформление интерфейса") {
+            Section(L("Оформление интерфейса")) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
                     ForEach(settings.allUIThemes) { theme in
                         ThemeCard(theme: theme, selected: theme.id == settings.uiThemeID)
@@ -36,10 +36,10 @@ private struct AppearanceSettings: View {
                 }
                 .padding(.vertical, 4)
                 HStack {
-                    Button("Создать свою на основе «\(settings.uiTheme.name)»") { settings.duplicateCurrentTheme() }
+                    Button(L("Создать свою на основе «%@»", "\(settings.uiTheme.name)")) { settings.duplicateCurrentTheme() }
                     Spacer()
                     if !settings.uiTheme.builtIn {
-                        Button("Удалить тему", role: .destructive) { settings.deleteCustomTheme(settings.uiThemeID) }
+                        Button(L("Удалить тему"), role: .destructive) { settings.deleteCustomTheme(settings.uiThemeID) }
                     }
                 }
                 if let index = settings.customThemes.firstIndex(where: { $0.id == settings.uiThemeID }) {
@@ -47,15 +47,15 @@ private struct AppearanceSettings: View {
                 }
             }
 
-            Picker("Цвета терминала", selection: $settings.terminalTheme) {
+            Picker(L("Цвета терминала"), selection: $settings.terminalTheme) {
                 ForEach(TerminalTheme.all) { Text($0.name).tag($0.id) }
             }
 
-            Picker("Шрифт", selection: $settings.fontName) {
+            Picker(L("Шрифт"), selection: $settings.fontName) {
                 ForEach(AppSettings.fontChoices, id: \.self) { Text($0).tag($0) }
             }
 
-            LabeledContent("Размер") {
+            LabeledContent(L("Размер")) {
                 HStack {
                     Slider(value: $settings.fontSize, in: 9...24, step: 0.5)
                     Text(String(format: "%.1f pt", settings.fontSize))
@@ -77,9 +77,19 @@ private struct BehaviorSettings: View {
     var body: some View {
         @Bindable var settings = settings
         Form {
-            Toggle("Option работает как Meta", isOn: $settings.optionAsMeta)
-            Toggle("Переподключаться после обрыва соединения", isOn: $settings.autoReconnect)
-            Toggle("Предлагать вход по ключу после входа по паролю", isOn: $settings.offerKeySetup)
+            Picker(L("Язык"), selection: $settings.language) {
+                ForEach(AppSettings.Language.allCases) { Text($0.title).tag($0) }
+            }
+            if settings.languageChanged {
+                HStack {
+                    Text(L("Язык сменится после перезапуска Relaya.")).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(L("Перезапустить сейчас")) { settings.relaunch() }
+                }
+            }
+            Toggle(L("Option работает как Meta"), isOn: $settings.optionAsMeta)
+            Toggle(L("Переподключаться после обрыва соединения"), isOn: $settings.autoReconnect)
+            Toggle(L("Предлагать вход по ключу после входа по паролю"), isOn: $settings.offerKeySetup)
         }
         .formStyle(.grouped)
         .padding(.vertical, 8)
@@ -120,12 +130,12 @@ private struct HighlightSettings: View {
         @Bindable var settings = settings
         Form {
             Section {
-                Toggle("Подсвечивать вывод терминала", isOn: $settings.highlightEnabled)
-                Text("Цвета берутся из палитры выбранной схемы терминала. Текст, который сервер уже раскрасил сам, и полноэкранные программы (vim, top, mc) не трогаются.")
+                Toggle(L("Подсвечивать вывод терминала"), isOn: $settings.highlightEnabled)
+                Text(L("Цвета берутся из палитры выбранной схемы терминала. Текст, который сервер уже раскрасил сам, и полноэкранные программы (vim, top, mc) не трогаются."))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
-            Section("Правила — сверху вниз, первое совпадение важнее") {
+            Section(L("Правила — сверху вниз, первое совпадение важнее")) {
                 ForEach($settings.highlightRules) { $rule in
                     RuleRow(rule: $rule, palette: settings.theme.ansi) {
                         settings.highlightRules.removeAll { $0.id == rule.id }
@@ -133,11 +143,11 @@ private struct HighlightSettings: View {
                 }
                 .onMove { settings.highlightRules.move(fromOffsets: $0, toOffset: $1) }
                 HStack {
-                    Button("Добавить правило") {
-                        settings.highlightRules.append(HighlightRule(name: "Новое правило", pattern: "", isRegex: false, color: 12))
+                    Button(L("Добавить правило")) {
+                        settings.highlightRules.append(HighlightRule(name: L("Новое правило"), pattern: "", isRegex: false, color: 12))
                     }
                     Spacer()
-                    Button("Сбросить к стандартным") { settings.highlightRules = HighlightRule.defaults }
+                    Button(L("Сбросить к стандартным")) { settings.highlightRules = HighlightRule.defaults }
                 }
             }
             .disabled(!settings.highlightEnabled)
@@ -157,7 +167,7 @@ private struct RuleRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Toggle("", isOn: $rule.enabled).labelsHidden()
-                TextField("Название", text: $rule.name)
+                TextField(L("Название"), text: $rule.name)
                     .textFieldStyle(.plain)
                     .fontWeight(.medium)
                 Spacer()
@@ -173,22 +183,22 @@ private struct RuleRow: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
-                .help("Цвет: \(Self.colorNames[rule.color])")
-                Toggle("Жирный", isOn: $rule.bold).toggleStyle(.checkbox)
+                .help(L("Цвет: %@", "\(Self.colorNames[rule.color])"))
+                Toggle(L("Жирный"), isOn: $rule.bold).toggleStyle(.checkbox)
                 Button(role: .destructive, action: remove) { Image(systemName: "trash") }
                     .buttonStyle(.borderless)
-                    .help("Удалить правило")
+                    .help(L("Удалить правило"))
             }
             HStack(spacing: 8) {
-                TextField(rule.isRegex ? "Регулярное выражение" : "Текст", text: $rule.pattern)
+                TextField(rule.isRegex ? L("Регулярное выражение") : L("Текст"), text: $rule.pattern)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(isValid ? Color.primary : Color.red)
                 Toggle("Regex", isOn: $rule.isRegex).toggleStyle(.checkbox)
-                Toggle("Aa", isOn: $rule.caseSensitive).toggleStyle(.checkbox).help("Учитывать регистр")
+                Toggle("Aa", isOn: $rule.caseSensitive).toggleStyle(.checkbox).help(L("Учитывать регистр"))
             }
             if !isValid {
-                Text("Ошибка в регулярном выражении — правило не применяется").font(.system(size: 11)).foregroundStyle(.red)
+                Text(L("Ошибка в регулярном выражении — правило не применяется")).font(.system(size: 11)).foregroundStyle(.red)
             }
         }
         .opacity(rule.enabled ? 1 : 0.55)
@@ -201,9 +211,9 @@ private struct RuleRow: View {
         return rule.pattern.isEmpty || probe.compiled() != nil
     }
 
-    static let colorNames = ["Чёрный", "Красный", "Зелёный", "Жёлтый", "Синий", "Пурпурный", "Голубой", "Белый",
-                             "Серый", "Ярко-красный", "Ярко-зелёный", "Ярко-жёлтый", "Ярко-синий",
-                             "Ярко-пурпурный", "Ярко-голубой", "Ярко-белый"]
+    static let colorNames = [L("Чёрный"), L("Красный"), L("Зелёный"), L("Жёлтый"), L("Синий"), L("Пурпурный"), L("Голубой"), L("Белый"),
+                             L("Серый"), L("Ярко-красный"), L("Ярко-зелёный"), L("Ярко-жёлтый"), L("Ярко-синий"),
+                             L("Ярко-пурпурный"), L("Ярко-голубой"), L("Ярко-белый")]
 }
 
 /// Карточка темы: мини-окно в светлом и тёмном варианте.
@@ -250,12 +260,12 @@ private struct CustomThemeEditor: View {
     @Binding var theme: UITheme
 
     var body: some View {
-        TextField("Название", text: $theme.name)
+        TextField(L("Название"), text: $theme.name)
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
             GridRow {
                 Text("")
-                Text("Светлая").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-                Text("Тёмная").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                Text(L("Светлая")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                Text(L("Тёмная")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             }
             ForEach(UIColors.fields, id: \.label) { field in
                 GridRow {

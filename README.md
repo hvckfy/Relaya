@@ -68,6 +68,9 @@ Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansib
 **Server awareness**
 - Detects the server OS (Ubuntu, Debian, OpenWrt, macOS…), shows its icon and offers OS-specific actions.
 
+**English and Russian**
+- The UI follows the macOS language; switch it in Settings → Connections → Language.
+
 **Plain system ssh**
 - Sessions run `/usr/bin/ssh`, so ProxyJump, ssh-agent, FIDO keys and every config option behave exactly like in Terminal.app.
 

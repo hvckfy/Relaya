@@ -11,9 +11,9 @@ final class AppSettings {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .system: "Системная"
-            case .light: "Светлая"
-            case .dark: "Тёмная"
+            case .system: L("Системная")
+            case .light: L("Светлая")
+            case .dark: L("Тёмная")
             }
         }
     }
@@ -45,7 +45,7 @@ final class AppSettings {
     func duplicateCurrentTheme() {
         var copy = uiTheme
         copy.id = "custom-" + UUID().uuidString
-        copy.name = uiTheme.name + " (копия)"
+        copy.name = uiTheme.name + L(" (копия)")
         copy.builtIn = false
         customThemes.append(copy)
         uiThemeID = copy.id
@@ -101,6 +101,45 @@ final class AppSettings {
         ThemeStore.current = uiTheme
     }
 
+    /// Язык интерфейса. macOS читает его при запуске, поэтому смена требует перезапуска.
+    enum Language: String, CaseIterable, Identifiable {
+        case system, ru, en
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .system: L("Системный")
+            case .ru: "Русский"
+            case .en: "English"
+            }
+        }
+    }
+
+    var language: Language {
+        get { Language(rawValue: defaults.string(forKey: "appLanguage") ?? "") ?? .system }
+        set {
+            defaults.set(newValue.rawValue, forKey: "appLanguage")
+            // AppleLanguages в домене приложения — стандартный способ задать язык одному приложению.
+            if newValue == .system {
+                defaults.removeObject(forKey: "AppleLanguages")
+            } else {
+                defaults.set([newValue.rawValue], forKey: "AppleLanguages")
+            }
+            languageChanged = true
+        }
+    }
+    /// Язык сменили в этом запуске — показать «Перезапустить».
+    var languageChanged = false
+
+    /// Перезапуск приложения: новая копия откроется через секунду, эта закроется.
+    func relaunch() {
+        let path = Bundle.main.bundlePath
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", path]
+        try? p.run()
+        NSApp.terminate(nil)
+    }
+
     func applyAppearance() {
         switch appearance {
         case .system: NSApp.appearance = nil
@@ -129,7 +168,7 @@ struct TerminalTheme: Identifiable, Hashable {
     let ansi: [UInt32]
 
     static let relaya = TerminalTheme(
-        id: "relaya", name: "По теме системы", background: nil, foreground: nil,
+        id: "relaya", name: L("По теме системы"), background: nil, foreground: nil,
         ansi: [0x1D1D1F, 0xC4161C, 0x1B7A33, 0xA84B00, 0x0066CC, 0x8E4EC6, 0x0F8A8A, 0xBFBFC4,
                0x5F5F64, 0xFF6B6B, 0x5ED47A, 0xFFB347, 0x5AA9FF, 0xB98AE6, 0x4FD1D1, 0xF5F5F7])
     static let solarizedDark = TerminalTheme(
