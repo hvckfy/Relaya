@@ -111,9 +111,9 @@ public struct SSHConfigDocument: Sendable {
 
         public var errorDescription: String? {
             switch self {
-            case .aliasTaken(let a): "Хост «\(a)» уже есть в ~/.ssh/config"
-            case .sharedBlock(let a): "«\(a)» объявлен вместе с другими алиасами — отредактируйте ~/.ssh/config вручную"
-            case .notFound(let a): "Хост «\(a)» не найден в ~/.ssh/config"
+            case .aliasTaken(let a): L("Хост «%@» уже есть в ~/.ssh/config", "\(a)")
+            case .sharedBlock(let a): L("«%@» объявлен вместе с другими алиасами — отредактируйте ~/.ssh/config вручную", "\(a)")
+            case .notFound(let a): L("Хост «%@» не найден в ~/.ssh/config", "\(a)")
             }
         }
     }

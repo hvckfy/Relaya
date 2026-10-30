@@ -7,10 +7,10 @@ public struct MCPPolicy: Codable, Equatable, Sendable {
 
         public var title: String {
             switch self {
-            case .off: "Нет доступа"
-            case .readOnly: "Только чтение"
-            case .confirm: "С подтверждением"
-            case .trusted: "Доверенный"
+            case .off: L("Нет доступа")
+            case .readOnly: L("Только чтение")
+            case .confirm: L("С подтверждением")
+            case .trusted: L("Доверенный")
             }
         }
     }

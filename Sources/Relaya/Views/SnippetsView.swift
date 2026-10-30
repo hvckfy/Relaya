@@ -18,10 +18,10 @@ struct SnippetsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Сниппеты").font(.system(size: 15, weight: .bold))
-                TextField("Поиск", text: $query).textFieldStyle(.roundedBorder).frame(width: 220)
+                Text(L("Сниппеты")).font(.system(size: 15, weight: .bold))
+                TextField(L("Поиск"), text: $query).textFieldStyle(.roundedBorder).frame(width: 220)
                 Spacer()
-                Button("Новый сниппет…") { editing = Snippet(name: "", command: "") }.buttonStyle(.relayaPrimary)
+                Button(L("Новый сниппет…")) { editing = Snippet(name: "", command: "") }.buttonStyle(.relayaPrimary)
             }
             .padding(.horizontal, 16)
             .frame(height: 48)
@@ -40,15 +40,15 @@ struct SnippetsView: View {
                                     .foregroundStyle(Theme.tx2).textSelection(.enabled).lineLimit(3)
                             }
                             Spacer()
-                            Button("На хостах…") { runOnHosts = s }.buttonStyle(.relaya)
+                            Button(L("На хостах…")) { runOnHosts = s }.buttonStyle(.relaya)
                             Menu {
-                                Button("Изменить…") { editing = s }
-                                Button("Копировать команду") {
+                                Button(L("Изменить…")) { editing = s }
+                                Button(L("Копировать команду")) {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(s.command, forType: .string)
                                 }
                                 Divider()
-                                Button("Удалить", role: .destructive) { model.snippets.removeAll { $0.id == s.id } }
+                                Button(L("Удалить"), role: .destructive) { model.snippets.removeAll { $0.id == s.id } }
                             } label: { Image(systemName: "ellipsis") }
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                         }
@@ -76,9 +76,9 @@ private struct SnippetEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(snippet.name.isEmpty ? "Новый сниппет" : "Сниппет").font(.system(size: 17, weight: .bold))
-            TextField("Название", text: $snippet.name).textFieldStyle(.roundedBorder)
-            Text("Команда · переменные пишите как {{имя}}").font(.system(size: 12)).foregroundStyle(Theme.tx2)
+            Text(snippet.name.isEmpty ? L("Новый сниппет") : L("Сниппет")).font(.system(size: 17, weight: .bold))
+            TextField(L("Название"), text: $snippet.name).textFieldStyle(.roundedBorder)
+            Text(L("Команда · переменные пишите как {{имя}}")).font(.system(size: 12)).foregroundStyle(Theme.tx2)
             TextEditor(text: $snippet.command)
                 .font(.system(size: 12.5, design: .monospaced))
                 .frame(height: 110)
@@ -86,14 +86,14 @@ private struct SnippetEditor: View {
                 .padding(6)
                 .background(Theme.bg2, in: .rect(cornerRadius: 8, style: .continuous))
             if !snippet.variables.isEmpty {
-                Text("Переменные: " + snippet.variables.joined(separator: ", "))
+                Text(L("Переменные: ") + snippet.variables.joined(separator: ", "))
                     .font(.system(size: 12)).foregroundStyle(Theme.tx2)
             }
-            TextField("Метки через запятую", text: $tags).textFieldStyle(.roundedBorder)
+            TextField(L("Метки через запятую"), text: $tags).textFieldStyle(.roundedBorder)
             HStack {
                 Spacer()
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Сохранить") {
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Сохранить")) {
                     var s = snippet
                     s.tags = SSHConfigParser.splitTags(tags)
                     if let i = model.snippets.firstIndex(where: { $0.id == s.id }) { model.snippets[i] = s } else { model.snippets.append(s) }
@@ -146,13 +146,13 @@ struct SnippetPalette: View {
                 Text(s.name).font(.system(size: 15, weight: .bold))
                 VariablesForm(snippet: s, values: $values)
                 HStack {
-                    Button("Назад") { chosen = nil }.buttonStyle(.relaya)
+                    Button(L("Назад")) { chosen = nil }.buttonStyle(.relaya)
                     Spacer()
-                    Button("Вставить") { send(s, execute: false) }.buttonStyle(.relaya).keyboardShortcut(.defaultAction)
-                    Button("Выполнить") { send(s, execute: true) }.buttonStyle(.relayaPrimary)
+                    Button(L("Вставить")) { send(s, execute: false) }.buttonStyle(.relaya).keyboardShortcut(.defaultAction)
+                    Button(L("Выполнить")) { send(s, execute: true) }.buttonStyle(.relayaPrimary)
                 }
             } else {
-                TextField("Найти сниппет", text: $query)
+                TextField(L("Найти сниппет"), text: $query)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { if let first = matches.first { pick(first) } }
                 ScrollView {
@@ -170,7 +170,7 @@ struct SnippetPalette: View {
                     }
                 }
                 .frame(height: 260)
-                HStack { Spacer(); Button("Закрыть") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction) }
+                HStack { Spacer(); Button(L("Закрыть")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction) }
             }
         }
         .font(.system(size: 13))
@@ -201,7 +201,7 @@ private struct RunOnHostsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("«\(snippet.name)» на хостах").font(.system(size: 15, weight: .bold))
+            Text(L("«%@» на хостах", "\(snippet.name)")).font(.system(size: 15, weight: .bold))
             VariablesForm(snippet: snippet, values: $values)
             List(model.hosts) { h in
                 Toggle(isOn: Binding(get: { chosen.contains(h.alias) },
@@ -211,12 +211,12 @@ private struct RunOnHostsSheet: View {
                 .toggleStyle(.checkbox)
             }
             .frame(height: 220)
-            Text("Откроется вкладка для каждого хоста; команда выполнится после входа.")
+            Text(L("Откроется вкладка для каждого хоста; команда выполнится после входа."))
                 .font(.system(size: 12)).foregroundStyle(Theme.tx2)
             HStack {
                 Spacer()
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Выполнить на \(chosen.count)") {
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Выполнить на %@", "\(chosen.count)")) {
                     let cmd = snippet.filled(values)
                     for h in model.hosts where chosen.contains(h.alias) { model.run(cmd, on: h) }
                     dismiss()

@@ -54,7 +54,7 @@ public struct KeyInstaller: Sendable {
     public func generate(path: String, comment: String, passphrase: String) async throws {
         let fm = FileManager.default
         guard !fm.fileExists(atPath: path), !fm.fileExists(atPath: path + ".pub") else {
-            throw Failure("Файл \(SSHPaths.abbreviate(path)) уже существует")
+            throw Failure(L("Файл %@ уже существует", "\(SSHPaths.abbreviate(path))"))
         }
         let dir = (path as NSString).deletingLastPathComponent
         if !fm.fileExists(atPath: dir) {
@@ -123,9 +123,9 @@ public struct KeyInstaller: Sendable {
             "-i", keyPath, alias, "true",
         ])
         guard r.succeeded else {
-            var msg = "Проверочный вход по ключу не прошёл: \(Self.explain(r))"
+            var msg = L("Проверочный вход по ключу не прошёл: %@", "\(Self.explain(r))")
             if r.message.contains("Permission denied") {
-                msg += ". Ключ на сервер добавлен, но сервер его не принимает — проверьте права (~/.ssh 700, authorized_keys 600, домашний каталог без записи для группы) и не отключён ли вход по ключу в настройках sshd."
+                msg += L(". Ключ на сервер добавлен, но сервер его не принимает — проверьте права (~/.ssh 700, authorized_keys 600, домашний каталог без записи для группы) и не отключён ли вход по ключу в настройках sshd.")
             }
             throw Failure(msg)
         }
@@ -140,18 +140,18 @@ public struct KeyInstaller: Sendable {
     static func explain(_ r: ProcessResult) -> String {
         let m = r.message
         if m.contains("Connection refused") {
-            return "сервер отклонил подключение к SSH (Connection refused). Обычно это значит, что sshd не запущен или ваш IP временно заблокирован после неудачных входов (fail2ban) — подождите 10–60 минут или проверьте сервер через консоль хостинга"
+            return L("сервер отклонил подключение к SSH (Connection refused). Обычно это значит, что sshd не запущен или ваш IP временно заблокирован после неудачных входов (fail2ban) — подождите 10–60 минут или проверьте сервер через консоль хостинга")
         }
         if m.contains("Operation timed out") || m.contains("Connection timed out") {
-            return "сервер не отвечает (таймаут) — проверьте адрес, порт и файрвол"
+            return L("сервер не отвечает (таймаут) — проверьте адрес, порт и файрвол")
         }
         if m.contains("Too many authentication failures") {
-            return "сервер оборвал вход после перебора ключей из ssh-agent (Too many authentication failures). Введите пароль сервера на первом шаге — тогда вход пойдёт сразу по паролю"
+            return L("сервер оборвал вход после перебора ключей из ssh-agent (Too many authentication failures). Введите пароль сервера на первом шаге — тогда вход пойдёт сразу по паролю")
         }
         if m.contains("Host key verification failed") {
-            return "сервер ещё не в known_hosts — подключитесь к нему в терминале и подтвердите отпечаток"
+            return L("сервер ещё не в known_hosts — подключитесь к нему в терминале и подтвердите отпечаток")
         }
-        if m.contains("Permission denied") { return "доступ запрещён (неверный пароль или ключ): \(m)" }
-        return m.isEmpty ? "ssh завершился с кодом \(r.status)" : m
+        if m.contains("Permission denied") { return L("доступ запрещён (неверный пароль или ключ): %@", m) }
+        return m.isEmpty ? L("ssh завершился с кодом %@", "\(r.status)") : m
     }
 }

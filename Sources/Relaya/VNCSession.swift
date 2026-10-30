@@ -63,7 +63,7 @@ final class VNCSession: NSObject {
             model.tunnels.start(t, hosts: model.hosts)
             for _ in 0..<40 {
                 try? await Task.sleep(for: .milliseconds(250))
-                if case .failed(let m) = model.tunnels.status(of: t) { phase = .disconnected("SSH-туннель: \(m)"); return }
+                if case .failed(let m) = model.tunnels.status(of: t) { phase = .disconnected(L("SSH-туннель: %@", "\(m)")); return }
                 if model.tunnels.status(of: t) == .running { break }
             }
             tunnel = t
@@ -108,7 +108,7 @@ final class VNCSession: NSObject {
     /// Почему пароль нельзя отправить как пароль VNC; nil — можно.
     static func vncPasswordProblem(_ password: String) -> String? {
         guard password.unicodeScalars.allSatisfy(\.isASCII) else {
-            return "Пароль VNC может содержать только латинские буквы, цифры и символы ASCII. Проверьте раскладку клавиатуры."
+            return L("Пароль VNC может содержать только латинские буквы, цифры и символы ASCII. Проверьте раскладку клавиатуры.")
         }
         return nil
     }

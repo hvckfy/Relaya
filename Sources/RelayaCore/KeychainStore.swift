@@ -18,7 +18,7 @@ public struct KeychainStore: Sendable {
         public var errorDescription: String? {
             switch self {
             case .status(let s):
-                let msg = SecCopyErrorMessageString(s, nil) as String? ?? "код \(s)"
+                let msg = SecCopyErrorMessageString(s, nil) as String? ?? L("код %@", "\(s)")
                 return "Keychain: \(msg)"
             }
         }

@@ -10,7 +10,7 @@ struct DesktopsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Рабочие столы").font(.system(size: 15, weight: .bold))
+                Text(L("Рабочие столы")).font(.system(size: 15, weight: .bold))
                 Spacer()
                 Button("VNC…") { editing = RemoteDesktop(name: "", kind: .vnc, address: "") }.buttonStyle(.relaya)
                 Button("RDP…") { editing = RemoteDesktop(name: "", kind: .rdp, address: "") }.buttonStyle(.relayaPrimary)
@@ -22,8 +22,8 @@ struct DesktopsView: View {
             if model.desktops.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "display.2").font(.system(size: 32, weight: .light)).foregroundStyle(Theme.tx2)
-                    Text("Нет рабочих столов").font(.system(size: 15, weight: .bold))
-                    Text("VNC и RDP открываются прямо в окне Relaya.\nПароль хранится в Keychain, можно подключаться через SSH-туннель.\n«Общий экран» и Windows App — запасной вариант в меню «…».")
+                    Text(L("Нет рабочих столов")).font(.system(size: 15, weight: .bold))
+                    Text(L("VNC и RDP открываются прямо в окне Relaya.\nПароль хранится в Keychain, можно подключаться через SSH-туннель.\n«Общий экран» и Windows App — запасной вариант в меню «…»."))
                         .multilineTextAlignment(.center).foregroundStyle(Theme.tx2)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -58,18 +58,18 @@ struct DesktopsView: View {
                 }
             }
             Spacer()
-            Button("Подключить") {
+            Button(L("Подключить")) {
                 // VNC и RDP — во встроенных окнах Relaya.
                 openWindow(id: d.kind == .vnc ? "vnc" : "rdp", value: d.id)
             }
             .buttonStyle(.relayaPrimary)
             Menu {
-                Button(d.kind == .vnc ? "Открыть в «Общем экране» macOS" : "Открыть в Windows App") {
+                Button(d.kind == .vnc ? L("Открыть в «Общем экране» macOS") : L("Открыть в Windows App")) {
                     Task { await model.open(d) }
                 }
-                Button("Изменить…") { editing = d }
+                Button(L("Изменить…")) { editing = d }
                 Divider()
-                Button("Удалить", role: .destructive) { model.desktops.removeAll { $0.id == d.id } }
+                Button(L("Удалить"), role: .destructive) { model.desktops.removeAll { $0.id == d.id } }
             } label: { Image(systemName: "ellipsis") }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         }
@@ -88,41 +88,41 @@ private struct DesktopEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("\(desktop.kind.title)-подключение").font(.system(size: 17, weight: .bold))
+            Text(L("%@-подключение", "\(desktop.kind.title)")).font(.system(size: 17, weight: .bold))
             Form {
-                Picker("Протокол", selection: $desktop.kind) {
+                Picker(L("Протокол"), selection: $desktop.kind) {
                     ForEach(RemoteDesktop.Kind.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: desktop.kind) { _, k in portText = String(k.defaultPort) }
-                TextField("Название", text: $desktop.name)
-                Toggle("Через SSH-туннель", isOn: $useSSH)
+                TextField(L("Название"), text: $desktop.name)
+                Toggle(L("Через SSH-туннель"), isOn: $useSSH)
                 if useSSH {
-                    Picker("SSH-хост", selection: Binding(get: { desktop.viaSSHHost ?? "" }, set: { desktop.viaSSHHost = $0 })) {
+                    Picker(L("SSH-хост"), selection: Binding(get: { desktop.viaSSHHost ?? "" }, set: { desktop.viaSSHHost = $0 })) {
                         ForEach(model.hosts) { Text($0.alias).tag($0.alias) }
                     }
                 }
-                TextField(useSSH ? "Адрес с точки зрения сервера" : "Адрес", text: $desktop.address,
+                TextField(useSSH ? L("Адрес с точки зрения сервера") : L("Адрес"), text: $desktop.address,
                           prompt: Text(useSSH ? "localhost" : "192.168.1.10"))
-                TextField("Порт", text: $portText)
-                TextField("Пользователь", text: $desktop.user, prompt: Text("необязательно"))
+                TextField(L("Порт"), text: $portText)
+                TextField(L("Пользователь"), text: $desktop.user, prompt: Text(L("необязательно")))
                 if desktop.kind == .rdp {
-                    Toggle("Во весь экран", isOn: $desktop.fullScreen)
+                    Toggle(L("Во весь экран"), isOn: $desktop.fullScreen)
                 } else {
-                    Picker("Масштаб", selection: Binding(get: { desktop.scaleToFit ?? true }, set: { desktop.scaleToFit = $0 })) {
-                        Text("По размеру окна").tag(true)
-                        Text("1:1, с прокруткой").tag(false)
+                    Picker(L("Масштаб"), selection: Binding(get: { desktop.scaleToFit ?? true }, set: { desktop.scaleToFit = $0 })) {
+                        Text(L("По размеру окна")).tag(true)
+                        Text(L("1:1, с прокруткой")).tag(false)
                     }
                 }
             }
             .formStyle(.grouped)
-            Text("Пароль Relaya спросит при первом подключении и, если разрешите, сохранит в Keychain.")
+            Text(L("Пароль Relaya спросит при первом подключении и, если разрешите, сохранит в Keychain."))
                 .font(.system(size: 12)).foregroundStyle(Theme.tx2)
             if let e = result.validationError { Text(e).font(.system(size: 12)).foregroundStyle(Theme.red) }
             HStack {
                 Spacer()
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Сохранить") {
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Сохранить")) {
                     let d = result
                     if let i = model.desktops.firstIndex(where: { $0.id == d.id }) { model.desktops[i] = d } else { model.desktops.append(d) }
                     dismiss()

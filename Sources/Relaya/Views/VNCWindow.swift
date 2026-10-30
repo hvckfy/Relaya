@@ -12,7 +12,7 @@ struct VNCWindow: View {
             if let session {
                 VNCContent(session: session)
             } else {
-                Text("Подключение не найдено").foregroundStyle(Theme.tx2)
+                Text(L("Подключение не найдено")).foregroundStyle(Theme.tx2)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -44,7 +44,7 @@ private struct VNCContent: View {
             case .idle, .tunneling, .connecting:
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.large)
-                    Text(session.phase == .tunneling ? "Поднимаю SSH-туннель…" : "Подключаюсь к \(session.desktop.summary)…")
+                    Text(session.phase == .tunneling ? L("Поднимаю SSH-туннель…") : L("Подключаюсь к %@…", "\(session.desktop.summary)"))
                         .foregroundStyle(.white.opacity(0.8))
                 }
             case .connected:
@@ -52,9 +52,9 @@ private struct VNCContent: View {
             case .disconnected(let error):
                 VStack(spacing: 12) {
                     Image(systemName: "display.trianglebadge.exclamationmark").font(.system(size: 36)).foregroundStyle(.white.opacity(0.7))
-                    Text("Отключено").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                    Text(L("Отключено")).font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
                     if let error { Text(error).foregroundStyle(.white.opacity(0.75)).multilineTextAlignment(.center) }
-                    Button("Подключить снова") { Task { await session.connect() } }.buttonStyle(.relayaPrimary)
+                    Button(L("Подключить снова")) { Task { await session.connect() } }.buttonStyle(.relayaPrimary)
                 }
                 .padding(24)
                 .background(.ultraThinMaterial, in: .rect(cornerRadius: 16, style: .continuous))
@@ -64,26 +64,26 @@ private struct VNCContent: View {
         .sheet(isPresented: Binding(get: { session.credentialRequest != nil }, set: { if !$0 { session.cancelCredentials() } })) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(session.credentialRequest?.isAppleRemoteDesktop == true
-                     ? "Вход на Mac (Apple Remote Desktop)" : "Пароль VNC")
+                     ? L("Вход на Mac (Apple Remote Desktop)") : L("Пароль VNC"))
                     .font(.system(size: 15, weight: .bold))
                 Text(session.desktop.summary).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
                 if session.credentialRequest?.needsUsername == true {
-                    TextField("Пользователь", text: $username).textFieldStyle(.roundedBorder)
+                    TextField(L("Пользователь"), text: $username).textFieldStyle(.roundedBorder)
                 }
-                SecureField("Пароль", text: $password).textFieldStyle(.roundedBorder)
+                SecureField(L("Пароль"), text: $password).textFieldStyle(.roundedBorder)
                     .onSubmit { session.provide(username: username, password: password, save: save) }
                 if session.credentialRequest?.needsUsername == false {
-                    Text("VNC учитывает только первые 8 символов пароля.")
+                    Text(L("VNC учитывает только первые 8 символов пароля."))
                         .font(.system(size: 11)).foregroundStyle(Theme.tx2)
                 }
                 if let error = session.credentialError {
                     Text(error).font(.system(size: 12)).foregroundStyle(Theme.red).fixedSize(horizontal: false, vertical: true)
                 }
-                Toggle("Сохранить в Keychain", isOn: $save)
+                Toggle(L("Сохранить в Keychain"), isOn: $save)
                 HStack {
                     Spacer()
-                    Button("Отмена") { session.cancelCredentials() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                    Button("Войти") { session.provide(username: username, password: password, save: save) }
+                    Button(L("Отмена")) { session.cancelCredentials() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                    Button(L("Войти")) { session.provide(username: username, password: password, save: save) }
                         .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
                         .disabled(password.isEmpty)
                 }
@@ -94,22 +94,22 @@ private struct VNCContent: View {
         }
         .toolbar {
             ToolbarItem {
-                Picker("Масштаб", selection: Binding(get: { session.scaleToFit },
+                Picker(L("Масштаб"), selection: Binding(get: { session.scaleToFit },
                                                     set: { fit in Task { await session.setScaleToFit(fit) } })) {
-                    Text("По окну").tag(true)
+                    Text(L("По окну")).tag(true)
                     Text("1:1").tag(false)
                 }
                 .pickerStyle(.segmented)
-                .help("По окну — весь экран удалённой машины вписан в окно; 1:1 — пиксель в пиксель, с прокруткой")
+                .help(L("По окну — весь экран удалённой машины вписан в окно; 1:1 — пиксель в пиксель, с прокруткой"))
             }
             ToolbarItem {
                 Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {
-                    Label("Во весь экран", systemImage: "arrow.up.left.and.arrow.down.right")
+                    Label(L("Во весь экран"), systemImage: "arrow.up.left.and.arrow.down.right")
                 }
-                .help("Во весь экран (⌃⌘F)")
+                .help(L("Во весь экран (⌃⌘F)"))
             }
             ToolbarItem {
-                Button { session.disconnect() } label: { Label("Отключить", systemImage: "xmark.circle") }
+                Button { session.disconnect() } label: { Label(L("Отключить"), systemImage: "xmark.circle") }
                     .disabled(session.phase != .connected)
             }
         }

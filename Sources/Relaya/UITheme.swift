@@ -1,4 +1,5 @@
 import Foundation
+import RelayaCore
 
 /// Набор цветов интерфейса для одного режима (светлого или тёмного).
 struct UIColors: Codable, Hashable, Sendable {
@@ -16,9 +17,9 @@ struct UIColors: Codable, Hashable, Sendable {
 
     /// Поля для редактора своей темы.
     nonisolated(unsafe) static let fields: [(key: WritableKeyPath<UIColors, UInt32>, label: String)] = [
-        (\.bg, "Фон"), (\.bg2, "Карточки"), (\.side, "Боковая панель"), (\.bar, "Тулбар и вкладки"),
-        (\.tx, "Текст"), (\.tx2, "Второстепенный текст"), (\.acc, "Акцент"), (\.accBg, "Кнопки"),
-        (\.red, "Ошибка"), (\.org, "Предупреждение"), (\.grn, "Успех"),
+        (\.bg, L("Фон")), (\.bg2, L("Карточки")), (\.side, L("Боковая панель")), (\.bar, L("Тулбар и вкладки")),
+        (\.tx, L("Текст")), (\.tx2, L("Второстепенный текст")), (\.acc, L("Акцент")), (\.accBg, L("Кнопки")),
+        (\.red, L("Ошибка")), (\.org, L("Предупреждение")), (\.grn, L("Успех")),
     ]
 }
 

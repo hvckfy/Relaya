@@ -82,7 +82,7 @@ final class AppModel {
     var selectedHost: SSHHost? { hosts.first { $0.id == selectedHostID } }
     var activeSession: Session? { sessions.first { $0.id == activeSessionID } }
 
-    static let ungrouped = "Без группы"
+    static let ungrouped = L("Без группы")
 
     /// Все метки, в порядке частоты, без учёта регистра.
     var allTags: [String] {
@@ -216,11 +216,11 @@ final class AppModel {
         var port = desktop.port
         let localPort = RemoteDesktop.freeLocalPort()
         if let tunnel = desktop.tunnel(localPort: localPort) {
-            desktopStatus[desktop.id] = "Поднимаю SSH-туннель…"
+            desktopStatus[desktop.id] = L("Поднимаю SSH-туннель…")
             tunnels.start(tunnel, hosts: hosts)
             for _ in 0..<20 {
                 try? await Task.sleep(for: .milliseconds(250))
-                if case .failed(let m) = tunnels.status(of: tunnel) { desktopStatus[desktop.id] = "Туннель: \(m)"; return }
+                if case .failed(let m) = tunnels.status(of: tunnel) { desktopStatus[desktop.id] = L("Туннель: %@", "\(m)"); return }
                 if tunnels.status(of: tunnel) == .running { break }
             }
             host = "localhost"
@@ -242,7 +242,7 @@ final class AppModel {
                 return
             }
             if NSWorkspace.shared.urlForApplication(toOpen: file) == nil {
-                desktopStatus[desktop.id] = "Нет приложения для RDP. Установите бесплатное Windows App от Microsoft из App Store."
+                desktopStatus[desktop.id] = L("Нет приложения для RDP. Установите бесплатное Windows App от Microsoft из App Store.")
                 if let store = URL(string: "macappstore://apps.apple.com/app/id1295203466") { NSWorkspace.shared.open(store) }
                 return
             }

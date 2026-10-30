@@ -32,7 +32,7 @@ struct SFTPView: View {
         VStack(spacing: 0) {
             toolbar
             Table(files, selection: $selection) {
-                TableColumn("Имя") { f in
+                TableColumn(L("Имя")) { f in
                     Label {
                         Text(f.name)
                     } icon: {
@@ -40,21 +40,21 @@ struct SFTPView: View {
                             .foregroundStyle(f.isDirectory ? Theme.acc : Theme.tx2)
                     }
                 }
-                TableColumn("Размер") { f in
+                TableColumn(L("Размер")) { f in
                     Text(f.isDirectory ? "—" : ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file))
                         .foregroundStyle(Theme.tx2)
                 }
                 .width(90)
-                TableColumn("Изменён") { f in Text(f.modified).foregroundStyle(Theme.tx2) }.width(110)
-                TableColumn("Права") { f in
+                TableColumn(L("Изменён")) { f in Text(f.modified).foregroundStyle(Theme.tx2) }.width(110)
+                TableColumn(L("Права")) { f in
                     Text(f.permissions).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Theme.tx2)
                 }
                 .width(100)
             }
             .contextMenu(forSelectionType: RemoteFile.ID.self) { ids in
                 if !ids.isEmpty {
-                    Button("Скачать…") { download() }
-                    Button("Удалить…", role: .destructive) { confirmDelete = true }
+                    Button(L("Скачать…")) { download() }
+                    Button(L("Удалить…"), role: .destructive) { confirmDelete = true }
                 }
             } primaryAction: { ids in
                 if ids.count == 1, let f = files.first(where: { ids.contains($0.id) }), f.isDirectory || f.isLink {
@@ -78,20 +78,20 @@ struct SFTPView: View {
         .frame(width: 860, height: 560)
         .background(Theme.bg)
         .task { await start() }
-        .alert("Новая папка", isPresented: $newFolder) {
-            TextField("Имя", text: $newFolderName)
-            Button("Создать") { perform("Создаю папку…") { try await client.makeDirectory(SFTPClient.join(path, newFolderName)) } }
-            Button("Отмена", role: .cancel) {}
+        .alert(L("Новая папка"), isPresented: $newFolder) {
+            TextField(L("Имя"), text: $newFolderName)
+            Button(L("Создать")) { perform(L("Создаю папку…")) { try await client.makeDirectory(SFTPClient.join(path, newFolderName)) } }
+            Button(L("Отмена"), role: .cancel) {}
         }
-        .confirmationDialog("Удалить \(selectedFiles.count) объект(ов) на сервере?", isPresented: $confirmDelete) {
-            Button("Удалить", role: .destructive) {
+        .confirmationDialog(L("Удалить %@ объект(ов) на сервере?", "\(selectedFiles.count)"), isPresented: $confirmDelete) {
+            Button(L("Удалить"), role: .destructive) {
                 let targets = selectedFiles
-                perform("Удаляю…") {
+                perform(L("Удаляю…")) {
                     for f in targets { try await client.remove(SFTPClient.join(path, f.name), isDirectory: f.isDirectory) }
                 }
             }
         } message: {
-            Text("Папки удаляются, только если они пустые. Восстановить файлы будет нельзя.")
+            Text(L("Папки удаляются, только если они пустые. Восстановить файлы будет нельзя."))
         }
     }
 
@@ -99,17 +99,17 @@ struct SFTPView: View {
         HStack(spacing: 8) {
             Image(systemName: "externaldrive.connected.to.line.below").foregroundStyle(Theme.tx2)
             Text(host.alias).fontWeight(.semibold)
-            IconButton(systemImage: "chevron.up", label: "Наверх") { open(SFTPClient.parent(of: path)) }
+            IconButton(systemImage: "chevron.up", label: L("Наверх")) { open(SFTPClient.parent(of: path)) }
                 .disabled(path == "/" || path.isEmpty)
-            TextField("Путь", text: $pathField)
+            TextField(L("Путь"), text: $pathField)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12.5, design: .monospaced))
                 .onSubmit { open(pathField) }
-            IconButton(systemImage: "arrow.clockwise", label: "Обновить") { open(path) }
-            Button("Загрузить…") { chooseUpload() }.buttonStyle(.relaya)
-            Button("Скачать…") { download() }.buttonStyle(.relaya).disabled(selection.isEmpty)
-            IconButton(systemImage: "folder.badge.plus", label: "Новая папка") { newFolderName = ""; newFolder = true }
-            Button("Готово") { dismiss() }.buttonStyle(.relayaPrimary).keyboardShortcut(.cancelAction)
+            IconButton(systemImage: "arrow.clockwise", label: L("Обновить")) { open(path) }
+            Button(L("Загрузить…")) { chooseUpload() }.buttonStyle(.relaya)
+            Button(L("Скачать…")) { download() }.buttonStyle(.relaya).disabled(selection.isEmpty)
+            IconButton(systemImage: "folder.badge.plus", label: L("Новая папка")) { newFolderName = ""; newFolder = true }
+            Button(L("Готово")) { dismiss() }.buttonStyle(.relayaPrimary).keyboardShortcut(.cancelAction)
         }
         .font(.system(size: 13))
         .padding(.horizontal, 12)
@@ -127,7 +127,7 @@ struct SFTPView: View {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.red)
                 Text(error).foregroundStyle(Theme.red).lineLimit(2).textSelection(.enabled)
             } else {
-                Text("\(files.count) объектов · перетащите файлы из Finder, чтобы загрузить сюда").foregroundStyle(Theme.tx2)
+                Text(L("%@ объектов · перетащите файлы из Finder, чтобы загрузить сюда", "\(files.count)")).foregroundStyle(Theme.tx2)
             }
             Spacer()
         }
@@ -187,11 +187,11 @@ struct SFTPView: View {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.prompt = "Скачать сюда"
+        panel.prompt = L("Скачать сюда")
         panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         guard panel.runModal() == .OK, let dir = panel.url else { return }
         let base = path
-        perform("Скачиваю \(targets.count) объект(ов)…") {
+        perform(L("Скачиваю %@ объект(ов)…", "\(targets.count)")) {
             for f in targets {
                 try await client.download(SFTPClient.join(base, f.name), to: dir, recursive: f.isDirectory)
             }
@@ -203,7 +203,7 @@ struct SFTPView: View {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
-        panel.prompt = "Загрузить"
+        panel.prompt = L("Загрузить")
         guard panel.runModal() == .OK else { return }
         upload(urls: panel.urls)
     }
@@ -211,7 +211,7 @@ struct SFTPView: View {
     private func upload(urls: [URL]) {
         guard !urls.isEmpty else { return }
         let base = path
-        perform("Загружаю \(urls.count) объект(ов)…") {
+        perform(L("Загружаю %@ объект(ов)…", "\(urls.count)")) {
             for url in urls { try await client.upload(url.path, to: base) }
         }
     }

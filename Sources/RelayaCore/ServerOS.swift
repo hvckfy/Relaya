@@ -128,64 +128,64 @@ extension ServerOS {
         var list: [OSAction] = []
         switch packageManager {
         case .apt?:
-            list += [OSAction("Обновить пакеты", "sudo apt update && sudo apt upgrade", needsRoot: true),
-                     OSAction("Установить пакет…", "sudo apt install ", needsRoot: true),
-                     OSAction("Удалить ненужные пакеты", "sudo apt autoremove", needsRoot: true)]
+            list += [OSAction(L("Обновить пакеты"), "sudo apt update && sudo apt upgrade", needsRoot: true),
+                     OSAction(L("Установить пакет…"), "sudo apt install ", needsRoot: true),
+                     OSAction(L("Удалить ненужные пакеты"), "sudo apt autoremove", needsRoot: true)]
         case .dnf?:
-            list += [OSAction("Обновить пакеты", "sudo dnf upgrade", needsRoot: true),
-                     OSAction("Установить пакет…", "sudo dnf install ", needsRoot: true)]
+            list += [OSAction(L("Обновить пакеты"), "sudo dnf upgrade", needsRoot: true),
+                     OSAction(L("Установить пакет…"), "sudo dnf install ", needsRoot: true)]
         case .yum?:
-            list += [OSAction("Обновить пакеты", "sudo yum update", needsRoot: true),
-                     OSAction("Установить пакет…", "sudo yum install ", needsRoot: true)]
+            list += [OSAction(L("Обновить пакеты"), "sudo yum update", needsRoot: true),
+                     OSAction(L("Установить пакет…"), "sudo yum install ", needsRoot: true)]
         case .apk?:
-            list += [OSAction("Обновить пакеты", "apk update && apk upgrade", needsRoot: true),
-                     OSAction("Установить пакет…", "apk add ", needsRoot: true)]
+            list += [OSAction(L("Обновить пакеты"), "apk update && apk upgrade", needsRoot: true),
+                     OSAction(L("Установить пакет…"), "apk add ", needsRoot: true)]
         case .pacman?:
-            list += [OSAction("Обновить пакеты", "sudo pacman -Syu", needsRoot: true),
-                     OSAction("Установить пакет…", "sudo pacman -S ", needsRoot: true)]
+            list += [OSAction(L("Обновить пакеты"), "sudo pacman -Syu", needsRoot: true),
+                     OSAction(L("Установить пакет…"), "sudo pacman -S ", needsRoot: true)]
         case .zypper?:
-            list += [OSAction("Обновить пакеты", "sudo zypper refresh && sudo zypper update", needsRoot: true),
-                     OSAction("Установить пакет…", "sudo zypper install ", needsRoot: true)]
+            list += [OSAction(L("Обновить пакеты"), "sudo zypper refresh && sudo zypper update", needsRoot: true),
+                     OSAction(L("Установить пакет…"), "sudo zypper install ", needsRoot: true)]
         case .opkg?:
-            list += [OSAction("Обновить список пакетов", "opkg update"),
-                     OSAction("Обновляемые пакеты", "opkg list-upgradable"),
-                     OSAction("Установить пакет…", "opkg install ")]
+            list += [OSAction(L("Обновить список пакетов"), "opkg update"),
+                     OSAction(L("Обновляемые пакеты"), "opkg list-upgradable"),
+                     OSAction(L("Установить пакет…"), "opkg install ")]
         case .brew?:
-            list += [OSAction("Обновить пакеты", "brew update && brew upgrade"),
-                     OSAction("Установить пакет…", "brew install ")]
+            list += [OSAction(L("Обновить пакеты"), "brew update && brew upgrade"),
+                     OSAction(L("Установить пакет…"), "brew install ")]
         case .pkg?:
-            list += [OSAction("Обновить пакеты", "sudo pkg update && sudo pkg upgrade", needsRoot: true),
-                     OSAction("Установить пакет…", "sudo pkg install ", needsRoot: true)]
+            list += [OSAction(L("Обновить пакеты"), "sudo pkg update && sudo pkg upgrade", needsRoot: true),
+                     OSAction(L("Установить пакет…"), "sudo pkg install ", needsRoot: true)]
         case nil:
             break
         }
 
         switch self {
         case .openwrt:
-            list += [OSAction("Сведения о системе", "ubus call system board"),
-                     OSAction("Сетевые интерфейсы", "ifstatus wan; ip -br addr"),
-                     OSAction("Wi-Fi клиенты", "iwinfo; for i in $(iwinfo | awk '/ESSID/{print $1}'); do iwinfo $i assoclist; done"),
-                     OSAction("Журнал", "logread | tail -n 100"),
-                     OSAction("Перезапустить сеть", "/etc/init.d/network restart")]
+            list += [OSAction(L("Сведения о системе"), "ubus call system board"),
+                     OSAction(L("Сетевые интерфейсы"), "ifstatus wan; ip -br addr"),
+                     OSAction(L("Wi-Fi клиенты"), "iwinfo; for i in $(iwinfo | awk '/ESSID/{print $1}'); do iwinfo $i assoclist; done"),
+                     OSAction(L("Журнал"), "logread | tail -n 100"),
+                     OSAction(L("Перезапустить сеть"), "/etc/init.d/network restart")]
         case .macos:
-            list += [OSAction("Сведения о системе", "sw_vers; uname -m; uptime"),
-                     OSAction("Место на диске", "df -h /"),
-                     OSAction("Нагрузка", "top -l 1 -n 10 -o cpu")]
+            list += [OSAction(L("Сведения о системе"), "sw_vers; uname -m; uptime"),
+                     OSAction(L("Место на диске"), "df -h /"),
+                     OSAction(L("Нагрузка"), "top -l 1 -n 10 -o cpu")]
         case .freebsd:
-            list += [OSAction("Сведения о системе", "freebsd-version; uname -a; uptime"),
-                     OSAction("Место на диске", "df -h"),
-                     OSAction("Сервисы", "service -e")]
+            list += [OSAction(L("Сведения о системе"), "freebsd-version; uname -a; uptime"),
+                     OSAction(L("Место на диске"), "df -h"),
+                     OSAction(L("Сервисы"), "service -e")]
         case .windows:
-            list += [OSAction("Сведения о системе", "systeminfo"),
-                     OSAction("Место на диске", "wmic logicaldisk get caption,freespace,size"),
-                     OSAction("Процессы", "tasklist")]
+            list += [OSAction(L("Сведения о системе"), "systeminfo"),
+                     OSAction(L("Место на диске"), "wmic logicaldisk get caption,freespace,size"),
+                     OSAction(L("Процессы"), "tasklist")]
         default:
-            list += [OSAction("Сведения о системе", "cat /etc/os-release; uname -a; uptime"),
-                     OSAction("Место на диске", "df -h"),
-                     OSAction("Память", "free -h"),
-                     OSAction("Нагрузка", "top -b -n 1 | head -n 20"),
-                     OSAction("Упавшие сервисы", "systemctl --failed"),
-                     OSAction("Журнал (последние ошибки)", "sudo journalctl -p err -n 50 --no-pager", needsRoot: true)]
+            list += [OSAction(L("Сведения о системе"), "cat /etc/os-release; uname -a; uptime"),
+                     OSAction(L("Место на диске"), "df -h"),
+                     OSAction(L("Память"), "free -h"),
+                     OSAction(L("Нагрузка"), "top -b -n 1 | head -n 20"),
+                     OSAction(L("Упавшие сервисы"), "systemctl --failed"),
+                     OSAction(L("Журнал (последние ошибки)"), "sudo journalctl -p err -n 50 --no-pager", needsRoot: true)]
         }
         return list
     }
@@ -217,7 +217,7 @@ extension ServerOS {
     /// Пункты меню «Вход по паролю».
     public var passwordLoginActions: [OSAction] {
         guard self != .windows else { return [] }
-        return [OSAction("Разрешить вход по паролю", passwordLoginCommand(enabled: true), needsRoot: true),
-                OSAction("Запретить вход по паролю", passwordLoginCommand(enabled: false), needsRoot: true)]
+        return [OSAction(L("Разрешить вход по паролю"), passwordLoginCommand(enabled: true), needsRoot: true),
+                OSAction(L("Запретить вход по паролю"), passwordLoginCommand(enabled: false), needsRoot: true)]
     }
 }

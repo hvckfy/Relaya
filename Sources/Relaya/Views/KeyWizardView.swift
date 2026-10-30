@@ -66,10 +66,10 @@ final class KeyWizardModel {
     var keyError: String? {
         switch mode {
         case .new:
-            if fileName.isEmpty || fileName.contains("/") { return "Имя файла без «/»" }
-            if FileManager.default.fileExists(atPath: keyPath) { return "Файл уже есть — выберите «Использовать существующий»" }
+            if fileName.isEmpty || fileName.contains("/") { return L("Имя файла без «/»") }
+            if FileManager.default.fileExists(atPath: keyPath) { return L("Файл уже есть — выберите «Использовать существующий»") }
         case .existing:
-            if existingKey == nil { return "Выберите ключ" }
+            if existingKey == nil { return L("Выберите ключ") }
         }
         return nil
     }
@@ -83,7 +83,7 @@ final class KeyWizardModel {
 
     var serverLine: String {
         if mode == .existing, let k = existingKey { return k.publicKey }
-        return "ssh-ed25519 AAAA…(будет создан) \(comment)"
+        return L("ssh-ed25519 AAAA…(будет создан) %@", "\(comment)")
     }
 
     // MARK: - Применение
@@ -128,7 +128,7 @@ final class KeyWizardModel {
                 statuses["Ключ"] = .skipped
             }
             guard let pub = try? String(contentsOfFile: keyPath + ".pub", encoding: .utf8) else {
-                throw KeyInstaller.Failure("Не найден \(SSHPaths.abbreviate(keyPath)).pub")
+                throw KeyInstaller.Failure(L("Не найден %@.pub", "\(SSHPaths.abbreviate(keyPath))"))
             }
 
             // 2. Сервер
@@ -140,7 +140,7 @@ final class KeyWizardModel {
                     if saveServerPassword {
                         try model.keychain.setPassword(serverPassword, for: host.keychainAccount)
                         secret = .init(store: model.keychain, account: host.keychainAccount, kind: .password)
-                        note("пароль сервера сохранён в Keychain")
+                        note(L("пароль сервера сохранён в Keychain"))
                     } else {
                         let a = UUID().uuidString
                         try temp.setPassword(serverPassword, for: a)
@@ -190,13 +190,13 @@ final class KeyWizardModel {
             if createdKey {
                 try? FileManager.default.removeItem(atPath: keyPath)
                 try? FileManager.default.removeItem(atPath: keyPath + ".pub")
-                undone.append("удалены созданные файлы \(fileName)*")
+                undone.append(L("удалены созданные файлы %@*", "\(fileName)"))
             }
             let serverChanged = statuses["Сервер"] == .ok
             undone.append(serverChanged
-                ? "ключ на сервере остался в authorized_keys — удалите строку вручную, если она не нужна"
-                : "на сервере ничего не изменено")
-            undone.append("~/.ssh/config не менялся")
+                ? L("ключ на сервере остался в authorized_keys — удалите строку вручную, если она не нужна")
+                : L("на сервере ничего не изменено"))
+            undone.append(L("~/.ssh/config не менялся"))
             rollbackNote = undone.joined(separator: "; ")
         }
     }
@@ -240,9 +240,9 @@ struct KeyWizardView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Настроить вход по ключу").font(.system(size: 17, weight: .bold))
+                Text(L("Настроить вход по ключу")).font(.system(size: 17, weight: .bold))
                 Spacer()
-                Text("Хост \(wizard.host.subtitle)")
+                Text(L("Хост %@", "\(wizard.host.subtitle)"))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Theme.tx2)
             }
@@ -265,22 +265,22 @@ struct KeyWizardView: View {
             Spacer()
             switch wizard.step {
             case .key:
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Далее") { wizard.step = .preview }
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Далее")) { wizard.step = .preview }
                     .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
                     .disabled(wizard.keyError != nil)
             case .preview:
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Назад") { wizard.step = .key }.buttonStyle(.relaya)
-                Button("Применить") { Task { await wizard.apply() } }
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Назад")) { wizard.step = .key }.buttonStyle(.relaya)
+                Button(L("Применить")) { Task { await wizard.apply() } }
                     .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
             case .apply:
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).disabled(wizard.running)
-                Button("Назад") { wizard.step = .key }.buttonStyle(.relaya).disabled(wizard.running)
-                Button("Повторить") { Task { await wizard.apply() } }
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).disabled(wizard.running)
+                Button(L("Назад")) { wizard.step = .key }.buttonStyle(.relaya).disabled(wizard.running)
+                Button(L("Повторить")) { Task { await wizard.apply() } }
                     .buttonStyle(.relayaPrimary).disabled(wizard.running)
             case .done:
-                Button("Готово") {
+                Button(L("Готово")) {
                     if !wizard.passwordLogin {
                         let host = wizard.model.current(wizard.host)
                         wizard.model.run((host.os ?? .linux).passwordLoginCommand(enabled: false), on: host)
@@ -302,32 +302,32 @@ private struct KeyStep: View {
     @Bindable var wizard: KeyWizardModel
 
     var body: some View {
-        Section2(title: "Ключ") {
+        Section2(title: L("Ключ")) {
             Picker("", selection: $wizard.mode) {
-                Text("Создать новый ed25519 — рекомендуется").tag(KeyWizardModel.Mode.new)
-                Text("Использовать существующий").tag(KeyWizardModel.Mode.existing)
+                Text(L("Создать новый ed25519 — рекомендуется")).tag(KeyWizardModel.Mode.new)
+                Text(L("Использовать существующий")).tag(KeyWizardModel.Mode.existing)
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
 
             if wizard.mode == .new {
-                Field("Имя файла") {
+                Field(L("Имя файла")) {
                     HStack(spacing: 2) {
                         Text("~/.ssh/").foregroundStyle(Theme.tx2)
                         TextField("", text: $wizard.fileName).textFieldStyle(.roundedBorder)
                     }
                     .font(.system(size: 12.5, design: .monospaced))
                 }
-                Field("Комментарий") { TextField("", text: $wizard.comment).textFieldStyle(.roundedBorder) }
+                Field(L("Комментарий")) { TextField("", text: $wizard.comment).textFieldStyle(.roundedBorder) }
                 Field("Passphrase") {
-                    SecureField("необязательно", text: $wizard.passphrase).textFieldStyle(.roundedBorder)
+                    SecureField(L("необязательно"), text: $wizard.passphrase).textFieldStyle(.roundedBorder)
                 }
                 if !wizard.passphrase.isEmpty {
-                    Text("Passphrase будет сохранена в Keychain macOS (UseKeychain), вводить её не придётся.")
+                    Text(L("Passphrase будет сохранена в Keychain macOS (UseKeychain), вводить её не придётся."))
                         .font(.system(size: 12)).foregroundStyle(Theme.tx2)
                 }
             } else {
-                Field("Ключ") {
+                Field(L("Ключ")) {
                     Picker("", selection: $wizard.existingPath) {
                         ForEach(wizard.keys) { k in
                             Text("\(k.name) · \(k.type)").tag(k.path)
@@ -336,21 +336,21 @@ private struct KeyStep: View {
                     .labelsHidden()
                 }
                 if wizard.existingKey?.hasPassphrase == true {
-                    Field("Passphrase ключа") {
-                        SecureField("для ssh-agent", text: $wizard.existingPassphrase).textFieldStyle(.roundedBorder)
+                    Field(L("Passphrase ключа")) {
+                        SecureField(L("для ssh-agent"), text: $wizard.existingPassphrase).textFieldStyle(.roundedBorder)
                     }
                 }
             }
         }
 
-        Section2(title: "Доступ к серверу") {
+        Section2(title: L("Доступ к серверу")) {
             if wizard.hasSavedPassword {
-                Text("Пароль сервера возьмём из Keychain.").foregroundStyle(Theme.tx2)
+                Text(L("Пароль сервера возьмём из Keychain.")).foregroundStyle(Theme.tx2)
             } else {
-                Field("Пароль сервера") {
-                    SecureField("если вход по паролю", text: $wizard.serverPassword).textFieldStyle(.roundedBorder)
+                Field(L("Пароль сервера")) {
+                    SecureField(L("если вход по паролю"), text: $wizard.serverPassword).textFieldStyle(.roundedBorder)
                 }
-                Toggle("Сохранить пароль в Keychain", isOn: $wizard.saveServerPassword)
+                Toggle(L("Сохранить пароль в Keychain"), isOn: $wizard.saveServerPassword)
                     .disabled(wizard.serverPassword.isEmpty)
             }
         }
@@ -358,7 +358,7 @@ private struct KeyStep: View {
         if let e = wizard.keyError {
             Text(e).font(.system(size: 12)).foregroundStyle(Theme.red)
         }
-        Text("На следующем шаге покажем все изменения до того, как что-то будет записано.")
+        Text(L("На следующем шаге покажем все изменения до того, как что-то будет записано."))
             .font(.system(size: 12)).foregroundStyle(Theme.tx2)
     }
 }
@@ -367,21 +367,21 @@ private struct PreviewStep: View {
     let wizard: KeyWizardModel
 
     var body: some View {
-        Text("Вот что изменится. Ничего не записано, пока вы не нажмёте «Применить».")
+        Text(L("Вот что изменится. Ничего не записано, пока вы не нажмёте «Применить»."))
             .foregroundStyle(Theme.tx2)
 
         if wizard.mode == .new {
-            ChangeBlock(title: "Локально", detail: "~/.ssh/", badge: "+2 файла") {
+            ChangeBlock(title: L("Локально"), detail: "~/.ssh/", badge: L("+2 файла")) {
                 CodeLine(kind: .added, text: "\(wizard.fileName)        600 -rw-------")
                 CodeLine(kind: .added, text: "\(wizard.fileName).pub    644 -rw-r--r--")
             }
         }
-        ChangeBlock(title: "Config", detail: "~/.ssh/config", badge: "бэкап → config.bak") {
+        ChangeBlock(title: "Config", detail: "~/.ssh/config", badge: L("бэкап → config.bak")) {
             ForEach(Array(wizard.configDiff.enumerated()), id: \.offset) { _, l in
                 CodeLine(kind: l.kind, text: l.text)
             }
         }
-        ChangeBlock(title: "Сервер", detail: "\(wizard.host.alias):~/.ssh/authorized_keys", badge: "+1 строка") {
+        ChangeBlock(title: L("Сервер"), detail: "\(wizard.host.alias):~/.ssh/authorized_keys", badge: L("+1 строка")) {
             CodeLine(kind: .added, text: wizard.serverLine)
         }
     }
@@ -408,13 +408,13 @@ private struct ApplyStep: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(error).fontWeight(.semibold).fixedSize(horizontal: false, vertical: true)
                     if let note = wizard.rollbackNote {
-                        Text("Откатили: \(note).").fixedSize(horizontal: false, vertical: true)
+                        Text(L("Откатили: %@.", "\(note)")).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
         }
 
-        DisclosureGroup("Показать лог", isExpanded: $showLog) {
+        DisclosureGroup(L("Показать лог"), isExpanded: $showLog) {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(wizard.log) { line in
                     Text("\(line.time.formatted(date: .omitted, time: .standard))  \(line.text)")
@@ -429,11 +429,11 @@ private struct ApplyStep: View {
 
     private func label(_ name: String) -> String {
         switch name {
-        case "Ключ": "Ключ создан"
-        case "Сервер": "Ключ добавлен на сервер"
-        case "Агент": "Passphrase в Keychain, ключ в ssh-agent"
-        case "Проверка": "Проверочный вход по ключу"
-        default: "~/.ssh/config обновлён (бэкап config.bak)"
+        case "Ключ": L("Ключ создан")
+        case "Сервер": L("Ключ добавлен на сервер")
+        case "Агент": L("Passphrase в Keychain, ключ в ssh-agent")
+        case "Проверка": L("Проверочный вход по ключу")
+        default: L("~/.ssh/config обновлён (бэкап config.bak)")
         }
     }
 
@@ -455,28 +455,28 @@ private struct DoneStep: View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.seal.fill").font(.system(size: 30)).foregroundStyle(Theme.grn)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Теперь вход по ключу").font(.system(size: 17, weight: .bold))
-                Text("Проверочное подключение без пароля прошло успешно.").foregroundStyle(Theme.tx2)
+                Text(L("Теперь вход по ключу")).font(.system(size: 17, weight: .bold))
+                Text(L("Проверочное подключение без пароля прошло успешно.")).foregroundStyle(Theme.tx2)
             }
         }
 
-        Section2(title: "Итог") {
-            Field("Ключ") { Mono(SSHPaths.abbreviate(wizard.keyPath)) }
-            Field("Отпечаток") { Mono(wizard.result?.fingerprint ?? "—") }
-            Field("Passphrase") { Mono(wizard.result?.hasPassphrase == true ? "в Keychain" : "нет") }
-            Field("Бэкап config") { Mono("~/.ssh/config.bak") }
+        Section2(title: L("Итог")) {
+            Field(L("Ключ")) { Mono(SSHPaths.abbreviate(wizard.keyPath)) }
+            Field(L("Отпечаток")) { Mono(wizard.result?.fingerprint ?? "—") }
+            Field("Passphrase") { Mono(wizard.result?.hasPassphrase == true ? L("в Keychain") : L("нет")) }
+            Field(L("Бэкап config")) { Mono("~/.ssh/config.bak") }
         }
 
-        Section2(title: "Вход по паролю на сервере") {
+        Section2(title: L("Вход по паролю на сервере")) {
             Picker("", selection: $wizard.passwordLogin) {
-                Text("Включён — можно входить и по паролю, и по ключу").tag(true)
-                Text("Отключён — только по ключу").tag(false)
+                Text(L("Включён — можно входить и по паролю, и по ключу")).tag(true)
+                Text(L("Отключён — только по ключу")).tag(false)
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
             Text(wizard.passwordLogin
-                 ? "На сервере ничего не меняем."
-                 : "После «Готово» откроется вкладка терминала и выполнит команду на сервере. Если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Вернуть вход по паролю: меню «Действия» в сессии.")
+                 ? L("На сервере ничего не меняем.")
+                 : L("После «Готово» откроется вкладка терминала и выполнит команду на сервере. Если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Вернуть вход по паролю: меню «Действия» в сессии."))
                 .font(.system(size: 12))
                 .foregroundStyle(wizard.passwordLogin ? Theme.tx2 : Theme.org)
                 .fixedSize(horizontal: false, vertical: true)

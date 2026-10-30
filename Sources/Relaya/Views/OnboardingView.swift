@@ -27,9 +27,9 @@ struct OnboardingView: View {
                 }
                 Spacer()
                 if step > 0 {
-                    Button("Назад") { step -= 1 }.buttonStyle(.relaya)
+                    Button(L("Назад")) { step -= 1 }.buttonStyle(.relaya)
                 }
-                Button(step == 0 ? "Продолжить" : step == 1 ? "Готово" : "Начать работу") {
+                Button(step == 0 ? L("Продолжить") : step == 1 ? L("Готово") : L("Начать работу")) {
                     if step < 2 { step += 1 } else { model.finishOnboarding() }
                 }
                 .buttonStyle(.relayaPrimary)
@@ -51,26 +51,26 @@ struct OnboardingView: View {
             Image(systemName: "terminal.fill")
                 .font(.system(size: 36))
                 .foregroundStyle(Theme.acc)
-            (Text("Ваши ключи живут в ") + Text("~/.ssh").font(.system(size: 22, weight: .bold, design: .monospaced)) + Text(", а не у нас"))
+            (Text(L("Ваши ключи живут в ")) + Text("~/.ssh").font(.system(size: 22, weight: .bold, design: .monospaced)) + Text(L(", а не у нас")))
                 .font(.system(size: 22, weight: .bold))
-            Text("Relaya читает ваш ~/.ssh/config и ключи как есть. Любое изменение файлов или сервера мы покажем заранее и применим только после подтверждения.")
+            Text(L("Relaya читает ваш ~/.ssh/config и ключи как есть. Любое изменение файлов или сервера мы покажем заранее и применим только после подтверждения."))
                 .foregroundStyle(Theme.tx2)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 8) {
-                bullet("Нет своего хранилища и облачной синхронизации")
-                bullet("Пароли и passphrase — только в Keychain")
-                bullet("Diff и бэкап перед каждой правкой config")
+                bullet(L("Нет своего хранилища и облачной синхронизации"))
+                bullet(L("Пароли и passphrase — только в Keychain"))
+                bullet(L("Diff и бэкап перед каждой правкой config"))
             }
         }
     }
 
     private var found: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Нашли в ~/.ssh").font(.system(size: 22, weight: .bold))
-            Text("\(model.hosts.count) \(plural(model.hosts.count, "хост", "хоста", "хостов")) в ~/.ssh/config и \(keyCount.map(String.init) ?? "…") \(plural(keyCount ?? 0, "ключ", "ключа", "ключей")). Только чтение: ничего не копируется.")
+            Text(L("Нашли в ~/.ssh")).font(.system(size: 22, weight: .bold))
+            Text(L("%@ %@ в ~/.ssh/config и %@ %@. Только чтение: ничего не копируется.", "\(model.hosts.count)", "\(plural(model.hosts.count, L("хост"), L("хоста"), L("хостов")))", "\(keyCount.map(String.init) ?? "…")", "\(plural(keyCount ?? 0, L("ключ"), L("ключа"), L("ключей")))"))
                 .foregroundStyle(Theme.tx2)
             if model.hosts.isEmpty {
-                Text("Хостов пока нет — добавьте первый кнопкой «Хост» в тулбаре.")
+                Text(L("Хостов пока нет — добавьте первый кнопкой «Хост» в тулбаре."))
                     .foregroundStyle(Theme.tx2)
             } else {
                 ScrollView {
@@ -94,10 +94,10 @@ struct OnboardingView: View {
 
     private var permissions: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Как это работает").font(.system(size: 22, weight: .bold))
-            permission("Доступ к ~/.ssh", "Читать config и ключи, записывать изменения после вашего подтверждения. Копия config перед правкой — в config.bak.", "folder")
-            permission("Keychain", "Пароли серверов и passphrase ключей. macOS спросит разрешение при первом обращении.", "key")
-            permission("Системный ssh", "Подключения идут через /usr/bin/ssh — ~/.ssh/config, ssh-agent и ProxyJump работают как в Terminal.app.", "terminal")
+            Text(L("Как это работает")).font(.system(size: 22, weight: .bold))
+            permission(L("Доступ к ~/.ssh"), L("Читать config и ключи, записывать изменения после вашего подтверждения. Копия config перед правкой — в config.bak."), "folder")
+            permission("Keychain", L("Пароли серверов и passphrase ключей. macOS спросит разрешение при первом обращении."), "key")
+            permission(L("Системный ssh"), L("Подключения идут через /usr/bin/ssh — ~/.ssh/config, ssh-agent и ProxyJump работают как в Terminal.app."), "terminal")
         }
     }
 

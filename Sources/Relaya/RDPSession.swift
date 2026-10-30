@@ -20,6 +20,8 @@ final class RDPSession {
     private(set) var phase: Phase = .idle
     /// Отпечаток сертификата сервера (SHA-256), когда он пришёл.
     private(set) var certificate: String?
+    /// Подключение оборвано из-за смены сертификата сервера.
+    private(set) var certificateMismatch = false
     /// Холст: экран удалённой машины и слой ввода.
     let canvas = RemoteDesktopCanvasNSView()
 
@@ -50,7 +52,7 @@ final class RDPSession {
             model.tunnels.start(t, hosts: model.hosts)
             for _ in 0..<40 {
                 try? await Task.sleep(for: .milliseconds(250))
-                if case .failed(let m) = model.tunnels.status(of: t) { phase = .disconnected("SSH-туннель: \(m)"); return }
+                if case .failed(let m) = model.tunnels.status(of: t) { phase = .disconnected(L("SSH-туннель: %@", "\(m)")); return }
                 if model.tunnels.status(of: t) == .running { break }
             }
             tunnel = t
@@ -88,12 +90,12 @@ final class RDPSession {
         let credentials: RDPCredentials
         do {
             guard let valid = try RDPCredentials.validated(username: user, domain: domain, password: password) else {
-                phase = .disconnected("Укажите имя пользователя и пароль.")
+                phase = .disconnected(L("Укажите имя пользователя и пароль."))
                 return
             }
             credentials = valid
         } catch {
-            phase = .disconnected("Учётные данные: \(error.localizedDescription)")
+            phase = .disconnected(L("Учётные данные: %@", "\(error.localizedDescription)"))
             return
         }
         phase = .connecting
@@ -191,13 +193,14 @@ final class RDPSession {
         inputSession = nil
         if let t = tunnel { model.tunnels.stop(t.id) }
         tunnel = nil
+        certificateMismatch = certificateChanged
         if certificateChanged {
-            phase = .disconnected("Сертификат сервера изменился с прошлого подключения. Если это ожидаемо (сервер переустановили), сбросьте доверие и подключитесь снова.")
+            phase = .disconnected(L("Сертификат сервера изменился с прошлого подключения. Если это ожидаемо (сервер переустановили), сбросьте доверие и подключитесь снова."))
             return
         }
         if status.localizedCaseInsensitiveContains("logon") || message.localizedCaseInsensitiveContains("logon") {
             try? keychain.deletePassword(for: account)
-            phase = .disconnected("Неверное имя пользователя или пароль.")
+            phase = .disconnected(L("Неверное имя пользователя или пароль."))
             return
         }
         phase = .disconnected(message.isEmpty ? status : message)

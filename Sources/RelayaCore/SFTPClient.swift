@@ -54,7 +54,7 @@ public struct SFTPClient: Sendable {
                                             environment: env, input: commands.joined(separator: "\n") + "\n")
         guard r.succeeded else {
             let lines = r.stderr.split(whereSeparator: \.isNewline).map(String.init).filter { !$0.hasPrefix("sftp>") }
-            throw Failure(message: lines.last ?? "sftp завершился с кодом \(r.status)")
+            throw Failure(message: lines.last ?? L("sftp завершился с кодом %@", "\(r.status)"))
         }
         return r.stdout
     }

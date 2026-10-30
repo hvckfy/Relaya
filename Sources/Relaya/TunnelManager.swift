@@ -122,9 +122,9 @@ final class TunnelManager {
             status[id] = .stopped
             return
         }
-        let line = stderr.split(whereSeparator: \.isNewline).last.map(String.init) ?? "ssh завершился с кодом \(code)"
+        let line = stderr.split(whereSeparator: \.isNewline).last.map(String.init) ?? L("ssh завершился с кодом %@", "\(code)")
         status[id] = .failed(line.contains("Permission denied")
-            ? "Нужен вход без пароля: настройте ключ или сохраните пароль в Keychain. (\(line))"
+            ? L("Нужен вход без пароля: настройте ключ или сохраните пароль в Keychain. (%@)", "\(line)")
             : line)
     }
 }

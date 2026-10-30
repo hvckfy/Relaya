@@ -21,17 +21,17 @@ struct HostDetailView: View {
                     }
                     Spacer()
                     // «Подключить» — в тулбаре окна (⌘T), здесь не дублируем.
-                    Button("Файлы") { model.sftpHost = host }
+                    Button(L("Файлы")) { model.sftpHost = host }
                         .buttonStyle(.relaya)
-                    Button("Изменить") { model.editor = EditorRequest(original: host) }
+                    Button(L("Изменить")) { model.editor = EditorRequest(original: host) }
                         .buttonStyle(.relaya)
                 }
 
                 if !host.usesKey {
                     HStack(spacing: 10) {
-                        Text("Ключ не указан — скорее всего, вход по паролю.")
+                        Text(L("Ключ не указан — скорее всего, вход по паролю."))
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("Настроить вход по ключу") { model.keyWizard = KeyWizardRequest(host: host) }
+                        Button(L("Настроить вход по ключу")) { model.keyWizard = KeyWizardRequest(host: host) }
                             .buttonStyle(.relaya(.primary, height: 24))
                     }
                     .font(.system(size: 13))
@@ -43,13 +43,13 @@ struct HostDetailView: View {
 
                 HStack(spacing: 10) {
                     OSIcon(os: host.os, size: 22)
-                    Text(host.os?.title ?? "ОС не определена")
+                    Text(host.os?.title ?? L("ОС не определена"))
                         .foregroundStyle(host.os == nil ? Theme.tx2 : Theme.tx)
                     Spacer()
                     if model.detectingOS.contains(host.alias) {
                         ProgressView().controlSize(.small)
                     } else {
-                        Button(host.os == nil ? "Определить" : "Проверить снова") {
+                        Button(host.os == nil ? L("Определить") : L("Проверить снова")) {
                             Task { await model.detectOS(for: host.alias) }
                         }
                         .buttonStyle(.relaya(.normal, height: 24))
@@ -61,17 +61,17 @@ struct HostDetailView: View {
                 .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
 
-                InfoGroup(title: "Подключение", rows: [
-                    ("Адрес", host.hostName ?? host.alias),
-                    ("Пользователь", host.user ?? "—"),
-                    ("Порт", String(host.port ?? 22)),
+                InfoGroup(title: L("Подключение"), rows: [
+                    (L("Адрес"), host.hostName ?? host.alias),
+                    (L("Пользователь"), host.user ?? "—"),
+                    (L("Порт"), String(host.port ?? 22)),
                     ("ProxyJump", host.proxyJump ?? "—"),
                 ])
-                InfoGroup(title: "Аутентификация", rows: [
-                    ("Ключ", host.identityFile ?? "по умолчанию / пароль"),
-                    ("Агент-форвардинг", host.forwardAgent == true ? "да" : "нет"),
+                InfoGroup(title: L("Аутентификация"), rows: [
+                    (L("Ключ"), host.identityFile ?? L("по умолчанию / пароль")),
+                    (L("Агент-форвардинг"), host.forwardAgent == true ? L("да") : L("нет")),
                 ])
-                InfoGroup(title: "ssh", rows: [("Команда", "ssh \(host.alias)")])
+                InfoGroup(title: "ssh", rows: [(L("Команда"), "ssh \(host.alias)")])
             }
             .padding(24)
             .frame(maxWidth: 720, alignment: .leading)
@@ -123,15 +123,15 @@ struct EmptyStateView: View {
             Image(systemName: "terminal")
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Theme.tx2)
-            Text(model.hosts.isEmpty ? "Добавьте первый хост" : "Выберите хост")
+            Text(model.hosts.isEmpty ? L("Добавьте первый хост") : L("Выберите хост"))
                 .font(.system(size: 17, weight: .bold))
-            Text("Ваши ключи живут в ~/.ssh, а не у нас.\nХосты Relaya — это ваш ~/.ssh/config.")
+            Text(L("Ваши ключи живут в ~/.ssh, а не у нас.\nХосты Relaya — это ваш ~/.ssh/config."))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.tx2)
             HStack(spacing: 8) {
-                Button("Добавить хост") { model.editor = EditorRequest(original: nil) }
+                Button(L("Добавить хост")) { model.editor = EditorRequest(original: nil) }
                     .buttonStyle(.relayaPrimary)
-                Button("Перечитать ~/.ssh/config") { model.reloadHosts() }
+                Button(L("Перечитать ~/.ssh/config")) { model.reloadHosts() }
                     .buttonStyle(.relaya)
             }
         }

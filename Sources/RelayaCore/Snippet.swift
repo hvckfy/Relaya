@@ -37,10 +37,10 @@ public struct Snippet: Codable, Hashable, Identifiable, Sendable {
     }
 
     public static let examples: [Snippet] = [
-        Snippet(name: "Логи сервиса", command: "journalctl -u {{service}} -n 200 --no-pager", tags: ["linux"]),
-        Snippet(name: "Кто слушает порт", command: "ss -tlnp | grep :{{port}}", tags: ["сеть"]),
-        Snippet(name: "Самые большие каталоги", command: "du -xh {{path}} 2>/dev/null | sort -rh | head -n 20"),
-        Snippet(name: "Docker: контейнеры", command: "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'",
+        Snippet(name: L("Логи сервиса"), command: "journalctl -u {{service}} -n 200 --no-pager", tags: ["linux"]),
+        Snippet(name: L("Кто слушает порт"), command: "ss -tlnp | grep :{{port}}", tags: [L("сеть")]),
+        Snippet(name: L("Самые большие каталоги"), command: "du -xh {{path}} 2>/dev/null | sort -rh | head -n 20"),
+        Snippet(name: L("Docker: контейнеры"), command: "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'",
                 tags: ["docker"]),
     ]
 }

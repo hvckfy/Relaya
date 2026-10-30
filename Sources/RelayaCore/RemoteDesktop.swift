@@ -40,14 +40,14 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
     }
 
     public var validationError: String? {
-        if address.trimmingCharacters(in: .whitespaces).isEmpty { return "Укажите адрес" }
-        if !(1...65535).contains(port) { return "Порт — число от 1 до 65535" }
+        if address.trimmingCharacters(in: .whitespaces).isEmpty { return L("Укажите адрес") }
+        if !(1...65535).contains(port) { return L("Порт — число от 1 до 65535") }
         return nil
     }
 
     public var summary: String {
         let target = "\(user.isEmpty ? "" : user + "@")\(address):\(port)"
-        return viaSSHHost.map { "\(target) через SSH \($0)" } ?? target
+        return viaSSHHost.map { L("%@ через SSH %@", "\(target)", "\($0)") } ?? target
     }
 
     /// Туннель для подключения через SSH: локальный порт → address:port на сервере.

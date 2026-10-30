@@ -34,19 +34,19 @@ struct SessionView: View {
             Text(session.host.alias).fontWeight(.semibold).foregroundStyle(Theme.tx)
             Spacer()
             OSActionsMenu(os: host.os, user: host.user) { c.insert($0) }
-            Button("Сниппеты") { model.snippetPalette = true }
+            Button(L("Сниппеты")) { model.snippetPalette = true }
                 .buttonStyle(.relaya(.ghost, height: 24))
-                .help("Вставить сохранённую команду (⇧⌘P)")
+                .help(L("Вставить сохранённую команду (⇧⌘P)"))
             Button("SFTP") { model.sftpHost = host }
                 .buttonStyle(.relaya(.ghost, height: 24))
-                .help("Файлы на сервере")
-            Button("Найти") { c.showFind() }
+                .help(L("Файлы на сервере"))
+            Button(L("Найти")) { c.showFind() }
                 .buttonStyle(.relaya(.ghost, height: 24))
-                .help("Поиск в терминале (⌘F)")
-            Button("Изменить хост") { model.editor = EditorRequest(original: session.host) }
+                .help(L("Поиск в терминале (⌘F)"))
+            Button(L("Изменить хост")) { model.editor = EditorRequest(original: session.host) }
                 .buttonStyle(.relaya(.ghost, height: 24))
             if !session.host.usesKey {
-                Button("Вход по ключу…") { model.keyWizard = KeyWizardRequest(host: session.host) }
+                Button(L("Вход по ключу…")) { model.keyWizard = KeyWizardRequest(host: session.host) }
                     .buttonStyle(.relaya(.ghost, height: 24))
             }
         }
@@ -62,14 +62,14 @@ struct SessionView: View {
         HStack(spacing: 14) {
             Text(session.host.subtitle)
             if session.host.usesKey {
-                Text("ключ").foregroundStyle(Theme.grn)
+                Text(L("ключ")).foregroundStyle(Theme.grn)
             } else if model.keychain.hasPassword(for: session.host.keychainAccount) {
-                Text("пароль · Keychain").foregroundStyle(Theme.org)
+                Text(L("пароль · Keychain")).foregroundStyle(Theme.org)
             } else {
-                Text("пароль").foregroundStyle(Theme.org)
+                Text(L("пароль")).foregroundStyle(Theme.org)
             }
             Spacer()
-            if c.ended { Text("отключён").foregroundStyle(Theme.red) }
+            if c.ended { Text(L("отключён")).foregroundStyle(Theme.red) }
             Text("UTF-8")
             Text("xterm-256color")
         }
@@ -95,14 +95,14 @@ private struct SessionBanners: View {
             if controller.hostKeyChanged {
                 BannerRow(tint: Theme.redTint, border: Theme.red) {
                     Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(Theme.red)
-                    Text("Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts.")
+                    Text(L("Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts."))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if controller.passwordOnly {
                 BannerRow(tint: Theme.accTint, border: Theme.line) {
                     Image(systemName: "key.slash").foregroundStyle(Theme.acc)
-                    Text("Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было.")
+                    Text(L("Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было."))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -110,44 +110,44 @@ private struct SessionBanners: View {
                 BannerRow(tint: Theme.orgTint, border: Theme.org) {
                     Image(systemName: "checkmark.shield").foregroundStyle(Theme.org)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Первое подключение к \(host.hostName ?? host.alias). Сверьте отпечаток с сервером:")
+                        Text(L("Первое подключение к %@. Сверьте отпечаток с сервером:", "\(host.hostName ?? host.alias)"))
                         Text(fp).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                     }
                     Spacer()
-                    Button("Доверять") { controller.answerHostKey(trust: true) }
+                    Button(L("Доверять")) { controller.answerHostKey(trust: true) }
                         .buttonStyle(.relaya(.primary, height: 24))
-                    Button("Отмена") { controller.answerHostKey(trust: false) }
+                    Button(L("Отмена")) { controller.answerHostKey(trust: false) }
                         .buttonStyle(.relaya(.normal, height: 24))
                 }
             }
             if controller.savedPasswordRejected {
                 BannerRow(tint: Theme.redTint, border: Theme.line) {
-                    Text("Сохранённый в Keychain пароль не подошёл.")
+                    Text(L("Сохранённый в Keychain пароль не подошёл."))
                     Spacer()
-                    Button("Ввести новый…") { askPassword = true }.buttonStyle(.relaya(.primary, height: 24))
+                    Button(L("Ввести новый…")) { askPassword = true }.buttonStyle(.relaya(.primary, height: 24))
                 }
             } else if controller.passwordPromptWithoutSaved {
                 BannerRow(tint: Theme.accTint, border: Theme.line) {
-                    Text("Сервер спрашивает пароль. Введите его здесь — Relaya сохранит его в Keychain и будет подставлять сама.")
+                    Text(L("Сервер спрашивает пароль. Введите его здесь — Relaya сохранит его в Keychain и будет подставлять сама."))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    Button("Ввести и сохранить…") { askPassword = true }.buttonStyle(.relaya(.primary, height: 24))
-                    Button("Не сейчас") { controller.passwordPromptWithoutSaved = false }
+                    Button(L("Ввести и сохранить…")) { askPassword = true }.buttonStyle(.relaya(.primary, height: 24))
+                    Button(L("Не сейчас")) { controller.passwordPromptWithoutSaved = false }
                         .buttonStyle(.relaya(.normal, height: 24))
                 }
             }
             if controller.offerKeySetup, settings.offerKeySetup {
                 BannerRow(tint: Theme.accTint, border: Theme.line) {
-                    Text("Вы вошли по паролю. Настроить вход по ключу?")
+                    Text(L("Вы вошли по паролю. Настроить вход по ключу?"))
                     Spacer()
-                    Button("Настроить") {
+                    Button(L("Настроить")) {
                         controller.offerKeySetup = false
                         model.keyWizard = KeyWizardRequest(host: host)
                     }
                     .buttonStyle(.relaya(.primary, height: 24))
-                    Button("Не сейчас") { controller.offerKeySetup = false }
+                    Button(L("Не сейчас")) { controller.offerKeySetup = false }
                         .buttonStyle(.relaya(.normal, height: 24))
-                    Button("Больше не предлагать") {
+                    Button(L("Больше не предлагать")) {
                         controller.offerKeySetup = false
                         settings.offerKeySetup = false
                     }
@@ -159,7 +159,7 @@ private struct SessionBanners: View {
         .padding(.top, anyVisible ? 10 : 0)
         .padding(.bottom, anyVisible ? 4 : 0)
         .sheet(isPresented: $askPassword) {
-            PasswordSheet(title: "Пароль для \(host.subtitle)") { password, save in
+            PasswordSheet(title: L("Пароль для %@", "\(host.subtitle)")) { password, save in
                 try controller.submitPassword(password, save: save)
             }
         }
@@ -192,7 +192,7 @@ struct BannerRow<Content: View>: View {
 struct PasswordSheet: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
-    var saveLabel = "Сохранить в Keychain"
+    var saveLabel = L("Сохранить в Keychain")
     let submit: (String, Bool) throws -> Void
     @State private var password = ""
     @State private var save = true
@@ -201,7 +201,7 @@ struct PasswordSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(title).font(.system(size: 15, weight: .bold))
-            SecureField("Пароль", text: $password)
+            SecureField(L("Пароль"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 320)
                 .onSubmit(send)
@@ -209,8 +209,8 @@ struct PasswordSheet: View {
             if let error { Text(error).foregroundStyle(Theme.red).font(.system(size: 12)) }
             HStack {
                 Spacer()
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Готово") { send() }.buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Готово")) { send() }.buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
                     .disabled(password.isEmpty)
             }
         }
@@ -238,15 +238,15 @@ private struct EndedOverlay: View {
         VStack(spacing: 10) {
             Text(title).font(.system(size: 15, weight: .bold))
             if let left = controller.reconnectIn {
-                Text("Переподключение через \(left) с…").foregroundStyle(Theme.tx2)
+                Text(L("Переподключение через %@ с…", "\(left)")).foregroundStyle(Theme.tx2)
             }
             HStack(spacing: 8) {
-                Button("Переподключить") { controller.reconnect() }
+                Button(L("Переподключить")) { controller.reconnect() }
                     .buttonStyle(.relayaPrimary)
                 if controller.reconnectIn != nil {
-                    Button("Отменить") { controller.cancelReconnect() }.buttonStyle(.relaya)
+                    Button(L("Отменить")) { controller.cancelReconnect() }.buttonStyle(.relaya)
                 } else {
-                    Button("Изменить хост") { model.editor = EditorRequest(original: controller.host) }
+                    Button(L("Изменить хост")) { model.editor = EditorRequest(original: controller.host) }
                         .buttonStyle(.relaya)
                 }
             }
@@ -261,10 +261,10 @@ private struct EndedOverlay: View {
 
     private var title: String {
         switch controller.exitCode {
-        case 0: "Сессия завершена"
-        case 255: "Соединение потеряно"
-        case let code?: "ssh завершился с кодом \(code)"
-        case nil: "Сессия завершена"
+        case 0: L("Сессия завершена")
+        case 255: L("Соединение потеряно")
+        case let code?: L("ssh завершился с кодом %@", "\(code)")
+        case nil: L("Сессия завершена")
         }
     }
 }

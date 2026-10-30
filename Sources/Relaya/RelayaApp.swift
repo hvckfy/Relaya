@@ -23,33 +23,33 @@ struct RelayaApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Новый хост…") { model.editor = EditorRequest(original: nil) }
+                Button(L("Новый хост…")) { model.editor = EditorRequest(original: nil) }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Подключить") { if let h = model.selectedHost { model.connect(h) } }
+                Button(L("Подключить")) { if let h = model.selectedHost { model.connect(h) } }
                     .keyboardShortcut("t", modifiers: .command)
                     .disabled(model.selectedHost == nil)
-                Button("Закрыть вкладку") { model.closeActiveSession() }
+                Button(L("Закрыть вкладку")) { model.closeActiveSession() }
                     .keyboardShortcut("w", modifiers: .command)
                     .disabled(model.activeSession == nil)
                 Divider()
-                Button("Перечитать ~/.ssh/config") { model.reloadHosts() }
+                Button(L("Перечитать ~/.ssh/config")) { model.reloadHosts() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
             CommandGroup(after: .textEditing) {
-                Button("Найти в терминале…") { model.activeSession?.controller.showFind() }
+                Button(L("Найти в терминале…")) { model.activeSession?.controller.showFind() }
                     .keyboardShortcut("f", modifiers: .command)
                     .disabled(model.activeSession == nil)
             }
-            CommandMenu("Вкладки") {
+            CommandMenu(L("Вкладки")) {
                 ForEach(1..<10) { n in
-                    Button("Вкладка \(n)") { model.selectSession(at: n - 1) }
+                    Button(L("Вкладка %@", "\(n)")) { model.selectSession(at: n - 1) }
                         .keyboardShortcut(KeyEquivalent(Character(String(n))), modifiers: .command)
                 }
                 Divider()
-                Button("Сниппеты…") { model.snippetPalette = true }
+                Button(L("Сниппеты…")) { model.snippetPalette = true }
                     .keyboardShortcut("p", modifiers: [.command, .shift])
                     .disabled(model.activeSession == nil)
-                Button("Переподключить") { model.activeSession?.controller.reconnect() }
+                Button(L("Переподключить")) { model.activeSession?.controller.reconnect() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.activeSession == nil)
             }

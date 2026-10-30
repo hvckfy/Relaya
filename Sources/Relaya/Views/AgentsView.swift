@@ -28,16 +28,16 @@ struct AgentsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Агенты (MCP)").font(.system(size: 20, weight: .bold))
-                        Text("AI-агенты (Claude, Cursor и другие) работают с вашими серверами через Relaya. Ключи им не передаются — команды выполняет ваш ssh, с вашими правами доступа.")
+                        Text(L("Агенты (MCP)")).font(.system(size: 20, weight: .bold))
+                        Text(L("AI-агенты (Claude, Cursor и другие) работают с вашими серверами через Relaya. Ключи им не передаются — команды выполняет ваш ssh, с вашими правами доступа."))
                             .foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Toggle("Доступ включён", isOn: $policy.enabled).toggleStyle(.switch)
+                    Toggle(L("Доступ включён"), isOn: $policy.enabled).toggleStyle(.switch)
                 }
 
-                card(title: "Подключить к клиенту") {
-                    Text("Добавьте в настройки MCP-клиента (например, ~/Library/Application Support/Claude/claude_desktop_config.json) и перезапустите его:")
+                card(title: L("Подключить к клиенту")) {
+                    Text(L("Добавьте в настройки MCP-клиента (например, ~/Library/Application Support/Claude/claude_desktop_config.json) и перезапустите его:"))
                         .font(.system(size: 12)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
                     Text(configJSON)
                         .font(.system(size: 12, design: .monospaced))
@@ -46,20 +46,20 @@ struct AgentsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.bg, in: .rect(cornerRadius: 8, style: .continuous))
                     HStack {
-                        Button(copied ? "Скопировано" : "Скопировать конфиг") {
+                        Button(copied ? L("Скопировано") : L("Скопировать конфиг")) {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(configJSON, forType: .string)
                             copied = true
                         }
                         .buttonStyle(.relayaPrimary)
-                        Text("Путь указывает на это приложение — держите Relaya в «Программах».")
+                        Text(L("Путь указывает на это приложение — держите Relaya в «Программах»."))
                             .font(.system(size: 11)).foregroundStyle(Theme.tx2)
                     }
                 }
 
-                card(title: "Права по хостам") {
+                card(title: L("Права по хостам")) {
                     HStack {
-                        Text("Для новых хостов")
+                        Text(L("Для новых хостов"))
                         Spacer()
                         modePicker($policy.defaultMode)
                     }
@@ -74,19 +74,19 @@ struct AgentsView: View {
                                                set: { policy.hosts[h.alias] = $0 }))
                         }
                     }
-                    Text("«Только чтение» — безопасные команды (ls, cat, df, journalctl, docker ps…) без перенаправлений и sudo. «С подтверждением» — каждую команду вы одобряете в системном окне; без ответа за 2 минуты — отказ.")
+                    Text(L("«Только чтение» — безопасные команды (ls, cat, df, journalctl, docker ps…) без перенаправлений и sudo. «С подтверждением» — каждую команду вы одобряете в системном окне; без ответа за 2 минуты — отказ."))
                         .font(.system(size: 11)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
                 }
                 .disabled(!policy.enabled)
 
-                card(title: "Журнал") {
+                card(title: L("Журнал")) {
                     HStack {
                         Spacer()
-                        Button("Обновить") { log = MCPLog().recent() }.buttonStyle(.relaya(.normal, height: 24))
-                        Button("Очистить") { MCPLog().clear(); log = [] }.buttonStyle(.relaya(.ghost, height: 24))
+                        Button(L("Обновить")) { log = MCPLog().recent() }.buttonStyle(.relaya(.normal, height: 24))
+                        Button(L("Очистить")) { MCPLog().clear(); log = [] }.buttonStyle(.relaya(.ghost, height: 24))
                     }
                     if log.isEmpty {
-                        Text("Пока пусто.").foregroundStyle(Theme.tx2)
+                        Text(L("Пока пусто.")).foregroundStyle(Theme.tx2)
                     } else {
                         ForEach(log) { e in
                             VStack(alignment: .leading, spacing: 2) {
@@ -95,9 +95,9 @@ struct AgentsView: View {
                                     Text(e.client).fontWeight(.medium)
                                     Text("→ \(e.host)")
                                     Spacer()
-                                    Text(e.decision)
+                                    Text(L(e.decision))
                                         .foregroundStyle(e.decision.hasPrefix("запрещено") || e.decision.hasPrefix("отклонено") ? Theme.red : Theme.grn)
-                                    if let code = e.exitCode { Text("код \(code)").foregroundStyle(Theme.tx2) }
+                                    if let code = e.exitCode { Text(L("код %@", "\(code)")).foregroundStyle(Theme.tx2) }
                                 }
                                 .font(.system(size: 11.5))
                                 Text(e.detail).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).lineLimit(3)

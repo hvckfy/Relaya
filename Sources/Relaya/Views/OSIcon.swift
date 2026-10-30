@@ -29,8 +29,8 @@ struct OSIcon: View {
             }
         }
         .frame(width: size, height: size)
-        .help(os?.title ?? "ОС ещё не определена")
-        .accessibilityLabel(os?.title ?? "ОС не определена")
+        .help(os?.title ?? L("ОС ещё не определена"))
+        .accessibilityLabel(os?.title ?? L("ОС не определена"))
     }
 }
 
@@ -77,21 +77,21 @@ struct OSActionsMenu: View {
                     }
                 }
                 if !os.passwordLoginActions.isEmpty {
-                    Section("Вход по паролю на сервере") {
+                    Section(L("Вход по паролю на сервере")) {
                         ForEach(os.passwordLoginActions, id: \.self) { action in
                             Button(action.title + "…") { insert(command(for: action)) }
                         }
                     }
                 }
             } else {
-                Text("ОС ещё не определена")
+                Text(L("ОС ещё не определена"))
             }
         } label: {
-            Text("Действия")
+            Text(L("Действия"))
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Команда вставится в терминал — проверьте её и нажмите Enter")
+        .help(L("Команда вставится в терминал — проверьте её и нажмите Enter"))
     }
 
     /// Под root `sudo` не нужен (и его может не быть, как на OpenWrt).

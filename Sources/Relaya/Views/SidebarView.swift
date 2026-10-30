@@ -34,7 +34,7 @@ struct SidebarView: View {
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(group.name), \(group.hosts.count) хостов, \(collapsed ? "свёрнута" : "развёрнута")")
+                        .accessibilityLabel(L("%@, %@ хостов, %@", "\(group.name)", "\(group.hosts.count)", "\(collapsed ? L("свёрнута") : L("развёрнута"))"))
 
                         if !collapsed {
                             ForEach(group.hosts) { host in
@@ -49,12 +49,12 @@ struct SidebarView: View {
             }
             .overlay {
                 if !model.hosts.isEmpty, model.groupedHosts.isEmpty {
-                    Text("Ничего не найдено").foregroundStyle(Theme.tx2)
+                    Text(L("Ничего не найдено")).foregroundStyle(Theme.tx2)
                 }
                 if model.hosts.isEmpty {
                     VStack(spacing: 8) {
-                        Text("Нет хостов").foregroundStyle(Theme.tx2)
-                        Button("Добавить хост") { model.editor = EditorRequest(original: nil) }
+                        Text(L("Нет хостов")).foregroundStyle(Theme.tx2)
+                        Button(L("Добавить хост")) { model.editor = EditorRequest(original: nil) }
                             .buttonStyle(.relaya(.normal, height: 24))
                     }
                 }
@@ -62,16 +62,16 @@ struct SidebarView: View {
 
             Divider().overlay(Theme.line)
             VStack(spacing: 2) {
-                NavRow(label: "Ключи", systemImage: "key", meta: nil,
+                NavRow(label: L("Ключи"), systemImage: "key", meta: nil,
                        selected: model.screen == .keys) { model.screen = model.screen == .keys ? .hosts : .keys }
-                NavRow(label: "Туннели", systemImage: "arrow.left.arrow.right",
-                       meta: model.tunnels.activeCount > 0 ? "\(model.tunnels.activeCount) акт." : nil,
+                NavRow(label: L("Туннели"), systemImage: "arrow.left.arrow.right",
+                       meta: model.tunnels.activeCount > 0 ? L("%@ акт.", "\(model.tunnels.activeCount)") : nil,
                        selected: model.screen == .tunnels) { model.screen = model.screen == .tunnels ? .hosts : .tunnels }
-                NavRow(label: "Рабочие столы", systemImage: "display.2", meta: model.desktops.isEmpty ? nil : "\(model.desktops.count)",
+                NavRow(label: L("Рабочие столы"), systemImage: "display.2", meta: model.desktops.isEmpty ? nil : "\(model.desktops.count)",
                        selected: model.screen == .desktops) { model.screen = model.screen == .desktops ? .hosts : .desktops }
-                NavRow(label: "Сниппеты", systemImage: "text.badge.plus", meta: "\(model.snippets.count)",
+                NavRow(label: L("Сниппеты"), systemImage: "text.badge.plus", meta: "\(model.snippets.count)",
                        selected: model.screen == .snippets) { model.screen = model.screen == .snippets ? .hosts : .snippets }
-                NavRow(label: "Агенты (MCP)", systemImage: "sparkles", meta: nil,
+                NavRow(label: L("Агенты (MCP)"), systemImage: "sparkles", meta: nil,
                        selected: model.screen == .agents) { model.screen = model.screen == .agents ? .hosts : .agents }
             }
             .padding(8)
@@ -95,7 +95,7 @@ struct HostRow: View {
                     ForEach(host.tags.prefix(3), id: \.self) { tag in
                         Circle().fill(TagStyle.color(tag)).frame(width: 6, height: 6)
                             .help(tag)
-                            .accessibilityLabel("метка \(tag)")
+                            .accessibilityLabel(L("метка %@", "\(tag)"))
                     }
                 }
                 Text(host.subtitle)
@@ -109,7 +109,7 @@ struct HostRow: View {
                 Image(systemName: "lock")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.org)
-                    .help("Ключ не указан — вероятно, вход по паролю")
+                    .help(L("Ключ не указан — вероятно, вход по паролю"))
             }
             StatusDot(connected: connected)
         }
@@ -125,23 +125,23 @@ struct HostRow: View {
         .onTapGesture { model.selectedHostID = host.id; model.activeSessionID = nil; model.screen = .hosts }
         .simultaneousGesture(TapGesture(count: 2).onEnded { model.connect(host) })
         .contextMenu {
-            Button("Подключить") { model.connect(host) }
-            Button("Файлы (SFTP)…") { model.sftpHost = host }
-            Button("Изменить…") { model.editor = EditorRequest(original: host) }
-            Button("Настроить вход по ключу…") { model.keyWizard = KeyWizardRequest(host: host) }
-            Button("Определить ОС") { Task { await model.detectOS(for: host.alias) } }
+            Button(L("Подключить")) { model.connect(host) }
+            Button(L("Файлы (SFTP)…")) { model.sftpHost = host }
+            Button(L("Изменить…")) { model.editor = EditorRequest(original: host) }
+            Button(L("Настроить вход по ключу…")) { model.keyWizard = KeyWizardRequest(host: host) }
+            Button(L("Определить ОС")) { Task { await model.detectOS(for: host.alias) } }
             if host.os != .windows {
-                Menu("Вход по паролю на сервере") {
-                    Button("Разрешить") { model.setPasswordLogin(true, on: host) }
-                    Button("Запретить…") { model.pendingDisablePassword = host }
+                Menu(L("Вход по паролю на сервере")) {
+                    Button(L("Разрешить")) { model.setPasswordLogin(true, on: host) }
+                    Button(L("Запретить…")) { model.pendingDisablePassword = host }
                 }
             }
-            Button("Дублировать…") {
+            Button(L("Дублировать…")) {
                 var copy = host
                 copy.alias += "-copy"
                 model.editor = EditorRequest(original: nil, draft: copy)
             }
-            Menu("Переместить в группу") {
+            Menu(L("Переместить в группу")) {
                 ForEach(model.groups.filter { $0 != host.group }, id: \.self) { g in
                     Button(g) { model.move(host, toGroup: g) }
                 }
@@ -149,14 +149,14 @@ struct HostRow: View {
                     Button(AppModel.ungrouped) { model.move(host, toGroup: nil) }
                 }
                 Divider()
-                Button("Новая группа…") { model.newGroupFor = host }
+                Button(L("Новая группа…")) { model.newGroupFor = host }
             }
-            Button("Копировать ssh-команду") {
+            Button(L("Копировать ssh-команду")) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString("ssh \(host.alias)", forType: .string)
             }
             Divider()
-            Button("Удалить…", role: .destructive) { model.pendingDelete = host }
+            Button(L("Удалить…"), role: .destructive) { model.pendingDelete = host }
         }
     }
 }
@@ -182,7 +182,7 @@ private struct TagFilterBar: View {
                 .padding(.horizontal, 8)
             }
             if !model.tagFilter.isEmpty {
-                IconButton(systemImage: "xmark.circle.fill", label: "Сбросить фильтр меток", size: 22) {
+                IconButton(systemImage: "xmark.circle.fill", label: L("Сбросить фильтр меток"), size: 22) {
                     model.tagFilter = []
                 }
                 .padding(.trailing, 6)

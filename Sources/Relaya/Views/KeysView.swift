@@ -17,11 +17,11 @@ struct KeysView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Ключи").font(.system(size: 15, weight: .bold))
+                Text(L("Ключи")).font(.system(size: 15, weight: .bold))
                 Text("~/.ssh · \(keys.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
                 Spacer()
-                Button("Сгенерировать…") { generate = true }.buttonStyle(.relayaPrimary)
-                Button("Показать в Finder") {
+                Button(L("Сгенерировать…")) { generate = true }.buttonStyle(.relayaPrimary)
+                Button(L("Показать в Finder")) {
                     NSWorkspace.shared.open(SSHPaths.sshDirectory)
                 }
                 .buttonStyle(.relaya)
@@ -36,8 +36,8 @@ struct KeysView: View {
                     if loading { ProgressView() }
                     else if keys.isEmpty {
                         VStack(spacing: 8) {
-                            Text("В ~/.ssh нет ключей").foregroundStyle(Theme.tx2)
-                            Button("Сгенерировать ed25519") { generate = true }.buttonStyle(.relayaPrimary)
+                            Text(L("В ~/.ssh нет ключей")).foregroundStyle(Theme.tx2)
+                            Button(L("Сгенерировать ed25519")) { generate = true }.buttonStyle(.relayaPrimary)
                         }
                     }
                 }
@@ -64,21 +64,21 @@ struct KeysView: View {
                 .environment(model)
         }
         .sheet(item: $askPassphrase) { key in
-            PasswordSheet(title: "Passphrase для \(key.name)", saveLabel: "Сохранить в Keychain macOS") { phrase, _ in
+            PasswordSheet(title: L("Passphrase для %@", "\(key.name)"), saveLabel: L("Сохранить в Keychain macOS")) { phrase, _ in
                 Task { await addToAgent(key, passphrase: phrase) }
             }
         }
-        .confirmationDialog("Переместить \(confirmDelete?.name ?? "") в Корзину?",
+        .confirmationDialog(L("Переместить %@ в Корзину?", "\(confirmDelete?.name ?? "")"),
                             isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
                             presenting: confirmDelete) { key in
-            Button("В Корзину", role: .destructive) { trash(key) }
+            Button(L("В Корзину"), role: .destructive) { trash(key) }
         } message: { key in
             let names = hosts(using: key).map(\.alias)
             Text(names.isEmpty
-                 ? "Ключ не указан ни у одного хоста в ~/.ssh/config. Файлы можно будет восстановить из Корзины."
-                 : "Перестанут подключаться по этому ключу: \(names.joined(separator: ", ")). Файлы можно будет восстановить из Корзины.")
+                 ? L("Ключ не указан ни у одного хоста в ~/.ssh/config. Файлы можно будет восстановить из Корзины.")
+                 : L("Перестанут подключаться по этому ключу: %@. Файлы можно будет восстановить из Корзины.", "\(names.joined(separator: ", "))"))
         }
-        .alert("Ключи", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+        .alert(L("Ключи"), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(message ?? "") }
     }
@@ -86,14 +86,14 @@ struct KeysView: View {
     // Отдельно от body: иначе компилятор не успевает вывести типы всего экрана.
     private var keysTable: some View {
         Table(keys, selection: $selection) {
-            TableColumn("Имя файла") { (k: SSHKey) in Text(k.name).font(.system(size: 12.5, design: .monospaced)) }
-            TableColumn("Тип") { (k: SSHKey) in Text(k.type) }.width(70)
-            TableColumn("Отпечаток") { (k: SSHKey) in
+            TableColumn(L("Имя файла")) { (k: SSHKey) in Text(k.name).font(.system(size: 12.5, design: .monospaced)) }
+            TableColumn(L("Тип")) { (k: SSHKey) in Text(k.type) }.width(70)
+            TableColumn(L("Отпечаток")) { (k: SSHKey) in
                 Text(k.fingerprint).font(.system(size: 11.5, design: .monospaced)).lineLimit(1).truncationMode(.middle)
             }
-            TableColumn("Passphrase") { (k: SSHKey) in Text(k.hasPassphrase ? "да" : "нет") }.width(80)
-            TableColumn("В агенте ⓘ") { (k: SSHKey) in AgentCell(inAgent: inAgent.contains(k.fingerprint)) }.width(80)
-            TableColumn("Хосты") { (k: SSHKey) in Text("\(hosts(using: k).count)") }.width(50)
+            TableColumn("Passphrase") { (k: SSHKey) in Text(k.hasPassphrase ? L("да") : L("нет")) }.width(80)
+            TableColumn(L("В агенте ⓘ")) { (k: SSHKey) in AgentCell(inAgent: inAgent.contains(k.fingerprint)) }.width(80)
+            TableColumn(L("Хосты")) { (k: SSHKey) in Text("\(hosts(using: k).count)") }.width(50)
         }
         // Заголовки Table не показывают свои подсказки — даём её всей таблице, ячейкам «В агенте» — свою.
         .help(Self.agentHelp)
@@ -105,14 +105,14 @@ struct KeysView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(key.name).font(.system(size: 15, weight: .bold))
                     Text([key.type,
-                          key.created.map { "создан \($0.formatted(date: .abbreviated, time: .omitted))" },
-                          key.hasPassphrase ? "с passphrase" : "без passphrase"]
+                          key.created.map { L("создан %@", "\($0.formatted(date: .abbreviated, time: .omitted))") },
+                          key.hasPassphrase ? L("с passphrase") : L("без passphrase")]
                         .compactMap { $0 }.joined(separator: " · "))
                         .font(.system(size: 12)).foregroundStyle(Theme.tx2)
                 }
 
-                caption("Публичный ключ") {
-                    Button("Копировать") {
+                caption(L("Публичный ключ")) {
+                    Button(L("Копировать")) {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(key.publicKey, forType: .string)
                     }
@@ -126,13 +126,13 @@ struct KeysView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.bg2, in: .rect(cornerRadius: 8, style: .continuous))
 
-                caption("Отпечаток") { EmptyView() }
+                caption(L("Отпечаток")) { EmptyView() }
                 Text(key.fingerprint).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
 
                 let using = hosts(using: key)
-                caption("Используется хостами · \(using.count)") { EmptyView() }
+                caption(L("Используется хостами · %@", "\(using.count)")) { EmptyView() }
                 if using.isEmpty {
-                    Text("Ни один хост не указывает этот ключ в IdentityFile.")
+                    Text(L("Ни один хост не указывает этот ключ в IdentityFile."))
                         .font(.system(size: 12)).foregroundStyle(Theme.tx2)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
@@ -143,26 +143,26 @@ struct KeysView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Button("Разложить на хосты…") { deploy = key }.buttonStyle(.relayaPrimary)
+                    Button(L("Разложить на хосты…")) { deploy = key }.buttonStyle(.relayaPrimary)
                     HStack(spacing: 6) {
                         if inAgent.contains(key.fingerprint) {
-                            Label("В агенте", systemImage: "checkmark.circle.fill")
+                            Label(L("В агенте"), systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(Theme.grn)
                                 .help(Self.agentHelp)
-                            Button("Убрать из агента") { Task { await removeFromAgent(key) } }
+                            Button(L("Убрать из агента")) { Task { await removeFromAgent(key) } }
                                 .buttonStyle(.relaya)
-                                .help("ssh-add -d: выгрузить ключ из памяти ssh-agent. Файлы ключа и passphrase в Keychain остаются.")
+                                .help(L("ssh-add -d: выгрузить ключ из памяти ssh-agent. Файлы ключа и passphrase в Keychain остаются."))
                         } else {
-                            Button("Добавить в агент") {
+                            Button(L("Добавить в агент")) {
                                 if key.hasPassphrase { askPassphrase = key } else { Task { await addToAgent(key, passphrase: nil) } }
                             }
                             .buttonStyle(.relaya)
                             .help(Self.agentHelp)
                         }
                     }
-                    Button("В Корзину…", role: .destructive) { confirmDelete = key }.buttonStyle(.relaya(.ghost))
+                    Button(L("В Корзину…"), role: .destructive) { confirmDelete = key }.buttonStyle(.relaya(.ghost))
                 }
-                Text("При удалении покажем, какие хосты перестанут подключаться.")
+                Text(L("При удалении покажем, какие хосты перестанут подключаться."))
                     .font(.system(size: 11)).foregroundStyle(Theme.tx2)
             }
             .padding(16)
@@ -191,11 +191,11 @@ struct KeysView: View {
         if selection == nil { selection = keys.first?.id }
     }
 
-    static let agentHelp = """
+    static let agentHelp = L("""
     ssh-agent — системная служба macOS, которая держит ключи расшифрованными в памяти.
-    Ключ «в агенте»: ssh использует его без ввода passphrase (она сохраняется в Keychain),     и его можно пробросить на сервер через ForwardAgent.
-    Минус: если в агенте много ключей, ssh перебирает их все, и сервер может оборвать вход     («Too many authentication failures») раньше, чем спросит пароль.
-    """
+    Ключ «в агенте»: ssh использует его без ввода passphrase (она сохраняется в Keychain), и его можно пробросить на сервер через ForwardAgent.
+    Минус: если в агенте много ключей, ssh перебирает их все, и сервер может оборвать вход («Too many authentication failures») раньше, чем спросит пароль.
+    """)
 
     private func removeFromAgent(_ key: SSHKey) async {
         do {
@@ -241,7 +241,7 @@ private struct AgentCell: View {
     let inAgent: Bool
 
     var body: some View {
-        Text(inAgent ? "да" : "нет")
+        Text(inAgent ? L("да") : L("нет"))
             .foregroundStyle(inAgent ? Theme.grn : Theme.tx2)
             .help(KeysView.agentHelp)
     }
@@ -260,23 +260,23 @@ private struct GenerateKeySheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Новый ключ ed25519").font(.system(size: 15, weight: .bold))
-            LabeledContent("Имя файла") {
+            Text(L("Новый ключ ed25519")).font(.system(size: 15, weight: .bold))
+            LabeledContent(L("Имя файла")) {
                 HStack(spacing: 2) {
                     Text("~/.ssh/").foregroundStyle(Theme.tx2)
                     TextField("", text: $name).textFieldStyle(.roundedBorder).frame(width: 220)
                 }
                 .font(.system(size: 12.5, design: .monospaced))
             }
-            LabeledContent("Комментарий") { TextField("", text: $comment).textFieldStyle(.roundedBorder).frame(width: 260) }
+            LabeledContent(L("Комментарий")) { TextField("", text: $comment).textFieldStyle(.roundedBorder).frame(width: 260) }
             LabeledContent("Passphrase") {
-                SecureField("необязательно", text: $passphrase).textFieldStyle(.roundedBorder).frame(width: 260)
+                SecureField(L("необязательно"), text: $passphrase).textFieldStyle(.roundedBorder).frame(width: 260)
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Theme.red) }
             HStack {
                 Spacer()
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Создать") { Task { await create() } }
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Создать")) { Task { await create() } }
                     .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
                     .disabled(name.isEmpty || name.contains("/") || working)
             }
@@ -323,8 +323,8 @@ private struct DeployKeySheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Разложить \(key.name) на хосты").font(.system(size: 15, weight: .bold))
-            Text("Ключ добавится в ~/.ssh/authorized_keys на сервере. Для входа используется сохранённый в Keychain пароль или уже настроенный ключ.")
+            Text(L("Разложить %@ на хосты", "\(key.name)")).font(.system(size: 15, weight: .bold))
+            Text(L("Ключ добавится в ~/.ssh/authorized_keys на сервере. Для входа используется сохранённый в Keychain пароль или уже настроенный ключ."))
                 .font(.system(size: 12)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
             List(model.hosts) { h in
                 HStack {
@@ -347,13 +347,13 @@ private struct DeployKeySheet: View {
                 }
             }
             .frame(height: 240)
-            Toggle("Прописать IdentityFile в ~/.ssh/config (после успешной проверки)", isOn: $writeConfig)
+            Toggle(L("Прописать IdentityFile в ~/.ssh/config (после успешной проверки)"), isOn: $writeConfig)
             failures
             HStack {
                 Spacer()
-                Button(results.isEmpty ? "Отмена" : "Закрыть") { done(); dismiss() }
+                Button(results.isEmpty ? L("Отмена") : L("Закрыть")) { done(); dismiss() }
                     .buttonStyle(.relaya).keyboardShortcut(.cancelAction).disabled(working)
-                Button("Разложить") { Task { await run() } }
+                Button(L("Разложить")) { Task { await run() } }
                     .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
                     .disabled(chosen.isEmpty || working)
             }

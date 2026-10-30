@@ -36,10 +36,10 @@ enum Theme {
 
     /// Палитра «Цвет хоста» из редактора.
     static let hostColors: [(name: String, label: String, color: Color)] = [
-        ("blue", "Синий", Color(hex: 0x0A7AFF)),
-        ("orange", "Оранжевый", Color(hex: 0xF08A00)),
-        ("purple", "Фиолетовый", Color(hex: 0x8E4EC6)),
-        ("gray", "Серый", Color(hex: 0x8E8E93)),
+        ("blue", L("Синий"), Color(hex: 0x0A7AFF)),
+        ("orange", L("Оранжевый"), Color(hex: 0xF08A00)),
+        ("purple", L("Фиолетовый"), Color(hex: 0x8E4EC6)),
+        ("gray", L("Серый"), Color(hex: 0x8E8E93)),
     ]
 
     static func dynamic(_ light: UInt32, _ dark: UInt32, lightAlpha: Double = 1, darkAlpha: Double = 1) -> Color {
@@ -103,7 +103,7 @@ struct TagChip: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.tx2)
-                .accessibilityLabel("Убрать метку \(tag)")
+                .accessibilityLabel(L("Убрать метку %@", "\(tag)"))
             }
         }
         .font(.system(size: 11, weight: selected ? .semibold : .regular))
@@ -186,6 +186,6 @@ struct StatusDot: View {
             .strokeBorder(connected ? Theme.grn : Theme.tx2, lineWidth: 1.5)
             .background(Circle().fill(connected ? Theme.grn : .clear))
             .frame(width: 8, height: 8)
-            .accessibilityLabel(connected ? "подключён" : "не подключён")
+            .accessibilityLabel(connected ? L("подключён") : L("не подключён"))
     }
 }

@@ -30,7 +30,7 @@ struct HostEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if let block = existingBlock, block.isShared {
-                        Banner(text: "Хост объявлен вместе с другими алиасами (Host a b). Чтобы не разорвать блок, отредактируйте ~/.ssh/config вручную.",
+                        Banner(text: L("Хост объявлен вместе с другими алиасами (Host a b). Чтобы не разорвать блок, отредактируйте ~/.ssh/config вручную."),
                                color: Theme.org, tint: Theme.orgTint)
                     }
                     basics
@@ -56,10 +56,10 @@ struct HostEditorView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text(original == nil ? "Новый хост" : "Изменить хост")
+            Text(original == nil ? L("Новый хост") : L("Изменить хост"))
                 .font(.system(size: 17, weight: .bold))
             Spacer()
-            Picker("Протокол", selection: .constant("SSH")) {
+            Picker(L("Протокол"), selection: .constant("SSH")) {
                 Text("SSH").tag("SSH")
                 Text("VNC").tag("VNC")
                 Text("RDP").tag("RDP")
@@ -68,7 +68,7 @@ struct HostEditorView: View {
             .labelsHidden()
             .frame(width: 170)
             .disabled(true)
-            .help("VNC и RDP появятся в v0.3–v0.4")
+            .help(L("VNC и RDP появятся в v0.3–v0.4"))
         }
         .padding(.horizontal, 24)
         .padding(.top, 18)
@@ -76,22 +76,22 @@ struct HostEditorView: View {
     }
 
     private var basics: some View {
-        FormGroup(title: "Основное") {
-            FieldRow("Алиас (Host)") {
+        FormGroup(title: L("Основное")) {
+            FieldRow(L("Алиас (Host)")) {
                 MonoField(text: $host.alias, placeholder: "staging-web", width: 300)
             }
-            FieldRow("Адрес (HostName)") {
+            FieldRow(L("Адрес (HostName)")) {
                 MonoField(text: optional(\.hostName), placeholder: "staging.example.com", width: 300)
             }
-            FieldRow("Порт") {
+            FieldRow(L("Порт")) {
                 MonoField(text: $portText, placeholder: "22", width: 80)
             }
-            FieldRow("Пользователь") {
+            FieldRow(L("Пользователь")) {
                 MonoField(text: optional(\.user), placeholder: "ubuntu", width: 300)
             }
-            FieldRow("Группа") {
+            FieldRow(L("Группа")) {
                 HStack(spacing: 4) {
-                    MonoField(text: optional(\.group), placeholder: "без группы", width: 270)
+                    MonoField(text: optional(\.group), placeholder: L("без группы"), width: 270)
                     Menu {
                         ForEach(model.groups, id: \.self) { g in
                             Button(g) { host.group = g }
@@ -105,12 +105,12 @@ struct HostEditorView: View {
                     .disabled(model.groups.isEmpty)
                 }
             }
-            FieldRow("Метки") {
+            FieldRow(L("Метки")) {
                 TagEditor(tags: $host.tags, suggestions: model.allTags)
             }
-            FieldRow("Цвет", last: true) {
+            FieldRow(L("Цвет"), last: true) {
                 HStack(spacing: 8) {
-                    ColorDot(color: nil, label: "Без цвета", selected: host.color == nil) { host.color = nil }
+                    ColorDot(color: nil, label: L("Без цвета"), selected: host.color == nil) { host.color = nil }
                     ForEach(Theme.hostColors, id: \.name) { c in
                         ColorDot(color: c.color, label: c.label, selected: host.color == c.name) { host.color = c.name }
                     }
@@ -120,32 +120,32 @@ struct HostEditorView: View {
     }
 
     private var auth: some View {
-        FormGroup(title: "Аутентификация") {
-            FieldRow("Ключ") {
-                Picker("Ключ", selection: optional(\.identityFile)) {
-                    Text("по умолчанию / пароль").tag("")
+        FormGroup(title: L("Аутентификация")) {
+            FieldRow(L("Ключ")) {
+                Picker(L("Ключ"), selection: optional(\.identityFile)) {
+                    Text(L("по умолчанию / пароль")).tag("")
                     ForEach(keyFiles, id: \.self) { Text($0).tag($0) }
                     if let f = host.identityFile, !f.isEmpty, !keyFiles.contains(f) { Text(f).tag(f) }
                 }
                 .labelsHidden()
                 .frame(width: 300)
             }
-            FieldRow("Хранить пароль в Keychain") {
+            FieldRow(L("Хранить пароль в Keychain")) {
                 Toggle("", isOn: $storeInKeychain).labelsHidden().toggleStyle(.checkbox)
-                    .help("Включено — Relaya сама подставит пароль при подключении. Выключено — пароль не сохраняется, ssh спросит его в терминале.")
+                    .help(L("Включено — Relaya сама подставит пароль при подключении. Выключено — пароль не сохраняется, ssh спросит его в терминале."))
             }
-            FieldRow("Пароль") {
+            FieldRow(L("Пароль")) {
                 HStack(spacing: 6) {
                     Text(passwordStatus)
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.tx2)
-                    SecureField(hasSavedPassword ? "••••••••" : "не сохранён", text: $password)
+                    SecureField(hasSavedPassword ? "••••••••" : L("не сохранён"), text: $password)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 160)
                         .disabled(!storeInKeychain)
                         .onChange(of: password) { passwordEdited = true }
                     if hasSavedPassword, let original {
-                        Button("Удалить из Keychain") {
+                        Button(L("Удалить из Keychain")) {
                             do {
                                 try model.keychain.deletePassword(for: original.keychainAccount)
                                 hasSavedPassword = false
@@ -159,17 +159,17 @@ struct HostEditorView: View {
                     }
                 }
             }
-            FieldRow("Агент-форвардинг", last: true) {
+            FieldRow(L("Агент-форвардинг"), last: true) {
                 Toggle("", isOn: flag(\.forwardAgent)).labelsHidden().toggleStyle(.checkbox)
             }
         }
     }
 
     private var network: some View {
-        FormGroup(title: "Сеть") {
+        FormGroup(title: L("Сеть")) {
             FieldRow("ProxyJump") {
                 Picker("ProxyJump", selection: optional(\.proxyJump)) {
-                    Text("нет").tag("")
+                    Text(L("нет")).tag("")
                     ForEach(model.hosts.filter { $0.alias != original?.alias }) { h in
                         Text("\(h.alias) (\(h.subtitle))").tag(h.alias)
                     }
@@ -183,10 +183,10 @@ struct HostEditorView: View {
             FieldRow("Keepalive") {
                 HStack(spacing: 6) {
                     MonoField(text: $keepAliveText, placeholder: "—", width: 60)
-                    Text("сек").font(.system(size: 12)).foregroundStyle(Theme.tx2)
+                    Text(L("сек")).font(.system(size: 12)).foregroundStyle(Theme.tx2)
                 }
             }
-            FieldRow("Сжатие", last: true) {
+            FieldRow(L("Сжатие"), last: true) {
                 Toggle("", isOn: flag(\.compression)).labelsHidden().toggleStyle(.checkbox)
             }
         }
@@ -203,11 +203,11 @@ struct HostEditorView: View {
                 HStack(spacing: 8) {
                     Image(systemName: showPreview ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
-                    Text("Превью ~/.ssh/config").fontWeight(.bold)
+                    Text(L("Превью ~/.ssh/config")).fontWeight(.bold)
                     Spacer()
                     if added > 0 { Text("+\(added)").foregroundStyle(Theme.grn) }
                     if removed > 0 { Text("−\(removed)").foregroundStyle(Theme.red) }
-                    if added + removed == 0 { Text("без изменений").foregroundStyle(Theme.tx2) }
+                    if added + removed == 0 { Text(L("без изменений")).foregroundStyle(Theme.tx2) }
                 }
                 .font(.system(size: 13))
                 .padding(.horizontal, 12)
@@ -245,10 +245,10 @@ struct HostEditorView: View {
                     .foregroundStyle(Theme.tx2)
             }
             Spacer()
-            Button("Отмена") { dismiss() }
+            Button(L("Отмена")) { dismiss() }
                 .buttonStyle(.relaya)
                 .keyboardShortcut(.cancelAction)
-            Button("Сохранить") { save() }
+            Button(L("Сохранить")) { save() }
                 .buttonStyle(.relayaPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(validationError != nil || existingBlock?.isShared == true)
@@ -269,8 +269,8 @@ struct HostEditorView: View {
     }
 
     private var locationText: String {
-        if let block = existingBlock { return "~/.ssh/config : строка \(block.hostLine + 1)" }
-        return "~/.ssh/config : в конец файла"
+        if let block = existingBlock { return L("~/.ssh/config : строка %@", "\(block.hostLine + 1)") }
+        return L("~/.ssh/config : в конец файла")
     }
 
     /// Хост из полей формы в том виде, в каком он попадёт в конфиг.
@@ -297,17 +297,17 @@ struct HostEditorView: View {
 
     private var validationError: String? {
         let h = normalized
-        if h.alias.isEmpty { return "Укажите алиас" }
+        if h.alias.isEmpty { return L("Укажите алиас") }
         if h.alias.contains(where: \.isWhitespace) || SSHConfigParser.isPattern(h.alias) {
-            return "Алиас без пробелов и символов * ? !"
+            return L("Алиас без пробелов и символов * ? !")
         }
         if h.alias != original?.alias, model.hosts.contains(where: { $0.alias == h.alias }) {
-            return "Хост «\(h.alias)» уже есть"
+            return L("Хост «%@» уже есть", "\(h.alias)")
         }
         let p = portText.trimmingCharacters(in: .whitespaces)
-        if !p.isEmpty, !(1...65535).contains(Int(p) ?? 0) { return "Порт — число от 1 до 65535" }
+        if !p.isEmpty, !(1...65535).contains(Int(p) ?? 0) { return L("Порт — число от 1 до 65535") }
         let k = keepAliveText.trimmingCharacters(in: .whitespaces)
-        if !k.isEmpty, (Int(k) ?? -1) < 0 { return "Keepalive — число секунд" }
+        if !k.isEmpty, (Int(k) ?? -1) < 0 { return L("Keepalive — число секунд") }
         return nil
     }
 
@@ -329,9 +329,9 @@ struct HostEditorView: View {
     }
 
     private var passwordStatus: String {
-        if !storeInKeychain { return hasSavedPassword ? "удалим из Keychain" : "не храним" }
-        if passwordEdited, !password.isEmpty { return "сохраним в Keychain" }
-        return hasSavedPassword ? "в Keychain" : ""
+        if !storeInKeychain { return hasSavedPassword ? L("удалим из Keychain") : L("не храним") }
+        if passwordEdited, !password.isEmpty { return L("сохраним в Keychain") }
+        return hasSavedPassword ? L("в Keychain") : ""
     }
 
     private func save() {
@@ -437,7 +437,7 @@ private struct TagEditor: View {
                 }
             }
             HStack(spacing: 4) {
-                TextField("prod, личное, db…", text: $input)
+                TextField(L("prod, личное, db…"), text: $input)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12.5))
                     .frame(width: 270)
@@ -456,7 +456,7 @@ private struct TagEditor: View {
                 .menuIndicator(.hidden)
                 .frame(width: 26)
                 .disabled(available.isEmpty)
-                .help("Существующие метки")
+                .help(L("Существующие метки"))
             }
         }
     }

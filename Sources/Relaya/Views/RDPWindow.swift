@@ -12,7 +12,7 @@ struct RDPWindow: View {
             if let session {
                 RDPContent(session: session)
             } else {
-                Text("Подключение не найдено").foregroundStyle(Theme.tx2)
+                Text(L("Подключение не найдено")).foregroundStyle(Theme.tx2)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -44,7 +44,7 @@ private struct RDPContent: View {
             case .idle, .tunneling, .connecting:
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.large)
-                    Text(session.phase == .tunneling ? "Поднимаю SSH-туннель…" : "Подключаюсь к \(session.desktop.summary)…")
+                    Text(session.phase == .tunneling ? L("Поднимаю SSH-туннель…") : L("Подключаюсь к %@…", "\(session.desktop.summary)"))
                         .foregroundStyle(.white.opacity(0.8))
                 }
             case .connected:
@@ -54,15 +54,15 @@ private struct RDPContent: View {
             case .disconnected(let error):
                 VStack(spacing: 12) {
                     Image(systemName: "pc").font(.system(size: 36)).foregroundStyle(.white.opacity(0.7))
-                    Text("Отключено").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                    Text(L("Отключено")).font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
                     if let error {
                         Text(error).foregroundStyle(.white.opacity(0.75)).multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 460)
                     }
                     HStack {
-                        Button("Подключить снова") { Task { await session.start() } }.buttonStyle(.relayaPrimary)
-                        if error?.contains("Сертификат") == true {
-                            Button("Сбросить доверие") { session.forgetCertificate(); Task { await session.start() } }
+                        Button(L("Подключить снова")) { Task { await session.start() } }.buttonStyle(.relayaPrimary)
+                        if session.certificateMismatch {
+                            Button(L("Сбросить доверие")) { session.forgetCertificate(); Task { await session.start() } }
                                 .buttonStyle(.relaya)
                         }
                     }
@@ -75,11 +75,11 @@ private struct RDPContent: View {
         .toolbar {
             ToolbarItem {
                 if let cert = session.certificate {
-                    Image(systemName: "lock.shield").help("Сертификат сервера SHA-256: \(cert)")
+                    Image(systemName: "lock.shield").help(L("Сертификат сервера SHA-256: %@", "\(cert)"))
                 }
             }
             ToolbarItem {
-                Button { session.disconnect() } label: { Label("Отключить", systemImage: "xmark.circle") }
+                Button { session.disconnect() } label: { Label(L("Отключить"), systemImage: "xmark.circle") }
                     .disabled(session.phase != .connected && session.phase != .connecting)
             }
         }
@@ -88,16 +88,16 @@ private struct RDPContent: View {
 
     private var credentialsForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Вход на \(session.desktop.name.isEmpty ? session.desktop.address : session.desktop.name)")
+            Text(L("Вход на %@", "\(session.desktop.name.isEmpty ? session.desktop.address : session.desktop.name)"))
                 .font(.system(size: 15, weight: .bold))
             Text(session.desktop.summary).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
-            TextField("Пользователь (или DOMAIN\\user)", text: $user).textFieldStyle(.roundedBorder)
-            SecureField("Пароль", text: $password).textFieldStyle(.roundedBorder)
+            TextField(L("Пользователь (или DOMAIN\\user)"), text: $user).textFieldStyle(.roundedBorder)
+            SecureField(L("Пароль"), text: $password).textFieldStyle(.roundedBorder)
                 .onSubmit(submit)
-            Toggle("Сохранить пароль в Keychain", isOn: $save)
+            Toggle(L("Сохранить пароль в Keychain"), isOn: $save)
             HStack {
                 Spacer()
-                Button("Войти", action: submit).buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
+                Button(L("Войти"), action: submit).buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
                     .disabled(user.isEmpty || password.isEmpty)
             }
         }

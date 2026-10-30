@@ -27,21 +27,21 @@ struct MainView: View {
                 Button {
                     model.editor = EditorRequest(original: nil)
                 } label: {
-                    Label("Хост", systemImage: "plus")
+                    Label(L("Хост"), systemImage: "plus")
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(.relaya)
-                .help("Новый хост (⇧⌘N)")
+                .help(L("Новый хост (⇧⌘N)"))
 
                 Button {
                     if let host = model.selectedHost { model.connect(host) }
                 } label: {
-                    Label("Подключить", systemImage: "bolt.fill")
+                    Label(L("Подключить"), systemImage: "bolt.fill")
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(.relayaPrimary)
                 .disabled(model.selectedHost == nil)
-                .help("Подключить (⌘T)")
+                .help(L("Подключить (⌘T)"))
             }
         }
         .toolbarBackground(Theme.bar, for: .windowToolbar)
@@ -65,37 +65,37 @@ struct MainView: View {
                 .environment(model)
         }
         .confirmationDialog(
-            "Удалить хост «\(model.pendingDelete?.alias ?? "")»?",
+            L("Удалить хост «%@»?", "\(model.pendingDelete?.alias ?? "")"),
             isPresented: Binding(get: { model.pendingDelete != nil }, set: { if !$0 { model.pendingDelete = nil } }),
             presenting: model.pendingDelete
         ) { host in
-            Button("Удалить из ~/.ssh/config", role: .destructive) { model.delete(host) }
+            Button(L("Удалить из ~/.ssh/config"), role: .destructive) { model.delete(host) }
         } message: { _ in
-            Text("Блок Host будет удалён из ~/.ssh/config. Копия прежнего файла сохранится в config.bak.")
+            Text(L("Блок Host будет удалён из ~/.ssh/config. Копия прежнего файла сохранится в config.bak."))
         }
         .confirmationDialog(
-            "Запретить вход по паролю на «\(model.pendingDisablePassword?.alias ?? "")»?",
+            L("Запретить вход по паролю на «%@»?", "\(model.pendingDisablePassword?.alias ?? "")"),
             isPresented: Binding(get: { model.pendingDisablePassword != nil },
                                  set: { if !$0 { model.pendingDisablePassword = nil } }),
             presenting: model.pendingDisablePassword
         ) { host in
-            Button("Запретить", role: .destructive) { model.setPasswordLogin(false, on: host) }
+            Button(L("Запретить"), role: .destructive) { model.setPasswordLogin(false, on: host) }
         } message: { host in
             Text(host.usesKey
-                 ? "Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу \(host.identityFile ?? "")."
-                 : "У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу.")
+                 ? L("Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу %@.", "\(host.identityFile ?? "")")
+                 : L("У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу."))
         }
         .alert(
-            "Новая группа",
+            L("Новая группа"),
             isPresented: Binding(get: { model.newGroupFor != nil }, set: { if !$0 { model.newGroupFor = nil } }),
             presenting: model.newGroupFor
         ) { host in
             NewGroupActions(host: host)
         } message: { host in
-            Text("Хост «\(host.alias)» будет перенесён в неё.")
+            Text(L("Хост «%@» будет перенесён в неё.", "\(host.alias)"))
         }
         .alert(
-            "Не получилось",
+            L("Не получилось"),
             isPresented: Binding(get: { model.alertMessage != nil }, set: { if !$0 { model.alertMessage = nil } })
         ) {
             Button("OK", role: .cancel) {}
@@ -134,10 +134,10 @@ private struct NewGroupActions: View {
     @State private var name = ""
 
     var body: some View {
-        TextField("Например: личные, работа", text: $name)
-        Button("Создать") { model.move(host, toGroup: name) }
+        TextField(L("Например: личные, работа"), text: $name)
+        Button(L("Создать")) { model.move(host, toGroup: name) }
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-        Button("Отмена", role: .cancel) {}
+        Button(L("Отмена"), role: .cancel) {}
     }
 }
 
@@ -148,7 +148,7 @@ private struct SearchField: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
-            TextField("Хосты, действия, сниппеты…", text: $text)
+            TextField(L("Хосты, действия, сниппеты…"), text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.tx)

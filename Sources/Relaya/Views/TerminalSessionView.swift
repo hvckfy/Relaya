@@ -15,7 +15,7 @@ struct SessionTabBar: View {
                     }
                 }
             }
-            IconButton(systemImage: "plus", label: "Новая вкладка", size: 34) {
+            IconButton(systemImage: "plus", label: L("Новая вкладка"), size: 34) {
                 if let host = model.activeSession?.host ?? model.selectedHost { model.connect(host) }
             }
             Spacer(minLength: 0)
@@ -42,7 +42,7 @@ private struct SessionTab: View {
                 .fontWeight(active ? .semibold : .regular)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            IconButton(systemImage: "xmark", label: "Закрыть вкладку \(session.host.alias)", size: 20) {
+            IconButton(systemImage: "xmark", label: L("Закрыть вкладку %@", "\(session.host.alias)"), size: 20) {
                 model.close(session)
             }
         }

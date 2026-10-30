@@ -11,10 +11,10 @@ struct TunnelsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("Туннели").font(.system(size: 15, weight: .bold))
+                Text(L("Туннели")).font(.system(size: 15, weight: .bold))
                 Text("\(manager.tunnels.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
                 Spacer()
-                Button("Новый туннель…") {
+                Button(L("Новый туннель…")) {
                     editing = Tunnel(name: "", hostAlias: model.selectedHost?.alias ?? model.hosts.first?.alias ?? "",
                                      listenPort: 8080, targetHost: "localhost", targetPort: 80)
                 }
@@ -28,8 +28,8 @@ struct TunnelsView: View {
             if manager.tunnels.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "arrow.left.arrow.right").font(.system(size: 32, weight: .light)).foregroundStyle(Theme.tx2)
-                    Text("Нет туннелей").font(.system(size: 15, weight: .bold))
-                    Text("Например, база данных с сервера на localhost:15432\nили SOCKS-прокси через ваш VPS.")
+                    Text(L("Нет туннелей")).font(.system(size: 15, weight: .bold))
+                    Text(L("Например, база данных с сервера на localhost:15432\nили SOCKS-прокси через ваш VPS."))
                         .multilineTextAlignment(.center).foregroundStyle(Theme.tx2)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -69,7 +69,7 @@ private struct TunnelRow: View {
                         .padding(.horizontal, 6).frame(height: 18)
                         .background(Theme.sel, in: .capsule)
                     if tunnel.autoStart {
-                        Text("автозапуск").font(.system(size: 11)).foregroundStyle(Theme.tx2)
+                        Text(L("автозапуск")).font(.system(size: 11)).foregroundStyle(Theme.tx2)
                     }
                 }
                 Text(tunnel.summary).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
@@ -81,23 +81,23 @@ private struct TunnelRow: View {
             Spacer()
             switch status {
             case .running, .starting:
-                Button("Остановить") { model.tunnels.stop(tunnel.id) }.buttonStyle(.relaya)
+                Button(L("Остановить")) { model.tunnels.stop(tunnel.id) }.buttonStyle(.relaya)
             case .stopped, .failed:
-                Button("Запустить") { model.tunnels.start(tunnel, hosts: model.hosts) }.buttonStyle(.relayaPrimary)
+                Button(L("Запустить")) { model.tunnels.start(tunnel, hosts: model.hosts) }.buttonStyle(.relayaPrimary)
             }
             Menu {
-                Button("Изменить…") { editing = tunnel }
+                Button(L("Изменить…")) { editing = tunnel }
                 if tunnel.kind == .local {
-                    Button("Открыть http://localhost:\(tunnel.listenPort)") {
+                    Button(L("Открыть http://localhost:%@", "\(tunnel.listenPort)")) {
                         if let url = URL(string: "http://localhost:\(tunnel.listenPort)") { NSWorkspace.shared.open(url) }
                     }
                 }
-                Button("Копировать ssh-команду") {
+                Button(L("Копировать ssh-команду")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString("ssh -N \(tunnel.kind.flag) \(tunnel.spec) \(tunnel.hostAlias)", forType: .string)
                 }
                 Divider()
-                Button("Удалить", role: .destructive) { model.tunnels.delete(tunnel.id) }
+                Button(L("Удалить"), role: .destructive) { model.tunnels.delete(tunnel.id) }
             } label: {
                 Image(systemName: "ellipsis")
             }
@@ -129,24 +129,24 @@ private struct TunnelEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(model.tunnels.tunnels.contains { $0.id == tunnel.id } ? "Изменить туннель" : "Новый туннель")
+            Text(model.tunnels.tunnels.contains { $0.id == tunnel.id } ? L("Изменить туннель") : L("Новый туннель"))
                 .font(.system(size: 17, weight: .bold))
             Form {
-                TextField("Название", text: $tunnel.name, prompt: Text("например, Postgres prod"))
-                Picker("Хост", selection: $tunnel.hostAlias) {
+                TextField(L("Название"), text: $tunnel.name, prompt: Text(L("например, Postgres prod")))
+                Picker(L("Хост"), selection: $tunnel.hostAlias) {
                     ForEach(model.hosts) { Text("\($0.alias) — \($0.subtitle)").tag($0.alias) }
                 }
-                Picker("Тип", selection: $tunnel.kind) {
+                Picker(L("Тип"), selection: $tunnel.kind) {
                     ForEach(Tunnel.Kind.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                TextField(tunnel.kind == .remote ? "Порт на сервере" : "Локальный порт", text: $listen)
+                TextField(tunnel.kind == .remote ? L("Порт на сервере") : L("Локальный порт"), text: $listen)
                 if tunnel.kind != .dynamic {
-                    TextField(tunnel.kind == .remote ? "Адрес на этом Mac" : "Адрес (с точки зрения сервера)",
+                    TextField(tunnel.kind == .remote ? L("Адрес на этом Mac") : L("Адрес (с точки зрения сервера)"),
                               text: $tunnel.targetHost)
-                    TextField("Порт назначения", text: $target)
+                    TextField(L("Порт назначения"), text: $target)
                 }
-                Toggle("Запускать вместе с Relaya", isOn: $tunnel.autoStart)
+                Toggle(L("Запускать вместе с Relaya"), isOn: $tunnel.autoStart)
                 Text(preview.summary).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
             }
             .formStyle(.grouped)
@@ -155,8 +155,8 @@ private struct TunnelEditor: View {
             }
             HStack {
                 Spacer()
-                Button("Отмена") { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
-                Button("Сохранить") {
+                Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                Button(L("Сохранить")) {
                     model.tunnels.upsert(preview)
                     dismiss()
                 }

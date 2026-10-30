@@ -71,7 +71,7 @@ final class SessionController {
         }
         if tail.contains("Are you sure you want to continue connecting"),
            tail.trimmingCharacters(in: .whitespaces).hasSuffix("?") {
-            hostKeyPrompt = Self.fingerprint(in: tail) ?? "неизвестен"
+            hostKeyPrompt = Self.fingerprint(in: tail) ?? L("неизвестен")
             return
         }
 

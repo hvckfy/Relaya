@@ -20,8 +20,8 @@ public struct Tunnel: Codable, Hashable, Identifiable, Sendable {
 
         public var title: String {
             switch self {
-            case .local: "Локальный (-L)"
-            case .remote: "Удалённый (-R)"
+            case .local: L("Локальный (-L)")
+            case .remote: L("Удалённый (-R)")
             case .dynamic: "SOCKS (-D)"
             }
         }
@@ -58,18 +58,18 @@ public struct Tunnel: Codable, Hashable, Identifiable, Sendable {
     /// Короткое описание: `localhost:8080 → db:5432 через web`.
     public var summary: String {
         switch kind {
-        case .local: "localhost:\(listenPort) → \(targetHost):\(targetPort) через \(hostAlias)"
-        case .remote: "\(hostAlias):\(listenPort) → \(targetHost):\(targetPort) на этом Mac"
-        case .dynamic: "SOCKS localhost:\(listenPort) через \(hostAlias)"
+        case .local: L("localhost:%@ → %@:%@ через %@", "\(listenPort)", "\(targetHost)", "\(targetPort)", "\(hostAlias)")
+        case .remote: L("%@:%@ → %@:%@ на этом Mac", "\(hostAlias)", "\(listenPort)", "\(targetHost)", "\(targetPort)")
+        case .dynamic: L("SOCKS localhost:%@ через %@", "\(listenPort)", "\(hostAlias)")
         }
     }
 
     public var validationError: String? {
-        if hostAlias.isEmpty { return "Выберите хост" }
-        if !(1...65535).contains(listenPort) { return "Порт — число от 1 до 65535" }
+        if hostAlias.isEmpty { return L("Выберите хост") }
+        if !(1...65535).contains(listenPort) { return L("Порт — число от 1 до 65535") }
         if kind != .dynamic {
-            if targetHost.trimmingCharacters(in: .whitespaces).isEmpty { return "Укажите адрес назначения" }
-            if !(1...65535).contains(targetPort) { return "Порт назначения — число от 1 до 65535" }
+            if targetHost.trimmingCharacters(in: .whitespaces).isEmpty { return L("Укажите адрес назначения") }
+            if !(1...65535).contains(targetPort) { return L("Порт назначения — число от 1 до 65535") }
         }
         return nil
     }
