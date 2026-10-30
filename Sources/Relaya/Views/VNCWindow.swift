@@ -38,7 +38,7 @@ private struct VNCContent: View {
     var body: some View {
         ZStack {
             if let view = session.framebufferView {
-                HostedView(view: view)
+                HostedView(view: view, scaleToFit: session.scaleToFit)
             }
             switch session.phase {
             case .idle, .tunneling, .connecting:
@@ -94,6 +94,21 @@ private struct VNCContent: View {
         }
         .toolbar {
             ToolbarItem {
+                Picker("Масштаб", selection: Binding(get: { session.scaleToFit },
+                                                    set: { fit in Task { await session.setScaleToFit(fit) } })) {
+                    Text("По окну").tag(true)
+                    Text("1:1").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .help("По окну — весь экран удалённой машины вписан в окно; 1:1 — пиксель в пиксель, с прокруткой")
+            }
+            ToolbarItem {
+                Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {
+                    Label("Во весь экран", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .help("Во весь экран (⌃⌘F)")
+            }
+            ToolbarItem {
                 Button { session.disconnect() } label: { Label("Отключить", systemImage: "xmark.circle") }
                     .disabled(session.phase != .connected)
             }
@@ -101,24 +116,37 @@ private struct VNCContent: View {
     }
 }
 
-/// Встраивает готовый NSView (экран VNC) в SwiftUI.
+/// Встраивает готовый NSView (экран VNC) в SwiftUI: по размеру окна или 1:1 в прокрутке.
 private struct HostedView: NSViewRepresentable {
     let view: NSView
+    let scaleToFit: Bool
 
-    func makeNSView(context: Context) -> NSView {
-        let container = NSView()
-        view.translatesAutoresizingMaskIntoConstraints = true
-        view.autoresizingMask = [.width, .height]
-        view.frame = container.bounds
-        container.addSubview(view)
-        return container
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSScrollView()
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .black
+        scroll.borderType = .noBorder
+        place(in: scroll)
+        return scroll
     }
 
-    func updateNSView(_ container: NSView, context: Context) {
-        if view.superview !== container {
-            container.subviews.forEach { $0.removeFromSuperview() }
-            view.frame = container.bounds
-            container.addSubview(view)
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        place(in: scroll)
+    }
+
+    private func place(in scroll: NSScrollView) {
+        scroll.hasVerticalScroller = !scaleToFit
+        scroll.hasHorizontalScroller = !scaleToFit
+        view.translatesAutoresizingMaskIntoConstraints = true
+        if scaleToFit {
+            // Вид сам вписывает картинку с сохранением пропорций.
+            view.autoresizingMask = [.width, .height]
+            if scroll.documentView !== view { scroll.documentView = view }
+            view.frame = NSRect(origin: .zero, size: scroll.contentSize)
+        } else {
+            // 1:1: размер вида — исходный размер кадра, остальное прокручивается.
+            view.autoresizingMask = []
+            if scroll.documentView !== view { scroll.documentView = view }
         }
     }
 }

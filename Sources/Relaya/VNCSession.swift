@@ -21,6 +21,8 @@ final class VNCSession: NSObject {
     }
 
     let desktop: RemoteDesktop
+    /// Масштаб «по размеру окна»; меняется из окна с переподключением.
+    private(set) var scaleToFit: Bool
     private let model: AppModel
     private let keychain = KeychainStore(service: "app.relaya.vnc-password")
 
@@ -37,6 +39,18 @@ final class VNCSession: NSObject {
     init(desktop: RemoteDesktop, model: AppModel) {
         self.desktop = desktop
         self.model = model
+        self.scaleToFit = desktop.scaleToFit ?? true
+    }
+
+    /// Переключает масштаб: RoyalVNCKit задаёт его при подключении, поэтому переподключаемся.
+    func setScaleToFit(_ fit: Bool) async {
+        guard fit != scaleToFit else { return }
+        scaleToFit = fit
+        if let i = model.desktops.firstIndex(where: { $0.id == desktop.id }) { model.desktops[i].scaleToFit = fit }
+        connection?.disconnect()
+        try? await Task.sleep(for: .milliseconds(300))
+        triedSaved = false
+        await connect()
     }
 
     var account: String { "\(desktop.user)@\(desktop.address):\(desktop.port)" }
@@ -59,7 +73,7 @@ final class VNCSession: NSObject {
 
         phase = .connecting
         let settings = VNCConnection.Settings(isDebugLoggingEnabled: false, hostname: host, port: UInt16(port),
-                                              isShared: true, isScalingEnabled: true, useDisplayLink: true,
+                                              isShared: true, isScalingEnabled: scaleToFit, useDisplayLink: true,
                                               inputMode: .forwardKeyboardShortcutsIfNotInUseLocally,
                                               isClipboardRedirectionEnabled: true, colorDepth: .depth24Bit,
                                               frameEncodings: .default)

@@ -24,6 +24,9 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
     public var viaSSHHost: String?
     /// Только для RDP.
     public var fullScreen: Bool
+    /// VNC: вписывать экран в окно (nil или true) или показывать 1:1 с прокруткой.
+    /// Optional — чтобы старые desktops.json без этого поля читались.
+    public var scaleToFit: Bool?
 
     public init(name: String, kind: Kind, address: String, port: Int? = nil, user: String = "",
                 viaSSHHost: String? = nil, fullScreen: Bool = false) {

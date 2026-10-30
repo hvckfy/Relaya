@@ -108,6 +108,11 @@ private struct DesktopEditor: View {
                 TextField("Пользователь", text: $desktop.user, prompt: Text("необязательно"))
                 if desktop.kind == .rdp {
                     Toggle("Во весь экран", isOn: $desktop.fullScreen)
+                } else {
+                    Picker("Масштаб", selection: Binding(get: { desktop.scaleToFit ?? true }, set: { desktop.scaleToFit = $0 })) {
+                        Text("По размеру окна").tag(true)
+                        Text("1:1, с прокруткой").tag(false)
+                    }
                 }
             }
             .formStyle(.grouped)
