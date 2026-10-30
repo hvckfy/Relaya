@@ -320,7 +320,7 @@ struct HostEditorView: View {
 
     /// Файлы приватных ключей в ~/.ssh — те, у которых рядом лежит `.pub`.
     private var keyFiles: [String] {
-        let dir = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".ssh")
+        let dir = RelayaPaths.sshDirectory
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         return names
             .filter { names.contains($0 + ".pub") }

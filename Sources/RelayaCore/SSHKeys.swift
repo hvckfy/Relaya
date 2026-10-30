@@ -21,7 +21,7 @@ public struct SSHKey: Identifiable, Hashable, Sendable {
 
 public enum SSHPaths {
     public static var sshDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: ".ssh")
+        RelayaPaths.sshDirectory
     }
 
     public static func expand(_ path: String) -> String {

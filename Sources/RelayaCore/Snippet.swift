@@ -53,8 +53,7 @@ public struct SnippetStore: Sendable {
     }
 
     public static var defaultURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "Relaya/snippets.json")
+        RelayaPaths.supportDirectory.appending(path: "snippets.json")
     }
 
     /// При первом запуске — несколько примеров.

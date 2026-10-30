@@ -93,8 +93,7 @@ public struct TunnelStore: Sendable {
     }
 
     public static var defaultURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "Relaya/tunnels.json")
+        RelayaPaths.supportDirectory.appending(path: "tunnels.json")
     }
 
     public func load() -> [Tunnel] {

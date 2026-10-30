@@ -107,8 +107,7 @@ public struct RemoteDesktopStore: Sendable {
     }
 
     public static var defaultURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "Relaya/desktops.json")
+        RelayaPaths.supportDirectory.appending(path: "desktops.json")
     }
 
     public func load() -> [RemoteDesktop] {

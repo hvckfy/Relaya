@@ -7,7 +7,7 @@ import Foundation
 /// Compression. Шаблоны (`*`, `?`, `!`), `Match` и `Include` пока пропускаются.
 public enum SSHConfigParser {
     public static var defaultConfigURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appending(path: ".ssh/config")
+        RelayaPaths.sshDirectory.appending(path: "config")
     }
 
     public static func load(from url: URL = defaultConfigURL) throws -> [SSHHost] {

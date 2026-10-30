@@ -76,7 +76,7 @@ public struct MCPPolicyStore: Sendable {
     }
 
     public static var directory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Relaya")
+        RelayaPaths.supportDirectory
     }
 
     public func load() -> MCPPolicy {
