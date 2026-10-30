@@ -58,8 +58,8 @@ struct MainView: View {
             }
         }
         .searchable(text: $model.searchText, placement: .sidebar, prompt: L("Хосты и подключения"))
-        .toolbarBackground(ThemeStore.native ? .automatic : .visible, for: .windowToolbar)
-        .toolbarBackground(Theme.bar, for: .windowToolbar)
+        // Без своей заливки тулбара: сайдбар идёт на всю высоту окна (как в Finder),
+        // а над рабочей областью виден её фон.
         .sheet(item: $model.desktopEditor) { d in
             DesktopEditor(desktop: d).environment(model)
         }
