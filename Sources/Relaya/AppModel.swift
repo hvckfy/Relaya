@@ -419,6 +419,52 @@ final class AppModel {
 
     var detectingOS: Set<String> = []
 
+    // MARK: - Состояние хоста
+
+    var hostStats: [String: HostStats] = [:]
+    var hostStatsError: [String: String] = [:]
+    var hostStatsLoading: Set<String> = []
+
+    /// Нагрузка/память/диск/аптайм одной командой по ssh. `interactive` — по кнопке: можно спросить Touch ID.
+    func refreshStats(_ host: SSHHost, interactive: Bool) async {
+        let h = current(host)
+        guard !hostStatsLoading.contains(h.alias), !RelayaPaths.isDemo else { return }
+        hostStatsLoading.insert(h.alias)
+        defer { hostStatsLoading.remove(h.alias) }
+
+        var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10"]
+        var env: [String: String] = [:]
+        if !h.usesKey, keychain.hasPassword(for: h.keychainAccount) {
+            var allowed = SecretGate.shared.isUnlocked
+            if !allowed, interactive {
+                allowed = await SecretGate.shared.authorize(L("Показать состояние %@", h.alias))
+            }
+            if allowed {
+                env = KeyInstaller(askpassExecutable: askpassExecutable)
+                    .askpassEnvironment(.init(store: keychain, account: h.keychainAccount, kind: .password))
+                args += KeyInstaller.passwordOnlyOptions
+            } else {
+                args += ["-o", "BatchMode=yes"]
+            }
+        } else {
+            args += ["-o", "BatchMode=yes"]
+        }
+        do {
+            let r = try await ProcessRunner.run("/usr/bin/ssh", args + [h.alias, HostStats.probeCommand],
+                                                environment: env, timeout: .seconds(20))
+            if let stats = HostStats.parse(r.stdout) {
+                hostStats[h.alias] = stats
+                hostStatsError[h.alias] = nil
+            } else {
+                hostStatsError[h.alias] = r.succeeded
+                    ? L("Сервер не отдаёт данные (нужен Linux с /proc).")
+                    : L("Нет доступа без пароля: настройте ключ или нажмите «Обновить», чтобы использовать пароль из Keychain.")
+            }
+        } catch {
+            hostStatsError[h.alias] = error.localizedDescription
+        }
+    }
+
     /// Фоновая проверка ОС: отдельный неинтерактивный вход по ключу/агенту или паролю из Keychain.
     func detectOS(for alias: String) async {
         guard let host = hosts.first(where: { $0.alias == alias }), !detectingOS.contains(alias) else { return }

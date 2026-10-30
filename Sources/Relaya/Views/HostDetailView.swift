@@ -61,6 +61,8 @@ struct HostDetailView: View {
                 .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
 
+                HostStatsPanel(host: host)
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L("Порты").uppercased())
                         .font(.system(size: 11, weight: .semibold))

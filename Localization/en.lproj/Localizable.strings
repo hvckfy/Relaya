@@ -537,3 +537,10 @@
 "Развернуть" = "Expand";
 "Ввод рассылается в терминалы: %@. Пароли и сниппеты не рассылаются." = "Input is broadcast to %@ terminals. Passwords and snippets are not broadcast.";
 "Выключить" = "Turn Off";
+"Показать состояние %@" = "show the status of %@";
+"Сервер не отдаёт данные (нужен Linux с /proc)." = "The server doesn't provide data (Linux with /proc is required).";
+"Нет доступа без пароля: настройте ключ или нажмите «Обновить», чтобы использовать пароль из Keychain." = "No passwordless access: set up a key or click “Refresh” to use the password from Keychain.";
+"Состояние" = "Status";
+"Нагрузка" = "Load";
+"Диск /" = "Disk /";
+"Аптайм" = "Uptime";
