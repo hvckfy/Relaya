@@ -20,6 +20,10 @@ struct SFTPView: View {
     @State private var newFolderName = ""
     @State private var confirmDelete = false
     @State private var dropTargeted = false
+    @State private var queue = TransferQueue()
+    @State private var edits: [RemoteEditSession] = []
+    @State private var renaming: RemoteFile?
+    @State private var renameText = ""
 
     private var client: SFTPClient {
         let usePassword = !host.usesKey && model.keychain.hasPassword(for: host.keychainAccount)
@@ -54,13 +58,19 @@ struct SFTPView: View {
                 .width(100)
             }
             .contextMenu(forSelectionType: RemoteFile.ID.self) { ids in
+                if ids.count == 1, let f = files.first(where: { ids.contains($0.id) }), !f.isDirectory {
+                    Button(L("Открыть в редакторе")) { edit(f) }
+                }
+                if ids.count == 1, let f = files.first(where: { ids.contains($0.id) }) {
+                    Button(L("Переименовать…")) { renameText = f.name; renaming = f }
+                }
                 if !ids.isEmpty {
                     Button(L("Скачать…")) { download() }
                     Button(L("Удалить…"), role: .destructive) { confirmDelete = true }
                 }
             } primaryAction: { ids in
-                if ids.count == 1, let f = files.first(where: { ids.contains($0.id) }), f.isDirectory || f.isLink {
-                    open(SFTPClient.join(path, f.name))
+                if ids.count == 1, let f = files.first(where: { ids.contains($0.id) }) {
+                    if f.isDirectory || f.isLink { open(SFTPClient.join(path, f.name)) } else { edit(f) }
                 }
             }
             .overlay {
@@ -75,12 +85,29 @@ struct SFTPView: View {
                 upload(urls: urls.filter(\.isFileURL))
                 return true
             } isTargeted: { dropTargeted = $0 }
+            if !queue.items.isEmpty { TransferList(queue: queue) }
             statusBar
         }
+        .background { shortcuts }
         .frame(width: embedded ? nil : 860, height: embedded ? nil : 560)
         .frame(maxWidth: embedded ? .infinity : nil, maxHeight: embedded ? .infinity : nil)
         .background(Theme.bg)
         .task { await start() }
+        .onDisappear {
+            queue.cancelAll()
+            edits.forEach { $0.stop() }
+        }
+        .alert(L("Переименовать"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(L("Имя"), text: $renameText)
+            Button(L("Переименовать")) {
+                guard let f = renaming, !renameText.isEmpty, renameText != f.name else { return }
+                let base = path, newName = renameText
+                perform(L("Переименовываю…")) {
+                    try await client.rename(SFTPClient.join(base, f.name), to: SFTPClient.join(base, newName))
+                }
+            }
+            Button(L("Отмена"), role: .cancel) {}
+        }
         .alert(L("Новая папка"), isPresented: $newFolder) {
             TextField(L("Имя"), text: $newFolderName)
             Button(L("Создать")) { perform(L("Создаю папку…")) { try await client.makeDirectory(SFTPClient.join(path, newFolderName)) } }
@@ -104,14 +131,17 @@ struct SFTPView: View {
             Text(host.alias).fontWeight(.semibold)
             IconButton(systemImage: "chevron.up", label: L("Наверх")) { open(SFTPClient.parent(of: path)) }
                 .disabled(path == "/" || path.isEmpty)
+                .keyboardShortcut(.upArrow, modifiers: .command)
             TextField(L("Путь"), text: $pathField)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12.5, design: .monospaced))
                 .onSubmit { open(pathField) }
             IconButton(systemImage: "arrow.clockwise", label: L("Обновить")) { open(path) }
+                .keyboardShortcut("r", modifiers: .command)
             Button(L("Загрузить…")) { chooseUpload() }.buttonStyle(.relaya)
             Button(L("Скачать…")) { download() }.buttonStyle(.relaya).disabled(selection.isEmpty)
             IconButton(systemImage: "folder.badge.plus", label: L("Новая папка")) { newFolderName = ""; newFolder = true }
+                .keyboardShortcut("n", modifiers: [.command, .option])
             if !embedded {
                 Button(L("Готово")) { dismiss() }.buttonStyle(.relayaPrimary).keyboardShortcut(.cancelAction)
             }
@@ -123,6 +153,16 @@ struct SFTPView: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 0.5) }
     }
 
+    /// Скрытые кнопки для сочетаний без видимого элемента.
+    private var shortcuts: some View {
+        Group {
+            Button("") { if !selection.isEmpty { confirmDelete = true } }
+                .keyboardShortcut(.delete, modifiers: .command)
+        }
+        .opacity(0)
+        .allowsHitTesting(false)
+    }
+
     private var statusBar: some View {
         HStack(spacing: 8) {
             if let busy {
@@ -131,6 +171,9 @@ struct SFTPView: View {
             } else if let error {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.red)
                 Text(error).foregroundStyle(Theme.red).lineLimit(2).textSelection(.enabled)
+            } else if !edits.isEmpty {
+                Image(systemName: "pencil.circle").foregroundStyle(Theme.acc)
+                Text(L("Открыто в редакторе: %@ · сохранения загружаются на сервер", "\(edits.count)")).foregroundStyle(Theme.tx2)
             } else {
                 Text(L("%@ объектов · перетащите файлы из Finder, чтобы загрузить сюда", "\(files.count)")).foregroundStyle(Theme.tx2)
             }
@@ -150,6 +193,9 @@ struct SFTPView: View {
            !(await SecretGate.shared.authorize(L("Открыть файлы на %@", host.alias))) {
             error = L("Touch ID не подтверждён — пароль из Keychain не использован.")
             return
+        }
+        queue.onFinish = { item in
+            if item.upload { Task { await load(path) } }
         }
         loading = true
         do {
@@ -201,11 +247,22 @@ struct SFTPView: View {
         panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         guard panel.runModal() == .OK, let dir = panel.url else { return }
         let base = path
-        perform(L("Скачиваю %@ объект(ов)…", "\(targets.count)")) {
+        Task {
+            let ssh = await sshInvocation()
+            let sftp = client
             for f in targets {
-                try await client.download(SFTPClient.join(base, f.name), to: dir, recursive: f.isDirectory)
+                let remote = SFTPClient.join(base, f.name)
+                let local = dir.appending(path: f.name)
+                if f.isDirectory {
+                    queue.enqueue(name: f.name, upload: false, total: nil) { _ in
+                        try await sftp.download(remote, to: dir, recursive: true)
+                    }
+                } else {
+                    queue.enqueue(name: f.name, upload: false, total: f.size) { progress in
+                        try await StreamTransfer.download(ssh, remotePath: remote, to: local, progress: progress)
+                    }
+                }
             }
-            NSWorkspace.shared.activateFileViewerSelecting(targets.map { dir.appending(path: $0.name) })
         }
     }
 
@@ -221,8 +278,128 @@ struct SFTPView: View {
     private func upload(urls: [URL]) {
         guard !urls.isEmpty else { return }
         let base = path
-        perform(L("Загружаю %@ объект(ов)…", "\(urls.count)")) {
-            for url in urls { try await client.upload(url.path, to: base) }
+        Task {
+            let ssh = await sshInvocation()
+            let sftp = client
+            for url in urls {
+                let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                let name = url.lastPathComponent
+                if isDir {
+                    queue.enqueue(name: name, upload: true, total: nil) { _ in try await sftp.upload(url.path, to: base) }
+                } else {
+                    let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
+                    queue.enqueue(name: name, upload: true, total: size) { progress in
+                        try await StreamTransfer.upload(ssh, localURL: url, remoteDirectory: base, name: name, progress: progress)
+                    }
+                }
+            }
         }
+    }
+
+    private func sshInvocation() async -> SSHInvocation {
+        await model.invocation(for: host, interactive: false, reason: L("Открыть файлы на %@", host.alias))
+    }
+
+    /// Скачать во временную папку, открыть в редакторе по умолчанию и загружать каждое сохранение.
+    private func edit(_ f: RemoteFile) {
+        let base = path
+        let dir = FileManager.default.temporaryDirectory
+            .appending(path: "Relaya-edit").appending(path: UUID().uuidString)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let local = dir.appending(path: f.name)
+        let remote = SFTPClient.join(base, f.name)
+        Task {
+            let ssh = await sshInvocation()
+            do {
+                try await StreamTransfer.download(ssh, remotePath: remote, to: local) { _ in }
+            } catch {
+                self.error = error.localizedDescription
+                return
+            }
+            let session = RemoteEditSession(remoteDirectory: base, name: f.name, localURL: local)
+            session.watch {
+                let size = (try? local.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
+                queue.enqueue(name: f.name, upload: true, total: size) { progress in
+                    try await StreamTransfer.upload(ssh, localURL: local, remoteDirectory: base, name: f.name, progress: progress)
+                }
+            }
+            edits.append(session)
+            NSWorkspace.shared.open(local)
+        }
+    }
+}
+
+/// Список передач над строкой состояния.
+private struct TransferList: View {
+    let queue: TransferQueue
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(L("Передачи")).font(.system(size: 12, weight: .semibold))
+                Spacer()
+                if queue.hasFinished {
+                    Button(L("Очистить")) { queue.clearFinished() }.buttonStyle(.link).font(.system(size: 12))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(queue.items) { item in row(item) }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            }
+            .frame(maxHeight: 150)
+        }
+        .background(Theme.bar)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 0.5) }
+    }
+
+    private func row(_ item: TransferQueue.Item) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: item.upload ? "arrow.up.circle" : "arrow.down.circle").foregroundStyle(Theme.tx2)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(item.name).lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Text(detail(item)).foregroundStyle(stateColor(item.state)).lineLimit(1)
+                }
+                if item.state == .running {
+                    if let f = item.fraction { ProgressView(value: f) } else { ProgressView().progressViewStyle(.linear) }
+                }
+            }
+            switch item.state {
+            case .queued, .running:
+                IconButton(systemImage: "xmark.circle", label: L("Отменить")) { queue.cancel(item.id) }
+            case .failed, .cancelled:
+                IconButton(systemImage: "arrow.clockwise", label: L("Повторить")) { queue.retry(item.id) }
+            case .done:
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.grn)
+            }
+        }
+        .font(.system(size: 12))
+    }
+
+    private func detail(_ item: TransferQueue.Item) -> String {
+        let done = ByteCountFormatter.string(fromByteCount: item.transferred, countStyle: .file)
+        switch item.state {
+        case .queued: return L("В очереди")
+        case .cancelled: return L("Отменено")
+        case .failed(let message): return message
+        case .done:
+            return item.total.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? L("Готово")
+        case .running:
+            var parts = [item.total.map { "\(done) / " + ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? done]
+            if let f = item.fraction { parts.insert("\(Int(f * 100))%", at: 0) }
+            if let s = item.speed { parts.append(ByteCountFormatter.string(fromByteCount: Int64(s), countStyle: .file) + L("/с")) }
+            return parts.joined(separator: " · ")
+        }
+    }
+
+    private func stateColor(_ state: TransferQueue.State) -> Color {
+        if case .failed = state { return Theme.red }
+        return Theme.tx2
     }
 }
