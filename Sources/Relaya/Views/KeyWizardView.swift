@@ -135,6 +135,9 @@ final class KeyWizardModel {
             try await run("Сервер") {
                 var secret: KeyInstaller.SecretRef?
                 if hasSavedPassword {
+                    guard await SecretGate.shared.authorize(L("Использовать сохранённый пароль для %@", host.alias)) else {
+                        throw KeyInstaller.Failure(L("Touch ID не подтверждён — пароль из Keychain не использован."))
+                    }
                     secret = .init(store: model.keychain, account: host.keychainAccount, kind: .password)
                 } else if !serverPassword.isEmpty {
                     if saveServerPassword {

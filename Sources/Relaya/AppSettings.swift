@@ -131,6 +131,10 @@ final class AppSettings {
             languageChanged = true
         }
     }
+    /// Счётчик для перерисовки настроек, которые читаются прямо из UserDefaults.
+    private(set) var revision = 0
+    func touch() { revision += 1 }
+
     /// Язык сменили в этом запуске — показать «Перезапустить».
     var languageChanged = false
 

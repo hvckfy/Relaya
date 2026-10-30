@@ -102,11 +102,20 @@ final class SessionController {
             savedPasswordRejected = true
             return
         }
-        if let pw = try? keychain.password(for: host.keychainAccount) {
-            autofilled = true
-            terminal?.send(txt: pw + "\r")
-        } else {
+        guard keychain.hasPassword(for: host.keychainAccount) else {
             passwordPromptWithoutSaved = true
+            return
+        }
+        autofilled = true
+        Task { @MainActor in
+            // Touch ID перед подстановкой сохранённого пароля.
+            guard await SecretGate.shared.authorize(L("Подставить сохранённый пароль для %@", host.alias)),
+                  let pw = try? keychain.password(for: host.keychainAccount) else {
+                autofilled = false
+                passwordPromptWithoutSaved = true
+                return
+            }
+            terminal?.send(txt: pw + "\r")
         }
     }
 

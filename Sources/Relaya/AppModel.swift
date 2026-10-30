@@ -396,7 +396,8 @@ final class AppModel {
         detectingOS.insert(alias)
         defer { detectingOS.remove(alias) }
         let installer = KeyInstaller(askpassExecutable: askpassExecutable)
-        let secret: KeyInstaller.SecretRef? = keychain.hasPassword(for: host.keychainAccount)
+        // Фоновая проверка не вызывает Touch ID: пароль берём, только если доступ уже подтверждён.
+        let secret: KeyInstaller.SecretRef? = keychain.hasPassword(for: host.keychainAccount) && SecretGate.shared.isUnlocked
             ? .init(store: keychain, account: host.keychainAccount, kind: .password) : nil
         if let os = await installer.detectOS(alias: alias, password: secret) {
             setOS(os, for: alias, onlyIfUnknown: false)

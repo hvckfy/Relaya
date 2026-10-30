@@ -76,6 +76,8 @@ private struct BehaviorSettings: View {
 
     var body: some View {
         @Bindable var settings = settings
+        // Перерисовка, когда меняются настройки, хранящиеся только в UserDefaults (Touch ID).
+        let _ = settings.revision
         Form {
             Picker(L("Язык"), selection: $settings.language) {
                 ForEach(AppSettings.Language.allCases) { Text($0.title).tag($0) }
@@ -91,6 +93,22 @@ private struct BehaviorSettings: View {
             Toggle(L("Переподключаться после обрыва соединения"), isOn: $settings.autoReconnect)
             Toggle(L("Предлагать вход по ключу после входа по паролю"), isOn: $settings.offerKeySetup)
             Toggle(L("Значок туннелей в строке меню"), isOn: $settings.menuBarIcon)
+            Section(L("Безопасность")) {
+                Toggle(SecretGate.biometryAvailable ? L("Touch ID перед использованием сохранённых паролей")
+                                                    : L("Пароль Mac перед использованием сохранённых паролей"),
+                       isOn: Binding(get: { SecretGate.enabled },
+                                     set: { UserDefaults.standard.set($0, forKey: "touchIDForPasswords"); settings.touch() }))
+                Picker(L("Не спрашивать повторно"), selection: Binding(
+                    get: { SecretGate.graceMinutes },
+                    set: { UserDefaults.standard.set($0, forKey: "touchIDGraceMinutes"); settings.touch() })) {
+                    Text(L("Каждый раз")).tag(0)
+                    Text(L("1 минуту")).tag(1)
+                    Text(L("5 минут")).tag(5)
+                    Text(L("15 минут")).tag(15)
+                    Text(L("1 час")).tag(60)
+                }
+                .disabled(!SecretGate.enabled)
+            }
         }
         .formStyle(.grouped)
         .padding(.vertical, 8)

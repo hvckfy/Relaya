@@ -376,6 +376,8 @@ private struct DeployKeySheet: View {
     private func run() async {
         working = true
         defer { working = false }
+        let needsPassword = model.hosts.contains { chosen.contains($0.alias) && model.keychain.hasPassword(for: $0.keychainAccount) }
+        if needsPassword, !(await SecretGate.shared.authorize(L("Разложить ключ на хосты"))) { return }
         let installer = KeyInstaller(askpassExecutable: model.askpassExecutable)
         for host in model.hosts where chosen.contains(host.alias) {
             results[host.alias] = .running

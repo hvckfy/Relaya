@@ -146,6 +146,11 @@ struct SFTPView: View {
     // MARK: - Действия
 
     private func start() async {
+        if !host.usesKey, model.keychain.hasPassword(for: host.keychainAccount),
+           !(await SecretGate.shared.authorize(L("Открыть файлы на %@", host.alias))) {
+            error = L("Touch ID не подтверждён — пароль из Keychain не использован.")
+            return
+        }
         loading = true
         do {
             let home = try await client.home()

@@ -70,6 +70,19 @@ final class TunnelManager {
         guard processes[tunnel.id] == nil else { return }
         let host = hosts.first { $0.alias == tunnel.hostAlias }
         let usePassword = host.map { keychain.hasPassword(for: $0.keychainAccount) && !$0.usesKey } ?? false
+        // Пароль из Keychain — только после Touch ID.
+        if usePassword, !SecretGate.shared.isUnlocked {
+            status[tunnel.id] = .starting
+            Task { @MainActor in
+                if await SecretGate.shared.authorize(L("Запустить туннель «%@»", tunnel.name.isEmpty ? tunnel.spec : tunnel.name)) {
+                    self.status[tunnel.id] = .stopped
+                    self.start(tunnel, hosts: hosts)
+                } else {
+                    self.status[tunnel.id] = .failed(L("Touch ID не подтверждён — пароль из Keychain не использован."))
+                }
+            }
+            return
+        }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
