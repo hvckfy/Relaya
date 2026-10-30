@@ -5,6 +5,7 @@ import RelayaCore
 struct DesktopsView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: RemoteDesktop?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,8 +58,15 @@ struct DesktopsView: View {
                 }
             }
             Spacer()
-            Button("Подключить") { Task { await model.open(d) } }.buttonStyle(.relayaPrimary)
+            Button("Подключить") {
+                // VNC — во встроенном окне Relaya, RDP — в Windows App.
+                if d.kind == .vnc { openWindow(id: "vnc", value: d.id) } else { Task { await model.open(d) } }
+            }
+            .buttonStyle(.relayaPrimary)
             Menu {
+                if d.kind == .vnc {
+                    Button("Открыть в «Общем экране» macOS") { Task { await model.open(d) } }
+                }
                 Button("Изменить…") { editing = d }
                 Divider()
                 Button("Удалить", role: .destructive) { model.desktops.removeAll { $0.id == d.id } }

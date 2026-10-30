@@ -1,4 +1,5 @@
 import SwiftUI
+import RelayaCore
 
 // Точка входа — main.swift (там askpass-режим).
 struct RelayaApp: App {
@@ -53,6 +54,13 @@ struct RelayaApp: App {
                     .disabled(model.activeSession == nil)
             }
         }
+
+        WindowGroup("VNC", id: "vnc", for: RemoteDesktop.ID.self) { $id in
+            VNCWindow(desktopID: id)
+                .environment(model)
+                .environment(model.settings)
+        }
+        .windowToolbarStyle(.unifiedCompact)
 
         Settings {
             SettingsView()
