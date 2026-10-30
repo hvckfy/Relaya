@@ -40,6 +40,7 @@ private struct SessionTab: View {
     @Environment(AppModel.self) private var model
     let session: Session
     let active: Bool
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -68,11 +69,19 @@ private struct SessionTab: View {
         .padding(.trailing, 4)
         .frame(minWidth: 160, maxHeight: .infinity)
         .background {
-            // Вкладка-«таблетка»: активная — приподнята над панелью, неактивные — плоские.
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(active ? Theme.bg : .clear)
-                .shadow(color: .black.opacity(active ? 0.08 : 0), radius: 2, y: 1)
+            // Активная вкладка — заметная «таблетка» с обводкой (как в Safari/Xcode), неактивные —
+            // плоские, подсветка при наведении. Без обводки в тёмной теме фон почти сливается с панелью.
+            let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+            if active {
+                shape.fill(Theme.bg)
+                    .overlay(shape.strokeBorder(Theme.tx2.opacity(0.35), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
+                    .relayaGlass(shape)
+            } else if hovering {
+                shape.fill(Theme.sel)
+            }
         }
+        .onHover { hovering = $0 }
         .padding(.vertical, 4)
         .contentShape(.rect)
         .onTapGesture { model.activeSessionID = session.id; model.screen = .hosts }
