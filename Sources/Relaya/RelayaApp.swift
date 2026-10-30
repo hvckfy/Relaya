@@ -40,6 +40,13 @@ struct RelayaApp: App {
                     .keyboardShortcut("f", modifiers: .command)
                     .disabled(model.activeSession?.controller == nil)
             }
+            CommandMenu(L("Хост")) {
+                if let host = model.selectedHost {
+                    HostMenuItems(host: host, shortcuts: true).environment(model)
+                } else {
+                    Text(L("Выберите хост в боковой панели"))
+                }
+            }
             CommandMenu(L("Вкладки")) {
                 ForEach(1..<10) { n in
                     Button(L("Вкладка %@", "\(n)")) { model.selectSession(at: n - 1) }

@@ -20,25 +20,36 @@ struct MainView: View {
             .background(Theme.bg)
         }
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                SearchField(text: $model.searchText)
-            }
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    model.addForCurrentMode()
-                } label: {
-                    Label(model.sidebarMode == .vnc || model.sidebarMode == .rdp ? model.sidebarMode.title : L("Хост"),
-                          systemImage: "plus")
-                        .labelStyle(.titleAndIcon)
+                if !model.allTags.isEmpty {
+                    Menu {
+                        ForEach(model.allTags, id: \.self) { tag in
+                            Toggle(tag, isOn: Binding(get: { model.tagFilter.contains(tag) },
+                                                      set: { _ in model.toggleTagFilter(tag) }))
+                        }
+                        if !model.tagFilter.isEmpty {
+                            Divider()
+                            Button(L("Сбросить фильтр меток")) { model.tagFilter = [] }
+                        }
+                    } label: {
+                        Label(L("Метки"), systemImage: model.tagFilter.isEmpty
+                              ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                    }
+                    .help(L("Фильтр по меткам"))
                 }
-                .buttonStyle(.relaya)
+                Menu {
+                    Button(L("Хост SSH…")) { model.add(nil) }
+                    Button(L("Подключение VNC…")) { model.add(.vnc) }
+                    Button(L("Подключение RDP…")) { model.add(.rdp) }
+                } label: {
+                    Label(L("Добавить"), systemImage: "plus")
+                }
                 .help(L("Новый хост (⇧⌘N)"))
 
                 Button {
                     model.connectSelection()
                 } label: {
-                    Label(model.sidebarMode == .sftp ? L("Открыть файлы") : L("Подключить"),
-                          systemImage: model.sidebarMode == .sftp ? "folder" : "bolt.fill")
+                    Label(L("Подключить"), systemImage: "bolt.fill")
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(.relayaPrimary)
@@ -46,6 +57,8 @@ struct MainView: View {
                 .help(L("Подключить (⌘T)"))
             }
         }
+        .searchable(text: $model.searchText, placement: .sidebar, prompt: L("Хосты и подключения"))
+        .toolbarBackground(ThemeStore.native ? .automatic : .visible, for: .windowToolbar)
         .toolbarBackground(Theme.bar, for: .windowToolbar)
         .sheet(item: $model.desktopEditor) { d in
             DesktopEditor(desktop: d).environment(model)
@@ -137,7 +150,7 @@ struct MainView: View {
             if let desktop = model.selectedDesktop {
                 DesktopDetailView(desktop: desktop)
             } else {
-                DesktopsEmptyView(kind: model.sidebarMode == .vnc ? .vnc : .rdp)
+                DesktopsEmptyView()
             }
         } else if let host = model.selectedHost {
             HostDetailView(host: host)
@@ -158,29 +171,5 @@ private struct NewGroupActions: View {
         Button(L("Создать")) { model.move(host, toGroup: name) }
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
         Button(L("Отмена"), role: .cancel) {}
-    }
-}
-
-private struct SearchField: View {
-    @Binding var text: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12))
-            TextField(L("Хосты, действия, сниппеты…"), text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.tx)
-            Text("⌘K")
-                .font(.system(size: 11, design: .monospaced))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 0.5))
-        }
-        .foregroundStyle(Theme.tx2)
-        .padding(.horizontal, 10)
-        .frame(width: 380, height: 28)
-        .background(Theme.sel, in: .capsule)
     }
 }

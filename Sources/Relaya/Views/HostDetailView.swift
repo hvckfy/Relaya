@@ -7,45 +7,22 @@ struct HostDetailView: View {
     let host: SSHHost
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        Form {
+            Section {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
-                            Text(host.alias).font(.system(size: 22, weight: .bold))
+                            Text(host.alias).font(.title2.bold())
                             ForEach(host.tags, id: \.self) { TagChip(tag: $0) }
                         }
-                        Text(host.subtitle)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(Theme.tx2)
+                        Text(host.subtitle).font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     // «Подключить» — в тулбаре окна (⌘T), здесь не дублируем.
-                    Button(L("Файлы")) { model.openFiles(host) }
-                        .buttonStyle(.relaya)
-                    Button(L("Изменить")) { model.editor = EditorRequest(original: host) }
-                        .buttonStyle(.relaya)
+                    Button(L("Файлы")) { model.openFiles(host) }.buttonStyle(.relaya)
+                    Button(L("Изменить")) { model.editor = EditorRequest(original: host) }.buttonStyle(.relaya)
                 }
-
-                if !host.usesKey {
-                    HStack(spacing: 10) {
-                        Text(L("Ключ не указан — скорее всего, вход по паролю."))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Button(L("Настроить вход по ключу")) { model.keyWizard = KeyWizardRequest(host: host) }
-                            .buttonStyle(.relaya(.primary, height: 24))
-                    }
-                    .font(.system(size: 13))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(Theme.accTint, in: .rect(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
-                }
-
-                HStack(spacing: 10) {
-                    OSIcon(os: host.os, size: 22)
-                    Text(host.os?.title ?? L("ОС не определена"))
-                        .foregroundStyle(host.os == nil ? Theme.tx2 : Theme.tx)
-                    Spacer()
+                LabeledContent {
                     if model.detectingOS.contains(host.alias) {
                         ProgressView().controlSize(.small)
                     } else {
@@ -54,80 +31,56 @@ struct HostDetailView: View {
                         }
                         .buttonStyle(.relaya(.normal, height: 24))
                     }
+                } label: {
+                    Label { Text(host.os?.title ?? L("ОС не определена")) } icon: { OSIcon(os: host.os, size: 18) }
                 }
-                .font(.system(size: 13))
-                .padding(.horizontal, 12)
-                .frame(height: 40)
-                .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
-
-                HostStatsPanel(host: host)
-
-                DockerPanel(host: host)
-
-                if host.tmux { TmuxPanel(host: host) }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L("Порты").uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.tx2)
-                        .padding(.leading, 4)
-                    PortsPanel(host: host)
-                        .padding(12)
-                        .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
+                if !host.usesKey {
+                    LabeledContent(L("Ключ не указан — скорее всего, вход по паролю.")) {
+                        Button(L("Настроить вход по ключу")) { model.keyWizard = KeyWizardRequest(host: host) }
+                            .buttonStyle(.relaya(.primary, height: 24))
+                    }
                 }
-
-                InfoGroup(title: L("Подключение"), rows: [
-                    (L("Адрес"), host.hostName ?? host.alias),
-                    (L("Пользователь"), host.user ?? "—"),
-                    (L("Порт"), String(host.port ?? 22)),
-                    ("ProxyJump", host.proxyJump ?? "—"),
-                ])
-                InfoGroup(title: L("Аутентификация"), rows: [
-                    (L("Ключ"), host.identityFile ?? L("по умолчанию / пароль")),
-                    (L("Агент-форвардинг"), host.forwardAgent == true ? L("да") : L("нет")),
-                ])
-                InfoGroup(title: "ssh", rows: [(L("Команда"), "ssh \(host.alias)")])
             }
-            .padding(24)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity)
+
+            panel { HostStatsPanel(host: host) }
+            panel { DockerPanel(host: host) }
+            if host.tmux { panel { TmuxPanel(host: host) } }
+
+            Section(L("Порты")) {
+                PortsPanel(host: host)
+            }
+
+            Section(L("Подключение")) {
+                info(L("Адрес"), host.hostName ?? host.alias)
+                info(L("Пользователь"), host.user ?? "—")
+                info(L("Порт"), String(host.port ?? 22))
+                info("ProxyJump", host.proxyJump ?? "—")
+            }
+            Section(L("Аутентификация")) {
+                info(L("Ключ"), host.identityFile ?? L("по умолчанию / пароль"))
+                info(L("Агент-форвардинг"), host.forwardAgent == true ? L("да") : L("нет"))
+            }
+            Section("ssh") {
+                info(L("Команда"), "ssh \(host.alias)")
+            }
         }
-        .foregroundStyle(Theme.tx)
+        .formStyle(.grouped)
+        .scrollContentBackground(ThemeStore.native ? .automatic : .hidden)
+        .background(Theme.bg)
     }
-}
 
-private struct InfoGroup: View {
-    let title: String
-    let rows: [(String, String)]
+    /// Панели со своим заголовком — строкой формы без отступов и фона.
+    private func panel<P: View>(@ViewBuilder _ content: () -> P) -> some View {
+        Section {
+            content()
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+        }
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.tx2)
-                .padding(.leading, 4)
-            VStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
-                    HStack {
-                        Text(row.0)
-                        Spacer()
-                        Text(row.1)
-                            .font(.system(size: 12.5, design: .monospaced))
-                            .foregroundStyle(Theme.tx2)
-                            .textSelection(.enabled)
-                    }
-                    .font(.system(size: 13))
-                    .padding(.horizontal, 12)
-                    .frame(height: 36)
-                    .overlay(alignment: .bottom) {
-                        if i < rows.count - 1 { Divider().overlay(Theme.line2).padding(.leading, 12) }
-                    }
-                }
-            }
-            .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
+    private func info(_ label: String, _ value: String) -> some View {
+        LabeledContent(label) {
+            Text(value).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
         }
     }
 }
@@ -136,24 +89,13 @@ struct EmptyStateView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "terminal")
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Theme.tx2)
-            Text(model.hosts.isEmpty ? L("Добавьте первый хост") : L("Выберите хост"))
-                .font(.system(size: 17, weight: .bold))
+        ContentUnavailableView {
+            Label(model.hosts.isEmpty ? L("Добавьте первый хост") : L("Выберите хост"), systemImage: "terminal")
+        } description: {
             Text(L("Ваши ключи живут в ~/.ssh, а не у нас.\nХосты Relaya — это ваш ~/.ssh/config."))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.tx2)
-            HStack(spacing: 8) {
-                Button(L("Добавить хост")) { model.editor = EditorRequest(original: nil) }
-                    .buttonStyle(.relayaPrimary)
-                Button(L("Перечитать ~/.ssh/config")) { model.reloadHosts() }
-                    .buttonStyle(.relaya)
-            }
+        } actions: {
+            Button(L("Добавить хост")) { model.add(nil) }.buttonStyle(.borderedProminent)
+            Button(L("Перечитать ~/.ssh/config")) { model.reloadHosts() }
         }
-        .font(.system(size: 13))
-        .foregroundStyle(Theme.tx)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
