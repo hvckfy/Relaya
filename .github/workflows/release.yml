@@ -45,7 +45,7 @@ jobs:
           # Самоподписанный сертификат не доверенный — ищем по SHA-1, а не по имени среди «валидных».
           HASH=$(security find-certificate -c "Relaya Self-Signed" -Z "$KC" | awk '/SHA-1/{print $NF}')
           codesign --force --deep --keychain "$KC" --sign "$HASH" build/Relaya.app
-          codesign -dv build/Relaya.app 2>&1 | grep -E "Authority|Identifier"
+          codesign -dvv build/Relaya.app 2>&1 | grep -E "Authority|Identifier|Signature"
           rm -f "$RUNNER_TEMP/relaya.p12"
 
       - name: Package
