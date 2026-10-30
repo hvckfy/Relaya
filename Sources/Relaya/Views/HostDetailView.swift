@@ -63,6 +63,8 @@ struct HostDetailView: View {
 
                 HostStatsPanel(host: host)
 
+                DockerPanel(host: host)
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L("Порты").uppercased())
                         .font(.system(size: 11, weight: .semibold))

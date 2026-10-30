@@ -419,6 +419,68 @@ final class AppModel {
 
     var detectingOS: Set<String> = []
 
+    // MARK: - Команды на хосте
+
+    /// Неинтерактивная команда на хосте: ключ/агент или пароль из Keychain (после Touch ID).
+    /// `interactive` — вызвано пользователем: можно спросить Touch ID; иначе пароль берём, только если уже подтверждён.
+    func exec(_ command: String, on host: SSHHost, interactive: Bool, reason: String,
+              timeout: Duration = .seconds(20)) async throws -> ProcessResult {
+        let h = current(host)
+        var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10"]
+        var env: [String: String] = [:]
+        var usePassword = false
+        if !h.usesKey, keychain.hasPassword(for: h.keychainAccount) {
+            usePassword = SecretGate.shared.isUnlocked
+            if !usePassword, interactive { usePassword = await SecretGate.shared.authorize(reason) }
+        }
+        if usePassword {
+            env = KeyInstaller(askpassExecutable: askpassExecutable)
+                .askpassEnvironment(.init(store: keychain, account: h.keychainAccount, kind: .password))
+            args += KeyInstaller.passwordOnlyOptions
+        } else {
+            args += ["-o", "BatchMode=yes"]
+        }
+        return try await ProcessRunner.run("/usr/bin/ssh", args + [h.alias, command], environment: env, timeout: timeout)
+    }
+
+    // MARK: - Docker
+
+    var docker: [String: Docker.ListResult] = [:]
+    var dockerLoading: Set<String> = []
+    var dockerBusy: Set<String> = []
+
+    func refreshDocker(_ host: SSHHost, interactive: Bool) async {
+        guard !dockerLoading.contains(host.alias), !RelayaPaths.isDemo else { return }
+        dockerLoading.insert(host.alias)
+        defer { dockerLoading.remove(host.alias) }
+        do {
+            let r = try await exec(Docker.listCommand, on: host, interactive: interactive,
+                                   reason: L("Показать контейнеры на %@", host.alias))
+            // Без доступа (нужен пароль, а Touch ID не подтверждён) — тихо, блок просто не показываем.
+            if !r.succeeded, r.stderr.contains("Permission denied") || r.status == 255 {
+                if interactive { docker[host.alias] = .failed(L("Нет доступа к хосту без пароля.")) }
+                return
+            }
+            docker[host.alias] = Docker.parse(stdout: r.stdout, stderr: r.stderr, status: r.status)
+        } catch {
+            docker[host.alias] = .failed(error.localizedDescription)
+        }
+    }
+
+    /// start / stop / restart контейнера, затем обновить список.
+    func dockerAction(_ action: String, _ container: DockerContainer, on host: SSHHost) async {
+        dockerBusy.insert(container.id)
+        defer { dockerBusy.remove(container.id) }
+        do {
+            let r = try await exec(Docker.actionCommand(action, container: container), on: host, interactive: true,
+                                   reason: L("Управлять контейнерами на %@", host.alias), timeout: .seconds(60))
+            if !r.succeeded { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+        await refreshDocker(host, interactive: false)
+    }
+
     // MARK: - Состояние хоста
 
     var hostStats: [String: HostStats] = [:]
@@ -432,26 +494,9 @@ final class AppModel {
         hostStatsLoading.insert(h.alias)
         defer { hostStatsLoading.remove(h.alias) }
 
-        var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10"]
-        var env: [String: String] = [:]
-        if !h.usesKey, keychain.hasPassword(for: h.keychainAccount) {
-            var allowed = SecretGate.shared.isUnlocked
-            if !allowed, interactive {
-                allowed = await SecretGate.shared.authorize(L("Показать состояние %@", h.alias))
-            }
-            if allowed {
-                env = KeyInstaller(askpassExecutable: askpassExecutable)
-                    .askpassEnvironment(.init(store: keychain, account: h.keychainAccount, kind: .password))
-                args += KeyInstaller.passwordOnlyOptions
-            } else {
-                args += ["-o", "BatchMode=yes"]
-            }
-        } else {
-            args += ["-o", "BatchMode=yes"]
-        }
         do {
-            let r = try await ProcessRunner.run("/usr/bin/ssh", args + [h.alias, HostStats.probeCommand],
-                                                environment: env, timeout: .seconds(20))
+            let r = try await exec(HostStats.probeCommand, on: h, interactive: interactive,
+                                   reason: L("Показать состояние %@", h.alias))
             if let stats = HostStats.parse(r.stdout) {
                 hostStats[h.alias] = stats
                 hostStatsError[h.alias] = nil
