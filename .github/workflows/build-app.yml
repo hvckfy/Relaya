@@ -1,0 +1,29 @@
+name: Build app
+
+# Ручная сборка Relaya.app без публикации релиза: артефакт сборки для проверки и скриншотов.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
+
+      - name: Build app bundle
+        run: scripts/bundle.sh "0.0.0-dev"
+
+      - name: Ad-hoc sign
+        run: codesign --force --deep --sign - build/Relaya.app
+
+      - name: Package
+        run: ditto -c -k --keepParent build/Relaya.app build/Relaya-dev.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Relaya-dev
+          path: build/Relaya-dev.zip
+          retention-days: 7
