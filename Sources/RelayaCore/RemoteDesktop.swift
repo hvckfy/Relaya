@@ -82,6 +82,29 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
         return lines.joined(separator: "\r\n") + "\r\n"
     }
 
+    /// Свободен ли порт на localhost.
+    public static func isLocalPortFree(_ port: Int) -> Bool {
+        guard (1...65535).contains(port) else { return false }
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        addr.sin_port = UInt16(port).bigEndian
+        return withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
+        }
+    }
+
+    /// Локальный порт для проброса: тот же номер, что на сервере, если свободен; иначе 10000+номер; иначе любой.
+    public static func preferredLocalPort(for remotePort: Int) -> Int {
+        for candidate in [remotePort, 10000 + remotePort, 20000 + remotePort] where candidate > 1023 && isLocalPortFree(candidate) {
+            return candidate
+        }
+        return freeLocalPort()
+    }
+
     /// Свободный локальный порт для туннеля.
     public static func freeLocalPort() -> Int {
         let fd = socket(AF_INET, SOCK_STREAM, 0)

@@ -120,7 +120,7 @@ private struct TunnelRow: View {
     }
 }
 
-private struct TunnelEditor: View {
+struct TunnelEditor: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State var tunnel: Tunnel
