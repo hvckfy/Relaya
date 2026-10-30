@@ -23,6 +23,18 @@ Relaya is a free, open source alternative to Termius-style SSH managers, built w
 
 Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansible — anything that speaks SSH.
 
+## Screenshots
+
+<p align="center"><img src="docs/screenshots/host.jpg" width="820" alt="Host card with OS, tags and connection details"></p>
+
+| Terminal | Keys |
+|---|---|
+| <img src="docs/screenshots/terminal.jpg" alt="Terminal tab with OS actions"> | <img src="docs/screenshots/keys.jpg" alt="Keys screen with fingerprints"> |
+| **Remote desktops (VNC / RDP)** | **Snippets** |
+| <img src="docs/screenshots/desktops.jpg" alt="VNC and RDP connections"> | <img src="docs/screenshots/snippets.jpg" alt="Snippets with variables"> |
+
+<sub>All hosts and keys above are fictional — screenshots are taken with `Relaya --demo`.</sub>
+
 ## Features
 
 **Hosts**
