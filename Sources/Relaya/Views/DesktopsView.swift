@@ -23,7 +23,7 @@ struct DesktopsView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "display.2").font(.system(size: 32, weight: .light)).foregroundStyle(Theme.tx2)
                     Text("Нет рабочих столов").font(.system(size: 15, weight: .bold))
-                    Text("VNC открывается во встроенном «Общем экране» macOS,\nRDP — в бесплатном Windows App от Microsoft.\nМожно подключаться через SSH-туннель к любому хосту.")
+                    Text("VNC и RDP открываются прямо в окне Relaya.\nПароль хранится в Keychain, можно подключаться через SSH-туннель.\n«Общий экран» и Windows App — запасной вариант в меню «…».")
                         .multilineTextAlignment(.center).foregroundStyle(Theme.tx2)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -59,13 +59,13 @@ struct DesktopsView: View {
             }
             Spacer()
             Button("Подключить") {
-                // VNC — во встроенном окне Relaya, RDP — в Windows App.
-                if d.kind == .vnc { openWindow(id: "vnc", value: d.id) } else { Task { await model.open(d) } }
+                // VNC и RDP — во встроенных окнах Relaya.
+                openWindow(id: d.kind == .vnc ? "vnc" : "rdp", value: d.id)
             }
             .buttonStyle(.relayaPrimary)
             Menu {
-                if d.kind == .vnc {
-                    Button("Открыть в «Общем экране» macOS") { Task { await model.open(d) } }
+                Button(d.kind == .vnc ? "Открыть в «Общем экране» macOS" : "Открыть в Windows App") {
+                    Task { await model.open(d) }
                 }
                 Button("Изменить…") { editing = d }
                 Divider()
@@ -111,7 +111,7 @@ private struct DesktopEditor: View {
                 }
             }
             .formStyle(.grouped)
-            Text("Пароль спросит и сохранит в Keychain сам клиент (Общий экран или Windows App).")
+            Text("Пароль Relaya спросит при первом подключении и, если разрешите, сохранит в Keychain.")
                 .font(.system(size: 12)).foregroundStyle(Theme.tx2)
             if let e = result.validationError { Text(e).font(.system(size: 12)).foregroundStyle(Theme.red) }
             HStack {

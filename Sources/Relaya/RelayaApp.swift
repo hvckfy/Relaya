@@ -62,6 +62,13 @@ struct RelayaApp: App {
         }
         .windowToolbarStyle(.unifiedCompact)
 
+        WindowGroup("RDP", id: "rdp", for: RemoteDesktop.ID.self) { $id in
+            RDPWindow(desktopID: id)
+                .environment(model)
+                .environment(model.settings)
+        }
+        .windowToolbarStyle(.unifiedCompact)
+
         Settings {
             SettingsView()
                 .environment(model.settings)
