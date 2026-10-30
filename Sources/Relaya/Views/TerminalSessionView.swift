@@ -81,6 +81,11 @@ private struct SessionTab: View {
             return NSItemProvider(object: session.id.uuidString as NSString)
         }
         .contextMenu {
+            if let c = session.controller {
+                Toggle(L("Сессия tmux"), isOn: Binding(get: { c.tmuxName != nil },
+                                                      set: { model.setTmux($0, for: session) }))
+                    .help(L("Вкладка переподключится: при включении — внутри tmux, при выключении сессия на сервере закроется."))
+            }
             if session.controller?.tmuxName != nil {
                 Button(L("Отсоединить и оставить на сервере")) { Task { await model.detachKeeping(session) } }
                     .help(L("Сессия tmux продолжит работать; сервер закроет её через сутки без подключения."))

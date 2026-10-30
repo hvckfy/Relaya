@@ -23,7 +23,8 @@ final class SessionController {
     /// Команда, которую нужно выполнить после входа (например, из мастера ключей).
     @ObservationIgnored var pendingCommand: String?
     /// Имя постоянной сессии tmux на сервере (если для хоста включено).
-    let tmuxName: String?
+    /// Можно включить и выключить в открытой вкладке — тогда она переподключается.
+    var tmuxName: String?
     let tmuxIdleMinutes: Int
 
     /// Меняется при переподключении — пересоздаёт терминал.
@@ -315,7 +316,9 @@ struct TerminalView: NSViewRepresentable {
     private func apply(to view: RelayaTerminalView) {
         let theme = settings.theme
         if view.font != settings.font { view.font = settings.font }
-        view.nativeBackgroundColor = theme.backgroundColor
+        // С картинкой фона терминал полупрозрачный: просвечивает общая картинка окна.
+        view.nativeBackgroundColor = theme.backgroundColor.withAlphaComponent(ThemeStore.sessionOpacity)
+        view.layer?.isOpaque = false
         view.nativeForegroundColor = theme.foregroundColor
         view.caretColor = theme.foregroundColor
         view.optionAsMetaKey = settings.optionAsMeta

@@ -59,16 +59,6 @@ struct HostEditorView: View {
             Text(original == nil ? L("Новый хост") : L("Изменить хост"))
                 .font(.system(size: 17, weight: .bold))
             Spacer()
-            Picker(L("Протокол"), selection: .constant("SSH")) {
-                Text("SSH").tag("SSH")
-                Text("VNC").tag("VNC")
-                Text("RDP").tag("RDP")
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 170)
-            .disabled(true)
-            .help(L("VNC и RDP появятся в v0.3–v0.4"))
         }
         .padding(.horizontal, 24)
         .padding(.top, 18)

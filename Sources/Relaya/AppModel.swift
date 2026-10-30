@@ -545,6 +545,22 @@ final class AppModel {
         Set(terminalSessions.compactMap { $0.controller?.tmuxName })
     }
 
+    /// Включить или выключить tmux в открытой вкладке. Вкладка переподключается:
+    /// при включении — уже внутри новой сессии tmux, при выключении — сессия на сервере закрывается.
+    func setTmux(_ on: Bool, for session: Session) {
+        guard let c = session.controller, (c.tmuxName != nil) != on else { return }
+        if on {
+            c.tmuxName = Tmux.sessionName(alias: c.host.alias, id: session.id)
+        } else if let name = c.tmuxName {
+            c.tmuxName = nil
+            let host = c.host
+            Task { _ = try? await exec(Tmux.killCommand([name]), on: host, interactive: true,
+                                       reason: L("Завершить сессии tmux на %@", host.alias)) }
+        }
+        c.terminate()
+        c.reconnect()
+    }
+
     /// «Отсоединить и оставить на сервере»: срок — сутки без подключения, затем сервер её закроет.
     func detachKeeping(_ session: Session) async {
         guard let c = session.controller, let name = c.tmuxName else { return }
