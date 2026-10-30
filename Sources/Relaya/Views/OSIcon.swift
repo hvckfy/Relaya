@@ -9,6 +9,11 @@ struct OSIcon: View {
     var body: some View {
         Group {
             if let os {
+                if let d = DistroLogos.paths[os] {
+                    SVGPathShape(d)
+                        .fill(os.brandColor, style: FillStyle(eoFill: false))
+                        .padding(size * 0.04)
+                } else {
                 switch os.style {
                 case .symbol(let name, let color):
                     Image(systemName: name)
@@ -21,6 +26,7 @@ struct OSIcon: View {
                         .minimumScaleFactor(0.5)
                         .frame(width: size, height: size)
                         .background(color, in: .rect(cornerRadius: size * 0.28))
+                }
                 }
             } else {
                 Image(systemName: "chevron.right.2")
@@ -38,6 +44,38 @@ extension ServerOS {
     enum Style {
         case symbol(String, Color)
         case badge(String, Color)
+    }
+
+    /// Фирменный цвет логотипа (Simple Icons); для тёмных логотипов — цвет текста.
+    var brandColor: Color {
+        switch self {
+        case .ubuntu: Color(hex: 0xE95420)
+        case .debian: Color(hex: 0xA81D33)
+        case .raspbian: Color(hex: 0xC51A4A)
+        case .fedora: Color(hex: 0x51A2DA)
+        case .centos: Color(hex: 0x932279)
+        case .rhel: Color(hex: 0xEE0000)
+        case .rocky: Color(hex: 0x10B981)
+        case .alma: Color(hex: 0x2C5FA4)
+        case .alpine: Color(hex: 0x0D597F)
+        case .arch: Color(hex: 0x1793D1)
+        case .opensuse: Color(hex: 0x73BA25)
+        case .openwrt: Color(hex: 0x00B5E2)
+        case .freebsd: Color(hex: 0xAB2B28)
+        case .mint: Color(hex: 0x87CF3E)
+        case .popos: Color(hex: 0x48B9C7)
+        case .elementary: Color(hex: 0x64BAFF)
+        case .zorin: Color(hex: 0x15A6F0)
+        case .kali: Color(hex: 0x557C94)
+        case .proxmox: Color(hex: 0xE57000)
+        case .manjaro: Color(hex: 0x35BF5C)
+        case .endeavouros: Color(hex: 0x7F7FFF)
+        case .gentoo: Color(hex: 0x54487A)
+        case .nixos: Color(hex: 0x5277C3)
+        case .void: Color(hex: 0x478061)
+        case .openbsd: Color(hex: 0xF2CA30)
+        case .linux, .macos, .windows: Theme.tx
+        }
     }
 
     var style: Style {
@@ -58,6 +96,7 @@ extension ServerOS {
         case .arch: .badge("A", Color(hex: 0x1793D1))
         case .opensuse: .badge("S", Color(hex: 0x73BA25))
         case .freebsd: .badge("BSD", Color(hex: 0xAB2B28))
+        default: .badge(String(title.prefix(1)), brandColor)
         }
     }
 }

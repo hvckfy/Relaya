@@ -4,6 +4,7 @@ import Foundation
 public enum ServerOS: String, Sendable, CaseIterable {
     case ubuntu, debian, raspbian, fedora, centos, rhel, rocky, alma, alpine, arch, opensuse
     case openwrt, linux, macos, freebsd, windows
+    case mint, popos, elementary, zorin, kali, proxmox, manjaro, endeavouros, gentoo, nixos, void, openbsd
 
     public var title: String {
         switch self {
@@ -23,6 +24,18 @@ public enum ServerOS: String, Sendable, CaseIterable {
         case .macos: "macOS"
         case .freebsd: "FreeBSD"
         case .windows: "Windows"
+        case .mint: "Linux Mint"
+        case .popos: "Pop!_OS"
+        case .elementary: "elementary OS"
+        case .zorin: "Zorin OS"
+        case .kali: "Kali Linux"
+        case .proxmox: "Proxmox VE"
+        case .manjaro: "Manjaro"
+        case .endeavouros: "EndeavourOS"
+        case .gentoo: "Gentoo"
+        case .nixos: "NixOS"
+        case .void: "Void Linux"
+        case .openbsd: "OpenBSD"
         }
     }
 
@@ -30,7 +43,8 @@ public enum ServerOS: String, Sendable, CaseIterable {
 
     public var packageManager: PackageManager? {
         switch self {
-        case .ubuntu, .debian, .raspbian: .apt
+        case .ubuntu, .debian, .raspbian, .mint, .popos, .elementary, .zorin, .kali, .proxmox: .apt
+        case .manjaro, .endeavouros: .pacman
         case .fedora, .rocky, .alma, .rhel: .dnf
         case .centos: .yum
         case .alpine: .apk
@@ -39,13 +53,13 @@ public enum ServerOS: String, Sendable, CaseIterable {
         case .openwrt: .opkg
         case .macos: .brew
         case .freebsd: .pkg
-        case .linux, .windows: nil
+        case .linux, .windows, .gentoo, .nixos, .void, .openbsd: nil
         }
     }
 
     /// Команда, которую запускает фоновая проверка. POSIX sh; на Windows вернёт ошибку — это тоже ответ.
     public static let probeCommand =
-        "uname -s 2>/dev/null; cat /etc/os-release 2>/dev/null; [ -f /etc/openwrt_release ] && echo ID=openwrt; true"
+        "uname -s 2>/dev/null; cat /etc/os-release 2>/dev/null; [ -f /etc/openwrt_release ] && echo ID=openwrt; [ -d /etc/pve ] && echo ID=proxmox; true"
 
     /// Разбор вывода `probeCommand`.
     public static func parse(probe: String) -> ServerOS? {
@@ -68,6 +82,7 @@ public enum ServerOS: String, Sendable, CaseIterable {
         switch uname {
         case "darwin": return .macos
         case "freebsd": return .freebsd
+        case "openbsd": return .openbsd
         case "linux": return .linux
         case let u? where u.contains("mingw") || u.contains("cygwin") || u.contains("msys"): return .windows
         default: break
@@ -78,7 +93,18 @@ public enum ServerOS: String, Sendable, CaseIterable {
 
     static func fromID(_ id: String) -> ServerOS? {
         switch id {
-        case "ubuntu", "pop", "linuxmint", "elementary": .ubuntu
+        case "ubuntu": .ubuntu
+        case "linuxmint": .mint
+        case "pop": .popos
+        case "elementary": .elementary
+        case "zorin": .zorin
+        case "kali": .kali
+        case "proxmox": .proxmox
+        case "manjaro", "manjaro-arm": .manjaro
+        case "endeavouros": .endeavouros
+        case "gentoo": .gentoo
+        case "nixos": .nixos
+        case "void": .void
         case "debian": .debian
         case "raspbian": .raspbian
         case "fedora": .fedora
@@ -87,7 +113,7 @@ public enum ServerOS: String, Sendable, CaseIterable {
         case "rocky": .rocky
         case "almalinux": .alma
         case "alpine": .alpine
-        case "arch", "manjaro", "endeavouros": .arch
+        case "arch": .arch
         case "opensuse", "opensuse-leap", "opensuse-tumbleweed", "sles", "suse": .opensuse
         case "openwrt": .openwrt
         default: nil
@@ -97,7 +123,8 @@ public enum ServerOS: String, Sendable, CaseIterable {
     /// Догадка по приветствию сервера в терминале (если фоновая проверка невозможна).
     public static func guess(fromBanner text: String) -> ServerOS? {
         let checks: [(String, ServerOS)] = [
-            ("OpenWrt", .openwrt), ("Raspbian", .raspbian), ("Ubuntu", .ubuntu), ("Debian GNU/Linux", .debian),
+            ("OpenWrt", .openwrt), ("Raspbian", .raspbian), ("Linux Mint", .mint), ("Pop!_OS", .popos),
+            ("Kali", .kali), ("pve-manager", .proxmox), ("Manjaro", .manjaro), ("Ubuntu", .ubuntu), ("Debian GNU/Linux", .debian),
             ("Alpine", .alpine), ("Fedora", .fedora), ("CentOS", .centos), ("Rocky Linux", .rocky),
             ("AlmaLinux", .alma), ("Red Hat Enterprise", .rhel), ("Arch Linux", .arch), ("openSUSE", .opensuse),
             ("FreeBSD", .freebsd), ("Microsoft Windows", .windows),

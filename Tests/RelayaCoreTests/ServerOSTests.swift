@@ -11,7 +11,9 @@ import Testing
     }
 
     @Test func fallsBackToIDLike() {
-        #expect(ServerOS.parse(probe: "Linux\nID=kali\nID_LIKE=debian\n") == .debian)
+        #expect(ServerOS.parse(probe: "Linux\nID=kali\nID_LIKE=debian\n") == .kali)
+        #expect(ServerOS.parse(probe: "Linux\nID=debian\nID=proxmox\n") == .proxmox)
+        #expect(ServerOS.parse(probe: "Linux\nID=someforkofdebian\nID_LIKE=debian\n") == .debian)
     }
 
     @Test func unameOnly() {
