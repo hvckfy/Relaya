@@ -32,6 +32,8 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
     public var rdpHeight: Int?
     /// RDP: масштаб интерфейса Windows как на Retina (nil или true) или 100% — мельче, но больше места.
     public var rdpRetina: Bool?
+    /// Группа в боковой панели (nil — «Без группы»).
+    public var group: String?
 
     /// Готовые разрешения для меню.
     public static let rdpResolutionPresets: [(Int, Int)] = [(1280, 720), (1440, 900), (1920, 1080), (2560, 1440), (3840, 2160)]
@@ -52,6 +54,8 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
         if !(1...65535).contains(port) { return L("Порт — число от 1 до 65535") }
         return nil
     }
+
+    public var displayName: String { name.isEmpty ? address : name }
 
     public var summary: String {
         let target = "\(user.isEmpty ? "" : user + "@")\(address):\(port)"

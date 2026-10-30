@@ -96,6 +96,9 @@ struct DesktopEditor: View {
                 .pickerStyle(.segmented)
                 .onChange(of: desktop.kind) { _, k in portText = String(k.defaultPort) }
                 TextField(L("Название"), text: $desktop.name)
+                TextField(L("Группа"), text: Binding(get: { desktop.group ?? "" },
+                                                     set: { desktop.group = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }),
+                          prompt: Text(L("необязательно")))
                 Toggle(L("Через SSH-туннель"), isOn: $useSSH)
                 if useSSH {
                     Picker(L("SSH-хост"), selection: Binding(get: { desktop.viaSSHHost ?? "" }, set: { desktop.viaSSHHost = $0 })) {

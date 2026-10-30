@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Observation
 import RelayaCore
 
@@ -140,13 +141,47 @@ final class AppModel {
     var selectedHost: SSHHost? { hosts.first { $0.id == selectedHostID } }
     var selectedDesktop: RemoteDesktop? { desktops.first { $0.id == selectedDesktopID } }
 
-    /// Рабочие столы для текущего режима меню (с учётом поиска).
+    /// Рабочие столы VNC и RDP с учётом поиска.
     var visibleDesktops: [RemoteDesktop] {
-        let kind: RemoteDesktop.Kind = sidebarMode == .rdp ? .rdp : .vnc
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         return desktops.filter { d in
-            d.kind == kind && (q.isEmpty || d.name.lowercased().contains(q) || d.summary.lowercased().contains(q))
+            q.isEmpty || d.name.lowercased().contains(q) || d.summary.lowercased().contains(q)
         }
+    }
+
+    /// Рабочие столы по группам; без группы — в конце.
+    var groupedDesktops: [(name: String, desktops: [RemoteDesktop])] {
+        let byGroup = Dictionary(grouping: visibleDesktops) { d in
+            d.group.flatMap { $0.isEmpty ? nil : $0 } ?? Self.ungrouped
+        }
+        return byGroup.keys
+            .sorted { a, b in a == Self.ungrouped ? false : b == Self.ungrouped ? true : a < b }
+            .map { ($0, byGroup[$0]!.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }) }
+    }
+
+    /// Выбор в боковой панели: хост, рабочий стол или раздел-инструмент.
+    func select(host id: SSHHost.ID) {
+        selectedHostID = id
+        selectedDesktopID = nil
+        sidebarMode = .ssh
+        activeSessionID = nil
+        screen = .hosts
+    }
+
+    func select(desktop d: RemoteDesktop) {
+        selectedDesktopID = d.id
+        selectedHostID = nil
+        sidebarMode = d.kind == .vnc ? .vnc : .rdp
+        activeSessionID = nil
+        screen = .hosts
+    }
+
+    /// Свёрнутые секции и группы боковой панели.
+    func isExpanded(_ key: String) -> Binding<Bool> {
+        Binding(get: { [unowned self] in !self.searchText.isEmpty || !self.collapsedGroups.contains(key) },
+                set: { [unowned self] open in
+                    if open { self.collapsedGroups.remove(key) } else { self.collapsedGroups.insert(key) }
+                })
     }
 
     /// «Подключить» в тулбаре — по выбранному в текущем режиме.
@@ -160,6 +195,14 @@ final class AppModel {
 
     var canConnectSelection: Bool {
         sidebarMode == .vnc || sidebarMode == .rdp ? selectedDesktop != nil : selectedHost != nil
+    }
+
+    func add(_ kind: RemoteDesktop.Kind?) {
+        switch kind {
+        case nil: editor = EditorRequest(original: nil)
+        case .vnc?: desktopEditor = RemoteDesktop(name: "", kind: .vnc, address: "")
+        case .rdp?: desktopEditor = RemoteDesktop(name: "", kind: .rdp, address: "")
+        }
     }
 
     /// «+» в тулбаре — новое подключение текущего типа.

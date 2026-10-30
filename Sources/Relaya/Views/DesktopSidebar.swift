@@ -1,77 +1,6 @@
 import SwiftUI
 import RelayaCore
 
-/// Список VNC/RDP-подключений в левом меню (режимы VNC и RDP).
-struct DesktopList: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 2) {
-                ForEach(model.visibleDesktops) { d in row(d) }
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-        }
-        .overlay {
-            if model.visibleDesktops.isEmpty {
-                VStack(spacing: 8) {
-                    Text(model.searchText.isEmpty ? L("Нет подключений") : L("Ничего не найдено")).foregroundStyle(Theme.tx2)
-                    if model.searchText.isEmpty {
-                        Button(L("Добавить")) { model.addForCurrentMode() }
-                            .buttonStyle(.relaya(.normal, height: 24))
-                    }
-                }
-            }
-        }
-    }
-
-    private func row(_ d: RemoteDesktop) -> some View {
-        let selected = model.selectedDesktopID == d.id
-        let open = model.sessions.contains { s in
-            switch s.kind {
-            case .vnc(let v): v.desktop.id == d.id
-            case .rdp(let r): r.desktop.id == d.id
-            default: false
-            }
-        }
-        return HStack(spacing: 8) {
-            Image(systemName: d.kind == .vnc ? "display" : "pc")
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.acc)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(d.name.isEmpty ? d.address : d.name).fontWeight(.medium)
-                Text(d.summary).font(.system(size: 11)).foregroundStyle(Theme.tx2).lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            StatusDot(connected: open)
-        }
-        .font(.system(size: 13))
-        .foregroundStyle(Theme.tx)
-        .padding(.horizontal, 8)
-        .frame(height: 36)
-        .background(selected ? Theme.sel : .clear, in: .rect(cornerRadius: 8, style: .continuous))
-        .contentShape(.rect)
-        .onTapGesture { model.selectedDesktopID = d.id; model.activeSessionID = nil; model.screen = .hosts }
-        .simultaneousGesture(TapGesture(count: 2).onEnded { model.openDesktop(d) })
-        .contextMenu {
-            Button(L("Подключить")) { model.openDesktop(d) }
-            Button(L("Открыть в отдельном окне")) { openWindow(id: d.kind == .vnc ? "vnc" : "rdp", value: d.id) }
-            Button(d.kind == .vnc ? L("Открыть в «Общем экране» macOS") : L("Открыть в Windows App")) {
-                Task { await model.open(d) }
-            }
-            Divider()
-            Button(L("Изменить…")) { model.desktopEditor = d }
-            Button(L("Удалить"), role: .destructive) {
-                model.desktops.removeAll { $0.id == d.id }
-                if model.selectedDesktopID == d.id { model.selectedDesktopID = nil }
-            }
-        }
-    }
-}
-
 /// Карточка VNC/RDP-подключения.
 struct DesktopDetailView: View {
     @Environment(AppModel.self) private var model
@@ -143,29 +72,21 @@ struct DesktopDetailView: View {
     }
 }
 
-/// Пустая область в режимах VNC/RDP, когда ничего не выбрано.
+/// Пустая область, когда выбран раздел удалённых столов, но не подключение.
 struct DesktopsEmptyView: View {
     @Environment(AppModel.self) private var model
-    let kind: RemoteDesktop.Kind
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: kind == .vnc ? "display" : "pc")
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Theme.tx2)
-            Text(model.visibleDesktops.isEmpty ? L("Добавьте первое подключение") : L("Выберите подключение"))
-                .font(.system(size: 17, weight: .bold))
-            Text(kind == .vnc
-                 ? L("VNC открывается во вкладке Relaya. Пароль хранится в Keychain, можно подключаться через SSH-туннель.")
-                 : L("RDP открывается во вкладке Relaya: вход с NLA, пароль в Keychain, можно через SSH-туннель."))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.tx2)
-                .frame(maxWidth: 420)
-            Button(kind == .vnc ? L("Добавить VNC") : L("Добавить RDP")) { model.addForCurrentMode() }
-                .buttonStyle(.relayaPrimary)
+        ContentUnavailableView {
+            Label(model.desktops.isEmpty ? L("Добавьте первое подключение") : L("Выберите подключение"),
+                  systemImage: "display")
+        } description: {
+            Text(L("VNC и RDP открываются во вкладке Relaya. Пароль хранится в Keychain, можно подключаться через SSH-туннель."))
+        } actions: {
+            HStack {
+                Button(L("Добавить VNC")) { model.add(.vnc) }
+                Button(L("Добавить RDP")) { model.add(.rdp) }
+            }
         }
-        .font(.system(size: 13))
-        .foregroundStyle(Theme.tx)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
