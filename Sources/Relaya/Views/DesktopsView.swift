@@ -107,7 +107,35 @@ struct DesktopEditor: View {
                 TextField(L("Порт"), text: $portText)
                 TextField(L("Пользователь"), text: $desktop.user, prompt: Text(L("необязательно")))
                 if desktop.kind == .rdp {
+                    Picker(L("Разрешение"), selection: Binding(
+                        get: { desktop.rdpWidth.flatMap { w in desktop.rdpHeight.map { "\(w)x\($0)" } } ?? "fit" },
+                        set: { v in
+                            let parts = v.split(separator: "x").compactMap { Int($0) }
+                            desktop.rdpWidth = parts.count == 2 ? parts[0] : nil
+                            desktop.rdpHeight = parts.count == 2 ? parts[1] : nil
+                        })) {
+                        Text(L("По размеру окна (подстраивается на лету)")).tag("fit")
+                        ForEach(RemoteDesktop.rdpResolutionPresets, id: \.0) { w, h in Text("\(w) × \(h)").tag("\(w)x\(h)") }
+                        if let w = desktop.rdpWidth, let h = desktop.rdpHeight,
+                           !RemoteDesktop.rdpResolutionPresets.contains(where: { $0 == (w, h) }) {
+                            Text("\(w) × \(h)").tag("\(w)x\(h)")
+                        }
+                    }
+                    HStack {
+                        Text(L("Своё разрешение"))
+                        Spacer()
+                        TextField("1920", value: $desktop.rdpWidth, format: .number.grouping(.never))
+                            .frame(width: 70).textFieldStyle(.roundedBorder)
+                        Text("×")
+                        TextField("1080", value: $desktop.rdpHeight, format: .number.grouping(.never))
+                            .frame(width: 70).textFieldStyle(.roundedBorder)
+                    }
+                    Picker(L("Масштаб интерфейса"), selection: Binding(get: { desktop.rdpRetina ?? true }, set: { desktop.rdpRetina = $0 })) {
+                        Text(L("Retina — крупный, как на Mac")).tag(true)
+                        Text(L("100% — мельче, больше места")).tag(false)
+                    }
                     Toggle(L("Во весь экран"), isOn: $desktop.fullScreen)
+                        .help(L("Только для открытия во внешнем Windows App"))
                 } else {
                     Picker(L("Масштаб"), selection: Binding(get: { desktop.scaleToFit ?? true }, set: { desktop.scaleToFit = $0 })) {
                         Text(L("По размеру окна")).tag(true)

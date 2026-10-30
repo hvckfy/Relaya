@@ -27,6 +27,14 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
     /// VNC: вписывать экран в окно (nil или true) или показывать 1:1 с прокруткой.
     /// Optional — чтобы старые desktops.json без этого поля читались.
     public var scaleToFit: Bool?
+    /// RDP: фиксированное разрешение рабочего стола; nil — по размеру окна (подстраивается на лету).
+    public var rdpWidth: Int?
+    public var rdpHeight: Int?
+    /// RDP: масштаб интерфейса Windows как на Retina (nil или true) или 100% — мельче, но больше места.
+    public var rdpRetina: Bool?
+
+    /// Готовые разрешения для меню.
+    public static let rdpResolutionPresets: [(Int, Int)] = [(1280, 720), (1440, 900), (1920, 1080), (2560, 1440), (3840, 2160)]
 
     public init(name: String, kind: Kind, address: String, port: Int? = nil, user: String = "",
                 viaSSHHost: String? = nil, fullScreen: Bool = false) {

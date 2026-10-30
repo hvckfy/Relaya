@@ -22,6 +22,15 @@ final class RDPSession {
     private(set) var certificate: String?
     /// Подключение оборвано из-за смены сертификата сервера.
     private(set) var certificateMismatch = false
+    /// Фиксированное разрешение (nil — по размеру окна) и масштаб; меняются на лету из меню окна.
+    private(set) var fixedSize: (width: Int, height: Int)?
+    private(set) var retina: Bool
+    /// Сервер поддерживает смену разрешения без переподключения.
+    private(set) var canResize = false
+    @ObservationIgnored private var displayControl: RDPDisplayControlSession?
+    @ObservationIgnored private var lastRequest: RDPDisplayRequest?
+    @ObservationIgnored private var surface: (points: CGSize, scale: CGFloat)?
+    @ObservationIgnored private var resizeTask: Task<Void, Never>?
     /// Холст: экран удалённой машины и слой ввода.
     let canvas = RemoteDesktopCanvasNSView()
 
@@ -34,6 +43,68 @@ final class RDPSession {
     init(desktop: RemoteDesktop, model: AppModel) {
         self.desktop = desktop
         self.model = model
+        if let w = desktop.rdpWidth, let h = desktop.rdpHeight { fixedSize = (w, h) }
+        retina = desktop.rdpRetina ?? true
+        canvas.onSurfaceChange = { [weak self] points, scale in
+            MainActor.assumeIsolated { self?.surfaceChanged(points: points, scale: scale) }
+        }
+    }
+
+    // MARK: - Разрешение
+
+    /// Запрос размера рабочего стола: пиксели окна (или фиксированные) и масштаб Retina/100%.
+    private func displayRequest(points: CGSize, scale: CGFloat) -> RDPDisplayRequest {
+        let scaleFactors = RDPDisplayScaleFactors(backingScaleFactor: retina ? scale : 1)
+        if let fixedSize {
+            return RDPDisplayRequest(width: UInt32(fixedSize.width), height: UInt32(fixedSize.height), scaleFactors: scaleFactors)
+        }
+        let w = UInt32(min(8192, max(640, (points.width * scale).rounded())))
+        let h = UInt32(min(8192, max(480, (points.height * scale).rounded())))
+        return RDPDisplayRequest(width: w, height: h, scaleFactors: scaleFactors)
+    }
+
+    private func surfaceChanged(points: CGSize, scale: CGFloat) {
+        surface = (points, scale)
+        guard fixedSize == nil else { return }
+        scheduleResize()
+    }
+
+    /// Окно перестали тянуть — через полсекунды просим сервер перестроить рабочий стол.
+    private func scheduleResize(delay: Duration = .milliseconds(500)) {
+        guard displayControl != nil, let surface else { return }
+        resizeTask?.cancel()
+        let request = displayRequest(points: surface.points, scale: surface.scale)
+        guard request != lastRequest else { return }
+        resizeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self, let control = self.displayControl, request != self.lastRequest else { return }
+            control.send(request)
+            self.lastRequest = request
+        }
+    }
+
+    /// Меню «Разрешение»: фиксированное значение или nil — по размеру окна.
+    func setResolution(_ size: (width: Int, height: Int)?) {
+        fixedSize = size
+        persist { $0.rdpWidth = size?.width; $0.rdpHeight = size?.height }
+        scheduleResize(delay: .zero)
+    }
+
+    func setRetina(_ on: Bool) {
+        retina = on
+        persist { $0.rdpRetina = on }
+        scheduleResize(delay: .zero)
+    }
+
+    private func persist(_ change: (inout RemoteDesktop) -> Void) {
+        if let i = model.desktops.firstIndex(where: { $0.id == desktop.id }) { change(&model.desktops[i]) }
+    }
+
+    fileprivate func displayControlReady(_ session: RDPDisplayControlSession) {
+        displayControl = session
+        canResize = true
+        lastRequest = nil
+        scheduleResize(delay: .milliseconds(200))
     }
 
     var account: String { "\(desktop.user)@\(desktop.address):\(desktop.port)" }
@@ -101,21 +172,25 @@ final class RDPSession {
         phase = .connecting
         presented = 0
 
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let scale = canvas.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         let points = canvas.bounds.size.width > 100 ? canvas.bounds.size : CGSize(width: 1440, height: 900)
+        let initial = displayRequest(points: points, scale: scale)
+        displayControl = nil
+        canResize = false
+        lastRequest = initial
         var configuration = RDPConnectionConfiguration(
             host: target.host,
             port: UInt16(target.port),
             credentials: credentials,
             timeoutSeconds: 15,
             graphicsFrameCaptureLimit: nil,
-            desktopWidth: UInt16(min(points.width * scale, 7680)) & ~1,
-            desktopHeight: UInt16(min(points.height * scale, 4320)) & ~1,
+            desktopWidth: UInt16(min(initial.width, 8192)),
+            desktopHeight: UInt16(min(initial.height, 8192)),
             clipboardEnabled: false,
             audioPlaybackEnabled: false,
             clientName: "Relaya"
         )
-        configuration.scaleFactors = RDPDisplayScaleFactors(backingScaleFactor: scale)
+        configuration.scaleFactors = initial.scaleFactors
 
         let cancellation = RDPConnectionCancellation()
         self.cancellation = cancellation
@@ -144,6 +219,9 @@ final class RDPSession {
                 onInputReady: { session in
                     nonisolated(unsafe) let session = session
                     DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.activated(session) } }
+                },
+                onDisplayControlReady: { session in
+                    DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.displayControlReady(session) } }
                 },
                 onCertificate: { info in
                     let fingerprint = info.sha256

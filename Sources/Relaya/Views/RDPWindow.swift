@@ -79,6 +79,9 @@ struct RDPContent: View {
                 }
             }
             ToolbarItem {
+                ResolutionMenu(session: session)
+            }
+            ToolbarItem {
                 Button { session.disconnect() } label: { Label(L("Отключить"), systemImage: "xmark.circle") }
                     .disabled(session.phase != .connected && session.phase != .connecting)
             }
@@ -126,4 +129,38 @@ private struct CanvasHost: NSViewRepresentable {
     }
 
     func updateNSView(_ container: NSView, context: Context) {}
+}
+
+/// Меню «Разрешение» в окне RDP: меняет рабочий стол Windows на лету, без переподключения.
+private struct ResolutionMenu: View {
+    let session: RDPSession
+
+    var body: some View {
+        Menu {
+            Button {
+                session.setResolution(nil)
+            } label: {
+                check(session.fixedSize == nil, L("По размеру окна"))
+            }
+            Divider()
+            ForEach(RemoteDesktop.rdpResolutionPresets, id: \.0) { w, h in
+                Button {
+                    session.setResolution((w, h))
+                } label: {
+                    check(session.fixedSize.map { $0.width == w && $0.height == h } ?? false, "\(w) × \(h)")
+                }
+            }
+            Divider()
+            Button { session.setRetina(true) } label: { check(session.retina, L("Масштаб Retina — крупный интерфейс")) }
+            Button { session.setRetina(false) } label: { check(!session.retina, L("Масштаб 100% — больше места")) }
+        } label: {
+            Label(L("Разрешение"), systemImage: "rectangle.dashed")
+        }
+        .help(session.canResize ? L("Разрешение и масштаб рабочего стола — меняются без переподключения")
+                                : L("Сервер не поддерживает смену разрешения на лету — изменения применятся при следующем подключении"))
+    }
+
+    private func check(_ on: Bool, _ title: String) -> Text {
+        Text((on ? "✓ " : "    ") + title)
+    }
 }
