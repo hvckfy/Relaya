@@ -55,6 +55,15 @@ struct SessionGrid: View {
                 if let host = session.host { OSIcon(os: model.current(host).os, size: 14) }
                 if controller == nil { Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(Theme.tx2) }
                 Text(session.title).font(.system(size: 12, weight: active ? .semibold : .regular))
+                // Куда подключены: user@адрес:порт из ~/.ssh/config.
+                if let host = session.host {
+                    Text(model.current(host).subtitle)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Theme.tx2)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
                 if controller?.ended == true { Text(L("отключён")).font(.system(size: 11)).foregroundStyle(Theme.red) }
                 Spacer()
                 if model.broadcastInput, controller != nil {
