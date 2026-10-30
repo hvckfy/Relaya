@@ -17,6 +17,15 @@ struct SidebarView: View {
     private var selection: Binding<SidebarItem?> {
         Binding(get: {
             if model.screen != .hosts { return .tool(model.screen) }
+            // Открыта вкладка — подсвечиваем её хост или рабочий стол, а не последний выбранный.
+            if let s = model.activeSession {
+                switch s.kind {
+                case .terminal(let c): return .host(c.host.id)
+                case .files(let h): return .host(h.id)
+                case .vnc(let v): return .desktop(v.desktop.id)
+                case .rdp(let r): return .desktop(r.desktop.id)
+                }
+            }
             if let id = model.selectedHostID { return .host(id) }
             if let id = model.selectedDesktopID { return .desktop(id) }
             return nil
@@ -33,8 +42,9 @@ struct SidebarView: View {
     var body: some View {
         List(selection: selection) {
             Section(isExpanded: model.isExpanded("section:hosts")) {
-                ForEach(model.groupedHosts, id: \.name) { group in
-                    DisclosureGroup(isExpanded: model.isExpanded(group.name)) {
+                ForEach(model.groupedHosts.map { (key: "host:" + $0.name, group: $0) }, id: \.key) { item in
+                    let group = item.group
+                    DisclosureGroup(isExpanded: model.isExpanded("host:" + group.name)) {
                         ForEach(group.hosts) { host in
                             HostRow(host: host, connected: model.isConnected(host)).tag(SidebarItem.host(host.id))
                         }
@@ -50,7 +60,8 @@ struct SidebarView: View {
             }
 
             Section(isExpanded: model.isExpanded("section:desktops")) {
-                ForEach(model.groupedDesktops, id: \.name) { group in
+                ForEach(model.groupedDesktops.map { (key: "desktop:" + $0.name, group: $0) }, id: \.key) { item in
+                    let group = item.group
                     DisclosureGroup(isExpanded: model.isExpanded("desktop:" + group.name)) {
                         ForEach(group.desktops) { d in
                             DesktopRow(desktop: d).tag(SidebarItem.desktop(d.id))
