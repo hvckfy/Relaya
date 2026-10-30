@@ -95,6 +95,7 @@ struct SessionGrid: View {
             .simultaneousGesture(TapGesture().onEnded { model.activeSessionID = session.id })
         }
         .clipShape(.rect(cornerRadius: 8, style: .continuous))
+        .relayaGlass(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(receiving ? Theme.red : (active ? Theme.acc : Theme.line),

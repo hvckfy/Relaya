@@ -67,6 +67,15 @@ final class AppSettings {
         themeRevision += 1
     }
 
+    /// Liquid Glass на вкладках и панелях (macOS 26 и новее).
+    var liquidGlass: Bool {
+        didSet { defaults.set(liquidGlass, forKey: "liquidGlass"); ThemeStore.glass = liquidGlass; themeRevision += 1 }
+    }
+    static var liquidGlassAvailable: Bool {
+        if #available(macOS 26, *) { return true }
+        return false
+    }
+
     /// Стиль окна: false — Relaya (темы оформления), true — системный macOS.
     var nativeUI: Bool {
         didSet { defaults.set(nativeUI, forKey: "nativeUI"); ThemeStore.native = nativeUI; themeRevision += 1 }
@@ -150,6 +159,9 @@ final class AppSettings {
         backgroundUnderSessions = underSessions
         backgroundUnderInterface = underInterface
         backgroundPanelOpacity = panelOpacity
+        let glass = defaults.bool(forKey: "liquidGlass")
+        liquidGlass = glass
+        ThemeStore.glass = glass
         let native = defaults.bool(forKey: "nativeUI")
         nativeUI = native
         ThemeStore.native = native

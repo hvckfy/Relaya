@@ -55,6 +55,12 @@ private struct AppearanceSettings: View {
             }
             }
 
+            Toggle(L("Liquid Glass"), isOn: $settings.liquidGlass)
+                .disabled(!AppSettings.liquidGlassAvailable)
+                .help(AppSettings.liquidGlassAvailable
+                      ? L("Стеклянные вкладки, плитки и панели, как в macOS 26")
+                      : L("Нужна macOS 26 или новее"))
+
             Picker(L("Вид блока «Состояние»"), selection: $settings.statsStyle) {
                 ForEach(AppSettings.StatsStyle.allCases) { Text($0.title).tag($0) }
             }

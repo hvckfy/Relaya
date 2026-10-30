@@ -73,6 +73,7 @@ struct HostStatsPanel: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.bg2, in: .rect(cornerRadius: 12, style: .continuous))
+        .relayaGlass(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
     }
 

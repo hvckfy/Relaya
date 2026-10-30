@@ -238,3 +238,19 @@ struct StatusDot: View {
             .accessibilityLabel(connected ? L("подключён") : L("не подключён"))
     }
 }
+
+extension View {
+    /// Стекло Liquid Glass поверх фона, если оно включено в настройках и есть в системе (macOS 26).
+    /// Собирается и старым Xcode — тогда ничего не делает.
+    @ViewBuilder func relayaGlass<S: Shape>(_ shape: S) -> some View {
+        #if compiler(>=6.2)
+        if ThemeStore.glass, #available(macOS 26, *) {
+            self.glassEffect(.regular, in: shape)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}

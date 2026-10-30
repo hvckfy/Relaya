@@ -617,3 +617,5 @@
 "Непрозрачность панелей" = "Panel opacity";
 "Одна картинка на всё окно: при плитках терминалы и файлы просвечивают её как общий фон." = "One image for the whole window: with tiles, terminals and files show it through as a shared background.";
 "Вкладка переподключится: при включении — внутри tmux, при выключении сессия на сервере закроется." = "The tab reconnects: when turned on, inside tmux; when turned off, the session on the server is closed.";
+"Стеклянные вкладки, плитки и панели, как в macOS 26" = "Glass tabs, tiles and panels, as in macOS 26";
+"Нужна macOS 26 или новее" = "Requires macOS 26 or later";
