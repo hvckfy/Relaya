@@ -1,7 +1,9 @@
 name: Release
 
 # Тег вида v0.1.0 → собранный Relaya.zip в GitHub Release.
-# Пока без подписи и нотаризации: при первом запуске macOS попросит подтвердить открытие.
+# Подпись — постоянным самоподписанным сертификатом из секретов SIGNING_P12_BASE64 / SIGNING_P12_PASSWORD:
+# у всех версий одна «личность», поэтому разрешения Keychain («Разрешать всегда») не сбрасываются после обновления.
+# Без секретов — ad-hoc. Нотаризации нет: при первом запуске macOS попросит подтвердить открытие.
 on:
   push:
     tags: ["v*"]
@@ -21,8 +23,30 @@ jobs:
       - name: Build app bundle
         run: scripts/bundle.sh "${GITHUB_REF_NAME#v}"
 
-      - name: Ad-hoc sign
-        run: codesign --force --deep --sign - build/Relaya.app
+      - name: Sign
+        env:
+          P12: ${{ secrets.SIGNING_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then
+            echo "::warning::No signing certificate in secrets, signing ad-hoc"
+            codesign --force --deep --sign - build/Relaya.app
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/signing.keychain-db"
+          KC_PW=$(openssl rand -hex 16)
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/relaya.p12"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          security import "$RUNNER_TEMP/relaya.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          # Самоподписанный сертификат не доверенный — ищем по SHA-1, а не по имени среди «валидных».
+          HASH=$(security find-certificate -c "Relaya Self-Signed" -Z "$KC" | awk '/SHA-1/{print $NF}')
+          codesign --force --deep --keychain "$KC" --sign "$HASH" build/Relaya.app
+          codesign -dv build/Relaya.app 2>&1 | grep -E "Authority|Identifier"
+          rm -f "$RUNNER_TEMP/relaya.p12"
 
       - name: Package
         run: ditto -c -k --keepParent build/Relaya.app "build/Relaya-${GITHUB_REF_NAME}.zip"
