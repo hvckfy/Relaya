@@ -584,3 +584,19 @@
 "без подключения %@" = "detached %@";
 "Подключиться" = "Attach";
 "Завершить" = "End";
+
+/* Native UI rework */
+"Удалённые столы" = "Remote Desktops";
+"Инструменты" = "Tools";
+"Добавить VNC или RDP" = "Add VNC or RDP";
+"Открыть файлы (SFTP)" = "Open Files (SFTP)";
+"Дублировать" = "Duplicate";
+"Фильтр по меткам" = "Filter by tags";
+"Хост SSH…" = "SSH Host…";
+"Подключение VNC…" = "VNC Connection…";
+"Подключение RDP…" = "RDP Connection…";
+"Хосты и подключения" = "Hosts and connections";
+"Стиль окна" = "Window style";
+"Системный macOS" = "macOS System";
+"Выберите хост в боковой панели" = "Select a host in the sidebar";
+"VNC и RDP открываются во вкладке Relaya. Пароль хранится в Keychain, можно подключаться через SSH-туннель." = "VNC and RDP open in a Relaya tab. The password is stored in Keychain; you can connect through an SSH tunnel.";
