@@ -31,8 +31,8 @@ struct SessionGrid: View {
     private func node(_ layout: TileLayout<Session.ID>) -> AnyView {
         switch layout {
         case .leaf(let id):
-            if let s = model.terminalSessions.first(where: { $0.id == id }), let c = s.controller {
-                return AnyView(cell(s, c)
+            if let s = model.tileableSessions.first(where: { $0.id == id }) {
+                return AnyView(cell(s)
                     .frame(minWidth: 160, maxWidth: .infinity, minHeight: 100, maxHeight: .infinity)
                     .background(GeometryReader { g in
                         Color.clear.preference(key: TileFrames.self, value: [id: g.frame(in: .named("tiles"))])
@@ -46,16 +46,18 @@ struct SessionGrid: View {
         }
     }
 
-    private func cell(_ session: Session, _ controller: SessionController) -> some View {
+    private func cell(_ session: Session) -> some View {
+        let controller = session.controller
         let active = session.id == model.activeSessionID
         let receiving = model.receivesBroadcast(session)
         return VStack(spacing: 0) {
             HStack(spacing: 6) {
-                OSIcon(os: model.current(controller.host).os, size: 14)
-                Text(controller.host.alias).font(.system(size: 12, weight: active ? .semibold : .regular))
-                if controller.ended { Text(L("отключён")).font(.system(size: 11)).foregroundStyle(Theme.red) }
+                if let host = session.host { OSIcon(os: model.current(host).os, size: 14) }
+                if controller == nil { Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(Theme.tx2) }
+                Text(session.title).font(.system(size: 12, weight: active ? .semibold : .regular))
+                if controller?.ended == true { Text(L("отключён")).font(.system(size: 11)).foregroundStyle(Theme.red) }
                 Spacer()
-                if model.broadcastInput {
+                if model.broadcastInput, controller != nil {
                     Toggle(L("ввод"), isOn: Binding(
                         get: { !model.broadcastExcluded.contains(session.id) },
                         set: { if $0 { model.broadcastExcluded.remove(session.id) } else { model.broadcastExcluded.insert(session.id) } }))
@@ -80,11 +82,17 @@ struct SessionGrid: View {
             }
             .help(L("Перетащите заголовок на край другой плитки, чтобы переставить"))
 
-            TerminalView(controller: controller)
-                .id("\(session.id)-\(controller.generation)")
-                .padding(4)
-                .background(Color(nsColor: settings.theme.backgroundColor))
-                .simultaneousGesture(TapGesture().onEnded { model.activeSessionID = session.id })
+            Group {
+                if let controller {
+                    TerminalView(controller: controller)
+                        .id("\(session.id)-\(controller.generation)")
+                        .padding(4)
+                        .background(Color(nsColor: settings.theme.backgroundColor))
+                } else if case .files(let host) = session.kind {
+                    SFTPView(host: host, embedded: true).id(session.id)
+                }
+            }
+            .simultaneousGesture(TapGesture().onEnded { model.activeSessionID = session.id })
         }
         .clipShape(.rect(cornerRadius: 8, style: .continuous))
         .overlay {

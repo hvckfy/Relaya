@@ -133,14 +133,14 @@ struct MainView: View {
             DesktopsView()
         } else if model.screen == .agents {
             AgentsView()
-        } else if model.gridMode, model.terminalSessions.count >= 2 {
+        } else if model.gridMode, model.tileableSessions.count >= 2 {
             SessionGrid()
         } else if let session = model.activeSession {
             // id привязывает содержимое к вкладке — при переключении процессы не пересоздаются.
             Group {
                 switch session.kind {
                 case .terminal(let c): SessionView(session: session, controller: c).modifier(DockTarget())
-                case .files(let h): SFTPView(host: h, embedded: true)
+                case .files(let h): SFTPView(host: h, embedded: true).modifier(DockTarget())
                 case .vnc(let s): VNCContent(session: s).background(Color.black)
                 case .rdp(let s): RDPContent(session: s).background(Color.black)
                 }

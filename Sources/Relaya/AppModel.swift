@@ -130,14 +130,14 @@ final class AppModel {
     @ObservationIgnored var draggingSessionID: Session.ID?
 
     var currentLayout: TileLayout<Session.ID>? {
-        let ids = terminalSessions.map(\.id)
+        let ids = tileableSessions.map(\.id)
         return tileLayout?.synced(with: ids) ?? .automatic(ids)
     }
 
     /// Пристыковать вкладку `id` к краю плитки `target` (nil — к краю всей сетки).
     /// Из обычного режима — сетка из активной вкладки и перетащенной.
     func dock(_ id: Session.ID, at edge: TileLayout<Session.ID>.Edge, of target: Session.ID?) {
-        guard terminalSessions.contains(where: { $0.id == id }) else { return }
+        guard tileableSessions.contains(where: { $0.id == id }) else { return }
         var base = gridMode ? currentLayout : activeSessionID.map { TileLayout.leaf($0) }
         if base == nil { base = .leaf(id) }
         tileLayout = base?.inserting(id, at: edge, of: target)
@@ -149,6 +149,10 @@ final class AppModel {
         tileLayout = currentLayout?.swapping(a, b)
     }
     var terminalSessions: [Session] { sessions.filter { $0.controller != nil } }
+    /// Вкладки, которые можно ставить плитками: терминалы и файлы SFTP.
+    var tileableSessions: [Session] {
+        sessions.filter { if case .files = $0.kind { true } else { $0.controller != nil } }
+    }
     var activeSessionID: Session.ID?
 
     var editor: EditorRequest?
@@ -265,6 +269,7 @@ final class AppModel {
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         let wanted = Set(tagFilter.map { $0.lowercased() })
         let visible = hosts.filter { host in
+            guard !host.isGitService else { return false }
             let tags = Set(host.tags.map { $0.lowercased() })
             guard wanted.isSubset(of: tags) else { return false }
             return query.isEmpty
@@ -371,10 +376,8 @@ final class AppModel {
         }
         sessions.remove(at: index)
         broadcastExcluded.remove(session.id)
-        if terminalSessions.count < 2 {
-            gridMode = false
-            broadcastInput = false
-        }
+        if tileableSessions.count < 2 { gridMode = false }
+        if terminalSessions.count < 2 { broadcastInput = false }
         if activeSessionID == session.id {
             activeSessionID = sessions.indices.contains(index) ? sessions[index].id : sessions.last?.id
         }

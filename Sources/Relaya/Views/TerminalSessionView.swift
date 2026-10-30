@@ -15,9 +15,11 @@ struct SessionTabBar: View {
                     }
                 }
             }
-            if model.terminalSessions.count >= 2 {
+            if model.tileableSessions.count >= 2 {
                 ToggleIcon(on: model.gridMode, systemImage: "square.grid.2x2",
                            label: L("Сетка: все терминалы сразу"), tint: Theme.acc) { model.gridMode.toggle() }
+            }
+            if model.terminalSessions.count >= 2 {
                 ToggleIcon(on: model.broadcastInput, systemImage: "dot.radiowaves.left.and.right",
                            label: L("Ввод во все терминалы"), tint: Theme.red) { model.broadcastInput.toggle() }
             }
