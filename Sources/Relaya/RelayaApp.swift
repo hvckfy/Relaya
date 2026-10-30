@@ -70,8 +70,13 @@ struct RelayaApp: App {
         .windowToolbarStyle(.unifiedCompact)
 
         // Туннели из строки меню — без открытого окна.
+        // Значок показывается, только если есть туннели. macOS пишет в эту привязку при каждом
+        // обновлении сцены — запись без изменения снова будила бы @Observable и зацикливала интерфейс.
         MenuBarExtra(isInserted: Binding(get: { model.settings.menuBarIcon && !model.tunnels.tunnels.isEmpty },
-                                         set: { model.settings.menuBarIcon = $0 })) {
+                                         set: { shown in
+                                             let current = model.settings.menuBarIcon && !model.tunnels.tunnels.isEmpty
+                                             if shown != current, !model.tunnels.tunnels.isEmpty { model.settings.menuBarIcon = shown }
+                                         })) {
             MenuBarTunnels().environment(model)
         } label: {
             Image(systemName: model.tunnels.activeCount > 0 ? "arrow.left.arrow.right.circle.fill" : "arrow.left.arrow.right.circle")

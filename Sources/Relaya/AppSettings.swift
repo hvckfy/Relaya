@@ -75,7 +75,7 @@ final class AppSettings {
         didSet { defaults.set(autoReconnect, forKey: "autoReconnect") }
     }
     var menuBarIcon: Bool {
-        didSet { defaults.set(menuBarIcon, forKey: "menuBarIcon") }
+        didSet { if menuBarIcon != oldValue { defaults.set(menuBarIcon, forKey: "menuBarIcon") } }
     }
     var offerKeySetup: Bool {
         didSet { defaults.set(offerKeySetup, forKey: "offerKeySetup") }
