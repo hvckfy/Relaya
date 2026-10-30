@@ -530,3 +530,10 @@
 "5 минут" = "5 minutes";
 "15 минут" = "15 minutes";
 "1 час" = "1 hour";
+"Сетка: все терминалы сразу" = "Grid: all terminals at once";
+"Ввод во все терминалы" = "Type into all terminals";
+"Получает рассылаемый ввод" = "Receives broadcast input";
+"ввод" = "input";
+"Развернуть" = "Expand";
+"Ввод рассылается в терминалы: %@. Пароли и сниппеты не рассылаются." = "Input is broadcast to %@ terminals. Passwords and snippets are not broadcast.";
+"Выключить" = "Turn Off";
