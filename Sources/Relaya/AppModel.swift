@@ -620,7 +620,8 @@ final class AppModel {
     var dockerBusy: Set<String> = []
 
     func refreshDocker(_ host: SSHHost, interactive: Bool) async {
-        guard !dockerLoading.contains(host.alias), !RelayaPaths.isDemo else { return }
+        if RelayaPaths.isDemo { docker[host.alias] = DemoData.docker(for: host); return }
+        guard !dockerLoading.contains(host.alias) else { return }
         dockerLoading.insert(host.alias)
         defer { dockerLoading.remove(host.alias) }
         do {
@@ -660,7 +661,8 @@ final class AppModel {
     /// Нагрузка/память/диск/аптайм одной командой по ssh. `interactive` — по кнопке: можно спросить Touch ID.
     func refreshStats(_ host: SSHHost, interactive: Bool) async {
         let h = current(host)
-        guard !hostStatsLoading.contains(h.alias), !RelayaPaths.isDemo else { return }
+        if RelayaPaths.isDemo { hostStats[h.alias] = DemoData.stats(for: h); return }
+        guard !hostStatsLoading.contains(h.alias) else { return }
         hostStatsLoading.insert(h.alias)
         defer { hostStatsLoading.remove(h.alias) }
 

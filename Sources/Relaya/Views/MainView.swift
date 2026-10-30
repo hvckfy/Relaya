@@ -17,6 +17,8 @@ struct MainView: View {
                 }
                 content
             }
+            // Рабочая область — на всё окно, иначе у пустых экранов фон виден только под карточкой.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background { WorkspaceBackground() }
         }
         .toolbar {

@@ -121,4 +121,27 @@ enum DemoData {
         User root
         IdentityFile ~/.ssh/id_ed25519
     """
+
+    /// Правдоподобное состояние сервера для карточки хоста.
+    static func stats(for host: SSHHost) -> HostStats {
+        let gb: Int64 = 1 << 30
+        let seed = Double(host.alias.unicodeScalars.reduce(0) { $0 + Int($1.value) } % 7)
+        return HostStats(load1: 0.6 + seed * 0.35, cores: 4, memTotal: 16 * gb, memAvailable: Int64(9 - seed) * gb,
+                         diskTotal: 200 * gb, diskUsed: Int64(60 + seed * 15) * gb, uptime: 86400 * (12 + seed))
+    }
+
+    /// Контейнеры для серверов приложений; на остальных Docker «не установлен».
+    static func docker(for host: SSHHost) -> Docker.ListResult {
+        guard host.alias.hasPrefix("web") else { return .notInstalled }
+        return .containers([
+            DockerContainer(id: "a1b2c3d4e5f6", name: "api", image: "acme/api:2.14.0", state: "running",
+                            status: "Up 3 days", ports: "0.0.0.0:8080->8080/tcp"),
+            DockerContainer(id: "b2c3d4e5f6a1", name: "nginx", image: "nginx:1.27-alpine", state: "running",
+                            status: "Up 3 days", ports: "0.0.0.0:443->443/tcp"),
+            DockerContainer(id: "c3d4e5f6a1b2", name: "worker", image: "acme/worker:2.14.0", state: "running",
+                            status: "Up 3 days", ports: ""),
+            DockerContainer(id: "d4e5f6a1b2c3", name: "migrations", image: "acme/api:2.14.0", state: "exited",
+                            status: "Exited (0) 3 days ago", ports: ""),
+        ])
+    }
 }

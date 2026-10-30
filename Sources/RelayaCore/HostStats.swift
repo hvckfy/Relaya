@@ -11,6 +11,17 @@ public struct HostStats: Equatable, Sendable {
     public var diskUsed: Int64
     public var uptime: TimeInterval
 
+    public init(load1: Double, cores: Int, memTotal: Int64, memAvailable: Int64,
+                diskTotal: Int64, diskUsed: Int64, uptime: TimeInterval) {
+        self.load1 = load1
+        self.cores = cores
+        self.memTotal = memTotal
+        self.memAvailable = memAvailable
+        self.diskTotal = diskTotal
+        self.diskUsed = diskUsed
+        self.uptime = uptime
+    }
+
     public var loadPercent: Double { cores > 0 ? min(1, load1 / Double(cores)) : 0 }
     public var memUsed: Int64 { max(0, memTotal - memAvailable) }
     public var memPercent: Double { memTotal > 0 ? Double(memUsed) / Double(memTotal) : 0 }
