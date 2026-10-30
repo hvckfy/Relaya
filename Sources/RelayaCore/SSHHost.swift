@@ -54,6 +54,14 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
         self.os = os
     }
 
+    /// Запись для git-хостинга (GitHub, GitLab, Bitbucket…), а не сервер: в список хостов не попадает.
+    public var isGitService: Bool {
+        let name = (hostName ?? alias).lowercased()
+        let known = ["github.com", "gitlab.com", "bitbucket.org", "ssh.dev.azure.com", "vs-ssh.visualstudio.com",
+                     "codeberg.org", "gitea.com", "ssh.github.com", "altssh.gitlab.com", "altssh.bitbucket.org"]
+        return user == "git" || known.contains(name)
+    }
+
     /// Подпись `user@hostname:port` для списка хостов.
     public var subtitle: String {
         var s = hostName ?? alias

@@ -147,6 +147,8 @@ struct DesktopEditor: View {
                 }
             }
             .formStyle(.grouped)
+            // В листе форма без своей подложки — иначе внутри один цвет, снаружи другой.
+            .scrollContentBackground(.hidden)
             Text(L("Пароль Relaya спросит при первом подключении и, если разрешите, сохранит в Keychain."))
                 .font(.system(size: 12)).foregroundStyle(Theme.tx2)
             if let e = result.validationError { Text(e).font(.system(size: 12)).foregroundStyle(Theme.red) }

@@ -60,3 +60,12 @@ import Testing
         #expect(SSHConfigParser.splitTags(" Prod, ,prod,db ") == ["Prod", "db"])
     }
 }
+
+struct GitServiceTests {
+    @Test func gitHostsAreRecognized() {
+        #expect(SSHHost(alias: "github.com").isGitService)
+        #expect(SSHHost(alias: "gh", hostName: "github.com").isGitService)
+        #expect(SSHHost(alias: "work-git", hostName: "git.company.io", user: "git").isGitService)
+        #expect(!SSHHost(alias: "web", hostName: "10.0.0.1", user: "root").isGitService)
+    }
+}

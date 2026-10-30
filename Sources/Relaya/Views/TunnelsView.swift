@@ -150,6 +150,8 @@ struct TunnelEditor: View {
                 Text(preview.summary).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
             }
             .formStyle(.grouped)
+            // В листе форма без своей подложки — иначе внутри один цвет, снаружи другой.
+            .scrollContentBackground(.hidden)
             if let e = preview.validationError {
                 Text(e).font(.system(size: 12)).foregroundStyle(Theme.red)
             }
