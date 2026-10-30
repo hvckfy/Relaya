@@ -121,7 +121,33 @@ final class AppModel {
     var broadcastInput = false
     var broadcastExcluded: Set<Session.ID> = []
     /// Все терминалы одновременно, сеткой.
-    var gridMode = false
+    var gridMode = false {
+        didSet { if gridMode { tileLayout = currentLayout } }
+    }
+    /// Раскладка плиток; закрытые вкладки убираются, новые добавляются при каждом показе.
+    var tileLayout: TileLayout<Session.ID>?
+    /// Вкладка или плитка, которую сейчас перетаскивают.
+    @ObservationIgnored var draggingSessionID: Session.ID?
+
+    var currentLayout: TileLayout<Session.ID>? {
+        let ids = terminalSessions.map(\.id)
+        return tileLayout?.synced(with: ids) ?? .automatic(ids)
+    }
+
+    /// Пристыковать вкладку `id` к краю плитки `target` (nil — к краю всей сетки).
+    /// Из обычного режима — сетка из активной вкладки и перетащенной.
+    func dock(_ id: Session.ID, at edge: TileLayout<Session.ID>.Edge, of target: Session.ID?) {
+        guard terminalSessions.contains(where: { $0.id == id }) else { return }
+        var base = gridMode ? currentLayout : activeSessionID.map { TileLayout.leaf($0) }
+        if base == nil { base = .leaf(id) }
+        tileLayout = base?.inserting(id, at: edge, of: target)
+        gridMode = (tileLayout?.ids.count ?? 0) >= 2
+        activeSessionID = id
+    }
+
+    func swapTiles(_ a: Session.ID, _ b: Session.ID) {
+        tileLayout = currentLayout?.swapping(a, b)
+    }
     var terminalSessions: [Session] { sessions.filter { $0.controller != nil } }
     var activeSessionID: Session.ID?
 

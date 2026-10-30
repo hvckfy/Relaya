@@ -139,7 +139,7 @@ struct MainView: View {
             // id привязывает содержимое к вкладке — при переключении процессы не пересоздаются.
             Group {
                 switch session.kind {
-                case .terminal(let c): SessionView(session: session, controller: c)
+                case .terminal(let c): SessionView(session: session, controller: c).modifier(DockTarget())
                 case .files(let h): SFTPView(host: h, embedded: true)
                 case .vnc(let s): VNCContent(session: s).background(Color.black)
                 case .rdp(let s): RDPContent(session: s).background(Color.black)
@@ -171,5 +171,23 @@ private struct NewGroupActions: View {
         Button(L("Создать")) { model.move(host, toGroup: name) }
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
         Button(L("Отмена"), role: .cancel) {}
+    }
+}
+
+/// Перетаскивание вкладки на открытый терминал: он и перетащенная вкладка становятся плитками.
+private struct DockTarget: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @State private var hint: CGRect?
+
+    func body(content: Content) -> some View {
+        GeometryReader { geo in
+            let bounds = CGRect(origin: .zero, size: geo.size)
+            content
+                .overlay(alignment: .topLeading) { DockHint(rect: hint) }
+                .onDrop(of: [.plainText], delegate: TileDropDelegate(
+                    model: model,
+                    frames: { model.activeSessionID.map { [$0: bounds.insetBy(dx: 28, dy: 28)] } ?? [:] },
+                    bounds: bounds, hint: $hint))
+        }
     }
 }

@@ -74,6 +74,10 @@ private struct SessionTab: View {
         .padding(.vertical, 4)
         .contentShape(.rect)
         .onTapGesture { model.activeSessionID = session.id; model.screen = .hosts }
+        .onDrag {
+            model.draggingSessionID = session.id
+            return NSItemProvider(object: session.id.uuidString as NSString)
+        }
         .contextMenu {
             if session.controller?.tmuxName != nil {
                 Button(L("Отсоединить и оставить на сервере")) { Task { await model.detachKeeping(session) } }

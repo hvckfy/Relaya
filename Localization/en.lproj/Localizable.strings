@@ -600,3 +600,4 @@
 "Системный macOS" = "macOS System";
 "Выберите хост в боковой панели" = "Select a host in the sidebar";
 "VNC и RDP открываются во вкладке Relaya. Пароль хранится в Keychain, можно подключаться через SSH-туннель." = "VNC and RDP open in a Relaya tab. The password is stored in Keychain; you can connect through an SSH tunnel.";
+"Перетащите заголовок на край другой плитки, чтобы переставить" = "Drag the title to another tile's edge to rearrange";

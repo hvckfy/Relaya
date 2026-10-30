@@ -1,29 +1,49 @@
 import SwiftUI
 import RelayaCore
 
-/// Все терминалы сразу, сеткой. Клик по ячейке делает её активной; в режиме рассылки
-/// у каждой ячейки галочка «получает ввод».
+/// Плитки терминалов: дерево разбиений с перетаскиваемыми границами, без наложений.
+/// Вкладку или заголовок плитки можно перетащить на край другой плитки — она прилипнет туда
+/// и займёт половину; к краю всей сетки — займёт всю ширину или высоту. В центр — поменяться местами.
 struct SessionGrid: View {
     @Environment(AppModel.self) private var model
     @Environment(AppSettings.self) private var settings
+    @State private var frames: [Session.ID: CGRect] = [:]
+    @State private var hint: CGRect?
 
     var body: some View {
-        let sessions = model.terminalSessions
-        let columns = max(1, Int(Double(sessions.count).squareRoot().rounded(.up)))
         VStack(spacing: 0) {
             if model.broadcastInput { BroadcastBanner() }
-            Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-                ForEach(Array(stride(from: 0, to: sessions.count, by: columns)), id: \.self) { start in
-                    GridRow {
-                        ForEach(sessions[start..<min(start + columns, sessions.count)]) { s in
-                            if let c = s.controller { cell(s, c) }
-                        }
-                    }
+            GeometryReader { geo in
+                Group {
+                    if let layout = model.currentLayout { node(layout) }
                 }
+                .padding(6)
+                .coordinateSpace(.named("tiles"))
+                .onPreferenceChange(TileFrames.self) { frames = $0 }
+                .overlay(alignment: .topLeading) { DockHint(rect: hint) }
+                .onDrop(of: [.plainText], delegate: TileDropDelegate(
+                    model: model, frames: { frames }, bounds: CGRect(origin: .zero, size: geo.size), hint: $hint))
             }
-            .padding(6)
         }
         .background(Theme.bar)
+    }
+
+    private func node(_ layout: TileLayout<Session.ID>) -> AnyView {
+        switch layout {
+        case .leaf(let id):
+            if let s = model.terminalSessions.first(where: { $0.id == id }), let c = s.controller {
+                return AnyView(cell(s, c)
+                    .frame(minWidth: 160, maxWidth: .infinity, minHeight: 100, maxHeight: .infinity)
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: TileFrames.self, value: [id: g.frame(in: .named("tiles"))])
+                    }))
+            }
+            return AnyView(EmptyView())
+        case .row(let children):
+            return AnyView(HSplitView { ForEach(Array(children.enumerated()), id: \.offset) { node($0.element) } })
+        case .column(let children):
+            return AnyView(VSplitView { ForEach(Array(children.enumerated()), id: \.offset) { node($0.element) } })
+        }
     }
 
     private func cell(_ session: Session, _ controller: SessionController) -> some View {
@@ -54,6 +74,11 @@ struct SessionGrid: View {
             .background(Theme.bg2)
             .contentShape(.rect)
             .onTapGesture { model.activeSessionID = session.id }
+            .onDrag {
+                model.draggingSessionID = session.id
+                return NSItemProvider(object: session.id.uuidString as NSString)
+            }
+            .help(L("Перетащите заголовок на край другой плитки, чтобы переставить"))
 
             TerminalView(controller: controller)
                 .id("\(session.id)-\(controller.generation)")
@@ -88,5 +113,91 @@ struct BroadcastBanner: View {
         .padding(.horizontal, 12)
         .frame(height: 30)
         .background(Theme.red)
+    }
+}
+
+/// Рамки плиток в общей системе координат сетки.
+struct TileFrames: PreferenceKey {
+    static let defaultValue: [Session.ID: CGRect] = [:]
+    static func reduce(value: inout [Session.ID: CGRect], nextValue: () -> [Session.ID: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+/// Подсветка места, куда встанет плитка.
+struct DockHint: View {
+    let rect: CGRect?
+
+    var body: some View {
+        if let rect {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Theme.acc.opacity(0.18))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.acc, lineWidth: 2))
+                .frame(width: rect.width, height: rect.height)
+                .offset(x: rect.minX, y: rect.minY)
+                .allowsHitTesting(false)
+                .animation(.easeOut(duration: 0.12), value: rect)
+        }
+    }
+}
+
+/// Куда встанет перетаскиваемая вкладка: у края всей сетки (полоса 28 pt) — на всю ширину/высоту;
+/// у края плитки (четверть) — рядом с ней; в центре — поменяться местами.
+@MainActor
+struct TileDropDelegate: DropDelegate {
+    let model: AppModel
+    let frames: () -> [Session.ID: CGRect]
+    let bounds: CGRect
+    @Binding var hint: CGRect?
+
+    enum Target {
+        case edge(TileLayout<Session.ID>.Edge, Session.ID?, CGRect)
+        case swap(Session.ID, CGRect)
+    }
+
+    func target(at p: CGPoint) -> Target? {
+        guard let dragged = model.draggingSessionID else { return nil }
+        let band: CGFloat = 28
+        if p.x < band { return .edge(.left, nil, CGRect(x: 0, y: 0, width: bounds.width / 3, height: bounds.height)) }
+        if p.x > bounds.width - band {
+            return .edge(.right, nil, CGRect(x: bounds.width * 2 / 3, y: 0, width: bounds.width / 3, height: bounds.height))
+        }
+        if p.y < band { return .edge(.top, nil, CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height / 3)) }
+        if p.y > bounds.height - band {
+            return .edge(.bottom, nil, CGRect(x: 0, y: bounds.height * 2 / 3, width: bounds.width, height: bounds.height / 3))
+        }
+        guard let (id, r) = frames().first(where: { $0.value.contains(p) }) else { return nil }
+        let fx = (p.x - r.minX) / r.width, fy = (p.y - r.minY) / r.height
+        let edges: [(CGFloat, TileLayout<Session.ID>.Edge, CGRect)] = [
+            (fx, .left, CGRect(x: r.minX, y: r.minY, width: r.width / 2, height: r.height)),
+            (1 - fx, .right, CGRect(x: r.midX, y: r.minY, width: r.width / 2, height: r.height)),
+            (fy, .top, CGRect(x: r.minX, y: r.minY, width: r.width, height: r.height / 2)),
+            (1 - fy, .bottom, CGRect(x: r.minX, y: r.midY, width: r.width, height: r.height / 2)),
+        ]
+        let nearest = edges.min { $0.0 < $1.0 }!
+        if nearest.0 < 0.28 {
+            return id == dragged ? nil : .edge(nearest.1, id, nearest.2)
+        }
+        return id == dragged ? nil : .swap(id, r)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        switch target(at: info.location) {
+        case .edge(_, _, let r)?, .swap(_, let r)?: hint = r
+        case nil: hint = nil
+        }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) { hint = nil }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer { hint = nil; model.draggingSessionID = nil }
+        guard let dragged = model.draggingSessionID, let t = target(at: info.location) else { return false }
+        switch t {
+        case .edge(let edge, let id, _): model.dock(dragged, at: edge, of: id)
+        case .swap(let id, _): model.swapTiles(dragged, id)
+        }
+        return true
     }
 }
