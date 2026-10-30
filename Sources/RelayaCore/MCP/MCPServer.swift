@@ -229,11 +229,11 @@ public final class MCPServer {
         let shown = command.count > 600 ? String(command.prefix(600)) + "…" : command
         let tags = host.tags.isEmpty ? "" : " [\(host.tags.joined(separator: ", "))]"
         let script = """
-        display dialog "\(esc(client)) хочет выполнить на \(esc(host.alias))\(esc(tags)):\n\n\(esc(shown))" ¬
+        set answer to display dialog "\(esc(client)) хочет выполнить на \(esc(host.alias))\(esc(tags)):\n\n\(esc(shown))" ¬
             with title "Relaya — запрос агента" buttons {"Запретить", "Разрешить"} default button "Запретить" ¬
             cancel button "Запретить" with icon caution giving up after 120
-        if gave up of result then error number -128
-        return button returned of result
+        if gave up of answer then error number -128
+        return button returned of answer
         """
         guard let r = try? await ProcessRunner.run("/usr/bin/osascript", ["-e", script]) else { return false }
         return r.succeeded && r.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "Разрешить"
