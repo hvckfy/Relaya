@@ -116,6 +116,12 @@ final class AppModel {
 
     var selectedHostID: SSHHost.ID?
     var sessions: [Session] = []
+    /// Ввод из одного терминала рассылается во все остальные (кроме исключённых).
+    var broadcastInput = false
+    var broadcastExcluded: Set<Session.ID> = []
+    /// Все терминалы одновременно, сеткой.
+    var gridMode = false
+    var terminalSessions: [Session] { sessions.filter { $0.controller != nil } }
     var activeSessionID: Session.ID?
 
     var editor: EditorRequest?
@@ -264,6 +270,10 @@ final class AppModel {
         screen = .hosts
         let controller = SessionController(host: host)
         controller.onOSGuessed = { [weak self] os in self?.setOS(os, for: host.alias, onlyIfUnknown: true) }
+        controller.onUserInput = { [weak self, weak controller] data in
+            guard let self, let controller else { return }
+            self.broadcast(data, from: controller)
+        }
         let session = Session(kind: .terminal(controller))
         if host.os == nil, !RelayaPaths.isDemo { Task { await detectOS(for: host.alias) } }
         sessions.append(session)
@@ -279,6 +289,11 @@ final class AppModel {
         case .files: break
         }
         sessions.remove(at: index)
+        broadcastExcluded.remove(session.id)
+        if terminalSessions.count < 2 {
+            gridMode = false
+            broadcastInput = false
+        }
         if activeSessionID == session.id {
             activeSessionID = sessions.indices.contains(index) ? sessions[index].id : sessions.last?.id
         }
@@ -372,6 +387,20 @@ final class AppModel {
         }
         sessions.append(session)
         activeSessionID = session.id
+    }
+
+    func receivesBroadcast(_ session: Session) -> Bool {
+        broadcastInput && session.controller != nil && !broadcastExcluded.contains(session.id)
+    }
+
+    /// Рассылка набранного пользователем во все другие терминалы, участвующие в рассылке.
+    func broadcast(_ data: ArraySlice<UInt8>, from source: SessionController) {
+        guard broadcastInput,
+              let sourceSession = sessions.first(where: { $0.controller === source }),
+              !broadcastExcluded.contains(sourceSession.id) else { return }
+        for s in sessions where s.id != sourceSession.id && !broadcastExcluded.contains(s.id) {
+            if let c = s.controller, !c.ended { c.terminal?.receiveBroadcast(data) }
+        }
     }
 
     func closeActiveSession() {

@@ -15,6 +15,12 @@ struct SessionTabBar: View {
                     }
                 }
             }
+            if model.terminalSessions.count >= 2 {
+                ToggleIcon(on: model.gridMode, systemImage: "square.grid.2x2",
+                           label: L("Сетка: все терминалы сразу"), tint: Theme.acc) { model.gridMode.toggle() }
+                ToggleIcon(on: model.broadcastInput, systemImage: "dot.radiowaves.left.and.right",
+                           label: L("Ввод во все терминалы"), tint: Theme.red) { model.broadcastInput.toggle() }
+            }
             IconButton(systemImage: "plus", label: L("Новая вкладка"), size: 34) {
                 if let host = model.activeSession?.host ?? model.selectedHost { model.connect(host) }
                 else if let d = model.selectedDesktop { model.openDesktop(d) }
@@ -40,6 +46,12 @@ private struct SessionTab: View {
                 .foregroundStyle(session.controller?.ended == true ? Theme.tx2.opacity(0.4)
                                  : session.host?.tags.first.map(TagStyle.color) ?? Theme.tx2)
                 .frame(width: 14)
+            if model.receivesBroadcast(session) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.red)
+                    .help(L("Получает рассылаемый ввод"))
+            }
             Text(session.title)
                 .fontWeight(active ? .semibold : .regular)
                 .lineLimit(1)
@@ -65,3 +77,27 @@ private struct SessionTab: View {
     }
 }
 
+
+/// Кнопка-переключатель в полосе вкладок.
+private struct ToggleIcon: View {
+    let on: Bool
+    let systemImage: String
+    let label: String
+    let tint: SwiftUI.Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(on ? SwiftUI.Color.white : Theme.tx2)
+                .frame(width: 28, height: 26)
+                .background(on ? tint : SwiftUI.Color.clear, in: .rect(cornerRadius: 7, style: .continuous))
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}

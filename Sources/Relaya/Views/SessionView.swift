@@ -12,6 +12,7 @@ struct SessionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if model.broadcastInput { BroadcastBanner() }
             breadcrumbs
             SessionBanners(controller: c, host: controller.host)
             TerminalView(controller: c)

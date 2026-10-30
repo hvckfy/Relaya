@@ -16,6 +16,8 @@ final class SessionController {
     @ObservationIgnored var liveView: (view: RelayaTerminalView, generation: Int)?
     /// Вызывается, когда ОС удалось угадать по приветствию сервера.
     @ObservationIgnored var onOSGuessed: ((ServerOS) -> Void)?
+    /// Пользователь что-то набрал в этом терминале.
+    @ObservationIgnored var onUserInput: ((ArraySlice<UInt8>) -> Void)?
     @ObservationIgnored private var osGuessed = false
     @ObservationIgnored private var retryPasswordOnly = false
     /// Команда, которую нужно выполнить после входа (например, из мастера ключей).
@@ -82,7 +84,7 @@ final class SessionController {
 
         if let cmd = pendingCommand, Self.looksLikeShellPrompt(tail) {
             pendingCommand = nil
-            terminal?.send(txt: cmd + "\r")
+            terminal?.sendQuiet(cmd + "\r")
         }
 
         // Первый осмысленный вывод после ввода пароля — значит, вошли.
@@ -115,7 +117,7 @@ final class SessionController {
                 passwordPromptWithoutSaved = true
                 return
             }
-            terminal?.send(txt: pw + "\r")
+            terminal?.sendQuiet(pw + "\r")
         }
     }
 
@@ -137,7 +139,7 @@ final class SessionController {
     func answerHostKey(trust: Bool) {
         hostKeyPrompt = nil
         tail = ""
-        terminal?.send(txt: trust ? "yes\r" : "no\r")
+        terminal?.sendQuiet(trust ? "yes\r" : "no\r")
     }
 
     /// Пользователь ввёл пароль в наше поле: сохраняем (по желанию) и отправляем в ssh.
@@ -146,7 +148,7 @@ final class SessionController {
         passwordPromptWithoutSaved = false
         savedPasswordRejected = false
         autofilled = true
-        terminal?.send(txt: password + "\r")
+        terminal?.sendQuiet(password + "\r")
     }
 
     // MARK: - Завершение и переподключение
@@ -208,7 +210,7 @@ final class SessionController {
 
     /// Вставляет команду в терминал без Enter — пользователь проверяет и запускает сам.
     func insert(_ command: String) {
-        terminal?.send(txt: command)
+        terminal?.sendQuiet(command)
         terminal?.window?.makeFirstResponder(terminal)
     }
 
@@ -223,6 +225,9 @@ final class SessionController {
 final class RelayaTerminalView: LocalProcessTerminalView {
     var onOutput: ((String) -> Void)?
     var onExit: ((Int32?) -> Void)?
+    /// Ввод, набранный пользователем в этом терминале (для рассылки в другие вкладки).
+    var onUserInput: ((ArraySlice<UInt8>) -> Void)?
+    private var quiet = false
     var highlighter = TerminalHighlighter(rules: [])
     /// Набор правил, уже переданный в highlighter (чтобы не перекомпилировать на каждом обновлении).
     var appliedRules: [HighlightRule]?
@@ -237,6 +242,23 @@ final class RelayaTerminalView: LocalProcessTerminalView {
             super.dataReceived(slice: slice)
         }
         onOutput?(String(decoding: slice, as: UTF8.self))
+    }
+
+    /// Программный ввод (пароль, ответ на запрос, сниппет): никогда не рассылается в другие вкладки.
+    func sendQuiet(_ text: String) {
+        quiet = true
+        send(txt: text)
+        quiet = false
+    }
+
+    override func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) {
+        super.send(source: source, data: data)
+        if !quiet { onUserInput?(data) }
+    }
+
+    /// Ввод, разосланный из другой вкладки: прямо в процесс, без повторной рассылки.
+    func receiveBroadcast(_ data: ArraySlice<UInt8>) {
+        process?.send(data: data)
     }
 
     override func processTerminated(_ source: LocalProcess, exitCode: Int32?) {
@@ -256,6 +278,7 @@ struct TerminalView: NSViewRepresentable {
             apply(to: live.view)
             return live.view
         }
+        defer { controller.liveView?.view.onUserInput = { [weak controller] data in controller?.onUserInput?(data) } }
         let view = RelayaTerminalView(frame: .zero)
         controller.liveView = (view, controller.generation)
         apply(to: view)

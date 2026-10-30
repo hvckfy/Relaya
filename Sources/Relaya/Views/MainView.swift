@@ -120,6 +120,8 @@ struct MainView: View {
             DesktopsView()
         } else if model.screen == .agents {
             AgentsView()
+        } else if model.gridMode, model.terminalSessions.count >= 2 {
+            SessionGrid()
         } else if let session = model.activeSession {
             // id привязывает содержимое к вкладке — при переключении процессы не пересоздаются.
             Group {
