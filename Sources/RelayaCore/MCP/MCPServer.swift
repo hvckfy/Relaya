@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 
 /// MCP-сервер Relaya: JSON-RPC 2.0 построчно через stdin/stdout.
 ///
@@ -223,8 +224,23 @@ public final class MCPServer {
         "'" + s.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
     }
 
-    /// Системный диалог через osascript: «Запретить» по умолчанию, без ответа за 2 минуты — отказ.
+    /// Подтверждение команды — системным окном Touch ID: приложить палец или ввести пароль Mac — разрешить,
+    /// «Запретить» — отказ. Без Touch ID и пароля на Mac — обычный диалог с кнопками.
     static func askWithDialog(host: SSHHost, command: String, client: String) async -> Bool {
+        let context = LAContext()
+        context.localizedCancelTitle = "Запретить"
+        context.localizedFallbackTitle = "Ввести пароль"
+        var error: NSError?
+        if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
+            let shown = command.count > 160 ? String(command.prefix(160)) + "…" : command
+            let reason = "\(client) хочет выполнить на \(host.alias): \(shown)"
+            return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
+        }
+        return await askWithButtons(host: host, command: command, client: client)
+    }
+
+    /// Запасной вариант: диалог osascript, «Запретить» по умолчанию, без ответа за 2 минуты — отказ.
+    static func askWithButtons(host: SSHHost, command: String, client: String) async -> Bool {
         func esc(_ s: String) -> String { s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
         let shown = command.count > 600 ? String(command.prefix(600)) + "…" : command
         let tags = host.tags.isEmpty ? "" : " [\(host.tags.joined(separator: ", "))]"
@@ -233,9 +249,12 @@ public final class MCPServer {
             with title "Relaya — запрос агента" buttons {"Запретить", "Разрешить"} default button "Запретить" ¬
             cancel button "Запретить" with icon caution giving up after 120
         if gave up of answer then error number -128
-        return button returned of answer
+        if button returned of answer is "Разрешить" then return "RELAYA_ALLOW"
+        return "RELAYA_DENY"
         """
+        // Ответ — ASCII: у процесса MCP бывает локаль без UTF-8, и osascript печатает кириллицу как «?»,
+        // из-за чего «Разрешить» не совпадало и любое разрешение считалось отказом.
         guard let r = try? await ProcessRunner.run("/usr/bin/osascript", ["-e", script]) else { return false }
-        return r.succeeded && r.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "Разрешить"
+        return r.succeeded && r.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "RELAYA_ALLOW"
     }
 }
