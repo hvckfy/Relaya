@@ -49,7 +49,7 @@ struct KeysView: View {
                 }
             }
         }
-        .background(Theme.bg)
+        .background(Theme.content)
         .task { await reload() }
         .sheet(isPresented: $generate) {
             GenerateKeySheet { path in

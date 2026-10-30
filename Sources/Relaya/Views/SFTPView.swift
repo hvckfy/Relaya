@@ -57,6 +57,7 @@ struct SFTPView: View {
                 }
                 .width(100)
             }
+            .scrollContentBackground(embedded && ThemeStore.sessionOpacity < 1 ? .hidden : .automatic)
             .contextMenu(forSelectionType: RemoteFile.ID.self) { ids in
                 if ids.count == 1, let f = files.first(where: { ids.contains($0.id) }), !f.isDirectory {
                     Button(L("Открыть в редакторе")) { edit(f) }
@@ -91,7 +92,7 @@ struct SFTPView: View {
         .background { shortcuts }
         .frame(width: embedded ? nil : 860, height: embedded ? nil : 560)
         .frame(maxWidth: embedded ? .infinity : nil, maxHeight: embedded ? .infinity : nil)
-        .background(Theme.bg)
+        .background(embedded ? Theme.session : Theme.bg)
         .task { await start() }
         .onDisappear {
             queue.cancelAll()

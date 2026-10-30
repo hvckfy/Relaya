@@ -38,7 +38,7 @@ struct DesktopsView: View {
         }
         .font(.system(size: 13))
         .foregroundStyle(Theme.tx)
-        .background(Theme.bg)
+        .background(Theme.content)
         .sheet(item: $editing) { d in DesktopEditor(desktop: d).environment(model) }
     }
 

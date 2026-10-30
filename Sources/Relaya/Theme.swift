@@ -7,6 +7,25 @@ enum Theme {
     static let bg = token(\.bg)
     static let bg2 = token(\.bg2)
     static let side = token(\.side)
+    /// Фон панелей сессий (файлы SFTP) поверх картинки фона.
+    static let session = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let a = ThemeStore.sessionOpacity
+        if ThemeStore.native { return NSColor(white: isDark ? 0.13 : 0.93, alpha: a) }
+        let theme = ThemeStore.current
+        return NSColor(hex: (isDark ? theme.dark : theme.light).bg, alpha: a)
+    })
+
+    /// Фон разделов в рабочей области: с картинкой фона — полупрозрачный.
+    static let content = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let a = ThemeStore.contentOpacity
+        if ThemeStore.native {
+            return NSColor(white: isDark ? 0.13 : 0.93, alpha: a)
+        }
+        let theme = ThemeStore.current
+        return NSColor(hex: (isDark ? theme.dark : theme.light).bg, alpha: a)
+    })
     static let bar = token(\.bar)
     static let line = token(\.tx, light: 0.12, dark: 0.13)
     static let line2 = token(\.tx, light: 0.06, dark: 0.07)

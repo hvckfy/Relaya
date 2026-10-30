@@ -113,7 +113,7 @@ struct AgentsView: View {
         }
         .font(.system(size: 13))
         .foregroundStyle(Theme.tx)
-        .background(Theme.bg)
+        .background(Theme.content)
         .onAppear { log = MCPLog().recent() }
         .onChange(of: policy) { _, p in try? MCPPolicyStore().save(p) }
     }

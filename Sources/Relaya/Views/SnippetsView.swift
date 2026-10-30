@@ -62,7 +62,7 @@ struct SnippetsView: View {
         }
         .font(.system(size: 13))
         .foregroundStyle(Theme.tx)
-        .background(Theme.bg)
+        .background(Theme.content)
         .sheet(item: $editing) { s in SnippetEditor(snippet: s).environment(model) }
         .sheet(item: $runOnHosts) { s in RunOnHostsSheet(snippet: s).environment(model) }
     }

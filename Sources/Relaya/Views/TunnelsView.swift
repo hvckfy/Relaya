@@ -46,7 +46,7 @@ struct TunnelsView: View {
         }
         .font(.system(size: 13))
         .foregroundStyle(Theme.tx)
-        .background(Theme.bg)
+        .background(Theme.content)
         .sheet(item: $editing) { t in
             TunnelEditor(tunnel: t).environment(model)
         }

@@ -19,7 +19,7 @@ struct SessionView: View {
                 .id("\(session.id)-\(c.generation)")
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(Color(nsColor: settings.theme.backgroundColor))
+                .background(Color(nsColor: settings.theme.backgroundColor.withAlphaComponent(ThemeStore.sessionOpacity)))
                 .overlay { if c.ended { EndedOverlay(controller: c) } }
             statusBar
         }

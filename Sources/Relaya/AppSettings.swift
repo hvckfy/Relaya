@@ -24,6 +24,49 @@ final class AppSettings {
     var uiThemeID: String {
         didSet { defaults.set(uiThemeID, forKey: "uiTheme"); applyUITheme() }
     }
+    /// Вид блока «Состояние» в карточке хоста.
+    enum StatsStyle: String, CaseIterable, Identifiable {
+        case tiles, compact, pixel, console
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .tiles: L("Плитки")
+            case .compact: L("Компактный")
+            case .pixel: L("Пиксельный")
+            case .console: L("Консоль")
+            }
+        }
+    }
+    var statsStyle: StatsStyle {
+        didSet { defaults.set(statsStyle.rawValue, forKey: "statsStyle") }
+    }
+
+    /// Картинка фона рабочей области: одна на всё окно, плитки и панели просвечивают.
+    var backgroundImagePath: String? {
+        didSet { defaults.set(backgroundImagePath, forKey: "backgroundImagePath"); applyBackground() }
+    }
+    /// Показывать картинку под терминалами и файлами.
+    var backgroundUnderSessions: Bool {
+        didSet { defaults.set(backgroundUnderSessions, forKey: "backgroundUnderSessions"); applyBackground() }
+    }
+    /// Показывать картинку под карточками и разделами (хост, ключи, туннели…).
+    var backgroundUnderInterface: Bool {
+        didSet { defaults.set(backgroundUnderInterface, forKey: "backgroundUnderInterface"); applyBackground() }
+    }
+    /// Непрозрачность терминалов и панелей поверх картинки: 0.2 — почти прозрачно, 1 — картинки не видно.
+    var backgroundPanelOpacity: Double {
+        didSet { defaults.set(backgroundPanelOpacity, forKey: "backgroundPanelOpacity"); applyBackground() }
+    }
+
+    var backgroundImage: NSImage? { backgroundImagePath.flatMap { NSImage(contentsOfFile: $0) } }
+
+    func applyBackground() {
+        let on = backgroundImagePath != nil
+        ThemeStore.contentOpacity = on && backgroundUnderInterface ? backgroundPanelOpacity : 1
+        ThemeStore.sessionOpacity = on && backgroundUnderSessions ? backgroundPanelOpacity : 1
+        themeRevision += 1
+    }
+
     /// Стиль окна: false — Relaya (темы оформления), true — системный macOS.
     var nativeUI: Bool {
         didSet { defaults.set(nativeUI, forKey: "nativeUI"); ThemeStore.native = nativeUI; themeRevision += 1 }
@@ -98,9 +141,20 @@ final class AppSettings {
     init() {
         appearance = Appearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
         uiThemeID = defaults.string(forKey: "uiTheme") ?? UITheme.relaya.id
+        statsStyle = StatsStyle(rawValue: defaults.string(forKey: "statsStyle") ?? "") ?? .tiles
+        let imagePath = defaults.string(forKey: "backgroundImagePath")
+        let underSessions = defaults.object(forKey: "backgroundUnderSessions") as? Bool ?? true
+        let underInterface = defaults.object(forKey: "backgroundUnderInterface") as? Bool ?? true
+        let panelOpacity = defaults.object(forKey: "backgroundPanelOpacity") as? Double ?? 0.75
+        backgroundImagePath = imagePath
+        backgroundUnderSessions = underSessions
+        backgroundUnderInterface = underInterface
+        backgroundPanelOpacity = panelOpacity
         let native = defaults.bool(forKey: "nativeUI")
         nativeUI = native
         ThemeStore.native = native
+        ThemeStore.contentOpacity = imagePath != nil && underInterface ? panelOpacity : 1
+        ThemeStore.sessionOpacity = imagePath != nil && underSessions ? panelOpacity : 1
         customThemes = defaults.data(forKey: "customThemes")
             .flatMap { try? JSONDecoder().decode([UITheme].self, from: $0) } ?? []
         terminalTheme = defaults.string(forKey: "terminalTheme") ?? TerminalTheme.relayaDark.id

@@ -75,4 +75,7 @@ enum ThemeStore {
     nonisolated(unsafe) static var current: UITheme = .relaya
     /// Системный стиль окна: цвета macOS и акцентный цвет пользователя вместо темы Relaya.
     nonisolated(unsafe) static var native = false
+    /// Непрозрачность фона разделов и терминалов поверх картинки фона (1 — картинки нет).
+    nonisolated(unsafe) static var contentOpacity = 1.0
+    nonisolated(unsafe) static var sessionOpacity = 1.0
 }

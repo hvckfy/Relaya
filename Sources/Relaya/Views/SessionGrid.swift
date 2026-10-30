@@ -25,7 +25,7 @@ struct SessionGrid: View {
                     model: model, frames: { frames }, bounds: CGRect(origin: .zero, size: geo.size), hint: $hint))
             }
         }
-        .background(Theme.bar)
+        .background(ThemeStore.sessionOpacity < 1 ? Color.clear : Theme.bar)
     }
 
     private func node(_ layout: TileLayout<Session.ID>) -> AnyView {
@@ -87,7 +87,7 @@ struct SessionGrid: View {
                     TerminalView(controller: controller)
                         .id("\(session.id)-\(controller.generation)")
                         .padding(4)
-                        .background(Color(nsColor: settings.theme.backgroundColor))
+                        .background(Color(nsColor: settings.theme.backgroundColor.withAlphaComponent(ThemeStore.sessionOpacity)))
                 } else if case .files(let host) = session.kind {
                     SFTPView(host: host, embedded: true).id(session.id)
                 }

@@ -55,6 +55,39 @@ private struct AppearanceSettings: View {
             }
             }
 
+            Picker(L("Вид блока «Состояние»"), selection: $settings.statsStyle) {
+                ForEach(AppSettings.StatsStyle.allCases) { Text($0.title).tag($0) }
+            }
+
+            Section(L("Картинка фона")) {
+                LabeledContent(L("Изображение")) {
+                    HStack {
+                        Text(settings.backgroundImagePath.map { ($0 as NSString).lastPathComponent } ?? L("нет"))
+                            .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Button(L("Выбрать…")) {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [.image]
+                            if panel.runModal() == .OK { settings.backgroundImagePath = panel.url?.path }
+                        }
+                        if settings.backgroundImagePath != nil {
+                            Button(L("Убрать")) { settings.backgroundImagePath = nil }
+                        }
+                    }
+                }
+                if settings.backgroundImagePath != nil {
+                    Toggle(L("Под терминалами и файлами"), isOn: $settings.backgroundUnderSessions)
+                    Toggle(L("Под карточками и разделами"), isOn: $settings.backgroundUnderInterface)
+                    LabeledContent(L("Непрозрачность панелей")) {
+                        HStack {
+                            Slider(value: $settings.backgroundPanelOpacity, in: 0.2...1)
+                            Text("\(Int(settings.backgroundPanelOpacity * 100))%").monospacedDigit().frame(width: 44, alignment: .trailing)
+                        }
+                    }
+                    Text(L("Одна картинка на всё окно: при плитках терминалы и файлы просвечивают её как общий фон."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
             Picker(L("Цвета терминала"), selection: $settings.terminalTheme) {
                 ForEach(TerminalTheme.all) { Text($0.name).tag($0.id) }
             }

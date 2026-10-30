@@ -17,7 +17,7 @@ struct MainView: View {
                 }
                 content
             }
-            .background(Theme.bg)
+            .background { WorkspaceBackground() }
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -189,5 +189,24 @@ private struct DockTarget: ViewModifier {
                     frames: { model.activeSessionID.map { [$0: bounds.insetBy(dx: 28, dy: 28)] } ?? [:] },
                     bounds: bounds, hint: $hint))
         }
+    }
+}
+
+/// Фон рабочей области: цвет темы и, если выбрана, одна картинка на всё окно —
+/// плитки, терминалы и разделы поверх неё полупрозрачные.
+private struct WorkspaceBackground: View {
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        ZStack {
+            Theme.bg
+            if let image = settings.backgroundImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .clipped()
+            }
+        }
+        .ignoresSafeArea()
     }
 }
