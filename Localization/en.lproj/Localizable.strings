@@ -555,3 +555,14 @@
 "Терминал" = "Shell";
 "Перезапустить" = "Restart";
 "Остановить…" = "Stop…";
+
+/* SFTP: transfers and editor */
+"Открыть в редакторе" = "Open in Editor";
+"Переименовать…" = "Rename…";
+"Переименовать" = "Rename";
+"Переименовываю…" = "Renaming…";
+"Открыто в редакторе: %@ · сохранения загружаются на сервер" = "Open in editor: %@ · saves are uploaded to the server";
+"Передачи" = "Transfers";
+"В очереди" = "Queued";
+"Отменено" = "Cancelled";
+"/с" = "/s";
