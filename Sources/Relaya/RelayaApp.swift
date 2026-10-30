@@ -36,9 +36,9 @@ struct RelayaApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
             CommandGroup(after: .textEditing) {
-                Button(L("Найти в терминале…")) { model.activeSession?.controller.showFind() }
+                Button(L("Найти в терминале…")) { model.activeSession?.controller?.showFind() }
                     .keyboardShortcut("f", modifiers: .command)
-                    .disabled(model.activeSession == nil)
+                    .disabled(model.activeSession?.controller == nil)
             }
             CommandMenu(L("Вкладки")) {
                 ForEach(1..<10) { n in
@@ -49,7 +49,7 @@ struct RelayaApp: App {
                 Button(L("Сниппеты…")) { model.snippetPalette = true }
                     .keyboardShortcut("p", modifiers: [.command, .shift])
                     .disabled(model.activeSession == nil)
-                Button(L("Переподключить")) { model.activeSession?.controller.reconnect() }
+                Button(L("Переподключить")) { model.activeSession?.controller?.reconnect() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.activeSession == nil)
             }
@@ -69,6 +69,14 @@ struct RelayaApp: App {
         }
         .windowToolbarStyle(.unifiedCompact)
 
+        // Туннели из строки меню — без открытого окна.
+        MenuBarExtra(isInserted: Binding(get: { model.settings.menuBarIcon && !model.tunnels.tunnels.isEmpty },
+                                         set: { model.settings.menuBarIcon = $0 })) {
+            MenuBarTunnels().environment(model)
+        } label: {
+            Image(systemName: model.tunnels.activeCount > 0 ? "arrow.left.arrow.right.circle.fill" : "arrow.left.arrow.right.circle")
+        }
+
         Settings {
             SettingsView()
                 .environment(model.settings)
@@ -83,4 +91,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+}
+
+/// Меню значка в строке меню: туннели с переключением и быстрый переход в Relaya.
+struct MenuBarTunnels: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section(L("Туннели")) {
+            ForEach(model.tunnels.tunnels) { t in
+                let status = model.tunnels.status(of: t)
+                let running = status == .running || status == .starting
+                Button {
+                    if running { model.tunnels.stop(t.id) } else { model.tunnels.start(t, hosts: model.hosts) }
+                } label: {
+                    Text((running ? "● " : "○ ") + (t.name.isEmpty ? t.spec : t.name) + " — " + t.summary)
+                }
+            }
+        }
+        Divider()
+        Button(L("Открыть Relaya")) {
+            NSApp.activate()
+            NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
+        }
+        Button(L("Выйти из Relaya")) { NSApp.terminate(nil) }
+            .keyboardShortcut("q")
+    }
 }

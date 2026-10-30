@@ -90,6 +90,7 @@ private struct BehaviorSettings: View {
             Toggle(L("Option работает как Meta"), isOn: $settings.optionAsMeta)
             Toggle(L("Переподключаться после обрыва соединения"), isOn: $settings.autoReconnect)
             Toggle(L("Предлагать вход по ключу после входа по паролю"), isOn: $settings.offerKeySetup)
+            Toggle(L("Значок туннелей в строке меню"), isOn: $settings.menuBarIcon)
         }
         .formStyle(.grouped)
         .padding(.vertical, 8)

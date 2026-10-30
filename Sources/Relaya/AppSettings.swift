@@ -74,6 +74,9 @@ final class AppSettings {
     var autoReconnect: Bool {
         didSet { defaults.set(autoReconnect, forKey: "autoReconnect") }
     }
+    var menuBarIcon: Bool {
+        didSet { defaults.set(menuBarIcon, forKey: "menuBarIcon") }
+    }
     var offerKeySetup: Bool {
         didSet { defaults.set(offerKeySetup, forKey: "offerKeySetup") }
     }
@@ -95,6 +98,7 @@ final class AppSettings {
         optionAsMeta = defaults.object(forKey: "optionAsMeta") as? Bool ?? true
         autoReconnect = defaults.object(forKey: "autoReconnect") as? Bool ?? true
         offerKeySetup = defaults.object(forKey: "offerKeySetup") as? Bool ?? true
+        menuBarIcon = defaults.object(forKey: "menuBarIcon") as? Bool ?? true
         highlightEnabled = defaults.object(forKey: "highlightEnabled") as? Bool ?? true
         highlightRules = defaults.data(forKey: "highlightRules")
             .flatMap { try? JSONDecoder().decode([HighlightRule].self, from: $0) } ?? HighlightRule.defaults
