@@ -19,6 +19,13 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create "${BINS[@]}" -output "$APP/Contents/MacOS/Relaya"
 
+# Динамические библиотеки зависимостей (RoyalVNCKit) — рядом с бинарником: SwiftPM прописывает rpath @loader_path.
+for DYLIB in $(cd "$(dirname "${BINS[0]}")" && ls *.dylib 2>/dev/null); do
+  PARTS=()
+  for B in "${BINS[@]}"; do PARTS+=("$(dirname "$B")/$DYLIB"); done
+  lipo -create "${PARTS[@]}" -output "$APP/Contents/MacOS/$DYLIB"
+done
+
 # Иконка из icon-sources/ (рендер Blender, см. icon-sources/README.md) → все размеры .iconset.
 ICON_SRC="$ROOT/icon-sources/relaya-chain-r-icon.png"
 ICONSET="$ROOT/build/Relaya.iconset"

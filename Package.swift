@@ -11,6 +11,9 @@ let package = Package(
     dependencies: [
         // 1.99+ требует Swift 6.2; держим 1.20.x, пока CI на Xcode 16.
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", .upToNextMinor(from: "1.20.0")),
+        // Встроенный VNC-клиент (MIT, Royal Applications).
+        // Закреплён на коммите тега 1.1.0: royalvnc зависит от CryptoSwift по ветке, и SwiftPM не разрешает версионную зависимость.
+        .package(url: "https://github.com/royalapplications/royalvnc", revision: "8e9d3bb9cd041266df0659651f646fef251b4c71"),
     ],
     targets: [
         // UI-независимая логика: ~/.ssh/config, ключи, хосты.
@@ -20,6 +23,7 @@ let package = Package(
             dependencies: [
                 "RelayaCore",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
+                .product(name: "RoyalVNCKit", package: "royalvnc"),
             ]
         ),
         .testTarget(name: "RelayaCoreTests", dependencies: ["RelayaCore"]),
