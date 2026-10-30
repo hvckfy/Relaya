@@ -73,7 +73,9 @@ struct SessionGrid: View {
             .foregroundStyle(Theme.tx)
             .padding(.horizontal, 8)
             .frame(height: 26)
-            .background(Theme.bg2)
+            // Полупрозрачный заголовок — как вкладки: не перекрывает стекло и картинку фона.
+            .background(.ultraThinMaterial)
+            .background(Theme.bg2.opacity(0.35))
             .contentShape(.rect)
             .onTapGesture { model.activeSessionID = session.id }
             .onDrag {
@@ -98,8 +100,8 @@ struct SessionGrid: View {
         .relayaGlass(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(receiving ? Theme.red : (active ? Theme.acc : Theme.line),
-                              lineWidth: receiving || active ? 1.5 : 0.5)
+                .strokeBorder(receiving ? Theme.red.opacity(0.8) : (active ? Theme.acc.opacity(0.45) : Theme.line),
+                              lineWidth: receiving ? 1.5 : active ? 1 : 0.5)
         }
     }
 }
