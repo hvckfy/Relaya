@@ -544,3 +544,14 @@
 "Нагрузка" = "Load";
 "Диск /" = "Disk /";
 "Аптайм" = "Uptime";
+"Показать контейнеры на %@" = "show the containers on %@";
+"Нет доступа к хосту без пароля." = "No passwordless access to this host.";
+"Управлять контейнерами на %@" = "manage containers on %@";
+"Команда не выполнена." = "The command failed.";
+"Контейнеров нет." = "No containers.";
+"Нет прав на Docker. Добавьте пользователя в группу docker (sudo usermod -aG docker $USER) и войдите заново, или подключайтесь под root." = "No permission for Docker. Add the user to the docker group (sudo usermod -aG docker $USER) and log in again, or connect as root.";
+"Остановить контейнер «%@»?" = "Stop container “%@”?";
+"Логи" = "Logs";
+"Терминал" = "Shell";
+"Перезапустить" = "Restart";
+"Остановить…" = "Stop…";
