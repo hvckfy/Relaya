@@ -504,3 +504,14 @@
 "Порты · %@" = "Ports · %@";
 "Проброс портов для этого хоста" = "Port forwarding for this host";
 "Значок туннелей в строке меню" = "Tunnels icon in the menu bar";
+"Масштаб Retina — крупный интерфейс" = "Retina scale — larger interface";
+"Масштаб 100% — больше места" = "100% scale — more space";
+"Разрешение" = "Resolution";
+"Разрешение и масштаб рабочего стола — меняются без переподключения" = "Desktop resolution and scale — change without reconnecting";
+"Сервер не поддерживает смену разрешения на лету — изменения применятся при следующем подключении" = "The server can't change resolution on the fly — changes apply on the next connection";
+"По размеру окна (подстраивается на лету)" = "Fit to window (adjusts live)";
+"Своё разрешение" = "Custom resolution";
+"Масштаб интерфейса" = "Interface scale";
+"Retina — крупный, как на Mac" = "Retina — larger, like on the Mac";
+"100% — мельче, больше места" = "100% — smaller, more space";
+"Только для открытия во внешнем Windows App" = "Only when opening in the external Windows App";
