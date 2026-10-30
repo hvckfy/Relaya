@@ -25,4 +25,9 @@ if CommandLine.arguments.contains("--mcp") {
     exit(0)
 }
 
+// Демо-режим для скриншотов: вымышленные хосты и ключи во временной папке.
+if CommandLine.arguments.contains("--demo") {
+    RelayaPaths.demoRoot = DemoData.prepare()
+}
+
 RelayaApp.main()

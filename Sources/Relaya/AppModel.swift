@@ -54,7 +54,7 @@ final class AppModel {
     var snippets: [Snippet] = SnippetStore().load() {
         didSet { try? SnippetStore().save(snippets) }
     }
-    var showOnboarding = !UserDefaults.standard.bool(forKey: "onboardingDone")
+    var showOnboarding = !UserDefaults.standard.bool(forKey: "onboardingDone") && !RelayaPaths.isDemo
 
     var hosts: [SSHHost] = []
     var loadError: String?
@@ -181,7 +181,7 @@ final class AppModel {
         let controller = SessionController(host: host)
         controller.onOSGuessed = { [weak self] os in self?.setOS(os, for: host.alias, onlyIfUnknown: true) }
         let session = Session(host: host, controller: controller)
-        if host.os == nil { Task { await detectOS(for: host.alias) } }
+        if host.os == nil, !RelayaPaths.isDemo { Task { await detectOS(for: host.alias) } }
         sessions.append(session)
         activeSessionID = session.id
     }

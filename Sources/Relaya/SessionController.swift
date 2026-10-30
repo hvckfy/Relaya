@@ -255,7 +255,13 @@ struct TerminalView: NSViewRepresentable {
         let autoReconnect = settings.autoReconnect
         view.onExit = { [weak controller] code in controller?.processEnded(code: code, autoReconnect: autoReconnect) }
         let options = controller.passwordOnly ? KeyInstaller.passwordOnlyOptions : []
-        view.startProcess(executable: "/usr/bin/ssh", args: options + [controller.host.alias])
+        if RelayaPaths.isDemo {
+            // Демо: локальная оболочка с приглашением «как на сервере», без сетевых подключений.
+            view.startProcess(executable: "/bin/bash", args: ["--noprofile", "--norc", "-i"],
+                              environment: DemoData.shellEnvironment(for: controller.host))
+        } else {
+            view.startProcess(executable: "/usr/bin/ssh", args: options + [controller.host.alias])
+        }
         DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
         return view
     }
