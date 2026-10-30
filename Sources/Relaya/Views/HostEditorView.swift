@@ -186,8 +186,12 @@ struct HostEditorView: View {
                     Text(L("сек")).font(.system(size: 12)).foregroundStyle(Theme.tx2)
                 }
             }
-            FieldRow(L("Сжатие"), last: true) {
+            FieldRow(L("Сжатие")) {
                 Toggle("", isOn: flag(\.compression)).labelsHidden().toggleStyle(.checkbox)
+            }
+            FieldRow(L("Сессия tmux"), last: true) {
+                Toggle(L("Переподключение возвращает в ту же сессию"), isOn: $host.tmux).toggleStyle(.checkbox)
+                    .help(L("Закрытие вкладки завершает сессию; после обрыва сервер сам закроет её, если не подключиться вовремя."))
             }
         }
     }

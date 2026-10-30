@@ -65,6 +65,8 @@ struct HostDetailView: View {
 
                 DockerPanel(host: host)
 
+                if host.tmux { TmuxPanel(host: host) }
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L("Порты").uppercased())
                         .font(.system(size: 11, weight: .semibold))

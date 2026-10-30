@@ -74,6 +74,10 @@ final class AppSettings {
     var autoReconnect: Bool {
         didSet { defaults.set(autoReconnect, forKey: "autoReconnect") }
     }
+    /// Через сколько минут без подключения сервер сам закрывает сессию tmux.
+    var tmuxIdleMinutes: Int {
+        didSet { defaults.set(tmuxIdleMinutes, forKey: "tmuxIdleMinutes") }
+    }
     var menuBarIcon: Bool {
         didSet { if menuBarIcon != oldValue { defaults.set(menuBarIcon, forKey: "menuBarIcon") } }
     }
@@ -98,6 +102,7 @@ final class AppSettings {
         optionAsMeta = defaults.object(forKey: "optionAsMeta") as? Bool ?? true
         autoReconnect = defaults.object(forKey: "autoReconnect") as? Bool ?? true
         offerKeySetup = defaults.object(forKey: "offerKeySetup") as? Bool ?? true
+        tmuxIdleMinutes = defaults.object(forKey: "tmuxIdleMinutes") as? Int ?? 60
         menuBarIcon = defaults.object(forKey: "menuBarIcon") as? Bool ?? true
         highlightEnabled = defaults.object(forKey: "highlightEnabled") as? Bool ?? true
         highlightRules = defaults.data(forKey: "highlightRules")

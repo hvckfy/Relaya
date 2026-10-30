@@ -74,6 +74,13 @@ private struct SessionTab: View {
         .padding(.vertical, 4)
         .contentShape(.rect)
         .onTapGesture { model.activeSessionID = session.id; model.screen = .hosts }
+        .contextMenu {
+            if session.controller?.tmuxName != nil {
+                Button(L("Отсоединить и оставить на сервере")) { Task { await model.detachKeeping(session) } }
+                    .help(L("Сессия tmux продолжит работать; сервер закроет её через сутки без подключения."))
+            }
+            Button(L("Закрыть вкладку")) { model.close(session) }
+        }
     }
 }
 

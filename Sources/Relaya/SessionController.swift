@@ -22,6 +22,9 @@ final class SessionController {
     @ObservationIgnored private var retryPasswordOnly = false
     /// Команда, которую нужно выполнить после входа (например, из мастера ключей).
     @ObservationIgnored var pendingCommand: String?
+    /// Имя постоянной сессии tmux на сервере (если для хоста включено).
+    let tmuxName: String?
+    let tmuxIdleMinutes: Int
 
     /// Меняется при переподключении — пересоздаёт терминал.
     private(set) var generation = 0
@@ -49,8 +52,10 @@ final class SessionController {
     @ObservationIgnored private var startedAt = Date()
     @ObservationIgnored private var reconnectTask: Task<Void, Never>?
 
-    init(host: SSHHost) {
+    init(host: SSHHost, tmuxName: String? = nil, tmuxIdleMinutes: Int = 60) {
         self.host = host
+        self.tmuxName = tmuxName
+        self.tmuxIdleMinutes = tmuxIdleMinutes
     }
 
     // MARK: - Вывод терминала
@@ -292,7 +297,12 @@ struct TerminalView: NSViewRepresentable {
             view.startProcess(executable: "/bin/bash", args: ["--noprofile", "--norc", "-i"],
                               environment: DemoData.shellEnvironment(for: controller.host))
         } else {
-            view.startProcess(executable: "/usr/bin/ssh", args: options + [controller.host.alias])
+            var args = options + [controller.host.alias]
+            if let name = controller.tmuxName {
+                args = options + ["-t", controller.host.alias,
+                                  Tmux.attachCommand(name: name, ttlMinutes: controller.tmuxIdleMinutes)]
+            }
+            view.startProcess(executable: "/usr/bin/ssh", args: args)
         }
         DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
         return view

@@ -266,9 +266,14 @@ final class AppModel {
 
     // MARK: - Сессии
 
-    func connect(_ host: SSHHost) {
+    /// `tmuxSession` — подключиться к уже существующей сессии tmux (из списка в карточке хоста).
+    func connect(_ host: SSHHost, tmuxSession: String? = nil) {
         screen = .hosts
-        let controller = SessionController(host: host)
+        let useTmux = host.tmux && !RelayaPaths.isDemo
+        let id = UUID()
+        let name = tmuxSession ?? (useTmux ? Tmux.sessionName(alias: host.alias, id: id) : nil)
+        let controller = SessionController(host: host, tmuxName: name, tmuxIdleMinutes: settings.tmuxIdleMinutes)
+        if useTmux { Task { await cleanTmux(host) } }
         controller.onOSGuessed = { [weak self] os in self?.setOS(os, for: host.alias, onlyIfUnknown: true) }
         controller.onUserInput = { [weak self, weak controller] data in
             guard let self, let controller else { return }
@@ -283,7 +288,14 @@ final class AppModel {
     func close(_ session: Session) {
         guard let index = sessions.firstIndex(of: session) else { return }
         switch session.kind {
-        case .terminal(let c): c.terminate()
+        case .terminal(let c):
+            c.terminate()
+            // Вкладку закрыли сами — сессия tmux больше не нужна. Не вышло (нет доступа) — её уберёт таймер на сервере.
+            if let name = c.tmuxName, !keepTmux.contains(name) {
+                let host = c.host
+                Task { _ = try? await exec(Tmux.killCommand([name]), on: host, interactive: false, reason: "") }
+            }
+            keepTmux.remove(c.tmuxName ?? "")
         case .vnc(let s): s.disconnect()
         case .rdp(let s): s.disconnect()
         case .files: break
@@ -448,6 +460,69 @@ final class AppModel {
             args += ["-o", "BatchMode=yes"]
         }
         return SSHInvocation(alias: h.alias, options: args, environment: env)
+    }
+
+    // MARK: - tmux
+
+    var tmux: [String: [TmuxSession]] = [:]
+    var tmuxError: [String: String] = [:]
+    /// Сессии, которые при закрытии вкладки остаются на сервере.
+    @ObservationIgnored private var keepTmux: Set<String> = []
+
+    private var openTmuxNames: Set<String> {
+        Set(terminalSessions.compactMap { $0.controller?.tmuxName })
+    }
+
+    /// «Отсоединить и оставить на сервере»: срок — сутки без подключения, затем сервер её закроет.
+    func detachKeeping(_ session: Session) async {
+        guard let c = session.controller, let name = c.tmuxName else { return }
+        do {
+            let r = try await exec(Tmux.keepCommand(name: name), on: c.host, interactive: true,
+                                   reason: L("Оставить сессию на %@", c.host.alias))
+            guard r.succeeded else { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message; return }
+        } catch {
+            alertMessage = error.localizedDescription
+            return
+        }
+        keepTmux.insert(name)
+        close(session)
+    }
+
+    func refreshTmux(_ host: SSHHost, interactive: Bool) async {
+        do {
+            let r = try await exec(Tmux.listCommand, on: host, interactive: interactive,
+                                   reason: L("Показать сессии tmux на %@", host.alias))
+            guard r.succeeded else {
+                tmuxError[host.alias] = L("Нет доступа к хосту без пароля.")
+                return
+            }
+            tmux[host.alias] = Tmux.parse(r.stdout).filter { $0.name.hasPrefix(Tmux.hostPrefix(host.alias)) }
+            tmuxError[host.alias] = nil
+        } catch {
+            tmuxError[host.alias] = error.localizedDescription
+        }
+    }
+
+    /// Убрать брошенные и просроченные сессии хоста (подстраховка к таймеру на сервере).
+    func cleanTmux(_ host: SSHHost) async {
+        await refreshTmux(host, interactive: false)
+        let stale = Tmux.stale(tmux[host.alias] ?? [], alias: host.alias, open: openTmuxNames,
+                               ttlMinutes: settings.tmuxIdleMinutes)
+        guard !stale.isEmpty else { return }
+        _ = try? await exec(Tmux.killCommand(stale), on: host, interactive: false, reason: "")
+        await refreshTmux(host, interactive: false)
+    }
+
+    func killTmux(_ names: [String], on host: SSHHost) async {
+        // Открытые вкладки с этими сессиями закрываем без повторного kill.
+        for s in terminalSessions where names.contains(s.controller?.tmuxName ?? "") { close(s) }
+        do {
+            _ = try await exec(Tmux.killCommand(names), on: host, interactive: true,
+                               reason: L("Завершить сессии tmux на %@", host.alias))
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+        await refreshTmux(host, interactive: false)
     }
 
     // MARK: - Docker
