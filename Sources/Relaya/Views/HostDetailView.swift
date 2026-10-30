@@ -43,7 +43,8 @@ struct HostDetailView: View {
             }
 
             panel { HostStatsPanel(host: host) }
-            panel { DockerPanel(host: host) }
+            // Загрузка — здесь: у пустой панели (Docker ещё не опрошен) .task не срабатывает.
+            if hasDocker { panel { DockerPanel(host: host) } }
             if host.tmux { panel { TmuxPanel(host: host) } }
 
             Section(L("Порты")) {
@@ -66,7 +67,16 @@ struct HostDetailView: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(ThemeStore.native ? .automatic : .hidden)
-        .background(Theme.bg)
+        .background(Theme.content)
+        .task(id: host.alias) { await model.refreshDocker(host, interactive: false) }
+    }
+
+    /// Блок Docker — только если на хосте он есть (или есть что сказать: нет прав, ошибка).
+    private var hasDocker: Bool {
+        switch model.docker[host.alias] {
+        case nil, .notInstalled?: false
+        default: true
+        }
     }
 
     /// Панели со своим заголовком — строкой формы без отступов и фона.

@@ -34,7 +34,6 @@ struct DockerPanel: View {
                 section(count: nil) { message(m) }
             }
         }
-        .task(id: host.alias) { await model.refreshDocker(host, interactive: false) }
         .confirmationDialog(L("Остановить контейнер «%@»?", confirmStop?.name ?? ""),
                             isPresented: Binding(get: { confirmStop != nil }, set: { if !$0 { confirmStop = nil } }),
                             presenting: confirmStop) { c in
