@@ -566,3 +566,21 @@
 "В очереди" = "Queued";
 "Отменено" = "Cancelled";
 "/с" = "/s";
+
+/* tmux sessions */
+"Сессия tmux закрывается без подключения через %@ мин" = "tmux session closes after %@ min without a connection";
+"Сессия tmux" = "tmux session";
+"Переподключение возвращает в ту же сессию" = "Reconnecting returns to the same session";
+"Закрытие вкладки завершает сессию; после обрыва сервер сам закроет её, если не подключиться вовремя." = "Closing the tab ends the session; after a drop the server closes it unless you reconnect in time.";
+"Отсоединить и оставить на сервере" = "Detach and Keep on Server";
+"Сессия tmux продолжит работать; сервер закроет её через сутки без подключения." = "The tmux session keeps running; the server closes it after a day without a connection.";
+"Оставить сессию на %@" = "Keep the session on %@";
+"Показать сессии tmux на %@" = "Show tmux sessions on %@";
+"Завершить сессии tmux на %@" = "End tmux sessions on %@";
+"Завершить все" = "End All";
+"Сессий нет." = "No sessions.";
+"оставлена" = "kept";
+"подключена" = "attached";
+"без подключения %@" = "detached %@";
+"Подключиться" = "Attach";
+"Завершить" = "End";
