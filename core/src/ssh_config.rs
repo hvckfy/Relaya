@@ -20,7 +20,20 @@ pub struct SshHost {
     pub color: Option<String>,
     pub os: Option<ServerOs>,
     pub tmux: bool,
+    /// Все IdentityFile блока по порядку; `identity_file` — первый из них. Пусто при рендере — берётся `identity_file`.
+    #[uniffi(default = [])]
+    pub identity_files: Vec<String>,
+    /// ForwardAgent как в конфиге: None — директивы нет (наследуется), иначе значение (`yes`/`no`). При рендере важнее `forward_agent`.
+    #[uniffi(default = None)]
+    pub forward_agent_value: Option<String>,
+    /// Compression как в конфиге, по тем же правилам.
+    #[uniffi(default = None)]
+    pub compression_value: Option<String>,
 }
+
+/// Для какой системы пишется конфиг: UseKeychain понимает только ssh на macOS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ConfigPlatform { Macos, Windows, Linux }
 
 impl SshHost {
     pub fn new(alias: &str) -> Self {
@@ -173,6 +186,22 @@ pub(crate) fn meta_value(s: &str) -> String {
     if clean.chars().any(char::is_whitespace) { format!("\"{clean}\"") } else { clean }
 }
 
+/// Значение директивы: с пробелами — в кавычках (ssh иначе прочтёт только первое слово).
+fn quote_value(v: &str) -> String {
+    let clean = v.trim_matches('"');
+    if clean.chars().any(char::is_whitespace) { format!("\"{clean}\"") } else { clean.to_string() }
+}
+
+/// Перевод строки в любом значении дописал бы в конфиг свою директиву.
+fn check_host(h: &SshHost) -> Result<(), CoreError> {
+    let all = [Some(&h.alias), h.host_name.as_ref(), h.user.as_ref(), h.identity_file.as_ref(), h.proxy_jump.as_ref(),
+               h.group.as_ref(), h.color.as_ref(), h.forward_agent_value.as_ref(), h.compression_value.as_ref()];
+    for v in all.into_iter().flatten().chain(h.identity_files.iter()).chain(h.tags.iter()) {
+        if v.contains(['\n', '\r']) { return Err(CoreError::InvalidValue(v.clone())); }
+    }
+    Ok(())
+}
+
 /// Строка `# relaya: …` или `None`, если метаданных нет; `extra` — незнакомые пары старой строки, как были.
 fn meta_line(group: Option<&str>, tags: &[String], color: Option<&str>, os: Option<ServerOs>, tmux: bool, extra: &[String]) -> Option<String> {
     let mut meta = Vec::new();
@@ -194,11 +223,20 @@ fn apply(key: &str, value: &str, host: &mut SshHost) {
         "hostname" if host.host_name.is_none() => host.host_name = Some(value.to_string()),
         "user" if host.user.is_none() => host.user = Some(value.to_string()),
         "port" if host.port.is_none() => host.port = value.parse().ok(),
-        "identityfile" if host.identity_file.is_none() => host.identity_file = Some(value.to_string()),
+        "identityfile" => {
+            if host.identity_file.is_none() { host.identity_file = Some(value.to_string()); }
+            host.identity_files.push(value.to_string());
+        }
         "proxyjump" if host.proxy_jump.is_none() => host.proxy_jump = Some(value.to_string()),
-        "forwardagent" if host.forward_agent.is_none() => host.forward_agent = Some(value.eq_ignore_ascii_case("yes")),
+        "forwardagent" if host.forward_agent.is_none() => {
+            host.forward_agent = Some(value.eq_ignore_ascii_case("yes"));
+            host.forward_agent_value = Some(value.to_string());
+        }
         "serveraliveinterval" if host.server_alive_interval.is_none() => host.server_alive_interval = value.parse().ok(),
-        "compression" if host.compression.is_none() => host.compression = Some(value.eq_ignore_ascii_case("yes")),
+        "compression" if host.compression.is_none() => {
+            host.compression = Some(value.eq_ignore_ascii_case("yes"));
+            host.compression_value = Some(value.to_string());
+        }
         _ => {}
     }
 }
@@ -247,8 +285,9 @@ pub fn parse_config(text: String) -> Vec<SshHost> {
 // MARK: - Документ для правок
 
 /// Директивы, которыми управляет редактор; остальные строки блока не трогаются.
+// UseKeychain и AddKeysToAgent сюда не входят: уже стоящие в блоке остаются как были.
 const MANAGED: &[&str] = &["hostname", "user", "port", "identityfile", "proxyjump", "forwardagent",
-                             "serveraliveinterval", "compression", "usekeychain", "addkeystoagent"];
+                             "serveraliveinterval", "compression"];
 
 /// Где лежит блок хоста.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -309,43 +348,57 @@ impl Document {
 
     /// Строки блока после сохранения `host`; незнакомые директивы старого блока сохраняются.
     pub fn rendered_lines(&self, host: &SshHost, original_alias: Option<&str>) -> Vec<String> {
+        self.rendered_lines_for(host, original_alias, ConfigPlatform::Macos)
+    }
+
+    /// Строки блока для `platform`: значения с пробелами — в кавычках, UseKeychain — только для macOS.
+    pub fn rendered_lines_for(&self, host: &SshHost, original_alias: Option<&str>, platform: ConfigPlatform) -> Vec<String> {
         let mut out = Vec::new();
         out.extend(meta_line(host.group.as_deref(), &host.tags, host.color.as_deref(), host.os, host.tmux, &[]));
 
         out.push(format!("Host {}", host.alias));
         let mut add = |k: &str, v: Option<String>| {
-            if let Some(v) = v.filter(|v| !v.is_empty()) { out.push(format!("    {k} {v}")); }
+            if let Some(v) = v.filter(|v| !v.is_empty()) { out.push(format!("    {k} {}", quote_value(&v))); }
         };
         add("HostName", host.host_name.clone());
         add("User", host.user.clone());
         add("Port", host.port.map(|p| p.to_string()));
-        add("IdentityFile", host.identity_file.clone());
-        if host.identity_file.as_deref().map(|s| !s.is_empty()).unwrap_or(false) {
-            add("UseKeychain", Some("yes".into()));
-            add("AddKeysToAgent", Some("yes".into()));
+        let keys: Vec<String> = if host.identity_files.is_empty() { host.identity_file.clone().into_iter().collect() }
+                                else { host.identity_files.clone() };
+        for k in &keys { add("IdentityFile", Some(k.clone())); }
+        let old_body: Vec<String> = original_alias.and_then(|a| self.block(a))
+            .map(|b| self.lines[(b.host_line as usize + 1)..b.end as usize].to_vec()).unwrap_or_default();
+        let has = |name: &str| old_body.iter().any(|l| { let t = l.trim(); !t.starts_with('#') && split_key_value(t).0 == name });
+        if keys.iter().any(|k| !k.is_empty()) {
+            if platform == ConfigPlatform::Macos && !has("usekeychain") { add("UseKeychain", Some("yes".into())); }
+            if !has("addkeystoagent") { add("AddKeysToAgent", Some("yes".into())); }
         }
         add("ProxyJump", host.proxy_jump.clone());
-        if host.forward_agent == Some(true) { add("ForwardAgent", Some("yes".into())); }
+        let tri = |raw: &Option<String>, flag: Option<bool>| raw.clone().or_else(|| (flag == Some(true)).then(|| "yes".to_string()));
+        add("ForwardAgent", tri(&host.forward_agent_value, host.forward_agent));
         add("ServerAliveInterval", host.server_alive_interval.map(|p| p.to_string()));
-        if host.compression == Some(true) { add("Compression", Some("yes".into())); }
+        add("Compression", tri(&host.compression_value, host.compression));
 
-        if let Some(b) = original_alias.and_then(|a| self.block(a)) {
-            for raw in &self.lines[(b.host_line as usize + 1)..b.end as usize] {
-                let t = raw.trim();
-                if t.is_empty() { continue; }
-                let (key, _) = split_key_value(t);
-                if t.starts_with('#') || !MANAGED.contains(&key.as_str()) { out.push(raw.clone()); }
-            }
+        for raw in &old_body {
+            let t = raw.trim();
+            if t.is_empty() { continue; }
+            let (key, _) = split_key_value(t);
+            if t.starts_with('#') || !MANAGED.contains(&key.as_str()) { out.push(raw.clone()); }
         }
         out
     }
 
     /// Добавить хост (`original_alias == None`) или заменить блок существующего.
     pub fn upsert(&mut self, host: &SshHost, original_alias: Option<&str>) -> Result<(), CoreError> {
+        self.upsert_for(host, original_alias, ConfigPlatform::Macos)
+    }
+
+    pub fn upsert_for(&mut self, host: &SshHost, original_alias: Option<&str>, platform: ConfigPlatform) -> Result<(), CoreError> {
+        check_host(host)?;
         if Some(host.alias.as_str()) != original_alias && self.block(&host.alias).is_some() {
             return Err(CoreError::AliasTaken(host.alias.clone()));
         }
-        let rendered = self.rendered_lines(host, original_alias);
+        let rendered = self.rendered_lines_for(host, original_alias, platform);
         match original_alias {
             Some(orig) => {
                 let b = self.block(orig).ok_or_else(|| CoreError::NotFound(orig.to_string()))?;
@@ -416,6 +469,43 @@ pub fn config_current_lines(text: String, alias: String) -> Vec<String> { Docume
 #[uniffi::export]
 pub fn config_rendered_lines(text: String, host: SshHost, original_alias: Option<String>) -> Vec<String> {
     Document::new(&text).rendered_lines(&host, original_alias.as_deref())
+}
+
+/// То же, что `config_rendered_lines`, но с проверкой значений и для своей платформы.
+#[uniffi::export]
+pub fn config_rendered_lines_checked(text: String, host: SshHost, original_alias: Option<String>, platform: ConfigPlatform)
+    -> Result<Vec<String>, CoreError> {
+    check_host(&host)?;
+    Ok(Document::new(&text).rendered_lines_for(&host, original_alias.as_deref(), platform))
+}
+
+/// `config_upsert` для платформы: на Windows и Linux новые блоки без UseKeychain.
+#[uniffi::export]
+pub fn config_upsert_for(text: String, host: SshHost, original_alias: Option<String>, platform: ConfigPlatform) -> Result<String, CoreError> {
+    let mut d = Document::new(&text);
+    d.upsert_for(&host, original_alias.as_deref(), platform)?;
+    Ok(d.text())
+}
+
+/// Конфиг с Mac для ssh на Windows/Linux: если где-то есть UseKeychain, в начало встаёт `IgnoreUnknown UseKeychain`
+/// (или UseKeychain дописывается в уже стоящий глобальный IgnoreUnknown). Иначе ssh отказывается читать конфиг.
+#[uniffi::export]
+pub fn config_for_platform(text: String, platform: ConfigPlatform) -> String {
+    if platform == ConfigPlatform::Macos { return text; }
+    let mut d = Document::new(&text);
+    let directive = |l: &str| { let t = l.trim(); if t.starts_with('#') { String::new() } else { split_key_value(t).0 } };
+    if !d.lines.iter().any(|l| directive(l) == "usekeychain") { return text; }
+    let global_end = d.lines.iter().position(|l| matches!(directive(l).as_str(), "host" | "match")).unwrap_or(d.lines.len());
+    match d.lines[..global_end].iter().position(|l| directive(l) == "ignoreunknown") {
+        Some(i) => {
+            let (_, v) = split_key_value(d.lines[i].trim());
+            if v.split(',').any(|x| x.trim().eq_ignore_ascii_case("usekeychain")) { return text; }
+            let indent: String = d.lines[i].chars().take_while(|c| c.is_whitespace()).collect();
+            d.lines[i] = format!("{indent}IgnoreUnknown {v},UseKeychain");
+        }
+        None => d.lines.insert(0, "IgnoreUnknown UseKeychain".into()),
+    }
+    d.text()
 }
 
 #[uniffi::export]
@@ -521,5 +611,62 @@ mod tests {
         assert_eq!(cleared, "Host a\n    User x\n");
         assert_eq!(config_set_meta(cfg.into(), "zz".into(), None, vec![], None, None, false), Err(CoreError::NotFound("zz".into())));
         assert!(matches!(config_set_meta(cfg.into(), "a".into(), Some("x\nHost evil".into()), vec![], None, None, false), Err(CoreError::InvalidValue(_))));
+    }
+
+    #[test]
+    fn c1_tristate_lists_quotes_and_line_breaks() {
+        let text = "Host web\n    HostName old\n    IdentityFile ~/.ssh/a\n    IdentityFile \"~/.ssh/my key\"\n    ForwardAgent no\n    UseKeychain no\n    AddKeysToAgent confirm\n";
+        let h = parse_config(text.into()).remove(0);
+        assert_eq!(h.identity_files, vec!["~/.ssh/a", "~/.ssh/my key"]);
+        assert_eq!(h.identity_file.as_deref(), Some("~/.ssh/a"));
+        assert_eq!(h.forward_agent_value.as_deref(), Some("no"));
+        assert_eq!(h.compression_value, None);
+        let out = config_upsert(text.into(), h.clone(), Some("web".into())).unwrap();
+        assert_eq!(out, "Host web\n    HostName old\n    IdentityFile ~/.ssh/a\n    IdentityFile \"~/.ssh/my key\"\n    ForwardAgent no\n    UseKeychain no\n    AddKeysToAgent confirm\n");
+        let mut bad = h.clone();
+        bad.user = Some("x\nProxyCommand evil".into());
+        assert!(matches!(config_upsert(text.into(), bad.clone(), Some("web".into())), Err(CoreError::InvalidValue(_))));
+        assert!(matches!(config_rendered_lines_checked(text.into(), bad, None, ConfigPlatform::Macos), Err(CoreError::InvalidValue(_))));
+        // Старые поля без новых — как раньше; на Windows без UseKeychain.
+        let mut n = SshHost::new("n");
+        n.identity_file = Some("C:\\Users\\My Name\\.ssh\\id".into());
+        n.forward_agent = Some(true);
+        assert_eq!(config_upsert("".into(), n.clone(), None).unwrap(),
+                   "Host n\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\id\"\n    UseKeychain yes\n    AddKeysToAgent yes\n    ForwardAgent yes\n");
+        assert_eq!(config_upsert_for("".into(), n, None, ConfigPlatform::Windows).unwrap(),
+                   "Host n\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\id\"\n    AddKeysToAgent yes\n    ForwardAgent yes\n");
+    }
+
+    #[test]
+    fn config_for_platform_adds_ignore_unknown() {
+        let mac = "Host a\n    UseKeychain yes\n";
+        assert_eq!(config_for_platform(mac.into(), ConfigPlatform::Macos), mac);
+        assert_eq!(config_for_platform(mac.into(), ConfigPlatform::Windows), "IgnoreUnknown UseKeychain\nHost a\n    UseKeychain yes\n");
+        assert_eq!(config_for_platform("IgnoreUnknown AddKeysToAgent\n\nHost a\n    UseKeychain yes\n".into(), ConfigPlatform::Linux),
+                   "IgnoreUnknown AddKeysToAgent,UseKeychain\n\nHost a\n    UseKeychain yes\n");
+        let done = config_for_platform(mac.into(), ConfigPlatform::Linux);
+        assert_eq!(config_for_platform(done.clone(), ConfigPlatform::Linux), done);
+        assert_eq!(config_for_platform("Host a\n".into(), ConfigPlatform::Windows), "Host a\n");
+    }
+
+    /// Конфиг с Mac проходит `ssh -G` на этой машине (в CI — windows-latest и ubuntu). Без ssh тест пропускается.
+    #[test]
+    fn mac_config_passes_ssh_g_here() {
+        if cfg!(target_os = "macos") { return; }
+        let platform = if cfg!(windows) { ConfigPlatform::Windows } else { ConfigPlatform::Linux };
+        let mut h = SshHost::new("web");
+        h.host_name = Some("10.0.0.1".into());
+        h.identity_file = Some("~/.ssh/id_ed25519".into());
+        let mac = config_upsert("".into(), h, None).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config");
+        std::fs::write(&file, config_for_platform(mac.clone(), platform)).unwrap();
+        let Ok(out) = std::process::Command::new("ssh").arg("-G").arg("-F").arg(&file).arg("web").output() else { return };
+        assert!(out.status.success(), "ssh -G: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(String::from_utf8_lossy(&out.stdout).to_lowercase().contains("hostname 10.0.0.1"));
+        // И без IgnoreUnknown ssh действительно падает — тест проверяет то, что нужно.
+        std::fs::write(&file, mac).unwrap();
+        let raw = std::process::Command::new("ssh").arg("-G").arg("-F").arg(&file).arg("web").output().unwrap();
+        assert!(!raw.status.success());
     }
 }
