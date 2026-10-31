@@ -309,14 +309,15 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
             }
         }
     }
-    if let (true, Some(pass)) = (items.contains(&SyncItem::Keys), passphrase) {
+    if items.contains(&SyncItem::Keys) {
         // Только ключи, которыми пользуются хосты профиля (по имени файла внутри .ssh).
         let only: Option<HashSet<String>> = (!all).then(|| fs::read_to_string(dir.join("ssh/config")).map(|t| parse_config(t).into_iter()
             .filter(|h| scoped.contains(&h.alias)).flat_map(|h| h.identity_files.into_iter())
             .filter_map(|p| p.replace('\\', "/").rsplit('/').next().map(str::to_string)).collect()).unwrap_or_default());
-        let (added, renamed) = keys_import(&paths.ssh, &pass, dir, only.as_ref())?;
+        let (added, renamed, skipped) = keys_import(&paths.ssh, passphrase.as_deref(), dir, only.as_ref())?;
         if !added.is_empty() { changed.push(SyncItem::Keys); }
         if !renamed.is_empty() { remember_renamed(&paths, renamed); }
+        remember_skipped(&paths, skipped);
     }
     Ok(changed)
 }
@@ -441,16 +442,35 @@ fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path
 #[serde(rename_all = "camelCase")]
 pub struct RenamedKey { pub name: String, pub saved_as: String }
 
-fn keys_import(ssh: &str, pass: &str, dir: &Path, only: Option<&HashSet<String>>) -> Result<(Vec<String>, Vec<RenamedKey>), CoreError> {
+/// Почему ключ из синхронизации не попал в ~/.ssh.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+#[serde(rename_all = "camelCase")]
+pub enum KeySkipReason { NoPassphrase, WrongPassphrase }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedKey { pub name: String, pub reason: KeySkipReason }
+
+fn keys_import(ssh: &str, pass: Option<&str>, dir: &Path, only: Option<&HashSet<String>>)
+    -> Result<(Vec<String>, Vec<RenamedKey>, Vec<SkippedKey>), CoreError> {
     let keys_dir = dir.join("keys");
-    let (mut added, mut renamed) = (Vec::new(), Vec::new());
-    let Ok(entries) = fs::read_dir(&keys_dir) else { return Ok((added, renamed)) };
+    let (mut added, mut renamed, mut skipped) = (Vec::new(), Vec::new(), Vec::new());
+    let Ok(entries) = fs::read_dir(&keys_dir) else { return Ok((added, renamed, skipped)) };
     let mut names: Vec<String> = entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).filter(|n| n.ends_with(".relaya-key")).collect();
     names.sort();
     for name in names {
         let base = name.trim_end_matches(".relaya-key").to_string();
         if let Some(only) = only { if !only.contains(&base) { continue; } }
-        let key = key_decrypt(fs::read(keys_dir.join(&name))?, pass.into())?;
+        // Без пароля или с неверным паролем ключ пропускается, остальное импортируется; клиент узнаёт об этом.
+        let Some(pass) = pass else {
+            if !Path::new(ssh).join(&base).exists() { skipped.push(SkippedKey { name: base, reason: KeySkipReason::NoPassphrase }); }
+            continue;
+        };
+        let key = match key_decrypt(fs::read(keys_dir.join(&name))?, pass.into()) {
+            Ok(k) => k,
+            Err(CoreError::Decrypt) => { skipped.push(SkippedKey { name: base, reason: KeySkipReason::WrongPassphrase }); continue; }
+            Err(e) => return Err(e),
+        };
         let mut target = base.clone();
         let dest_of = |t: &str| Path::new(ssh).join(t);
         if let Some(existing) = read(&dest_of(&target)) {
@@ -467,10 +487,27 @@ fn keys_import(ssh: &str, pass: &str, dir: &Path, only: Option<&HashSet<String>>
         if let Some(p) = read(&keys_dir.join(format!("{base}.pub"))) { let _ = fs::write(Path::new(ssh).join(format!("{target}.pub")), p); }
         added.push(target);
     }
-    Ok((added, renamed))
+    Ok((added, renamed, skipped))
 }
 
 fn warnings_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-warnings.json") }
+fn skipped_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-skipped-keys.json") }
+
+/// Последний импорт заменяет список: ключ, который потом импортировался, из него уходит.
+fn remember_skipped(paths: &SyncPaths, skipped: Vec<SkippedKey>) {
+    if skipped.is_empty() { let _ = fs::remove_file(skipped_file(paths)); return; }
+    let _ = fs::create_dir_all(&paths.support);
+    let _ = fs::write(skipped_file(paths), encode_sorted(&skipped));
+}
+
+/// Ключи, которые последний импорт не смог положить в ~/.ssh: нет пароля шифрования ключей или он неверный.
+/// Хосты с этими IdentityFile уже пришли — клиент показывает предупреждение. Список отдаётся один раз.
+#[uniffi::export]
+pub fn sync_take_skipped_keys(paths: SyncPaths) -> Vec<SkippedKey> {
+    let list = fs::read_to_string(skipped_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let _ = fs::remove_file(skipped_file(&paths));
+    list
+}
 
 fn remember_renamed(paths: &SyncPaths, mut renamed: Vec<RenamedKey>) {
     let mut all: Vec<RenamedKey> = fs::read_to_string(warnings_file(paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
@@ -908,6 +945,25 @@ mod tests {
         sync_import(sync_new_profile("all".into()), paths(a.path()), None, dir.path().to_string_lossy().into()).unwrap();
         let cfg = fs::read_to_string(a.path().join("config")).unwrap();
         assert_eq!(cfg.starts_with("IgnoreUnknown UseKeychain\n"), !cfg!(target_os = "macos"), "{cfg}");
+    }
+
+    #[test]
+    fn skipped_keys_are_reported() {
+        let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        fs::create_dir_all(dir.path().join("keys")).unwrap();
+        fs::write(dir.path().join("keys/id_x.relaya-key"), key_encrypt(b"KEY".to_vec(), "right".into(), MIN_ROUNDS)).unwrap();
+        let mut p = sync_new_profile("all".into());
+        p.items.push(SyncItem::Keys);
+        let d = dir.path().to_string_lossy().to_string();
+        sync_import(p.clone(), paths(a.path()), None, d.clone()).unwrap();
+        assert_eq!(sync_take_skipped_keys(paths(a.path())), vec![SkippedKey { name: "id_x".into(), reason: KeySkipReason::NoPassphrase }]);
+        assert!(sync_take_skipped_keys(paths(a.path())).is_empty(), "отдаётся один раз");
+        // Неверный пароль не роняет импорт.
+        sync_import(p.clone(), paths(a.path()), Some("wrong".into()), d.clone()).unwrap();
+        assert_eq!(sync_take_skipped_keys(paths(a.path()))[0].reason, KeySkipReason::WrongPassphrase);
+        sync_import(p, paths(a.path()), Some("right".into()), d).unwrap();
+        assert!(sync_take_skipped_keys(paths(a.path())).is_empty());
+        assert_eq!(fs::read(a.path().join("id_x")).unwrap(), b"KEY");
     }
 
     #[test]
