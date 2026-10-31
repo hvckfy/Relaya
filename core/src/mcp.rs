@@ -647,6 +647,26 @@ mod tests {
         assert!(m.grants.unwrap().get("web").is_none(), "временный доступ с другой машины не приходит");
     }
 
+    /// Регресс (аудит безопасности): синхронизация не снимает локальный deny и не принимает чужие grants.
+    #[test]
+    fn merge_keeps_local_deny_and_ignores_incoming_grants() {
+        let mut local = McpPolicy::default();
+        local.deny = Some(HashMap::from([("web".into(), vec!["rm -rf *".into()]), ("*".into(), vec!["reboot".into()])]));
+        let mut theirs = McpPolicy::default();
+        theirs.deny = Some(HashMap::from([("web".into(), vec![])]));
+        theirs.grants = Some(HashMap::from([("web".into(), McpGrant { mode: McpMode::Trusted, until: 9e9 }),
+                                            ("db".into(), McpGrant { mode: McpMode::Trusted, until: 9e9 })]));
+        let m = mcp_policy_merge(local.clone(), theirs.clone());
+        let deny = m.deny.clone().unwrap();
+        assert_eq!(deny["web"], vec!["rm -rf *".to_string()]);
+        assert_eq!(deny["*"], vec!["reboot".to_string()]);
+        assert!(m.is_denied("rm -rf /", "web"));
+        assert!(m.grants.is_none(), "grants из пришедшего файла игнорируются");
+        // Пустой deny с другой стороны (None) тоже ничего не снимает.
+        theirs.deny = None;
+        assert_eq!(mcp_policy_merge(local, theirs).deny.unwrap()["web"], vec!["rm -rf *".to_string()]);
+    }
+
     #[test]
     fn broken_policy_fails_closed() {
         assert!(mcp_policy_decode("".into()).enabled);

@@ -590,6 +590,8 @@ mod agents {
     pub(super) fn pending(p: &SyncPaths) -> Vec<AgentEscalation> { load(&pending_file(p)) }
 
     /// Делит пришедшую политику на безопасную часть и расширения прав относительно `local`.
+    /// grants (временный доступ) сейчас не синхронизируются вовсе (mcp_policy_merge их не берёт). Если это изменится,
+    /// новый или более длинный grant здесь обязан считаться расширением прав и идти на подтверждение.
     pub(super) fn split(local: &McpPolicy, mut theirs: McpPolicy, declined: &[AgentEscalation]) -> (McpPolicy, Vec<AgentEscalation>) {
         let mut out = Vec::new();
         let mut hosts: Vec<_> = theirs.hosts.drain().collect();
