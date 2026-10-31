@@ -152,7 +152,7 @@ final class VNCSession: NSObject {
         case .connected: phase = .connected
         case .disconnecting: break
         case .disconnected:
-            phase = .disconnected(error)
+            phase = .disconnected(error.map { SSHErrorText.describeRemote(.vnc, $0) })
             framebufferView = nil
             if let t = tunnel { model.tunnels.stop(t.id) }
             tunnel = nil

@@ -4,6 +4,16 @@ import RelayaRust
 /// Понятный текст ошибки ssh/sftp/git: «что случилось. что сделать» и исходная строка (ядро узнаёт ошибку,
 /// перевод — здесь). Неизвестная ошибка — главная строка вывода (fatal:/error: или последняя).
 public enum SSHErrorText {
+    public enum RemoteKind: Sendable { case rdp, vnc }
+
+    /// Понятная ошибка RDP/VNC (ядро узнаёт текст RDPKit/RoyalVNC и др.): «что случилось. что сделать» и исходный текст.
+    public static func describeRemote(_ kind: RemoteKind, _ message: String) -> String {
+        if let p = remoteExplain(protocol: kind == .rdp ? .rdp : .vnc, message: message) {
+            return L(p.title) + ". " + L(p.hint) + (p.detail.isEmpty ? "" : "\n" + p.detail)
+        }
+        return message
+    }
+
     public static func describe(_ output: String, fallback: String? = nil) -> String {
         if let p = sshExplain(output: output) {
             return L(p.title) + ". " + L(p.hint) + "\n" + p.detail

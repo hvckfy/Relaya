@@ -349,7 +349,8 @@ final class RDPSession {
             phase = .disconnected(L("Неверное имя пользователя или пароль."))
             return
         }
-        phase = .disconnected(message.isEmpty ? status : message)
+        let raw = message.isEmpty ? status : message
+        phase = .disconnected(raw.isEmpty ? nil : SSHErrorText.describeRemote(.rdp, raw))
     }
 }
 
