@@ -15,7 +15,7 @@ internal static class Consent
             if (UserConsentVerifier.CheckAvailabilityAsync().AsTask().GetAwaiter().GetResult() == UserConsentVerifierAvailability.Available)
             {
                 // Окно-владелец: главное окно Relaya, в --mcp его нет — окно на переднем плане.
-                var hwnd = MainWindow.Current is { } w ? WinRT.Interop.WindowNative.GetWindowHandle(w) : GetForegroundWindow();
+                var hwnd = MainWindow.Hwnd != IntPtr.Zero ? MainWindow.Hwnd : GetForegroundWindow();
                 var result = UserConsentVerifierInterop.RequestVerificationForWindowAsync(hwnd, text).AsTask().GetAwaiter().GetResult();
                 return result == UserConsentVerificationResult.Verified;
             }

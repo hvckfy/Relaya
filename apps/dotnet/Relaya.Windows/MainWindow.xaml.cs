@@ -14,10 +14,14 @@ public sealed partial class MainWindow : Window
 {
     public static MainWindow? Current { get; private set; }
 
+    /// Handle окна, снятый в UI-потоке: им пользуются фоновые потоки (Windows Hello для askpass).
+    public static IntPtr Hwnd { get; private set; }
+
     public MainWindow()
     {
         InitializeComponent();
         Current = this;
+        Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
         Title = "Relaya";
