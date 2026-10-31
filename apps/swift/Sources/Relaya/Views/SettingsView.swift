@@ -122,6 +122,7 @@ private struct AppearanceSettings: View {
 
 private struct BehaviorSettings: View {
     @Environment(AppSettings.self) private var settings
+    @AppStorage(AskpassBroker.confirmEachUseKey) private var confirmEachUse = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -130,6 +131,10 @@ private struct BehaviorSettings: View {
         Form {
             Picker(L("Язык"), selection: $settings.language) {
                 ForEach(AppSettings.Language.allCases) { Text($0.title).tag($0) }
+            }
+            Toggle(isOn: $confirmEachUse) {
+                Text(L("Touch ID при каждом использовании пароля ssh"))
+                Text(L("Сохранённые пароль или passphrase отдаются ssh (туннели, файлы, панели хоста, агенты) только после Touch ID или пароля Mac."))
             }
             if settings.languageChanged {
                 HStack {

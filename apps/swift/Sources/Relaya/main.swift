@@ -1,17 +1,14 @@
 import Foundation
 import RelayaCore
 
-// Askpass-режим: ssh запускает этот же бинарник с текстом запроса в аргументе.
-// Секрет читается из Keychain по имени записи из окружения и печатается только
-// в ответ на ожидаемый запрос (пароль сервера или passphrase), иначе — отказ.
+// Askpass-режим: ssh запускает этот же бинарник с текстом запроса в аргументе. Секрет выдаёт брокер процесса
+// Relaya, запустившего ssh (по одноразовому токену и только своему потомку) — сам Keychain здесь не читается.
+// Старый способ (имя записи в окружении) больше не работает: так пароль мог получить любой процесс.
 let env = ProcessInfo.processInfo.environment
-if let account = env["RELAYA_ASKPASS_ACCOUNT"] {
+if env["RELAYA_ASKPASS_ACCOUNT"] != nil { exit(1) }
+if let socket = env["RELAYA_ASKPASS_SOCKET"], let token = env["RELAYA_ASKPASS_TOKEN"] {
     let prompt = CommandLine.arguments.dropFirst().joined(separator: " ")
-    let store = KeychainStore(service: env["RELAYA_ASKPASS_SERVICE"] ?? KeychainStore().service)
-    let expected = env["RELAYA_ASKPASS_KIND"] == "passphrase"
-        ? prompt.lowercased().contains("passphrase")
-        : PasswordPrompt.matches(prompt)
-    if expected, let secret = try? store.password(for: account) {
+    if let secret = AskpassBroker.request(socket: socket, token: token, prompt: prompt) {
         print(secret)
         exit(0)
     }

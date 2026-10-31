@@ -898,3 +898,8 @@
 "Для каждого хоста откроется вкладка, все они будут показаны плитками; команда выполнится после входа." = "A tab opens for each host and they are shown as tiles; the command runs after login.";
 "Политика не прочитана — доступ выключен" = "Policy couldn’t be read — access is off";
 "Файл mcp.json повреждён. Агенты не получат доступ, пока вы не сохраните настройки заново." = "mcp.json is damaged. Agents get no access until you save the settings again.";
+"passphrase ключа" = "key passphrase";
+"пароль" = "password";
+"ssh просит %@ для %@" = "ssh asks for the %@ for %@";
+"Touch ID при каждом использовании пароля ssh" = "Touch ID for every ssh password use";
+"Сохранённые пароль или passphrase отдаются ssh (туннели, файлы, панели хоста, агенты) только после Touch ID или пароля Mac." = "Saved passwords and passphrases are given to ssh (tunnels, files, host panels, agents) only after Touch ID or your Mac password.";

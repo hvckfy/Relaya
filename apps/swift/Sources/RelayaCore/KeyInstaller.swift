@@ -2,9 +2,8 @@ import Foundation
 
 /// Генерация ключа, установка на сервер и проверка входа.
 ///
-/// Пароль сервера и passphrase передаются ssh только через askpass-помощник:
-/// сам Relaya, запущенный с `RELAYA_ASKPASS_ACCOUNT`, читает секрет из Keychain.
-/// В аргументы и окружение секреты не попадают.
+/// Пароль сервера и passphrase передаются ssh только через askpass-помощник: сам Relaya, запущенный ssh,
+/// получает секрет у `AskpassBroker` по одноразовому токену. В аргументы и окружение секреты не попадают.
 public struct KeyInstaller: Sendable {
     public var askpassExecutable: String
     public var keychain: KeychainStore
@@ -38,14 +37,18 @@ public struct KeyInstaller: Sendable {
         }
     }
 
+    /// Окружение для ssh: askpass — сам Relaya, секрет он получит у брокера этого процесса по одноразовому токену.
+    /// Имя записи Keychain в окружение не попадает.
     public func askpassEnvironment(_ secret: SecretRef) -> [String: String] {
-        [
+        guard let (socket, token) = try? AskpassBroker.shared.issue(secret) else {
+            return ["SSH_ASKPASS_REQUIRE": "never"]
+        }
+        return [
             "SSH_ASKPASS": askpassExecutable,
             "SSH_ASKPASS_REQUIRE": "force",
             "DISPLAY": ":0",
-            "RELAYA_ASKPASS_ACCOUNT": secret.account,
-            "RELAYA_ASKPASS_SERVICE": secret.store.service,
-            "RELAYA_ASKPASS_KIND": secret.kind.rawValue,
+            "RELAYA_ASKPASS_SOCKET": socket,
+            "RELAYA_ASKPASS_TOKEN": token,
         ]
     }
 
