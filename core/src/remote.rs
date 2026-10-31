@@ -58,9 +58,10 @@ pub struct RdpConfig {
     pub gateway_password: Option<String>,
     #[uniffi(default = None)]
     pub gateway_domain: Option<String>,
-    /// Путь к библиотеке H.264 (OpenH264 от Cisco, скачанной пользователем). Пусто — системный декодер или без H.264.
+    /// Путь к библиотеке H.264 (OpenH264 от Cisco, скачанной пользователем; проверить `openh264_verify`).
+    /// Пусто — системный декодер (Windows) или без H.264.
     #[uniffi(default = None)]
-    pub h264_codec_path: Option<String>,
+    pub h264_library_path: Option<String>,
 }
 
 /// Изменившийся прямоугольник экрана, пиксели BGRA построчно без отступов.
@@ -690,7 +691,7 @@ mod tests {
         let cfg = RdpConfig { host: "127.0.0.1".into(), port: 1, user: "u".into(), password: "p".into(), domain: None,
                               width: 800, height: 600, scale_percent: 100, trusted_cert_sha256: None,
                               gateway_host: None, gateway_user: None, gateway_password: None, gateway_domain: None,
-                              h264_codec_path: None };
+                              h264_library_path: None };
         RemoteSession::rdp(cfg, l.clone()).connect();
         let start = Instant::now();
         while l.0.lock().unwrap().is_none() && start.elapsed() < Duration::from_secs(20) { std::thread::sleep(Duration::from_millis(50)); }

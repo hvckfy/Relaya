@@ -14,6 +14,7 @@ pub mod key_hosts;
 pub mod local_ports;
 pub mod mcp;
 pub mod models;
+pub mod openh264;
 #[cfg(feature = "remote-desktop")]
 pub mod remote;
 pub mod server_os;
