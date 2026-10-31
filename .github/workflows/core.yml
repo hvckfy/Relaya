@@ -8,7 +8,7 @@ on:
     paths: ["core/**"]
 
 concurrency:
-  group: core-${{ github.ref }}
+  group: core-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
   # На main не отменяем: туда пушат несколько агентов, и у каждого коммита должен быть полный прогон.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
