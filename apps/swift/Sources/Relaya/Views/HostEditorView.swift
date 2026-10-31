@@ -150,7 +150,8 @@ struct HostEditorView: View {
                 }
             }
             FieldRow(L("Агент-форвардинг"), last: true) {
-                Toggle("", isOn: flag(\.forwardAgent)).labelsHidden().toggleStyle(.checkbox)
+                Picker(L("Агент-форвардинг"), selection: tri(\.forwardAgentValue, \.forwardAgent)) { triOptions }
+                    .labelsHidden().frame(width: 200)
             }
         }
     }
@@ -177,7 +178,8 @@ struct HostEditorView: View {
                 }
             }
             FieldRow(L("Сжатие")) {
-                Toggle("", isOn: flag(\.compression)).labelsHidden().toggleStyle(.checkbox)
+                Picker(L("Сжатие"), selection: tri(\.compressionValue, \.compression)) { triOptions }
+                    .labelsHidden().frame(width: 200)
             }
             FieldRow(L("Сессия tmux"), last: true) {
                 Toggle(L("Переподключение возвращает в ту же сессию"), isOn: $host.tmux).toggleStyle(.checkbox)
@@ -284,8 +286,6 @@ struct HostEditorView: View {
         h.port = port == 22 ? nil : port
         h.serverAliveInterval = Int(keepAliveText.trimmingCharacters(in: .whitespaces))
         h.tags = SSHConfigParser.splitTags(h.tags.joined(separator: ","))
-        if h.forwardAgent == false { h.forwardAgent = nil }
-        if h.compression == false { h.compression = nil }
         return h
     }
 
@@ -350,8 +350,19 @@ struct HostEditorView: View {
         Binding(get: { host[keyPath: keyPath] ?? "" }, set: { host[keyPath: keyPath] = $0 })
     }
 
-    private func flag(_ keyPath: WritableKeyPath<SSHHost, Bool?>) -> Binding<Bool> {
-        Binding(get: { host[keyPath: keyPath] ?? false }, set: { host[keyPath: keyPath] = $0 })
+    /// Тристейт как в ssh_config: «Как в конфиге» (директивы нет — наследуется от Host *), «Да», «Нет».
+    private func tri(_ value: WritableKeyPath<SSHHost, String?>, _ flag: WritableKeyPath<SSHHost, Bool?>) -> Binding<String> {
+        Binding(get: { host[keyPath: value] ?? (host[keyPath: flag] == true ? "yes" : "") },
+                set: {
+                    host[keyPath: value] = $0.isEmpty ? nil : $0
+                    host[keyPath: flag] = $0.isEmpty ? nil : $0 == "yes"
+                })
+    }
+
+    @ViewBuilder private var triOptions: some View {
+        Text(L("Как в конфиге")).tag("")
+        Text(L("Да")).tag("yes")
+        Text(L("Нет")).tag("no")
     }
 }
 

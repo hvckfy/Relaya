@@ -406,6 +406,14 @@ final class AppModel {
         selectedHostID = host.alias
     }
 
+    /// Только строка `# relaya:` хоста — директивы блока не трогаются (смена группы, ОС).
+    private func saveMeta(_ host: SSHHost) throws {
+        var doc = try store.loadDocument()
+        try doc.setMeta(of: host)
+        try store.save(doc)
+        reloadHosts()
+    }
+
     /// Переносит хост в группу (`nil` — «Без группы»), меняя только комментарий `# relaya:` над блоком.
     func move(_ host: SSHHost, toGroup group: String?) {
         var updated = host
@@ -413,7 +421,7 @@ final class AppModel {
         updated.group = trimmed?.isEmpty == false ? trimmed : nil
         guard updated.group != host.group else { return }
         do {
-            try save(updated, originalAlias: host.alias)
+            try saveMeta(updated)
             if let g = updated.group { collapsedGroups.remove(g) }
         } catch {
             alertMessage = error.localizedDescription
@@ -975,11 +983,7 @@ final class AppModel {
         guard var host = hosts.first(where: { $0.alias == alias }), host.os != os else { return }
         if onlyIfUnknown, host.os != nil { return }
         host.os = os
-        do {
-            try save(host, originalAlias: alias)
-        } catch {
-            // Например, общий блок `Host a b` — ОС просто не запоминаем.
-        }
+        try? saveMeta(host)
     }
 
     func finishOnboarding() {

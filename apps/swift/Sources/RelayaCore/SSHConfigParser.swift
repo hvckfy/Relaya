@@ -32,11 +32,21 @@ extension SSHHost {
                   proxyJump: h.proxyJump, forwardAgent: h.forwardAgent, serverAliveInterval: h.serverAliveInterval.map(Int.init),
                   compression: h.compression, group: h.group, tags: h.tags, color: h.color, os: h.os.flatMap(ServerOS.init(rust:)))
         tmux = h.tmux
+        identityFiles = h.identityFiles
+        forwardAgentValue = h.forwardAgentValue
+        compressionValue = h.compressionValue
+    }
+
+    /// Первый IdentityFile — тот, что правит редактор; остальные из конфига сохраняются за ним.
+    private var identityFileList: [String] {
+        guard !identityFiles.isEmpty else { return [] }
+        return (identityFile.map { [$0] } ?? []) + identityFiles.dropFirst()
     }
 
     var rust: RelayaRust.SshHost {
         RelayaRust.SshHost(alias: alias, hostName: hostName, user: user, port: port.map(Int64.init), identityFile: identityFile,
                            proxyJump: proxyJump, forwardAgent: forwardAgent, serverAliveInterval: serverAliveInterval.map(Int64.init),
-                           compression: compression, group: group, tags: tags, color: color, os: os?.rust, tmux: tmux)
+                           compression: compression, group: group, tags: tags, color: color, os: os?.rust, tmux: tmux,
+                           identityFiles: identityFileList, forwardAgentValue: forwardAgentValue, compressionValue: compressionValue)
     }
 }

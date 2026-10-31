@@ -32,6 +32,13 @@ public struct SSHConfigDocument: Sendable {
         }
     }
 
+    /// Сменить только метаданные Relaya (`# relaya:` — группа, метки, цвет, ОС, tmux), не перерисовывая директивы блока.
+    /// Подходит и для общих блоков `Host a b`.
+    public mutating func setMeta(of host: SSHHost) throws {
+        text = try configSetMeta(text: text, alias: host.alias, group: host.group, tags: host.tags, color: host.color,
+                                 os: host.os?.rust, tmux: host.tmux)
+    }
+
     /// Строки, которые сейчас занимает хост (для превью).
     public func currentLines(for alias: String) -> [String] { configCurrentLines(text: text, alias: alias) }
 

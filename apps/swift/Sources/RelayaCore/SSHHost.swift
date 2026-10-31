@@ -23,6 +23,11 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
     public var os: ServerOS?
     /// Постоянная сессия через tmux (`tmux=on`): переподключение возвращает в неё же.
     public var tmux = false
+    /// Все IdentityFile блока по порядку (`identityFile` — первый). Пусто — только `identityFile`.
+    public var identityFiles: [String] = []
+    /// ForwardAgent / Compression как в конфиге: nil — директивы нет (наследуется), "yes" / "no" — явно.
+    public var forwardAgentValue: String?
+    public var compressionValue: String?
 
     public init(
         alias: String,
