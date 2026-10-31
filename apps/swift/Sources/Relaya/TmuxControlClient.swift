@@ -30,8 +30,13 @@ final class TmuxWindow {
         self.client = client
     }
 
+    /// До создания терминала вывод копится, но не больше ~1 МБ: старое отбрасывается (экран всё равно перерисуется).
+    private static let pendingLimit = 1 << 20
+
     func receive(_ bytes: [UInt8]) {
-        if viewCreated { view.feed(byteArray: bytes[...]) } else { pending += bytes }
+        if viewCreated { view.feed(byteArray: bytes[...]); return }
+        pending += bytes
+        if pending.count > Self.pendingLimit { pending.removeFirst(pending.count - Self.pendingLimit) }
     }
 
     func makeView() -> TmuxPaneView {
@@ -128,6 +133,9 @@ final class TmuxControlClient {
         do {
             try p.run()
             process = p
+            // Сам attach отвечает своим %begin/%end (часто пустым) — у него свой обработчик, иначе этот ответ
+            // забрал бы обработчик list-windows и окна не появились бы.
+            replyHandlers.append { _, _ in }
             query(TmuxControl.listWindows) { [weak self] lines, _ in self?.syncWindows(lines) }
         } catch {
             self.error = error.localizedDescription
