@@ -8,6 +8,19 @@ namespace Relaya.Platform;
 /// Вызывается не из UI-потока (сервер askpass), поэтому ждёт синхронно.
 internal static class Consent
 {
+    /// Подтвердить присутствие человека Windows Hello, если он настроен; без Hello — true (решение уже принято диалогом).
+    public static bool Verify(string text)
+    {
+        try
+        {
+            if (UserConsentVerifier.CheckAvailabilityAsync().AsTask().GetAwaiter().GetResult() != UserConsentVerifierAvailability.Available) return true;
+            var hwnd = MainWindow.Hwnd != IntPtr.Zero ? MainWindow.Hwnd : GetForegroundWindow();
+            return UserConsentVerifierInterop.RequestVerificationForWindowAsync(hwnd, text).AsTask().GetAwaiter().GetResult()
+                == UserConsentVerificationResult.Verified;
+        }
+        catch (Exception) { return true; }
+    }
+
     public static bool Ask(string text)
     {
         try

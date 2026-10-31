@@ -1118,3 +1118,4 @@
 "Файл %@ не удалось прочитать — изменения не сохранены, чтобы не затереть его. Проверьте права доступа и перезапустите Relaya." = "Couldn't read %@ — changes weren't saved so it isn't overwritten. Check its permissions and restart Relaya.";
 "Не удалось применить изменения" = "Couldn’t apply the changes";
 "Не удалось удалить" = "Couldn’t delete";
+"Подтвердите выполнение команды агента" = "Confirm running the agent’s command";

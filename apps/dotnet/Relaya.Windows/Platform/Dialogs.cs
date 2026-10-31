@@ -10,7 +10,10 @@ internal static class Dialogs
     {
         var flags = 0x4u /* YESNO */ | (warning ? 0x30u /* ICONWARNING */ : 0x20u /* ICONQUESTION */)
             | 0x100 /* DEFBUTTON2 */ | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */;
-        return MessageBoxW(IntPtr.Zero, text, "Relaya", flags) == 6;
+        if (MessageBoxW(IntPtr.Zero, text, "Relaya", flags) != 6) return false;
+        // Предупреждение — это команда агента (M-MCP-5): после «Да» ещё и Windows Hello, как Touch ID на Mac.
+        // Текст команды человек уже прочитал в окне выше; Hello подтверждает, что ответил он сам.
+        return !warning || Consent.Verify(Strings.L("Подтвердите выполнение команды агента"));
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
