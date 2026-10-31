@@ -2,8 +2,16 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location "$root/core"
-# remote-desktop: встроенный RDP (IronRDP) — только для Windows/Linux, на Mac его нет.
-cargo build --release --features remote-desktop
+# Встроенный RDP: с FREERDP_DIR (артефакт freerdp.yml) — движок FreeRDP 3 и его DLL рядом с relaya_core.dll,
+# без него — IronRDP (remote-desktop). На Mac встроенного RDP пока нет.
+if ($env:FREERDP_DIR) {
+    cargo build --release --features rdp-freerdp
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Copy-Item "$env:FREERDP_DIR/bin/*.dll" target/release/ -Force
+} else {
+    cargo build --release --features remote-desktop
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 if (-not (Get-Command uniffi-bindgen-cs -ErrorAction SilentlyContinue)) {
     cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
 }
