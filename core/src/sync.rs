@@ -307,6 +307,8 @@ fn set_private(_p: &Path) {}
 // MARK: - Ключи
 
 const MAGIC: &[u8] = b"RLYK1";
+const MIN_ROUNDS: u32 = 10_000;
+const MAX_ROUNDS: u32 = 5_000_000;
 
 fn derive(pass: &str, salt: &[u8], rounds: u32) -> Key {
     let mut out = [0u8; 32];
@@ -332,6 +334,8 @@ pub fn key_decrypt(blob: Vec<u8>, passphrase: String) -> Result<Vec<u8>, CoreErr
     if blob.len() <= 5 + 16 + 4 + 28 || &blob[..5] != MAGIC { return Err(CoreError::Decrypt); }
     let salt = &blob[5..21];
     let rounds = u32::from_be_bytes(blob[21..25].try_into().unwrap());
+    // Число итераций берётся из файла: без границ чужой файл подвесил бы расшифровку (или ослабил ключ).
+    if !(MIN_ROUNDS..=MAX_ROUNDS).contains(&rounds) { return Err(CoreError::Decrypt); }
     let cipher = ChaCha20Poly1305::new(&derive(&passphrase, salt, rounds));
     cipher.decrypt(Nonce::from_slice(&blob[25..37]), &blob[37..]).map_err(|_| CoreError::Decrypt)
 }
@@ -615,9 +619,15 @@ mod tests {
 
     #[test]
     fn vault_roundtrip() {
-        let blob = key_encrypt(b"PRIVATE".to_vec(), "pw".into(), 1000);
+        let blob = key_encrypt(b"PRIVATE".to_vec(), "pw".into(), MIN_ROUNDS);
         assert_eq!(key_decrypt(blob.clone(), "pw".into()).unwrap(), b"PRIVATE");
-        assert_eq!(key_decrypt(blob, "nope".into()), Err(CoreError::Decrypt));
+        assert_eq!(key_decrypt(blob.clone(), "nope".into()), Err(CoreError::Decrypt));
+        // Итерации вне границ отвергаются сразу, без расчёта ключа.
+        for rounds in [1u32, MIN_ROUNDS - 1, MAX_ROUNDS + 1, u32::MAX] {
+            let mut bad = blob.clone();
+            bad[21..25].copy_from_slice(&rounds.to_be_bytes());
+            assert_eq!(key_decrypt(bad, "pw".into()), Err(CoreError::Decrypt));
+        }
     }
 
     #[test]
