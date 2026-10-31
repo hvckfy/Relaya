@@ -1,0 +1,40 @@
+name: Core (Rust)
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["core/**", ".github/workflows/core.yml"]
+  pull_request:
+    paths: ["core/**"]
+
+concurrency:
+  group: core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('core/Cargo.toml', 'core/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - name: Git identity for sync tests
+        run: |
+          git config --global init.defaultBranch main
+          git config --global user.name ci
+          git config --global user.email ci@localhost
+      - name: Test
+        run: cargo test
