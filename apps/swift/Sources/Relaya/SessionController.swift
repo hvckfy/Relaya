@@ -130,7 +130,7 @@ final class SessionController {
         }
         if passwordPromptAfterLogin, text.contains(where: { $0.isLetter || $0.isNewline }) { passwordPromptAfterLogin = false }
 
-        if let cmd = pendingCommand, Self.looksLikeShellPrompt(tail) {
+        if let cmd = pendingCommand, loginReady() {
             pendingCommand = nil
             terminal?.sendQuiet(cmd + "\r")
         }
@@ -170,6 +170,15 @@ final class SessionController {
             guard asked == generation, !loggedIn else { return }
             terminal?.sendQuiet(pw + "\r")
         }
+    }
+
+    /// Вход выполнен и shell ждёт команду — по реальному экрану и курсору (ядро), а не по хвосту вывода:
+    /// строка MOTD с `#` или `>` в конце больше не считается приглашением.
+    private func loginReady() -> Bool {
+        guard let t = terminal?.getTerminal() else { return false }
+        let rows = t.rows
+        let lines = (0..<rows).map { t.getLine(row: $0)?.translateToString(trimRight: true) ?? "" }
+        return TerminalLogin.ready(lines: lines, cursorRow: t.buffer.y, cursorCol: t.buffer.x, altScreen: t.isCurrentBufferAlternate)
     }
 
     /// Последняя строка заканчивается на `$`, `#`, `%` или `>` — shell ждёт ввода.

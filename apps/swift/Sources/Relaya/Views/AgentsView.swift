@@ -5,6 +5,8 @@ import RelayaCore
 struct AgentsView: View {
     @Environment(AppModel.self) private var model
     @State private var policy = MCPPolicyStore().load()
+    /// mcp.json повреждён: доступ выключен, а файл не перезаписывается, пока пользователь не создаст политику заново.
+    @State private var policyUnreadable = MCPPolicyStore().isUnreadable
     @State private var log: [MCPLogEntry] = []
     @State private var copied = false
     @State private var rulesHost: String?
@@ -180,7 +182,7 @@ struct AgentsView: View {
         .foregroundStyle(Theme.tx)
         .background(Theme.content)
         .onAppear { log = MCPLog().recent() }
-        .onChange(of: policy) { _, p in try? MCPPolicyStore().save(p) }
+        .onChange(of: policy) { _, p in if !policyUnreadable { try? MCPPolicyStore().save(p) } }
         .sheet(item: Binding(get: { rulesHost.map { RulesTarget(id: $0) } }, set: { rulesHost = $0?.id })) { t in
             RulesEditor(alias: t.id, policy: $policy)
         }
@@ -222,6 +224,19 @@ private struct RulesEditor: View {
             Text(L("По одному шаблону на строку, как в shell: * — любые символы. Пример: systemctl restart *"))
                 .font(.caption).foregroundStyle(.secondary)
             Form {
+                if policyUnreadable {
+                    Section {
+                        Label(L("Файл политики агентов (mcp.json) не читается — доступ агентов выключен."), systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Button(L("Создать политику заново")) {
+                            policyUnreadable = false
+                            policy = MCPPolicy()
+                            try? MCPPolicyStore().save(policy)
+                        }
+                    } footer: {
+                        Text(MCPPolicyStore().url.path)
+                    }
+                }
                 Section(L("Без подтверждения")) {
                     TextEditor(text: $allow).font(.system(.body, design: .monospaced)).frame(height: 90)
                 }

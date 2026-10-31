@@ -106,9 +106,20 @@ public struct MCPPolicyStore: Sendable {
         RelayaPaths.supportDirectory
     }
 
+    /// Нет файла — политика по умолчанию. Файл есть, но не читается — доступ агентов выключен (fail-closed):
+    /// повреждённая политика не должна снимать ограничения.
     public func load() -> MCPPolicy {
         guard let data = try? Data(contentsOf: url) else { return MCPPolicy() }
-        return (try? JSONDecoder().decode(MCPPolicy.self, from: data)) ?? MCPPolicy()
+        if let p = try? JSONDecoder().decode(MCPPolicy.self, from: data) { return p }
+        var closed = MCPPolicy()
+        closed.enabled = false
+        return closed
+    }
+
+    /// Файл политики есть, но не читается.
+    public var isUnreadable: Bool {
+        guard let data = try? Data(contentsOf: url) else { return false }
+        return (try? JSONDecoder().decode(MCPPolicy.self, from: data)) == nil
     }
 
     public func save(_ policy: MCPPolicy) throws {

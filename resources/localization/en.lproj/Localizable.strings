@@ -893,3 +893,5 @@
 "Как в конфиге" = "As in config";
 "Да" = "Yes";
 "Не удалось прочитать файлы данных — они не перезаписаны, а отложены рядом:" = "Some data files could not be read; they were set aside instead of being overwritten:";
+"Файл политики агентов (mcp.json) не читается — доступ агентов выключен." = "The agent policy file (mcp.json) can't be read; agent access is off.";
+"Создать политику заново" = "Create a New Policy";

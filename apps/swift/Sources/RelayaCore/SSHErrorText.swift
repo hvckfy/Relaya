@@ -12,3 +12,11 @@ public enum SSHErrorText {
         return line.isEmpty ? (fallback ?? output) : line
     }
 }
+
+/// Признак «вход выполнен, shell ждёт команду» по экрану терминала — логика ядра (C23), общая с Windows:
+/// приглашение в строке курсора, курсор сразу после него, нет запросов пароля и ключа сервера.
+public enum TerminalLogin {
+    public static func ready(lines: [String], cursorRow: Int, cursorCol: Int, altScreen: Bool) -> Bool {
+        terminalLoginReady(lines: lines, cursorRow: UInt32(max(0, cursorRow)), cursorCol: UInt32(max(0, cursorCol)), altScreen: altScreen)
+    }
+}
