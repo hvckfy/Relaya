@@ -3,7 +3,7 @@ using Windows.UI;
 namespace Relaya.Terminal;
 
 /// Палитра терминала. Цвет ячейки из ядра: 0 — по умолчанию, 0x01RRGGBB — RGB, 0x02_0000II — индекс 0…255.
-public sealed record TerminalTheme(Color Background, Color Foreground, Color Cursor, Color[] Ansi)
+internal sealed record TerminalTheme(Color Background, Color Foreground, Color Cursor, Color[] Ansi)
 {
     public static TerminalTheme Default { get; } = new(
         Rgb(0x1E1E1E), Rgb(0xD4D4D4), Rgb(0xFFFFFF),

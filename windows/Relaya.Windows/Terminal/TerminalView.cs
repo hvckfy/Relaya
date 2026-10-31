@@ -10,7 +10,7 @@ using uniffi.relaya_core;
 namespace Relaya.Terminal;
 
 /// Нативный терминал: состояние экрана — эмулятор из Rust-ядра, отрисовка — Win2D (DirectX/DirectWrite).
-public sealed class TerminalView : UserControl
+internal sealed class TerminalView : UserControl
 {
     private readonly CanvasControl canvas = new();
     private readonly CanvasTextFormat format = new()
