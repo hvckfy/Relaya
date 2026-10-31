@@ -37,33 +37,33 @@ internal static class AppState
     /// Новый или изменённый хост; originalAlias — при переименовании.
     public static void Upsert(SshHost host, string? originalAlias)
     {
-        Directory.CreateDirectory(SshDir);
-        Backup();
-        File.WriteAllText(ConfigPath, RelayaCoreMethods.ConfigUpsert(ConfigText(), host, originalAlias));
+        SaveConfig(RelayaCoreMethods.ConfigUpsert(ConfigText(), host, originalAlias));
         LoadHosts();
     }
 
     /// Готовый текст конфига (правка ключей) — с копией и перечитыванием хостов.
     public static void WriteConfig(string text)
     {
-        Directory.CreateDirectory(SshDir);
-        Backup();
-        File.WriteAllText(ConfigPath, text);
+        SaveConfig(text);
         LoadHosts();
     }
 
     public static void Remove(string alias)
     {
-        Backup();
-        File.WriteAllText(ConfigPath, RelayaCoreMethods.ConfigRemove(ConfigText(), alias));
+        SaveConfig(RelayaCoreMethods.ConfigRemove(ConfigText(), alias));
         Platform.CredentialStore.Delete(alias);
         LoadHosts();
     }
 
-    // Как на Mac: перед каждой записью — копия config.relaya.bak.
-    private static void Backup()
+    // Как на Mac: перед каждой записью — копия config.relaya.bak. Запись атомарна: временный файл и File.Replace,
+    // чтобы сбой посреди записи не оставил обрезанный ~/.ssh/config.
+    private static void SaveConfig(string text)
     {
-        if (File.Exists(ConfigPath)) File.Copy(ConfigPath, ConfigPath + ".relaya.bak", true);
+        Directory.CreateDirectory(SshDir);
+        var tmp = ConfigPath + ".relaya.tmp";
+        File.WriteAllText(tmp, text);
+        if (File.Exists(ConfigPath)) File.Replace(tmp, ConfigPath, ConfigPath + ".relaya.bak", ignoreMetadataErrors: true);
+        else File.Move(tmp, ConfigPath);
     }
 
     // --- JSON-списки (общие с Mac) ---
@@ -128,13 +128,20 @@ internal static class AppState
         if (askpassAlias != null) Platform.Askpass.Configure(info, askpassAlias);
         try
         {
+            // Таймер — от старта процесса; stdout/stderr читаются до записи stdin, иначе большой вывод
+            // заполнит канал, пока мы пишем stdin, и процессы заблокируют друг друга.
+            var deadline = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
             using var p = Process.Start(info)!;
-            if (stdin != null) await p.StandardInput.WriteAsync(stdin);
-            p.StandardInput.Close();
             var output = p.StandardOutput.ReadToEndAsync();
             var error = p.StandardError.ReadToEndAsync();
-            var exited = p.WaitForExitAsync();
-            if (await Task.WhenAny(exited, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != exited)
+            var input = Task.Run(async () =>
+            {
+                try { if (stdin != null) await p.StandardInput.WriteAsync(stdin); }
+                catch (IOException) { } // процесс закрыл stdin раньше — вывод и код выхода всё равно прочитаем
+                finally { try { p.StandardInput.Close(); } catch (IOException) { } }
+            });
+            var exited = Task.WhenAll(p.WaitForExitAsync(), input);
+            if (await Task.WhenAny(exited, deadline) != exited)
             {
                 try { p.Kill(true); } catch (InvalidOperationException) { }
                 return new Result(-1, "", Strings.L("Время ожидания истекло"));
