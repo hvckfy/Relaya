@@ -19,6 +19,11 @@ using Windows.Foundation;
 using Windows.Graphics.DirectX;
 using Windows.System;
 using static Relaya.Strings;
+using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
+using DispatcherQueuePriority = Microsoft.UI.Dispatching.DispatcherQueuePriority;
+using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
+using Rect = Windows.Foundation.Rect;
+using Point = Windows.Foundation.Point;
 
 namespace Relaya.Desktop;
 
