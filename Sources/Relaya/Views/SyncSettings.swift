@@ -24,7 +24,8 @@ struct SyncSettings: View {
                         .opacity(p.enabled ? 1 : 0.5)
                     }
                 }
-                .listStyle(.sidebar)
+                // Не .sidebar: в окне настроек сайдбар залезает под тулбар и красит угол окна своим материалом.
+                .listStyle(.bordered(alternatesRowBackgrounds: false))
                 HStack(spacing: 0) {
                     Button { selection = sync.addProfile().id } label: { Image(systemName: "plus") }
                         .help(L("Новый профиль"))
@@ -36,9 +37,11 @@ struct SyncSettings: View {
                     Spacer()
                 }
                 .buttonStyle(.borderless)
-                .padding(6)
+                .padding(.vertical, 4)
             }
             .frame(width: 200)
+            .padding([.leading, .top], 12)
+            .padding(.trailing, 4)
             Divider()
             if let i = sync.profiles.firstIndex(where: { $0.id == selection }) {
                 ProfileForm(profile: Binding(get: { sync.profiles[i] }, set: { sync.profiles[i] = $0 }), passphrase: $passphrase)
