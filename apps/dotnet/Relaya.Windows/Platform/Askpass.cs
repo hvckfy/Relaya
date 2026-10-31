@@ -42,6 +42,13 @@ internal static class Askpass
         info.Environment["DISPLAY"] = "relaya";
     }
 
+    /// После Process.Start: токен askpass работает только для этого процесса (ssh или sftp).
+    public static void Started(ProcessStartInfo info, Process process)
+    {
+        if (info.Environment.TryGetValue("RELAYA_ASKPASS_TOKEN", out var token) && token != null)
+            AskpassBroker.Bind(token, process.Id);
+    }
+
     public static void Configure(ProcessStartInfo info, string alias, bool interactive = false)
     {
         if (CredentialStore.Has(alias))

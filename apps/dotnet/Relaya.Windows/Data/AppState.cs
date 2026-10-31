@@ -158,6 +158,7 @@ internal static class AppState
             // заполнит канал, пока мы пишем stdin, и процессы заблокируют друг друга.
             var deadline = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
             using var p = Process.Start(info)!;
+            Platform.Askpass.Started(info, p);
             var output = p.StandardOutput.ReadToEndAsync();
             var error = p.StandardError.ReadToEndAsync();
             var input = Task.Run(async () =>

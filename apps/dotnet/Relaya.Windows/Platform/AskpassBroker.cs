@@ -13,12 +13,13 @@ namespace Relaya.Platform;
 
 /// Секреты для askpass без открытого доступа к Credential Manager (аналог M8 на Mac).
 /// Процесс, который запускает ssh/sftp, держит named pipe с ACL только для текущего пользователя и выдаёт
-/// одноразовый токен на учётку: ~60 с, не больше 3 использований (ssh может переспросить). Askpass-режим
-/// Relaya.exe шлёт в pipe токен и текст запроса; секрет отдаётся, только если клиент — Relaya.exe,
-/// его родитель — ssh.exe, а выше по цепочке (не дальше 3 уровней) — этот процесс.
+/// одноразовый токен на учётку: ~60 с, одно использование. После запуска токен привязывается к PID процесса,
+/// который мы запустили (ssh.exe или sftp.exe). Askpass-режим Relaya.exe шлёт в pipe токен и текст запроса;
+/// секрет отдаётся, только если клиент — наш Relaya.exe, его родитель — настоящий ssh.exe (полный путь),
+/// и это либо сам привязанный процесс, либо прямой потомок привязанного sftp.exe.
 internal static class AskpassBroker
 {
-    private sealed record Grant(string Account, DateTime Expires) { public int Uses; }
+    private sealed record Grant(string Account, DateTime Expires) { public int Uses; public int Pid; }
 
     private static readonly ConcurrentDictionary<string, Grant> grants = new();
     private static readonly object startLock = new();
@@ -40,7 +41,13 @@ internal static class AskpassBroker
         }
     }
 
-    /// Токен на учётку: живёт 60 с, до 3 использований.
+    /// Связать токен с процессом, который мы только что запустили (без привязки токен не работает).
+    public static void Bind(string token, int pid)
+    {
+        if (grants.TryGetValue(token, out var g)) lock (g) g.Pid = pid;
+    }
+
+    /// Токен на учётку: живёт 60 с, одно использование.
     public static string Issue(string account)
     {
         _ = PipeName;
@@ -93,33 +100,38 @@ internal static class AskpassBroker
         if (!grants.TryGetValue(token, out var g)) return null;
         if (g.Expires < DateTime.UtcNow) { grants.TryRemove(token, out _); return null; }
         if (!PasswordPrompt.Matches(prompt)) return null;
-        if (!GetNamedPipeClientProcessId(server.SafePipeHandle.DangerousGetHandle(), out var client) || !CallerIsOurSsh((int)client))
+        // Привязка ставится сразу после Process.Start; запрос пароля почти всегда позже, но подождём до 2 с.
+        var bound = 0;
+        for (var i = 0; i < 20 && bound <= 0; i++)
+        {
+            lock (g) bound = g.Pid;
+            if (bound <= 0) System.Threading.Thread.Sleep(100);
+        }
+        if (bound <= 0) return null;
+        if (!GetNamedPipeClientProcessId(server.SafePipeHandle.DangerousGetHandle(), out var client) || !CallerIsOurSsh((int)client, bound))
             return null;
         lock (g)
         {
-            if (++g.Uses > 3) { grants.TryRemove(token, out _); return null; }
+            if (++g.Uses > 1) { grants.TryRemove(token, out _); return null; }
         }
+        grants.TryRemove(token, out _);
         // Настройка «Подтверждать каждое использование пароля»: Windows Hello, без него — диалог с «Нет» по умолчанию.
         if (Settings.GetFresh("security.confirmPassword", "0") == "1"
             && !Consent.Ask(Strings.L("ssh просит пароль %@:", g.Account) + "\n\n" + prompt)) return null;
         return CredentialStore.Read(g.Account);
     }
 
-    // Клиент — Relaya.exe (тот же файл), родитель — ssh.exe, выше не дальше 3 уровней — мы.
-    private static bool CallerIsOurSsh(int client)
+    // Клиент — наш Relaya.exe; родитель — настоящий ssh.exe (полный путь). Либо родитель и есть привязанный ssh,
+    // либо привязанный sftp.exe — родитель этого ssh. Привязанный процесс — наш прямой потомок.
+    private static bool CallerIsOurSsh(int client, int bound)
     {
         var self = Environment.ProcessPath;
         if (self == null || !SamePath(ImagePath(client), self)) return false;
         var parent = ParentOf(client);
-        if (parent <= 0 || !string.Equals(Path.GetFileName(ImagePath(parent)), "ssh.exe", StringComparison.OrdinalIgnoreCase)) return false;
-        var p = parent;
-        for (var i = 0; i < 3; i++)
-        {
-            p = ParentOf(p);
-            if (p <= 0) return false;
-            if (p == Environment.ProcessId) return true;
-        }
-        return false;
+        if (parent <= 0 || !SamePath(ImagePath(parent), Data.AppState.SshExe)) return false;
+        if (ParentOf(bound) != Environment.ProcessId) return false;
+        if (parent == bound) return true;
+        return ParentOf(parent) == bound && SamePath(ImagePath(bound), Data.AppState.SftpExe);
     }
 
     private static bool SamePath(string? a, string b) =>

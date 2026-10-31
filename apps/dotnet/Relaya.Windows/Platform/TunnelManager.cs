@@ -51,7 +51,7 @@ internal sealed class TunnelManager
         // Опции «только пароль» уже в аргументах ядра — askpass нужен только для самого пароля.
         if (passwordOnly) { Askpass.SetEnvironment(info, t.hostAlias); }
         Process p;
-        try { p = Process.Start(info)!; }
+        try { p = Process.Start(info)!; Askpass.Started(info, p); }
         catch (Exception e) { running[t.id] = (null!, State.Failed, e.Message); Changed?.Invoke(); return; }
         p.EnableRaisingEvents = true;
         var error = new System.Text.StringBuilder();
