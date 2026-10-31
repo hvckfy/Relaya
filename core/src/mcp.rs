@@ -337,7 +337,7 @@ pub fn mcp_mask_secrets(text: String) -> String {
     static RULES: OnceLock<[regex::Regex; 3]> = OnceLock::new();
     let r = RULES.get_or_init(|| [
         regex::Regex::new(r"(?i)(authorization\s*:\s*(?:bearer|basic|token)?\s*)[^\s'\x22]+").unwrap(),
-        regex::Regex::new(r"(?i)((?:password|passwd|pwd|pass|token|secret|api[_-]?key|access[_-]?key)\s*[=:]\s*['\x22]?)[^\s'\x22&]+").unwrap(),
+        regex::Regex::new(r"(?i)((?:password|passwd|pwd|pass|token|secret|api[_-]?key|access[_-]?key)\s*[=:]\s*['\x22]?)[^\s'\x22&;]+").unwrap(),
         regex::Regex::new(r"(?i)(--(?:password|passwd|pass|token|secret|api-key)\s+['\x22]?)[^\s'\x22]+").unwrap(),
     ]);
     let mut out = text;

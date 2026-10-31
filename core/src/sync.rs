@@ -332,8 +332,6 @@ where T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone {
     }
     Ok(changed)
 }
-
-#[cfg(unix)]
 /// Временный файл рядом → права 0600 → rename: ssh никогда не прочтёт половину конфига, а ключ не будет открыт.
 fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
     let tmp = dest.with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
@@ -343,6 +341,7 @@ fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn set_private(p: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
