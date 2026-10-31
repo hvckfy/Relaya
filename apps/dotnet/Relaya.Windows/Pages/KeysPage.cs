@@ -20,6 +20,7 @@ internal sealed class KeysPage : UserControl
     {
         var (page, body) = Ui.Scaffold(L("Ключи"), Ui.Button(L("Новый ключ"), async () => await Create(), accent: true, glyph: ""));
         Content = page;
+        var configHosts = RelayaCoreMethods.ParseConfig(AppState.ConfigText());
         var pubs = Directory.Exists(AppState.SshDir) ? Directory.GetFiles(AppState.SshDir, "*.pub").OrderBy(p => p).ToList() : new();
         if (pubs.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("В ~/.ssh нет ключей. Создайте ключ ed25519 — его можно установить на хосты и входить без пароля."))));
         foreach (var pub in pubs)
@@ -39,10 +40,31 @@ internal sealed class KeysPage : UserControl
                 install.Items.Add(item);
             }
             actions.Children.Add(new DropDownButton { Content = L("Установить на хост"), Flyout = install });
-            body.Children.Add(Ui.Row("", name,
-                fingerprint + (used.Count > 0 ? "\n" + L("Используют: %@", string.Join(", ", used)) : ""), actions));
+            var row = Ui.Row("", name, fingerprint, actions);
+            if (used.Count > 0)
+            {
+                // Хосты ключа с иконкой: сервер или git-сервер (как на Mac).
+                var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Margin = new Thickness(0, 4, 0, 0) };
+                foreach (var alias in used)
+                {
+                    var git = IsGit(alias, configHosts);
+                    var chip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+                    chip.Children.Add(new FontIcon { Glyph = git ? GitGlyph : ServerGlyph, FontSize = 12 });
+                    chip.Children.Add(Ui.Secondary(alias));
+                    ToolTipService.SetToolTip(chip, git ? L("Git-сервер") : L("Сервер"));
+                    chips.Children.Add(chip);
+                }
+                ((Panel)((Grid)row.Child).Children[1]).Children.Add(chips);
+            }
+            body.Children.Add(row);
         }
     }
+
+    private const string ServerGlyph = "\ue756", GitGlyph = "\ue943";
+
+    // Git-сервер — по ядру (User git, github.com и т. п.); записи без блока (только что добавленные полем) — тоже git.
+    private static bool IsGit(string alias, System.Collections.Generic.List<SshHost> config) =>
+        config.FirstOrDefault(h => h.alias == alias) is not { } h || RelayaCoreMethods.HostIsGitService(h);
 
     // Какие хосты и git-серверы ходят только с этим ключом: IdentityFile + IdentitiesOnly yes (логика ядра, как на Mac).
     // Так лечится «Too many authentication failures», когда ssh-agent перебирает все ключи.
@@ -51,25 +73,33 @@ internal sealed class KeysPage : UserControl
         var key = "~/.ssh/" + name;
         var text = AppState.ConfigText();
         var all = RelayaCoreMethods.ConfigAllAliases(text);
+        var config = RelayaCoreMethods.ParseConfig(text);
         var selected = RelayaCoreMethods.ConfigKeyHosts(text, key).ToHashSet();
-        var list = new StackPanel { Spacing = 2 };
+        var servers = new StackPanel { Spacing = 2 };
+        var gits = new StackPanel { Spacing = 2 };
         void Add(string alias)
         {
+            var git = IsGit(alias, config);
             var box = new CheckBox { Content = alias, IsChecked = selected.Contains(alias), Tag = alias };
-            ToolTipService.SetToolTip(box, AppState.Host(alias) is { } h ? RelayaCoreMethods.HostSubtitle(h) : L("git-сервер или служебная запись"));
-            list.Children.Add(box);
+            if (AppState.Host(alias) is { } h) ToolTipService.SetToolTip(box, RelayaCoreMethods.HostSubtitle(h));
+            (git ? gits : servers).Children.Add(box);
         }
         foreach (var a in all) Add(a);
-        var server = new TextBox { PlaceholderText = L("например, gitlab.com или git.example.com"), MinWidth = 280 };
-        var addButton = Ui.Button(L("Добавить"), () =>
+        var server = new TextBox { PlaceholderText = "gitlab.com", Header = L("Git-сервер"), MinWidth = 280 };
+        void AddGit()
         {
+            // `git@gitlab.com` → `gitlab.com`: пользователя git для нового блока ставит ядро (config_bind_key).
             var n = server.Text.Trim();
+            if (n.LastIndexOf('@') is var at and >= 0) n = n[(at + 1)..];
             if (n.Length == 0 || n.Contains(' ') || all.Contains(n)) return;
             all.Add(n);
             selected.Add(n);
             Add(n);
             server.Text = "";
-        });
+        }
+        server.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { e.Handled = true; AddGit(); } };
+        var addButton = Ui.Button(L("Добавить"), AddGit);
+        addButton.VerticalAlignment = VerticalAlignment.Bottom;
         var d = new ContentDialog
         {
             Title = L("Хосты, которые ходят с %@", name),
@@ -78,19 +108,23 @@ internal sealed class KeysPage : UserControl
                 MaxHeight = 520,
                 Content = new StackPanel
                 {
-                    Spacing = 10, MinWidth = 420,
+                    Spacing = 8, MinWidth = 420,
                     Children =
                     {
+                        Ui.Section(L("Серверы")),
+                        servers,
                         Ui.Secondary(L("Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.relaya.bak.")),
-                        list,
+                        Ui.Section(L("Git-серверы")),
+                        gits,
                         new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { server, addButton } },
+                        Ui.Secondary(L("GitHub, GitLab, свой Gitea или Forgejo: вход как git с этим ключом. Git-серверы не показываются среди хостов и не синхронизируются.")),
                     },
                 },
             },
             PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;
-        var hosts = list.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
+        var hosts = servers.Children.Concat(gits.Children).OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
         AppState.WriteConfig(RelayaCoreMethods.ConfigBindKey(AppState.ConfigText(), key, hosts));
         await Build();
     }
