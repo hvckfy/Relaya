@@ -6,40 +6,33 @@ import RelayaCore
 /// «SFTP как диск в Finder»: локальный WebDAV-сервер на 127.0.0.1 со случайным портом и секретным токеном в пути,
 /// который превращает запросы Finder в операции SFTP/ssh. macOS подключает его сам (NetFS) — без расширений ядра,
 /// без FUSE и без аккаунта разработчика. Диск называется как хост и появляется в боковой панели Finder.
+///
+/// Сервер работает в своей очереди и своём акторе, а не в главном потоке: Relaya сама обращается к этому диску
+/// (Finder, проверка существования), и если бы сервер ждал главный поток — получилась бы взаимная блокировка.
 @MainActor
 final class WebDAVBridge {
     let host: SSHHost
-    private let sftp: SFTPClient
-    private let ssh: SSHInvocation
-    private let token = UUID().uuidString.lowercased()
+    private let server: DAVServer
     private var listener: NWListener?
-    private var root = "/"
     private(set) var mountPoint: URL?
-    /// Служебные файлы Finder (`._*`, `.DS_Store`) живут только в памяти моста.
-    private var junk: [String: Data] = [:]
-    private var listings: [String: (files: [RemoteFile], at: Date)] = [:]
-
+    private let queue = DispatchQueue(label: "app.relaya.webdav")
     var onStopped: (() -> Void)?
 
     init(host: SSHHost, sftp: SFTPClient, ssh: SSHInvocation) {
         self.host = host
-        self.sftp = sftp
-        self.ssh = ssh
+        server = DAVServer(volumeName: host.alias.replacingOccurrences(of: "/", with: "-"), sftp: sftp, ssh: ssh)
     }
-
-    private var volumeName: String {
-        host.alias.replacingOccurrences(of: "/", with: "-")
-    }
-    private var prefix: String { "/\(token)/\(volumeName)" }
 
     /// Поднять сервер, подключить диск и открыть его в Finder.
     func start() async throws {
-        root = try await sftp.home()
+        try await server.prepare()
         let params = NWParameters.tcp
         params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
         let listener = try NWListener(using: params)
-        listener.newConnectionHandler = { [weak self] conn in
-            Task { @MainActor in self?.accept(conn) }
+        let server = self.server
+        let queue = self.queue
+        listener.newConnectionHandler = { conn in
+            DAVConnection(conn, queue: queue) { await server.handle($0) }.start()
         }
         let port: UInt16 = try await withCheckedThrowingContinuation { cont in
             let once = Once()
@@ -52,12 +45,14 @@ final class WebDAVBridge {
                 default: break
                 }
             }
-            listener.start(queue: .main)
+            listener.start(queue: queue)
         }
         self.listener = listener
-        guard let url = URL(string: "http://127.0.0.1:\(port)\(prefix)") else { return }
-        mountPoint = try await Self.mount(url)
-        if let mountPoint { NSWorkspace.shared.open(mountPoint) }
+        guard let url = URL(string: "http://127.0.0.1:\(port)\(server.prefix)") else { return }
+        let mp = try await Self.mount(url)
+        mountPoint = mp
+        // Открыть в Finder — не из главного потока: обращение к диску идёт к нашему же серверу.
+        if let mp { DispatchQueue.global().async { NSWorkspace.shared.open(mp) } }
     }
 
     func stop() {
@@ -66,6 +61,12 @@ final class WebDAVBridge {
         listener?.cancel()
         listener = nil
         onStopped?()
+    }
+
+    /// Открыть уже подключённый диск в Finder.
+    func reveal() {
+        guard let mp = mountPoint else { return }
+        DispatchQueue.global().async { NSWorkspace.shared.open(mp) }
     }
 
     private static func mount(_ url: URL) async throws -> URL? {
@@ -85,23 +86,33 @@ final class WebDAVBridge {
             }
         }
     }
+}
 
-    // MARK: - Соединения
+/// Обработка запросов WebDAV: состояние моста (кэш списков, служебные файлы Finder) — внутри актора.
+actor DAVServer {
+    nonisolated let prefix: String
+    private let volumeName: String
+    private let sftp: SFTPClient
+    private let ssh: SSHInvocation
+    private var root = "/"
+    /// Служебные файлы Finder (`._*`, `.DS_Store`) живут только в памяти моста.
+    private var junk: [String: Data] = [:]
+    private var listings: [String: (files: [RemoteFile], at: Date)] = [:]
 
-    private func accept(_ conn: NWConnection) {
-        let c = DAVConnection(conn) { [weak self] req in
-            await self?.handle(req) ?? WebDAV.response(503, "Service Unavailable")
-        }
-        connections.insert(c)
-        c.onClose = { [weak self, weak c] in if let c { self?.connections.remove(c) } }
-        c.start()
+    init(volumeName: String, sftp: SFTPClient, ssh: SSHInvocation) {
+        self.volumeName = volumeName
+        self.sftp = sftp
+        self.ssh = ssh
+        prefix = "/\(UUID().uuidString.lowercased())/\(volumeName)"
     }
 
-    private var connections: Set<DAVConnection> = []
+    func prepare() async throws {
+        root = try await sftp.home()
+    }
 
     // MARK: - Запросы
 
-    private func remotePath(_ path: String) -> String? {
+    func remotePath(_ path: String) -> String? {
         guard path.hasPrefix(prefix) else { return nil }
         var rest = String(path.dropFirst(prefix.count))
         while rest.hasSuffix("/") && rest.count > 1 { rest.removeLast() }
@@ -109,7 +120,7 @@ final class WebDAVBridge {
         return SFTPClient.join(root, String(rest.drop(while: { $0 == "/" })))
     }
 
-    private func handle(_ req: WebDAV.Request) async -> Data {
+    func handle(_ req: WebDAV.Request) async -> Data {
         guard !req.path.contains("/../"), !req.path.hasSuffix("/.."),
               let remote = remotePath(req.path) else { return WebDAV.response(404, "Not Found") }
         if remote == root, ["DELETE", "MOVE"].contains(req.method) { return WebDAV.response(403, "Forbidden") }
@@ -248,59 +259,57 @@ private final class Once: @unchecked Sendable {
     func fire() -> Bool { lock.withLock { defer { done = true }; return !done } }
 }
 
-/// Одно соединение Finder: запросы по очереди, ответы в том же порядке.
-@MainActor
-private final class DAVConnection: Hashable {
+/// Одно соединение Finder: запросы по очереди, ответы в том же порядке. Всё состояние — в своей очереди.
+private final class DAVConnection: @unchecked Sendable {
     private let conn: NWConnection
-    private let handler: (WebDAV.Request) async -> Data
+    private let queue: DispatchQueue
+    private let handler: @Sendable (WebDAV.Request) async -> Data
     private var parser = WebDAV.Parser()
-    private var queue: [WebDAV.Request] = []
+    private var pending: [WebDAV.Request] = []
     private var busy = false
-    var onClose: (() -> Void)?
+    /// Соединение держит само себя, пока открыто.
+    private var keepAlive: DAVConnection?
 
-    init(_ conn: NWConnection, handler: @escaping (WebDAV.Request) async -> Data) {
+    init(_ conn: NWConnection, queue: DispatchQueue, handler: @escaping @Sendable (WebDAV.Request) async -> Data) {
         self.conn = conn
+        self.queue = queue
         self.handler = handler
     }
 
-    nonisolated static func == (a: DAVConnection, b: DAVConnection) -> Bool { a === b }
-    nonisolated func hash(into h: inout Hasher) { h.combine(ObjectIdentifier(self)) }
-
     func start() {
-        conn.start(queue: .main)
+        keepAlive = self
+        conn.start(queue: queue)
         receive()
     }
 
     private func receive() {
-        conn.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { [weak self] data, _, done, error in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                if let data, !data.isEmpty {
-                    self.queue += self.parser.feed(data)
-                    self.pump()
-                }
-                if done || error != nil {
-                    self.conn.cancel()
-                    self.onClose?()
-                } else {
-                    self.receive()
-                }
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { [self] data, _, done, error in
+            if let data, !data.isEmpty {
+                pending += parser.feed(data)
+                pump()
+            }
+            if done || error != nil {
+                conn.cancel()
+                keepAlive = nil
+            } else {
+                receive()
             }
         }
     }
 
     private func pump() {
-        guard !busy, !queue.isEmpty else { return }
+        guard !busy, !pending.isEmpty else { return }
         busy = true
-        let req = queue.removeFirst()
-        Task { @MainActor in
+        let req = pending.removeFirst()
+        let handler = self.handler
+        Task.detached { [self] in
             let data = await handler(req)
-            conn.send(content: data, completion: .contentProcessed { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.busy = false
-                    self?.pump()
-                }
-            })
+            queue.async { [self] in
+                conn.send(content: data, completion: .contentProcessed { [self] _ in
+                    busy = false
+                    pump()
+                })
+            }
         }
     }
 }

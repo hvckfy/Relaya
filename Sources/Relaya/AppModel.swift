@@ -707,8 +707,9 @@ final class AppModel {
     /// Открыть файлы хоста в Finder: мост поднимается сам, диск подключается и появляется в боковой панели Finder.
     func openInFinder(_ host: SSHHost) async {
         let h = current(host)
-        if let b = finderBridges[h.alias], let mp = b.mountPoint, FileManager.default.fileExists(atPath: mp.path) {
-            NSWorkspace.shared.open(mp)
+        // Не проверяем диск через FileManager из главного потока: он обслуживается нашим же мостом.
+        if let b = finderBridges[h.alias], b.mountPoint != nil {
+            b.reveal()
             return
         }
         finderBridges[h.alias]?.stop()
