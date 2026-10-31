@@ -12,4 +12,8 @@ fi
 OUT="$ROOT/apps/dotnet/Relaya.Shared/Core"
 mkdir -p "$OUT"
 uniffi-bindgen-cs --library target/release/librelaya_core.so --out-dir "$OUT"
+# Сгенерированный код не проходит nullable-проверки проекта — отключаем их только в нём (А9), не NoWarn на весь проект.
+for f in "$OUT"/*.cs; do
+  grep -q '^#nullable disable' "$f" || printf '#nullable disable\n#pragma warning disable\n%s' "$(cat "$f")" > "$f"
+done
 echo "core: $ROOT/core/target/release/librelaya_core.so"

@@ -12,8 +12,15 @@
     <UnoFeatures>Skia</UnoFeatures>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- Сгенерированные UniFFI-привязки не проходят наши предупреждения (как в Relaya.Windows). -->
-    <NoWarn>$(NoWarn);CS8618;CS8625;CS8603;CS8604;CS0168;Uno0001</NoWarn>
+    <!-- Сгенерированный Core/relaya_core.cs сам отключает nullable-предупреждения (build-core-linux.sh, А9). -->
+    <NoWarn>$(NoWarn);Uno0001</NoWarn>
+  </PropertyGroup>
+  <!-- Язык интерфейса при сборке (ADR-002): -p:RelayaLang=ru|en; без флага — по языку системы. -->
+  <PropertyGroup Condition="'$(RelayaLang)' == 'ru'">
+    <DefineConstants>$(DefineConstants);RELAYA_LANG_RU</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RelayaLang)' == 'en'">
+    <DefineConstants>$(DefineConstants);RELAYA_LANG_EN</DefineConstants>
   </PropertyGroup>
   <Import Project="..\Relaya.Shared\Relaya.Shared.projitems" Label="Shared" />
   <ItemGroup>
