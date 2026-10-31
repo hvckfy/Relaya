@@ -410,17 +410,27 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         new(new(@"\bhttps?://[^\s'""<>]+"), 12, false),
     };
 
-    private static (int Color, bool Bold)?[]? Highlights(TermSnapshot s, int row)
+    // Подсветка считается один раз на текст строки (П3): кадр без изменений не гоняет регулярки заново.
+    private readonly System.Collections.Generic.Dictionary<string, (int Color, bool Bold)?[]?> highlightCache = new();
+
+    private (int Color, bool Bold)?[]? Highlights(TermSnapshot s, int row)
     {
         var text = new StringBuilder((int)s.cols);
         for (var c = 0; c < s.cols; c++) text.Append(s.cells[row * (int)s.cols + c].ch is { Length: > 0 } ch ? ch[0] : ' ');
         var line = text.ToString();
         if (line.Trim().Length == 0) return null;
+        if (highlightCache.TryGetValue(line, out var cached)) return cached;
+        if (highlightCache.Count > 512) highlightCache.Clear();
+        return highlightCache[line] = HighlightLine(line, (int)s.cols);
+    }
+
+    private static (int Color, bool Bold)?[]? HighlightLine(string line, int cols)
+    {
         (int, bool)?[]? marks = null;
         foreach (var rule in Rules)
             foreach (System.Text.RegularExpressions.Match m in rule.Pattern.Matches(line))
             {
-                marks ??= new (int, bool)?[s.cols];
+                marks ??= new (int, bool)?[cols];
                 for (var i = m.Index; i < m.Index + m.Length && i < marks.Length; i++) marks[i] ??= (rule.Color, rule.Bold);
             }
         return marks;
@@ -469,10 +479,18 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         ds.Clear(Theme.Background);
         var s = Emulator.Snapshot();
         var highlight = !s.altScreen && Platform.Settings.Get("terminal.highlight", "1") == "1";
+        var run = new StringBuilder();
         for (var r = 0; r < s.rows; r++)
         {
             var y = Pad + r * cellH;
             var marks = highlight ? Highlights(s, r) : null;
+            // Прогон соседних ASCII-ячеек одного стиля рисуется одним DrawText (П3), а не по ячейке.
+            double runX = 0; Color runFg = default; bool runBold = false, runItalic = false;
+            void Flush()
+            {
+                if (run.Length > 0) ds.Text(run.ToString().TrimEnd(), runX, y, runFg, runBold, runItalic);
+                run.Clear();
+            }
             for (var c = 0; c < s.cols; c++)
             {
                 var cell = s.cells[r * (int)s.cols + c];
@@ -485,12 +503,21 @@ internal sealed partial class TerminalView : UserControl, IDisposable
                 var width = (cell.flags & 64) != 0 ? cellW * 2 : cellW;
                 if (cell.bg != 0 || inverse) ds.Fill(x, y, width, cellH, bg);
                 if (Selected(r, c)) ds.Fill(x, y, cellW, cellH, Theme.Selection);
-                if (cell.ch.Length == 0 || cell.ch == " ") continue;
                 if ((cell.flags & 16) != 0) fg.A = 160;
-                ds.Text(cell.ch, x, y, fg, (cell.flags & 1) != 0, (cell.flags & 2) != 0);
+                bool bold = (cell.flags & 1) != 0, italic = (cell.flags & 2) != 0;
+                var ascii = cell.ch.Length == 1 && cell.ch[0] is >= ' ' and < (char)127 && (cell.flags & 64) == 0;
+                if (ascii && run.Length > 0 && fg == runFg && bold == runBold && italic == runItalic) run.Append(cell.ch[0]);
+                else
+                {
+                    Flush();
+                    if (cell.ch.Length == 0 || cell.ch == " ") { }
+                    else if (ascii) { run.Append(cell.ch[0]); runX = x; runFg = fg; runBold = bold; runItalic = italic; }
+                    else ds.Text(cell.ch, x, y, fg, bold, italic);
+                }
                 if ((cell.flags & 4) != 0) ds.Line(x, y + cellH - 1, x + width, y + cellH - 1, fg);
                 if ((cell.flags & 32) != 0) ds.Line(x, y + cellH / 2, x + width, y + cellH / 2, fg);
             }
+            Flush();
         }
         if (s.cursorVisible)
         {
