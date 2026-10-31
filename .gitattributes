@@ -1,0 +1,2 @@
+# Переводы дописываются в конец сразу несколькими агентами: union-слияние берёт обе стороны без конфликта.
+resources/localization/*.lproj/Localizable.strings merge=union
