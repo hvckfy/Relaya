@@ -35,8 +35,13 @@ internal static class McpHost
     private static readonly string PolicyFile = Path.Combine(Data.AppState.Support, "mcp.json");
     private static readonly string LogFile = Path.Combine(Data.AppState.Support, "mcp-log.jsonl");
 
-    public static McpPolicy LoadPolicy() =>
-        RelayaCoreMethods.McpPolicyDecode(File.Exists(PolicyFile) ? File.ReadAllText(PolicyFile) : "{}");
+    // Нет файла — "" (политика по умолчанию ядра); "{}" ядро считает закрытой политикой (C18).
+    private static string PolicyText() => File.Exists(PolicyFile) ? File.ReadAllText(PolicyFile) : "";
+
+    public static McpPolicy LoadPolicy() => RelayaCoreMethods.McpPolicyDecode(PolicyText());
+
+    /// mcp.json есть, но не читается: ядро закрыло доступ, интерфейс должен об этом сказать.
+    public static bool PolicyUnreadable() => RelayaCoreMethods.McpPolicyIsUnreadable(PolicyText());
 
     public static void SavePolicy(McpPolicy policy)
     {

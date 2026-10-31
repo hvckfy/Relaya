@@ -896,3 +896,5 @@
 "Файл политики агентов (mcp.json) не читается — доступ агентов выключен." = "The agent policy file (mcp.json) can't be read; agent access is off.";
 "Создать политику заново" = "Create a New Policy";
 "Для каждого хоста откроется вкладка, все они будут показаны плитками; команда выполнится после входа." = "A tab opens for each host and they are shown as tiles; the command runs after login.";
+"Политика не прочитана — доступ выключен" = "Policy couldn’t be read — access is off";
+"Файл mcp.json повреждён. Агенты не получат доступ, пока вы не сохраните настройки заново." = "mcp.json is damaged. Agents get no access until you save the settings again.";

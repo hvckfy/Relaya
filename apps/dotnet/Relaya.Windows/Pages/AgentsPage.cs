@@ -25,6 +25,13 @@ internal sealed class AgentsPage : UserControl
         var policy = McpHost.LoadPolicy();
         var (page, body) = Ui.Scaffold(L("Агенты"));
         Content = page;
+        if (McpHost.PolicyUnreadable())
+            body.Children.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Error, IsOpen = true, IsClosable = false,
+                Title = L("Политика не прочитана — доступ выключен"),
+                Message = L("Файл mcp.json повреждён. Агенты не получат доступ, пока вы не сохраните настройки заново."),
+            });
 
         var enabled = new ToggleSwitch { IsOn = policy.enabled, OnContent = "", OffContent = "", MinWidth = 0 };
         enabled.Toggled += (_, _) => Save(McpHost.LoadPolicy() with { enabled = enabled.IsOn });
