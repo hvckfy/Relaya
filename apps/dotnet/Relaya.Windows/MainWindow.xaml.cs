@@ -1,105 +1,51 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Relaya.Data;
 using uniffi.relaya_core;
+using static Relaya.Strings;
 
 namespace Relaya;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly string SshConfig =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh", "config");
-
-    private List<SshHost> hosts = new();
+    public static MainWindow? Current { get; private set; }
 
     public MainWindow()
     {
         InitializeComponent();
-        current = this;
+        Current = this;
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
-        ConfigPath.Text = SshConfig;
-        LoadHosts();
-        Platform.SyncService.Shared.Imported += () => DispatcherQueue.TryEnqueue(LoadHosts);
+        Title = "Relaya";
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 820));
+        ConfigPath.Text = AppState.ConfigPath;
+        Search.PlaceholderText = L("Поиск хостов");
+        NewHostText.Text = L("Новый хост…");
+        AppState.HostsChanged += () => DispatcherQueue.TryEnqueue(() => Render(Search.Text.Trim()));
+        AppState.LoadHosts();
+        Platform.SyncService.Shared.Imported += () => DispatcherQueue.TryEnqueue(AppState.LoadHosts);
         Platform.SyncService.Shared.ScheduleAuto();
+        Platform.TunnelManager.Shared.StartAuto();
+        Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
     }
-
-    private static MainWindow? current;
 
     /// Группы из ~/.ssh/config — настройки синхронизации отличают по ним группы от хостов.
-    public static HashSet<string> KnownGroups() =>
-        current?.hosts.Select(h => h.group).OfType<string>().ToHashSet() ?? new();
+    public static HashSet<string> KnownGroups() => AppState.Groups().ToHashSet();
 
-    // ~/.ssh/config — источник правды, как на Mac; разбирает общее Rust-ядро.
-    private void LoadHosts()
-    {
-        var text = File.Exists(SshConfig) ? File.ReadAllText(SshConfig) : "";
-        hosts = RelayaCoreMethods.ParseConfig(text)
-            .Where(h => !RelayaCoreMethods.IsPattern(h.alias) && !RelayaCoreMethods.HostIsGitService(h))
-            .ToList();
-        Render("");
-        EmptyTitle.Text = hosts.Count == 0 ? "Хостов пока нет — добавьте первый кнопкой «Новый хост…»" : "Выберите хост слева";
-    }
+    private async void OnNewHost(object sender, RoutedEventArgs e) => await Pages.HostEditor.Show(Content.XamlRoot, null, false);
 
-    // Новый хост пишется в ~/.ssh/config тем же кодом ядра, что и на Mac.
-    private async void OnNewHost(object sender, RoutedEventArgs e)
-    {
-        TextBox Field(string header, string placeholder) => new() { Header = header, PlaceholderText = placeholder };
-        var alias = Field("Название (Host)", "prod-web");
-        var address = Field("Адрес (HostName)", "203.0.113.10 или server.example.com");
-        var user = Field("Пользователь", "root");
-        var port = Field("Порт", "22");
-        var key = Field("Ключ (IdentityFile)", "~/.ssh/id_ed25519 — необязательно");
-        var group = Field("Группа", "необязательно");
-        var error = new TextBlock { Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.IndianRed), TextWrapping = TextWrapping.Wrap };
-        var dialog = new ContentDialog
-        {
-            Title = "Новый хост",
-            Content = new ScrollViewer { Content = new StackPanel { Spacing = 10, Children = { alias, address, user, port, key, group, error } } },
-            PrimaryButtonText = "Добавить",
-            CloseButtonText = "Отмена",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot,
-        };
-        dialog.PrimaryButtonClick += (_, args) =>
-        {
-            string? Opt(TextBox b) => string.IsNullOrWhiteSpace(b.Text) ? null : b.Text.Trim();
-            if (Opt(alias) is not { } name || name.Contains(' ')) { error.Text = "Укажите название без пробелов."; args.Cancel = true; return; }
-            long? portValue = null;
-            if (Opt(port) is { } p)
-            {
-                if (!long.TryParse(p, out var v) || v is < 1 or > 65535) { error.Text = "Порт — число от 1 до 65535."; args.Cancel = true; return; }
-                portValue = v;
-            }
-            var host = new SshHost(name, Opt(address), Opt(user), portValue, Opt(key), null, null, null, null, Opt(group),
-                new List<string>(), null, null, false);
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(SshConfig)!);
-                var text = File.Exists(SshConfig) ? File.ReadAllText(SshConfig) : "";
-                File.WriteAllText(SshConfig, RelayaCoreMethods.ConfigUpsert(text, host, null));
-            }
-            catch (Exception ex)
-            {
-                error.Text = ex.Message;
-                args.Cancel = true;
-            }
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) LoadHosts();
-    }
-
-    // Секции и группы — как сайдбар на Mac: «Хосты», внутри сворачиваемые группы.
+    // Сайдбар как на Mac: «Хосты» со сворачиваемыми группами, «Удалённые столы», «Инструменты».
     private void Render(string query)
     {
+        EmptyTitle.Text = AppState.Hosts.Count == 0 ? L("Хостов пока нет — добавьте первый кнопкой «Новый хост…»") : L("Выберите хост слева");
         Nav.MenuItems.Clear();
-        Nav.MenuItems.Add(new NavigationViewItemHeader { Content = "Хосты" });
-        var shown = hosts.Where(h => query.Length == 0
-            || h.alias.Contains(query, StringComparison.OrdinalIgnoreCase)
-            || (h.hostName ?? "").Contains(query, StringComparison.OrdinalIgnoreCase));
-        foreach (var group in shown.GroupBy(h => h.group ?? ""))
+        Nav.MenuItems.Add(new NavigationViewItemHeader { Content = L("Хосты") });
+        var shown = AppState.Hosts.Where(h => query.Length == 0
+            || RelayaCoreMethods.FuzzyScoreFields(query, Fields(h)) != null);
+        foreach (var group in shown.GroupBy(h => h.group ?? "").OrderBy(g => g.Key.Length == 0 ? "" : "~" + g.Key))
         {
             var items = group.Select(HostItem).ToList();
             if (group.Key.Length == 0)
@@ -110,99 +56,79 @@ public sealed partial class MainWindow : Window
             var folder = new NavigationViewItem
             {
                 Content = group.Key, Icon = new FontIcon { Glyph = "" }, SelectsOnInvoked = false,
-                IsExpanded = true,
+                IsExpanded = Platform.Settings.Get("group." + group.Key, "1") == "1",
             };
+            folder.Expanding += (_, _) => Platform.Settings.Set("group." + group.Key, "1");
+            folder.Collapsed += (_, _) => Platform.Settings.Set("group." + group.Key, "0");
             items.ForEach(folder.MenuItems.Add);
             Nav.MenuItems.Add(folder);
         }
-        Nav.MenuItems.Add(new NavigationViewItemHeader { Content = "Инструменты" });
-        Nav.MenuItems.Add(new NavigationViewItem { Content = "Ключи", Icon = new FontIcon { Glyph = "" } });
-        Nav.MenuItems.Add(new NavigationViewItem { Content = "Туннели", Icon = new FontIcon { Glyph = "" } });
-        Nav.MenuItems.Add(new NavigationViewItem { Content = "Сниппеты", Icon = new FontIcon { Glyph = "" } });
-    }
-
-    private static async System.Threading.Tasks.Task AskPassword(FrameworkElement anchor, string alias)
-    {
-        var box = new PasswordBox { PlaceholderText = "Пароль" };
-        var dialog = new ContentDialog
+        var desktops = AppState.Desktops;
+        if (desktops.Count > 0)
         {
-            Title = $"Пароль для {alias}",
-            Content = new StackPanel
-            {
-                Spacing = 8,
-                Children =
+            Nav.MenuItems.Add(new NavigationViewItemHeader { Content = L("Удалённые столы") });
+            foreach (var d in desktops)
+                Nav.MenuItems.Add(new NavigationViewItem
                 {
-                    box,
-                    new TextBlock
-                    {
-                        Text = "Хранится в диспетчере учётных данных Windows и вводится сам, когда сервер спросит пароль.",
-                        TextWrapping = TextWrapping.Wrap,
-                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                    },
-                },
-            },
-            PrimaryButtonText = "Сохранить",
-            CloseButtonText = "Отмена",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = anchor.XamlRoot,
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary && box.Password.Length > 0)
-            Platform.CredentialStore.Write(alias, box.Password);
+                    Content = d.name, Tag = d, Icon = new FontIcon { Glyph = d.kind == DesktopKind.Rdp ? "" : "" },
+                });
+        }
+        Nav.MenuItems.Add(new NavigationViewItemHeader { Content = L("Инструменты") });
+        Nav.MenuItems.Add(Tool("keys", L("Ключи"), ""));
+        Nav.MenuItems.Add(Tool("tunnels", L("Туннели"), ""));
+        Nav.MenuItems.Add(Tool("snippets", L("Сниппеты"), ""));
+        Nav.MenuItems.Add(Tool("desktops", L("Удалённые столы"), ""));
+        Nav.MenuItems.Add(Tool("agents", L("Агенты"), ""));
     }
 
-    private static NavigationViewItem HostItem(SshHost h)
+    private static List<string> Fields(SshHost h) =>
+        new[] { h.alias, h.hostName ?? "", h.user ?? "", h.group ?? "" }.Concat(h.tags).ToList();
+
+    private static NavigationViewItem Tool(string tag, string title, string glyph) =>
+        new() { Content = title, Tag = tag, Icon = new FontIcon { Glyph = glyph } };
+
+    private NavigationViewItem HostItem(SshHost h)
     {
-        var item = new NavigationViewItem { Content = h.alias, Tag = h, Icon = new FontIcon { Glyph = "" } };
+        var item = new NavigationViewItem { Content = h.alias, Tag = h, Icon = Pages.OsIcon.For(h.os) };
         ToolTipService.SetToolTip(item, RelayaCoreMethods.HostSubtitle(h));
-        var menu = new MenuFlyout();
-        var save = new MenuFlyoutItem { Text = "Сохранить пароль…", Icon = new FontIcon { Glyph = "\uE8D7" } };
-        save.Click += async (_, _) => await AskPassword(item, h.alias);
-        var forget = new MenuFlyoutItem { Text = "Забыть пароль", Icon = new FontIcon { Glyph = "\uE74D" } };
-        forget.Click += (_, _) => Platform.CredentialStore.Delete(h.alias);
-        menu.Opening += (_, _) => forget.IsEnabled = Platform.CredentialStore.Has(h.alias);
-        menu.Items.Add(save);
-        menu.Items.Add(forget);
-        item.ContextFlyout = menu;
+        item.ContextFlyout = Pages.HostActions.Menu(h, item);
+        item.DoubleTapped += (_, _) => OpenSession(h.alias);
         return item;
     }
 
-    private void OnSearchChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) =>
-        Render(sender.Text.Trim());
+    private void OnSearchChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) => Render(sender.Text.Trim());
+
+    // Enter в поиске — подключиться к первому найденному, как ⌘K на Mac.
+    private void OnSearchSubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        var first = AppState.Hosts.Select(h => (h, s: RelayaCoreMethods.FuzzyScoreFields(sender.Text.Trim(), Fields(h))))
+            .Where(x => x.s != null).OrderByDescending(x => x.s).Select(x => x.h).FirstOrDefault();
+        if (first != null) OpenSession(first.alias);
+    }
 
     private void OnItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
-        if (args.IsSettingsInvoked)
+        if (args.IsSettingsInvoked) { ShowPage(settingsPage ??= new Pages.SettingsPage()); return; }
+        switch (args.InvokedItemContainer?.Tag)
         {
-            Tabs.SelectedItem = null;
-            Show(syncPage ??= new Settings.SyncPage());
-            return;
+            case SshHost h: ShowPage(new Pages.HostPage(h)); break;
+            case RemoteDesktop d: Platform.DesktopLauncher.Open(d, Content.XamlRoot); break;
+            case "keys": ShowPage(new Pages.KeysPage()); break;
+            case "tunnels": ShowPage(new Pages.TunnelsPage()); break;
+            case "snippets": ShowPage(new Pages.SnippetsPage()); break;
+            case "desktops": ShowPage(new Pages.DesktopsPage()); break;
+            case "agents": ShowPage(new Pages.AgentsPage()); break;
         }
-        if (args.InvokedItemContainer?.Tag is not SshHost h) return;
-        var view = new Terminal.TerminalView();
-        var session = new Terminal.SshSession(view, h.alias);
-        var tab = new TabViewItem
-        {
-            Header = h.alias,
-            IconSource = new FontIconSource { Glyph = "\uE756" },
-            Tag = new Tab(session, view),
-        };
-        Tabs.TabItems.Add(tab);
-        Tabs.SelectedItem = tab;
-        // Размер в ячейках известен после первой раскладки — тогда и запускаем ssh.
-        session.StateChanged += alive => DispatcherQueue.TryEnqueue(() =>
-            tab.IconSource = new FontIconSource { Glyph = alive ? "\uE756" : "\uE783" });
-        var started = false;
-        view.Loaded += (_, _) =>
-        {
-            if (!started) { started = true; session.Start(); }
-            view.Focus(FocusState.Programmatic);
-        };
     }
 
-    // Вкладки живут в заголовке, а их терминал — в основной области справа от сайдбара.
-    private sealed record Tab(Terminal.SshSession Session, Terminal.TerminalView View);
+    private Pages.SettingsPage? settingsPage;
 
-    private Settings.SyncPage? syncPage;
+    /// Страница слева-справа (карточка хоста, ключи…): снимает выбор вкладки.
+    public void ShowPage(UIElement page)
+    {
+        Tabs.SelectedItem = null;
+        Show(page);
+    }
 
     private void Show(UIElement? page)
     {
@@ -210,22 +136,90 @@ public sealed partial class MainWindow : Window
         Empty.Visibility = page is null ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    // --- Вкладки: терминалы (с плитками) и SFTP. Вкладка в заголовке, содержимое — в основной области. ---
+
+    public void OpenSession(string alias, string? initialInput = null)
+    {
+        var tiles = new Terminal.TileHost();
+        var tab = AddTab(alias, "", tiles, tiles);
+        tiles.TitleChanged += t => DispatcherQueue.TryEnqueue(() => tab.Header = t);
+        tiles.AliveChanged += alive => DispatcherQueue.TryEnqueue(() =>
+            tab.IconSource = new FontIconSource { Glyph = alive ? "" : "" });
+        tiles.Add(alias, initialInput);
+    }
+
+    public void OpenSftp(string alias)
+    {
+        var page = new Pages.SftpPage(alias);
+        AddTab(L("Файлы: %@", alias), "", page, null);
+    }
+
+    private TabViewItem AddTab(string title, string glyph, UIElement content, IDisposable? owner)
+    {
+        var tab = new TabViewItem
+        {
+            Header = title, IconSource = new FontIconSource { Glyph = glyph }, Tag = new Tab(content, owner),
+        };
+        Tabs.TabItems.Add(tab);
+        Tabs.SelectedItem = tab;
+        return tab;
+    }
+
+    private sealed record Tab(UIElement Content, IDisposable? Owner);
+
+    /// Терминал активной вкладки — для сниппетов и действий ОС.
+    public Terminal.TerminalView? ActiveTerminal =>
+        ((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.Active : null;
+
+    /// Последняя открытая терминальная вкладка (страница сниппетов закрывает выбор вкладки).
+    public Terminal.TerminalView? LastTerminal => Tabs.TabItems.OfType<TabViewItem>().Reverse()
+        .Select(t => (t.Tag as Tab)?.Content).OfType<Terminal.TileHost>().Select(t => t.Active).FirstOrDefault();
+
+    public void SelectTerminal(Terminal.TerminalView view)
+    {
+        foreach (var t in Tabs.TabItems.OfType<TabViewItem>())
+            if ((t.Tag as Tab)?.Content is Terminal.TileHost host && host.Contains(view)) { Tabs.SelectedItem = t; return; }
+    }
+
     private void OnTabSelected(object sender, SelectionChangedEventArgs e)
     {
         if ((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t)
         {
             Nav.SelectedItem = null;
-            Show(t.View);
+            Show(t.Content);
         }
-        else if (Page.Content is Terminal.TerminalView)
+        else if (Page.Content is Terminal.TileHost or Pages.SftpPage)
         {
             Show(null);
         }
     }
 
-    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
+    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args) => CloseTab(args.Tab);
+
+    private void CloseTab(TabViewItem tab)
     {
-        if (args.Tab.Tag is Tab t) t.Session.Dispose();
-        sender.TabItems.Remove(args.Tab);
+        if (tab.Tag is Tab t) t.Owner?.Dispose();
+        Tabs.TabItems.Remove(tab);
+        if (Tabs.TabItems.Count == 0) Show(null);
     }
+
+    // Ctrl+T — новая вкладка к хосту из поиска, Ctrl+W — закрыть, Ctrl+Tab — следующая.
+    public void CloseActiveTab()
+    {
+        if (Tabs.SelectedItem is TabViewItem t) CloseTab(t);
+    }
+
+    public void NextTab(int delta)
+    {
+        if (Tabs.TabItems.Count == 0) return;
+        var i = Math.Max(0, Tabs.SelectedIndex);
+        Tabs.SelectedIndex = (i + delta + Tabs.TabItems.Count) % Tabs.TabItems.Count;
+    }
+
+    private void OnCloseTabKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; CloseActiveTab(); }
+    private void OnNextTabKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; NextTab(1); }
+    private void OnPrevTabKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; NextTab(-1); }
+    private void OnSearchKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; FocusSearch(); }
+
+    public void FocusSearch() => Search.Focus(FocusState.Keyboard);
 }

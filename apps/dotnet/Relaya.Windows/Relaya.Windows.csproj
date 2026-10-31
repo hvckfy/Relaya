@@ -15,12 +15,19 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Сгенерированные UniFFI-привязки не проходят наши предупреждения. -->
+    <!-- Свой Main (Program.cs): askpass- и MCP-режимы без окна. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <NoWarn>$(NoWarn);CS8618;CS8625;CS8603;CS8604;CS0168</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250108002" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+  </ItemGroup>
+  <!-- Переводы общие с Mac: ключи — русские строки, en.lproj — английский. -->
+  <ItemGroup>
+    <None Include="..\..\..\resources\localization\en.lproj\Localizable.strings" Link="Localization\en.strings"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Rust-ядро: scripts/build-core-windows.ps1 кладёт relaya_core.dll и Core/relaya_core.cs. -->
   <ItemGroup>

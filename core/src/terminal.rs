@@ -122,6 +122,37 @@ impl TerminalEmulator {
         self.inner.lock().unwrap().term.scroll_display(Scroll::Bottom);
     }
 
+    /// Вся история и экран как текст, сверху вниз (0 — самая старая строка) — для поиска.
+    pub fn history_lines(&self) -> Vec<String> {
+        let g = self.inner.lock().unwrap();
+        let grid = g.term.grid();
+        let top = -(grid.history_size() as i32);
+        (top..grid.screen_lines() as i32)
+            .map(|l| {
+                let row = &grid[Line(l)];
+                (0..grid.columns())
+                    .filter(|&c| !row[Column(c)].flags.contains(Flags::WIDE_CHAR_SPACER))
+                    .map(|c| row[Column(c)].c)
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// Показать строку истории `index` (как в history_lines) в верхней строке экрана; возвращает её номер на экране.
+    pub fn reveal_line(&self, index: u32) -> u32 {
+        let mut g = self.inner.lock().unwrap();
+        let history = g.term.grid().history_size() as i32;
+        let screen = g.term.grid().screen_lines() as i32;
+        let line = index as i32 - history;
+        g.term.scroll_display(Scroll::Bottom);
+        if line >= 0 { return line as u32; }
+        let offset = (-line).min(history);
+        g.term.scroll_display(Scroll::Delta(offset));
+        (line + offset).clamp(0, screen - 1) as u32
+    }
+
     /// Строки экрана как текст (без хвостовых пробелов) — для копирования и тестов.
     pub fn screen_text(&self) -> Vec<String> {
         let snap = self.snapshot();
@@ -234,6 +265,18 @@ mod tests {
         t.scroll_to_bottom();
         t.resize(5, 4);
         assert_eq!(t.snapshot().cells.len(), 20);
+    }
+
+    #[test]
+    fn history_search() {
+        let t = TerminalEmulator::new(10, 2, 100);
+        t.feed(b"one\r\ntwo\r\nthree\r\nfour".to_vec());
+        let h = t.history_lines();
+        assert_eq!(h, vec!["one", "two", "three", "four"]);
+        assert_eq!(t.reveal_line(0), 0);
+        assert_eq!(t.screen_text()[0], "one");
+        assert_eq!(t.reveal_line(3), 1);
+        assert_eq!(t.screen_text(), vec!["three", "four"]);
     }
 
     #[test]

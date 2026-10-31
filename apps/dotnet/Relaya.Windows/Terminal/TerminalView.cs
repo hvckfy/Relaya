@@ -16,15 +16,12 @@ namespace Relaya.Terminal;
 internal sealed class TerminalView : UserControl
 {
     private readonly CanvasControl canvas = new();
-    private readonly CanvasTextFormat format = new()
-    {
-        FontFamily = "Cascadia Mono, Consolas", FontSize = 14, WordWrapping = CanvasWordWrapping.NoWrap,
-    };
+    private readonly CanvasTextFormat format = new() { WordWrapping = CanvasWordWrapping.NoWrap };
     private double cellW = 8, cellH = 17;
     private bool measured;
 
     public TerminalEmulator Emulator { get; } = new(80, 24, 10_000);
-    public TerminalTheme Theme { get; set; } = TerminalTheme.Default;
+    public TerminalTheme Theme { get; set; } = TerminalTheme.Named("Relaya");
 
     /// Терминал сменил размер в ячейках — сессия передаёт его в ssh (ConPTY).
     public event Action<uint, uint>? Resized;
@@ -38,6 +35,9 @@ internal sealed class TerminalView : UserControl
 
     public TerminalView()
     {
+        ApplySettings();
+        Platform.Settings.Changed += OnSettingsChanged;
+        Unloaded += (_, _) => Platform.Settings.Changed -= OnSettingsChanged;
         Content = canvas;
         canvas.Draw += OnDraw;
         SizeChanged += (_, _) => FitToSize();
@@ -50,6 +50,65 @@ internal sealed class TerminalView : UserControl
         PointerPressed += OnPointerPressed;
         PointerMoved += OnPointerMoved;
         PointerReleased += OnPointerReleased;
+    }
+
+    private void OnSettingsChanged() => DispatcherQueue.TryEnqueue(() =>
+    {
+        ApplySettings();
+        measured = false;
+        canvas.Invalidate();
+    });
+
+    // Тема и шрифт — общие настройки терминала (Параметры → Терминал), как на Mac.
+    private void ApplySettings()
+    {
+        Theme = TerminalTheme.Default;
+        format.FontFamily = Platform.Settings.Get("terminal.font", "Cascadia Mono");
+        format.FontSize = float.TryParse(Platform.Settings.Get("terminal.size", "14"), out var size) ? size : 14;
+    }
+
+    /// Вставить текст (сниппет, команда ОС) как вставку из буфера — без Enter.
+    public void Paste(string text)
+    {
+        text = text.Replace("\r\n", "\r").Replace('\n', '\r');
+        Send(Emulator.Snapshot().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
+        Focus(FocusState.Programmatic);
+    }
+
+    /// Ввести текст как с клавиатуры (команда с \r выполнится).
+    public void Type(string text) => Send(text);
+
+    /// Найти текст в истории снизу вверх, начиная перед строкой `before`; показать и выделить. Возвращает индекс строки или -1.
+    public int Find(string query, int before)
+    {
+        if (query.Length == 0) return -1;
+        var lines = Emulator.HistoryLines();
+        for (var i = Math.Min(before, lines.Count) - 1; i >= 0; i--)
+        {
+            var col = lines[i].IndexOf(query, StringComparison.OrdinalIgnoreCase);
+            if (col < 0) continue;
+            var row = (int)Emulator.RevealLine((uint)i);
+            selStart = (row, col);
+            selEnd = (row, col + query.Length - 1);
+            canvas.Invalidate();
+            return i;
+        }
+        return -1;
+    }
+
+    public int HistoryCount => Emulator.HistoryLines().Count;
+
+    public void ResetView()
+    {
+        Emulator.ScrollToBottom();
+        ClearSelection();
+        canvas.Invalidate();
+    }
+
+    public void ZoomFont(int delta)
+    {
+        var size = Math.Clamp(format.FontSize + delta, 8, 32);
+        Platform.Settings.Set("terminal.size", size.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private void Send(string s)
@@ -69,6 +128,8 @@ internal sealed class TerminalView : UserControl
         bool ctrl = IsDown(VirtualKey.Control), shift = IsDown(VirtualKey.Shift), alt = IsDown(VirtualKey.Menu);
         if (ctrl && shift && e.Key == VirtualKey.V) { e.Handled = true; _ = Paste(); return; }
         if (ctrl && shift && e.Key == VirtualKey.C) { e.Handled = true; CopySelection(); return; }
+        if (ctrl && e.Key is (VirtualKey)187 or VirtualKey.Add) { e.Handled = true; ZoomFont(1); return; }
+        if (ctrl && e.Key is (VirtualKey)189 or VirtualKey.Subtract) { e.Handled = true; ZoomFont(-1); return; }
         // Alt+буква/цифра — Meta: ESC и символ (bash: Alt+B/F по словам).
         if (alt && !ctrl && e.Key is >= VirtualKey.A and <= VirtualKey.Z or >= VirtualKey.Number0 and <= VirtualKey.Number9)
         {
@@ -151,6 +212,13 @@ internal sealed class TerminalView : UserControl
             e.Handled = true;
             return;
         }
+        // Ctrl+клик по ссылке — открыть в браузере, как ⌘-клик на Mac.
+        if (props.IsLeftButtonPressed && IsDown(VirtualKey.Control) && LinkAt(at) is { } url)
+        {
+            _ = Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+            e.Handled = true;
+            return;
+        }
         // Правая кнопка — как в Windows Terminal: есть выделение — копировать, нет — вставить.
         if (props.IsRightButtonPressed)
         {
@@ -183,6 +251,19 @@ internal sealed class TerminalView : UserControl
         if (ReportsMouse(out _)) { Report(lastButton, CellAt(e), true); return; }
         selecting = false;
         if (selStart == selEnd) ClearSelection();
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex Url =
+        new(@"(https?|ftp)://[^\s<>""'`]+[^\s<>""'`.,;:!?)\]]");
+
+    private string? LinkAt((int Row, int Col) at)
+    {
+        var s = Emulator.Snapshot();
+        var sb = new StringBuilder();
+        for (var c = 0; c < s.cols; c++) sb.Append(s.cells[at.Row * (int)s.cols + c].ch is { Length: > 0 } ch ? ch[0] : ' ');
+        foreach (System.Text.RegularExpressions.Match m in Url.Matches(sb.ToString()))
+            if (at.Col >= m.Index && at.Col < m.Index + m.Length) return m.Value;
+        return null;
     }
 
     private bool HasSelection => selStart is not null && selEnd is not null && selStart != selEnd;
