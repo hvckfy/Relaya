@@ -6,7 +6,7 @@
   #define AppVersion "0.0.0"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\Relaya.Windows\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64"
+  #define SourceDir "..\Relaya.Windows\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64"
 #endif
 
 [Setup]
