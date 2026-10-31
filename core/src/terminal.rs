@@ -45,6 +45,31 @@ pub struct TermSnapshot {
     pub cells: Vec<TermCell>,
 }
 
+/// Состояние курсора и режимов без ячеек — дёшево спрашивать на каждый кадр.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TermCursor {
+    pub cols: u32,
+    pub rows: u32,
+    pub row: u32,
+    pub col: u32,
+    pub visible: bool,
+    pub alt_screen: bool,
+    pub mouse_reporting: bool,
+    pub bracketed_paste: bool,
+    pub app_cursor: bool,
+    pub mouse_sgr: bool,
+    pub mouse_drag: bool,
+    pub title: Option<String>,
+}
+
+/// Строка экрана целиком.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TermRow { pub row: u32, pub cells: Vec<TermCell> }
+
+/// Что изменилось с прошлого `damage()`: все строки (`full`) или только перечисленные; курсор — всегда.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TermDamage { pub full: bool, pub lines: Vec<TermRow>, pub cursor: TermCursor }
+
 #[derive(Default)]
 struct Listener {
     out: Mutex<Vec<u8>>,
@@ -167,6 +192,35 @@ impl TerminalEmulator {
         terminal_login_ready(self.screen_text(), snap.cursor_row, snap.cursor_col, snap.alt_screen)
     }
 
+    /// Изменения экрана с прошлого вызова (П1): вместо полного снимка на каждый кадр — только изменённые строки.
+    /// Первый вызов, resize и прокрутка истории дают `full`.
+    pub fn damage(&self) -> TermDamage {
+        let mut g = self.inner.lock().unwrap();
+        let rows_dirty: Option<Vec<usize>> = match g.term.damage() {
+            alacritty_terminal::term::TermDamage::Full => None,
+            alacritty_terminal::term::TermDamage::Partial(it) => Some(it.map(|d| d.line).collect()),
+        };
+        g.term.reset_damage();
+        let term = &g.term;
+        let rows = term.grid().screen_lines();
+        let lines: Vec<TermRow> = match &rows_dirty {
+            None => (0..rows).map(|r| TermRow { row: r as u32, cells: row_cells(term, r) }).collect(),
+            Some(list) => {
+                let mut list = list.clone();
+                list.sort_unstable();
+                list.dedup();
+                list.into_iter().filter(|r| *r < rows).map(|r| TermRow { row: r as u32, cells: row_cells(term, r) }).collect()
+            }
+        };
+        TermDamage { full: rows_dirty.is_none(), lines, cursor: cursor_of(term, &self.listener) }
+    }
+
+    /// Курсор, режимы и заголовок без ячеек.
+    pub fn cursor_state(&self) -> TermCursor {
+        let g = self.inner.lock().unwrap();
+        cursor_of(&g.term, &self.listener)
+    }
+
     pub fn snapshot(&self) -> TermSnapshot {
         let g = self.inner.lock().unwrap();
         let term = &g.term;
@@ -212,6 +266,47 @@ impl TerminalEmulator {
     }
 }
 
+fn row_cells(term: &Term<Listen>, r: usize) -> Vec<TermCell> {
+    let grid = term.grid();
+    let offset = grid.display_offset() as i32;
+    (0..grid.columns()).map(|c| {
+        let cell = &grid[Point::new(Line(r as i32 - offset), Column(c))];
+        let f = cell.flags;
+        let mut flags = 0u16;
+        for (bit, flag) in [(1, Flags::BOLD), (2, Flags::ITALIC), (4, Flags::UNDERLINE), (8, Flags::INVERSE),
+                            (16, Flags::DIM), (32, Flags::STRIKEOUT), (64, Flags::WIDE_CHAR), (128, Flags::WIDE_CHAR_SPACER)] {
+            if f.contains(flag) { flags |= bit; }
+        }
+        let ch = if f.contains(Flags::WIDE_CHAR_SPACER) { String::new() } else {
+            let mut s = cell.c.to_string();
+            if let Some(extra) = cell.zerowidth() { s.extend(extra); }
+            s
+        };
+        TermCell { ch, fg: encode(cell.fg), bg: encode(cell.bg), flags }
+    }).collect()
+}
+
+fn cursor_of(term: &Term<Listen>, listener: &Listener) -> TermCursor {
+    let grid = term.grid();
+    let offset = grid.display_offset() as i32;
+    let cursor = grid.cursor.point;
+    let mode = *term.mode();
+    TermCursor {
+        cols: grid.columns() as u32,
+        rows: grid.screen_lines() as u32,
+        row: (cursor.line.0 + offset).max(0) as u32,
+        col: cursor.column.0 as u32,
+        visible: mode.contains(TermMode::SHOW_CURSOR) && offset == 0,
+        alt_screen: mode.contains(TermMode::ALT_SCREEN),
+        mouse_reporting: mode.intersects(TermMode::MOUSE_MODE),
+        bracketed_paste: mode.contains(TermMode::BRACKETED_PASTE),
+        app_cursor: mode.contains(TermMode::APP_CURSOR),
+        mouse_sgr: mode.contains(TermMode::SGR_MOUSE),
+        mouse_drag: mode.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION),
+        title: listener.title.lock().unwrap().clone(),
+    }
+}
+
 fn encode(color: Color) -> u32 {
     match color {
         Color::Spec(rgb) => 0x0100_0000 | (rgb.r as u32) << 16 | (rgb.g as u32) << 8 | rgb.b as u32,
@@ -229,6 +324,22 @@ fn encode(color: Color) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn damage_reports_only_changed_rows() {
+        let t = TerminalEmulator::new(20, 5, 100);
+        let first = t.damage();
+        assert!(first.full && first.lines.len() == 5);
+        t.feed(b"\x1b[3;1Hhi".to_vec());
+        let d = t.damage();
+        assert!(!d.full);
+        assert!(d.lines.iter().any(|l| l.row == 2 && l.cells[0].ch == "h"));
+        assert!(d.lines.len() < 5, "{:?}", d.lines.iter().map(|l| l.row).collect::<Vec<_>>());
+        assert_eq!((d.cursor.row, d.cursor.col), (2, 2));
+        t.resize(30, 5);
+        assert!(t.damage().full);
+        assert_eq!(t.cursor_state().cols, 30);
+    }
 
     #[test]
     fn plain_text_and_newlines() {
