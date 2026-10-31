@@ -587,10 +587,11 @@ pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Opt
     }
     if !conflicts.is_empty() { return Ok(SyncOutcome::Conflict { conflicts }); }
 
-    let pulled = result.iter().any(|(k, v)| base.get(k) != Some(v) && mine.get(k) != Some(v));
     let pushed = result.iter().any(|(k, v)| theirs.get(k) != Some(v));
     put_tree(folder_p, &result)?;
     let imported = sync_import(profile, paths, passphrase, folder.clone())?;
+    // Пришло чужое: файл папки не совпал со своим или что-то влилось в локальные файлы (первая синхронизация).
+    let pulled = !imported.is_empty() || result.iter().any(|(k, v)| mine.get(k) != Some(v));
     let _ = fs::remove_dir_all(&base_dir);
     put_tree(&base_dir, &result)?;
     Ok(if pulled || pushed || !imported.is_empty() { SyncOutcome::Synced { pulled, imported } } else { SyncOutcome::UpToDate })
