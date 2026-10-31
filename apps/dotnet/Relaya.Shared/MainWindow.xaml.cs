@@ -24,6 +24,11 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // Без переходной анимации: страница не «въезжает» справа (и не застревает за краем при двойном клике
+        // по хосту, когда сразу открывается вкладка) — показывается сразу, как в Параметрах Windows.
+        Page.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
+        TabHost.ChildrenTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
+        Nav.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Current = this;
 #if !HAS_UNO
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);

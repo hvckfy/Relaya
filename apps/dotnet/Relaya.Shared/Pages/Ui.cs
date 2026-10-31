@@ -23,7 +23,13 @@ internal static class Ui
         Grid.SetColumn(buttons, 1);
         header.Children.Add(buttons);
         var root = new StackPanel { MaxWidth = 1100, Margin = new Thickness(36, 24, 36, 36), Children = { header, body } };
-        return (new UserControl { Content = new ScrollViewer { Content = root } }, body);
+        // Без горизонтального переполнения: ширина — по окну (не больше 1100), прокрутка только вертикальная.
+        root.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var scroll = new ScrollViewer
+        {
+            Content = root, HorizontalScrollMode = ScrollMode.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+        return (new UserControl { Content = scroll, ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection() }, body);
     }
 
     public static TextBlock Section(string text) =>
