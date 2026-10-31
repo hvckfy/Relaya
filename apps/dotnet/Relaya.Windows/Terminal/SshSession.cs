@@ -42,7 +42,7 @@ internal sealed class SshSession : IDisposable
             var command = $"\"{ssh}\" \"{alias}\"";
             if (Relaya.Data.AppState.Host(alias)?.tmux == true)
             {
-                var ttl = long.TryParse(Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
+                var ttl = long.TryParse(Relaya.Platform.Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
                 var attach = uniffi.relaya_core.RelayaCoreMethods.TmuxAttachCommand(tmuxName, ttl);
                 command = $"{Arg(ssh)} -t {Arg(alias)} {Arg(attach)}";
             }
