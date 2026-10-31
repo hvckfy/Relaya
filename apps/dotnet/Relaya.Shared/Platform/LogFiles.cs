@@ -18,7 +18,9 @@ internal static class LogFiles
         {
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             if (File.Exists(file) && new FileInfo(file).Length > LimitKB * 1024L) File.Move(file, file + ".old", overwrite: true);
+            var created = !File.Exists(file);
             File.AppendAllText(file, text);
+            if (created) AtomicFile.MakePrivate(file); // журналы — только владельцу (M-MCP-2)
         }
         catch (Exception) { }
     }

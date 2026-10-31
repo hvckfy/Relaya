@@ -46,7 +46,7 @@ internal static class McpHost
     public static void SavePolicy(McpPolicy policy)
     {
         Directory.CreateDirectory(Data.AppState.Support);
-        AtomicFile.Write(PolicyFile, RelayaCoreMethods.McpPolicyEncode(policy));
+        AtomicFile.Write(PolicyFile, RelayaCoreMethods.McpPolicyEncode(policy), privateFile: true);
     }
 
     public static List<McpLogEntry> Log(uint limit = 500) =>
