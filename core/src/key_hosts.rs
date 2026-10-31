@@ -18,6 +18,9 @@ fn norm(path: &str) -> String {
     match p.rfind("/.ssh/") { Some(i) => p[i + 6..].to_string(), None => p.trim_start_matches("~/").to_string() }
 }
 
+/// Путь с пробелами (`C:\Users\My Name\.ssh\id`) ssh читает только в кавычках.
+fn quoted(path: &str) -> String { if path.contains(char::is_whitespace) { format!("\"{path}\"") } else { path.to_string() } }
+
 fn host_aliases(value: &str) -> Vec<String> { value.split_whitespace().map(str::to_string).collect() }
 
 /// Все конкретные хосты конфига (без шаблонов) — для выбора, включая git-серверы.
@@ -62,7 +65,7 @@ pub fn config_bind_key(text: String, key: String, hosts: Vec<String>) -> String 
     for a in &hosts {
         if doc.block(a).is_none() {
             if doc.lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) { doc.lines.push(String::new()); }
-            doc.lines.extend([format!("Host {a}"), format!("    IdentityFile {key}"), "    IdentitiesOnly yes".into()]);
+            doc.lines.extend([format!("Host {a}"), format!("    IdentityFile {}", quoted(&key)), "    IdentitiesOnly yes".into()]);
             continue;
         }
         split_if_shared(&mut doc, a, &hosts);
@@ -97,7 +100,7 @@ fn set_key(doc: &mut Document, alias: &str, new: Option<&str>, key: &str) {
         .map(|l| l.chars().take_while(|c| c.is_whitespace()).collect::<String>()).unwrap_or_else(|| "    ".into());
     let mut body: Vec<String> = doc.lines[start..end].iter()
         .filter(|l| { let (k, _) = key_of(l); k != "identityfile" && k != "identitiesonly" }).cloned().collect();
-    if let Some(k) = new { body.splice(0..0, [format!("{indent}IdentityFile {k}"), format!("{indent}IdentitiesOnly yes")]); }
+    if let Some(k) = new { body.splice(0..0, [format!("{indent}IdentityFile {}", quoted(k)), format!("{indent}IdentitiesOnly yes")]); }
     let empty = body.iter().all(|l| l.trim().is_empty() || l.trim().starts_with('#'));
     if empty && new.is_none() {
         // Блок держался только на ключе — убрать целиком (с `# relaya:` и пустой строкой после).
@@ -138,5 +141,48 @@ mod tests {
         assert!(!out.contains("Host git.lan.example\n    User git\n    IdentityFile"), "{out}");
         let gone = config_bind_key("Host a\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n\nHost b\n    User x\n".into(), "~/.ssh/k".into(), vec![]);
         assert_eq!(gone, "Host b\n    User x\n");
+    }
+
+    #[test]
+    fn match_blocks_are_neither_listed_nor_touched() {
+        let cfg = "Host web\n    User root\n\nMatch host web exec \"true\"\n    IdentityFile ~/.ssh/k\n";
+        assert!(config_key_hosts(cfg.into(), "~/.ssh/k".into()).is_empty());
+        let out = config_bind_key(cfg.into(), "~/.ssh/k".into(), vec!["web".into()]);
+        assert_eq!(out, "Host web\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    User root\n\nMatch host web exec \"true\"\n    IdentityFile ~/.ssh/k\n");
+        assert_eq!(config_bind_key(out, "~/.ssh/k".into(), vec![]), cfg);
+    }
+
+    #[test]
+    fn include_lines_stay_and_included_hosts_get_own_block() {
+        let cfg = "Include ~/.ssh/config.d/*\n\nHost web\n    Include extra.conf\n    User root\n";
+        let out = config_bind_key(cfg.into(), "~/.ssh/k".into(), vec!["web".into(), "fromfile".into()]);
+        assert_eq!(out, "Include ~/.ssh/config.d/*\n\nHost web\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    Include extra.conf\n    User root\n\nHost fromfile\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n");
+    }
+
+    #[test]
+    fn comments_are_kept_and_commented_keys_ignored() {
+        let cfg = "Host web\n    # IdentityFile ~/.ssh/k\n    User root # prod\n";
+        assert!(config_key_hosts(cfg.into(), "~/.ssh/k".into()).is_empty());
+        let out = config_bind_key(cfg.into(), "~/.ssh/k".into(), vec!["web".into()]);
+        assert_eq!(out, "Host web\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    # IdentityFile ~/.ssh/k\n    User root # prod\n");
+        assert_eq!(config_bind_key(out, "~/.ssh/k".into(), vec![]), cfg);
+    }
+
+    #[test]
+    fn quoted_and_equals_identity_files_match() {
+        let cfg = "Host a\n    IdentityFile \"~/.ssh/k\"\nHost b\n    IdentityFile=~/.ssh/k\nHost c\n    identityfile = \"/Users/me/.ssh/k\"\n";
+        assert_eq!(config_key_hosts(cfg.into(), "~/.ssh/k".into()), vec!["a", "b", "c"]);
+        assert_eq!(config_bind_key(cfg.into(), "~/.ssh/k".into(), vec![]), "");
+    }
+
+    #[test]
+    fn windows_paths_match_and_spaces_get_quoted() {
+        let cfg = "Host a\n    IdentityFile C:\\Users\\me\\.ssh\\k\n";
+        assert_eq!(config_key_hosts(cfg.into(), "~/.ssh/k".into()), vec!["a"]);
+        let key = "C:\\Users\\My Name\\.ssh\\k";
+        let out = config_bind_key("Host b\n    User x\n".into(), key.into(), vec!["b".into(), "c".into()]);
+        assert_eq!(out, "Host b\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\k\"\n    IdentitiesOnly yes\n    User x\n\nHost c\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\k\"\n    IdentitiesOnly yes\n");
+        assert_eq!(config_key_hosts(out.clone(), key.into()), vec!["b", "c"]);
+        assert_eq!(config_bind_key(out, key.into(), vec![]), "Host b\n    User x\n");
     }
 }
