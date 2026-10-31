@@ -129,8 +129,11 @@ private struct BehaviorSettings: View {
         // Перерисовка, когда меняются настройки, хранящиеся только в UserDefaults (Touch ID).
         let _ = settings.revision
         Form {
-            Picker(L("Язык"), selection: $settings.language) {
-                ForEach(AppSettings.Language.allCases) { Text($0.title).tag($0) }
+            // ADR-002: в релизных сборках язык зашит (один .lproj) — выбирать нечего.
+            if Bundle.main.localizations.filter({ $0 != "Base" }).count > 1 {
+                Picker(L("Язык"), selection: $settings.language) {
+                    ForEach(AppSettings.Language.allCases) { Text($0.title).tag($0) }
+                }
             }
             Toggle(isOn: $confirmEachUse) {
                 Text(L("Touch ID при каждом использовании пароля ssh"))

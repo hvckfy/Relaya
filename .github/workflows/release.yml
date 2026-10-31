@@ -31,8 +31,11 @@ jobs:
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           scripts/build-core-macos.sh
-      - name: Build app bundle
-        run: scripts/bundle-macos.sh "${GITHUB_REF_NAME#v}"
+      # ADR-002: две сборки — русская и английская; язык зашит в бандл (второй прогон берёт кэш SwiftPM).
+      - name: Build app bundles (ru, en)
+        run: |
+          scripts/bundle-macos.sh "${GITHUB_REF_NAME#v}" ru
+          scripts/bundle-macos.sh "${GITHUB_REF_NAME#v}" en
 
       - name: Sign
         env:
@@ -41,7 +44,7 @@ jobs:
         run: |
           if [ -z "$P12" ]; then
             echo "::warning::No signing certificate in secrets, signing ad-hoc"
-            codesign --force --deep --sign - build/Relaya.app
+            for l in ru en; do codesign --force --deep --sign - "build/$l/Relaya.app"; done
             exit 0
           fi
           KC="$RUNNER_TEMP/signing.keychain-db"
@@ -55,12 +58,15 @@ jobs:
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
           # Самоподписанный сертификат не доверенный — ищем по SHA-1, а не по имени среди «валидных».
           HASH=$(security find-certificate -c "Relaya Self-Signed" -Z "$KC" | awk '/SHA-1/{print $NF}')
-          codesign --force --deep --keychain "$KC" --sign "$HASH" build/Relaya.app
-          codesign -dvv build/Relaya.app 2>&1 | grep -E "Authority|Identifier|Signature"
+          for l in ru en; do
+            codesign --force --deep --keychain "$KC" --sign "$HASH" "build/$l/Relaya.app"
+            codesign -dvv "build/$l/Relaya.app" 2>&1 | grep -E "Authority|Identifier|Signature"
+          done
           rm -f "$RUNNER_TEMP/relaya.p12"
 
       - name: Package
-        run: ditto -c -k --keepParent build/Relaya.app "build/Relaya-${GITHUB_REF_NAME}.zip"
+        run: |
+          for l in ru en; do ditto -c -k --keepParent "build/$l/Relaya.app" "build/Relaya-${GITHUB_REF_NAME}-macos-$l.zip"; done
 
       - name: Upload build (manual run)
         if: github.event_name == 'workflow_dispatch'
@@ -76,4 +82,4 @@ jobs:
         # Windows-сборка (windows.yml) кладёт свой zip в тот же релиз — кто первый, тот и создаёт.
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes || true
-          gh release upload "$GITHUB_REF_NAME" "build/Relaya-${GITHUB_REF_NAME}.zip" --clobber
+          gh release upload "$GITHUB_REF_NAME" build/Relaya-${GITHUB_REF_NAME}-macos-*.zip --clobber

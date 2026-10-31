@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Собирает Relaya.app из SwiftPM-сборки.
-# Использование: scripts/bundle-macos.sh [version]   →   build/Relaya.app
+# Использование: scripts/bundle-macos.sh [version] [ru|en]
+#   без языка → build/Relaya.app с обоими переводами (язык по системе, переключатель в настройках);
+#   с языком  → build/<язык>/Relaya.app только с этим языком (ADR-002: язык задаётся при сборке).
 set -euo pipefail
 
 VERSION="${1:-0.0.0}"
+RELAYA_LANG="${2:-}"
+case "$RELAYA_LANG" in ""|ru|en) ;; *) echo "язык: ru или en" >&2; exit 1 ;; esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/build/Relaya.app"
+APP="$ROOT/build${RELAYA_LANG:+/$RELAYA_LANG}/Relaya.app"
 
 cd "$ROOT/apps/swift"
 # По архитектуре отдельно: мульти-arch сборка уходит в xcbuild, который не тянет плагин SwiftTerm.
@@ -37,7 +41,15 @@ done
 iconutil -c icns "$ROOT/build/Relaya.iconset" -o "$APP/Contents/Resources/Relaya.icns"
 
 # Переводы интерфейса: ключи — русские строки, en.lproj — английский (см. apps/swift/Sources/RelayaCore/Localization.swift).
-cp -R "$ROOT/resources/localization/"*.lproj "$APP/Contents/Resources/"
+if [ -n "$RELAYA_LANG" ]; then
+  cp -R "$ROOT/resources/localization/$RELAYA_LANG.lproj" "$APP/Contents/Resources/"
+  DEV_REGION="$RELAYA_LANG"
+  LOCALIZATIONS="<string>$RELAYA_LANG</string>"
+else
+  cp -R "$ROOT/resources/localization/"*.lproj "$APP/Contents/Resources/"
+  DEV_REGION="ru"
+  LOCALIZATIONS="<string>ru</string><string>en</string>"
+fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -49,8 +61,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>Relaya</string>
   <key>CFBundleIconFile</key><string>Relaya</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleDevelopmentRegion</key><string>ru</string>
-  <key>CFBundleLocalizations</key><array><string>ru</string><string>en</string></array>
+  <key>CFBundleDevelopmentRegion</key><string>${DEV_REGION}</string>
+  <key>CFBundleLocalizations</key><array>${LOCALIZATIONS}</array>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>

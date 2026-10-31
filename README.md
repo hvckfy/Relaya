@@ -104,7 +104,7 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 
 ### macOS
 
-1. Download `Relaya-vX.Y.Z.zip` from [Releases](https://github.com/hvckfy/Relaya/releases/latest).
+1. Download `Relaya-vX.Y.Z-macos-en.zip` (English) or `Relaya-vX.Y.Z-macos-ru.zip` (Russian) from [Releases](https://github.com/hvckfy/Relaya/releases/latest).
 2. Unzip and move `Relaya.app` to `/Applications`.
 3. Builds are signed with a persistent self-signed certificate (Keychain permissions survive updates) but not notarized, so remove the quarantine flag once:
 
