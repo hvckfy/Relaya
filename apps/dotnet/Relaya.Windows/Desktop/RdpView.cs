@@ -71,7 +71,13 @@ internal sealed class RdpView : UserControl, IDisposable
             Label = L("Общий буфер обмена"), Icon = new FontIcon { Glyph = "" },
             IsChecked = Settings.Get($"desktop.{d.id}.clipboard", "1") == "1",
         };
-        clipboard.Click += (_, _) => Settings.Set($"desktop.{d.id}.clipboard", clipboard.IsChecked == true ? "1" : "0");
+        clipboard.Click += (_, _) =>
+        {
+            Settings.Set($"desktop.{d.id}.clipboard", clipboard.IsChecked == true ? "1" : "0");
+            // Выключили обмен — на сервере не должен остаться наш последний текст (W-RDP-2).
+            if (clipboard.IsChecked != true && connected) session?.SetClipboard("");
+            else _ = SendLocalClipboard();
+        };
 
         var keys = new MenuFlyout();
         void Combo(string title, params ushort[] codes)
@@ -134,7 +140,12 @@ internal sealed class RdpView : UserControl, IDisposable
         CharacterReceived += OnCharacter;
         SizeChanged += (_, _) => { if (connected) { resizeTimer.Stop(); resizeTimer.Start(); } };
         // Скрытая вкладка не рисует; кадры копятся в буфере, при показе — одна перерисовка.
-        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => { if (Visibility == Visibility.Visible) canvas.Invalidate(); });
+        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) =>
+        {
+            if (Visibility != Visibility.Visible) return;
+            canvas.Invalidate();
+            _ = SendLocalClipboard();
+        });
         Clipboard.ContentChanged += OnLocalClipboard;
         var started = false;
         Loaded += (_, _) => { if (started) return; started = true; _ = Connect(); };
@@ -246,7 +257,19 @@ internal sealed class RdpView : UserControl, IDisposable
         File.WriteAllText(TrustFile, JsonSerializer.Serialize(map));
     }
 
+    private bool certOpen;
+
+    // Диалоги сертификата — по одному (W-RDP-7); любая ошибка показа — отказ, а не зависшее подключение.
     private async void AskCert(string sha256, string subject)
+    {
+        if (certOpen) { session?.AcceptCert(false); return; }
+        certOpen = true;
+        try { await AskCertCore(sha256, subject); }
+        catch (Exception e) { Terminal.TerminalView.Trace("RDP cert dialog: " + e.Message); session?.AcceptCert(false); }
+        finally { certOpen = false; }
+    }
+
+    private async Task AskCertCore(string sha256, string subject)
     {
         var previous = TrustedCert();
         var content = new StackPanel { Spacing = 8 };
@@ -409,9 +432,16 @@ internal sealed class RdpView : UserControl, IDisposable
 
     // --- Буфер обмена ---
 
+    // Локальный буфер уходит только на стол, вкладка которого видна (W-RDP-1); при показе вкладки — один раз.
     private async void OnLocalClipboard(object? sender, object e)
     {
-        if (settingClipboard || clipboard.IsChecked != true || session is not { } s || !connected) return;
+        if (settingClipboard || Visibility != Visibility.Visible) return;
+        await SendLocalClipboard();
+    }
+
+    private async Task SendLocalClipboard()
+    {
+        if (clipboard.IsChecked != true || session is not { } s || !connected) return;
         try
         {
             var view = Clipboard.GetContent();

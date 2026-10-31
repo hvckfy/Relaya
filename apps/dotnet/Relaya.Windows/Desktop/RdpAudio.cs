@@ -15,6 +15,7 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
     private AudioFormat? format;
     private float server = 1f;
     private int percent;
+    private DateTime lastRestart = DateTime.MinValue;
 
     public RdpAudio(string volume) => percent = int.TryParse(volume, out var v) ? Math.Clamp(v, 0, 100) : 100;
 
@@ -37,6 +38,9 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
         {
             if (format is not { } cur || cur.sampleRate != f.sampleRate || cur.channels != f.channels || cur.bitsPerSample != f.bitsPerSample)
             {
+                // Перезапуск WASAPI — не чаще раза в секунду (W-RDP-6): сервер, меняющий формат на лету, не дёргает устройство.
+                if (DateTime.UtcNow - lastRestart < TimeSpan.FromSeconds(1)) return;
+                lastRestart = DateTime.UtcNow;
                 Stop();
                 try
                 {
