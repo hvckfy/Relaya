@@ -22,9 +22,29 @@ jobs:
         shell: pwsh
         run: scripts/build-core-windows.ps1
       # ConPTY: вывод процесса доходит до подписчика (регрессия «чёрная вкладка, код 255»).
-      - name: ConPTY smoke test
+      # sshd в раннере для smoke-теста: вход по ключу на localhost. Не поднялся — ssh-часть теста пропускается.
+      - name: Start local sshd for smoke test
         shell: pwsh
-        run: dotnet run --project apps/dotnet/Relaya.Windows.Smoke -c Release
+        continue-on-error: true
+        run: |
+          if (-not (Get-Service sshd -ErrorAction SilentlyContinue)) { Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null }
+          $key = "$env:RUNNER_TEMP\relaya_smoke_key"
+          ssh-keygen -q -t ed25519 -N "" -f $key
+          $auth = "$env:ProgramData\ssh\administrators_authorized_keys"
+          New-Item -ItemType Directory -Force "$env:ProgramData\ssh" | Out-Null
+          Get-Content "$key.pub" | Set-Content -Encoding ascii $auth
+          icacls $auth /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
+          Start-Service sshd
+          "RELAYA_SMOKE_SSH_KEY=$key" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      # Терминал как в приложении: WinExe без консоли, ConPTY, эмулятор ядра, ввод, Resize, ssh.
+      - name: Terminal smoke test
+        shell: pwsh
+        run: |
+          dotnet build apps/dotnet/Relaya.Windows.Smoke -c Release -o build/smoke
+          $log = "$env:RUNNER_TEMP\smoke.log"
+          $p = Start-Process build/smoke/Relaya.Windows.Smoke.exe -ArgumentList "`"$log`"" -Wait -PassThru
+          Get-Content $log
+          exit $p.ExitCode
       # PRI-задачи WinAppSDK есть только в MSBuild из Visual Studio, не в dotnet CLI.
       - uses: microsoft/setup-msbuild@v2
       - name: Build WinUI app
