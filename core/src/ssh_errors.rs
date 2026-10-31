@@ -16,6 +16,11 @@ const RULES: &[(&[&str], &str, &str)] = &[
     (&["too many authentication failures"],
      "Сервер отклонил вход: ssh-agent предложил слишком много ключей",
      "Укажите для этого сервера один ключ: в ~/.ssh/config добавьте IdentityFile с нужным ключом и IdentitiesOnly yes."),
+    // Незнакомый сервер при BatchMode/StrictHostKeyChecking (синхронизация, туннели): ssh пишет «No … host key is known
+    // for …» и затем «Host key verification failed» — это не подмена, а первое подключение.
+    (&["host key is known for", "no host key is known"],
+     "Сервер ещё не знаком",
+     "Подключитесь к нему один раз в терминале Relaya и подтвердите ключ сервера — после этого синхронизация и туннели заработают."),
     (&["remote host identification has changed", "host key verification failed"],
      "Ключ сервера не совпадает с сохранённым",
      "Если сервер переустанавливали или сменили адрес — удалите старую запись: ssh-keygen -R <адрес>. Иначе это может быть подмена сервера."),
@@ -204,6 +209,10 @@ mod tests {
         assert!(ssh_explain("Warning: Identity file ~/.ssh/x not accessible: No such file or directory.".into()).is_none());
         assert!(ssh_explain("rm: cannot remove 'a': No such file or directory".into()).is_none());
         assert!(ssh_explain("zsh: command not found: ssh".into()).unwrap().title.contains("программа"));
+        let unknown = "No ED25519 host key is known for git.lan and you have requested strict checking.\nHost key verification failed.\nfatal: Could not read from remote repository.";
+        assert_eq!(ssh_explain(unknown.into()).unwrap().title, "Сервер ещё не знаком");
+        let changed = "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\nHost key for git.lan has changed and you have requested strict checking.\nHost key verification failed.";
+        assert!(ssh_explain(changed.into()).unwrap().title.contains("не совпадает"));
         assert_eq!(ssh_error_line("x\nfatal: bad\nand the repository exists.".into()), "fatal: bad");
     }
 

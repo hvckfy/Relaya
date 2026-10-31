@@ -1104,3 +1104,5 @@
 "Раскладка будет удалена, хосты и сессии не затрагиваются." = "The layout will be deleted; hosts and sessions are not affected.";
 "Не найден RDP-клиент. Установите FreeRDP (xfreerdp) или Remmina." = "No RDP client found. Install FreeRDP (xfreerdp) or Remmina.";
 "Не найден VNC-клиент. Установите TigerVNC (vncviewer) или Remmina." = "No VNC client found. Install TigerVNC (vncviewer) or Remmina.";
+"Сервер ещё не знаком" = "The server is not known yet";
+"Подключитесь к нему один раз в терминале Relaya и подтвердите ключ сервера — после этого синхронизация и туннели заработают." = "Connect to it once in the Relaya terminal and confirm the server key — after that sync and tunnels will work.";
