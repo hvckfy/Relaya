@@ -16,7 +16,10 @@ internal sealed partial class TerminalView
     private const string DefaultFont = "monospace";
     private Surface canvas = null!;
     // Модификаторы отслеживаем сами: ввод в Uno Skia приходит событиями, общего опроса клавиатуры нет.
-    private static readonly HashSet<VirtualKey> down = new();
+    // Своё множество у каждого терминала: в другом окне или вкладке нажатия свои, при потере фокуса сброс.
+    // IsDown статический (объявлен в Shared), поэтому читает множество терминала с фокусом ввода.
+    private readonly HashSet<VirtualKey> down = new();
+    private static TerminalView? focused;
 
     private partial void CreateCanvas()
     {
@@ -24,10 +27,15 @@ internal sealed partial class TerminalView
         Content = canvas;
         AddHandler(KeyDownEvent, new KeyEventHandler((_, e) => Track(e.Key, true)), handledEventsToo: true);
         AddHandler(KeyUpEvent, new KeyEventHandler((_, e) => Track(e.Key, false)), handledEventsToo: true);
-        LostFocus += (_, _) => { lock (down) down.Clear(); };
+        GotFocus += (_, _) => focused = this;
+        LostFocus += (_, _) =>
+        {
+            lock (down) down.Clear();
+            if (focused == this) focused = null;
+        };
     }
 
-    private static void Track(VirtualKey key, bool pressed)
+    private void Track(VirtualKey key, bool pressed)
     {
         var k = key switch
         {
@@ -40,7 +48,11 @@ internal sealed partial class TerminalView
         lock (down) { if (pressed) down.Add(k); else down.Remove(k); }
     }
 
-    private static partial bool IsDown(VirtualKey key) { lock (down) return down.Contains(key); }
+    private static partial bool IsDown(VirtualKey key)
+    {
+        if (focused is not { } view) return false;
+        lock (view.down) return view.down.Contains(key);
+    }
 
     private partial void RemoveCanvas() { }
 
