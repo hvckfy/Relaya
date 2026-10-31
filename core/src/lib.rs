@@ -14,6 +14,8 @@ pub mod key_hosts;
 pub mod local_ports;
 pub mod mcp;
 pub mod models;
+#[cfg(feature = "remote-desktop")]
+pub mod remote;
 pub mod server_os;
 pub mod ssh_commands;
 pub mod ssh_config;

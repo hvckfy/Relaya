@@ -16,6 +16,8 @@ required-features = ["bindgen"]
 
 [features]
 bindgen = ["uniffi/cli"]
+# Встроенный RDP для Windows и Linux. На Mac выключено: там RDPKit, ядро не тянет IronRDP и rustls.
+remote-desktop = ["dep:ironrdp", "dep:ironrdp-blocking", "dep:rustls", "dep:x509-cert"]
 
 [dependencies]
 uniffi = "0.28"
@@ -31,6 +33,10 @@ pbkdf2 = { version = "0.12", features = ["hmac"] }
 sha2 = "0.10"
 rand = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+ironrdp = { version = "0.17", optional = true, default-features = false, features = ["core", "pdu", "connector", "session", "graphics", "input", "svc", "dvc", "displaycontrol"] }
+ironrdp-blocking = { version = "0.10", optional = true }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
+x509-cert = { version = "0.2", optional = true, default-features = false, features = ["std"] }
 
 [dev-dependencies]
 tempfile = "3"
