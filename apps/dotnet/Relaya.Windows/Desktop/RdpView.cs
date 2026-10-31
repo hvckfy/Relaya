@@ -64,17 +64,17 @@ internal sealed class RdpView : UserControl, IDisposable
         fit = new AppBarToggleButton
         {
             Label = L("Вписать"), Icon = new FontIcon { Glyph = "" },
-            IsChecked = Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
+            IsChecked = Platform.Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
         };
-        fit.Click += (_, _) => { Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); canvas.Invalidate(); };
+        fit.Click += (_, _) => { Platform.Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); canvas.Invalidate(); };
         clipboard = new AppBarToggleButton
         {
             Label = L("Общий буфер обмена"), Icon = new FontIcon { Glyph = "" },
-            IsChecked = Settings.Get($"desktop.{d.id}.clipboard", "1") == "1",
+            IsChecked = Platform.Settings.Get($"desktop.{d.id}.clipboard", "1") == "1",
         };
         clipboard.Click += (_, _) =>
         {
-            Settings.Set($"desktop.{d.id}.clipboard", clipboard.IsChecked == true ? "1" : "0");
+            Platform.Settings.Set($"desktop.{d.id}.clipboard", clipboard.IsChecked == true ? "1" : "0");
             // Выключили обмен — на сервере не должен остаться наш последний текст (W-RDP-2).
             if (clipboard.IsChecked != true && connected) session?.SetClipboard("");
             else _ = SendLocalClipboard();
@@ -94,9 +94,9 @@ internal sealed class RdpView : UserControl, IDisposable
         var full = new AppBarButton { Label = L("Во весь экран"), Icon = new FontIcon { Glyph = "" } };
         full.Click += (_, _) => ToggleFullScreen();
         // Звук: громкость и «без звука» на нашей стороне, хранится в настройках стола.
-        audio = new RdpAudio(Settings.Get($"desktop.{d.id}.volume", "100"));
+        audio = new RdpAudio(Platform.Settings.Get($"desktop.{d.id}.volume", "100"));
         var volume = new Slider { Minimum = 0, Maximum = 100, Width = 200, Value = audio.VolumePercent, Header = L("Громкость") };
-        volume.ValueChanged += (_, e) => { audio.VolumePercent = (int)e.NewValue; Settings.Set($"desktop.{d.id}.volume", ((int)e.NewValue).ToString()); };
+        volume.ValueChanged += (_, e) => { audio.VolumePercent = (int)e.NewValue; Platform.Settings.Set($"desktop.{d.id}.volume", ((int)e.NewValue).ToString()); };
         var sound = new AppBarButton
         {
             Label = L("Звук"), Icon = new FontIcon { Glyph = "\uE767" },

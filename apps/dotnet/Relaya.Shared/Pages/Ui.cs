@@ -29,7 +29,7 @@ internal static class Ui
         {
             Content = root, HorizontalScrollMode = ScrollMode.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
-        return (new UserControl { Content = scroll, ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection() }, body);
+        return (new UserControl { Content = scroll }, body);
     }
 
     public static TextBlock Section(string text) =>
