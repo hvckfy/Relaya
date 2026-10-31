@@ -1097,3 +1097,8 @@
 "Удалённый стол" = "Remote Desktop";
 "Разделить вправо / вниз, закрыть плитку" = "Split right / down, close pane";
 "Соседняя плитка" = "Neighboring pane";
+"Сохранить раскладку…" = "Save Layout…";
+"Раскладок пока нет. Разложите терминалы плитками и выберите «Сохранить раскладку…» в меню вкладки." = "No layouts yet. Arrange terminals as panes and choose “Save Layout…” in the tab menu.";
+"Нет в конфиге: %@" = "Not in config: %@";
+"Мои серверы" = "My servers";
+"Раскладка будет удалена, хосты и сессии не затрагиваются." = "The layout will be deleted; hosts and sessions are not affected.";

@@ -107,6 +107,7 @@ public sealed partial class MainWindow : Window
         Nav.MenuItems.Add(new NavigationViewItemHeader { Content = L("Инструменты") });
         Nav.MenuItems.Add(Tool("keys", L("Ключи"), ""));
         Nav.MenuItems.Add(Tool("tunnels", L("Туннели"), ""));
+        Nav.MenuItems.Add(Tool("layouts", L("Раскладки"), "\ue8a9"));
         Nav.MenuItems.Add(Tool("snippets", L("Сниппеты"), ""));
         Nav.MenuItems.Add(Tool("desktops", L("Удалённые столы"), ""));
         Nav.MenuItems.Add(Tool("agents", L("Агенты"), ""));
@@ -147,6 +148,7 @@ public sealed partial class MainWindow : Window
             case "keys": ShowPage(new Pages.KeysPage()); break;
             case "tunnels": ShowPage(new Pages.TunnelsPage()); break;
             case "snippets": ShowPage(new Pages.SnippetsPage()); break;
+            case "layouts": ShowPage(new Pages.LayoutsPage()); break;
             case "desktops": ShowPage(new Pages.DesktopsPage()); break;
             case "agents": ShowPage(new Pages.AgentsPage()); break;
         }
@@ -189,7 +191,33 @@ public sealed partial class MainWindow : Window
         down.Click += (_, _) => tiles.Split(uniffi.relaya_core.Edge.Bottom);
         menu.Items.Add(right);
         menu.Items.Add(down);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var save = new MenuFlyoutItem { Text = L("Сохранить раскладку…") };
+        save.Click += async (_, _) => await SaveLayout(tiles);
+        menu.Items.Add(save);
         tab.ContextFlyout = menu;
+    }
+
+    private async System.Threading.Tasks.Task SaveLayout(Terminal.TileHost tiles)
+    {
+        if (tiles.SaveableLayout() is not { } layout) return;
+        var name = new TextBox { Header = L("Название"), PlaceholderText = L("Мои серверы") };
+        var dialog = new ContentDialog
+        {
+            Title = L("Сохранить раскладку"), Content = name, PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary, XamlRoot = Content.XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || name.Text.Trim().Length == 0) return;
+        SavedLayouts.Add(name.Text.Trim(), layout);
+    }
+
+    /// Открыть сохранённую раскладку одной вкладкой с плитками.
+    public void OpenLayout(SavedLayouts.Saved saved)
+    {
+        var tiles = new Terminal.TileHost();
+        var tab = AddTab(saved.Name, "\ue8a9", tiles, tiles);
+        tiles.TitleChanged += t => ui.TryEnqueue(() => tab.Header = saved.Name + " — " + t);
+        if (!tiles.Open(saved.Layout)) CloseTab(tab);
     }
 
     /// Вкладка с плитками, которую сейчас перетаскивают (TabView → холст другой вкладки).

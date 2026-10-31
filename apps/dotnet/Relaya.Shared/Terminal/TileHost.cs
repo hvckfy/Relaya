@@ -111,7 +111,42 @@ internal sealed class TileHost : UserControl, IDisposable
         if (active is { } a) Add(a.Alias, null, edge, a.Id);
     }
 
+    /// Раскладка для сохранения: листья — алиасы хостов (формат layouts.json).
+    public string? SaveableLayout()
+    {
+        if (layout == null) return null;
+        return Data.SavedLayouts.MapLeaves(System.Text.Json.Nodes.JsonNode.Parse(layout), id => panes.FirstOrDefault(p => p.Id == id)?.Alias)?.ToJsonString();
+    }
+
+    /// Открыть сохранённую раскладку: по сессии на каждый лист-хост; хостов, которых больше нет, пропускаем.
+    public bool Open(string saved)
+    {
+        var ids = new List<string>();
+        var tree = Data.SavedLayouts.MapLeaves(System.Text.Json.Nodes.JsonNode.Parse(saved), alias =>
+        {
+            if (AppState.Host(alias) == null) return null;
+            var id = AddPane(alias, null);
+            ids.Add(id);
+            return id;
+        });
+        if (tree == null || ids.Count == 0) return false;
+        layout = RelayaCoreMethods.TilesSynced(tree.ToJsonString(), ids) ?? tree.ToJsonString();
+        Layout();
+        Activate(panes[0]);
+        return true;
+    }
+
     public void Add(string alias, string? initialInput = null, Edge? edge = null, string? target = null)
+    {
+        var id = AddPane(alias, initialInput);
+        layout = layout == null ? RelayaCoreMethods.TilesAutomatic(new List<string> { id })
+            : edge is { } e ? RelayaCoreMethods.TilesInserting(layout, id, e, target) : RelayaCoreMethods.TilesAppending(layout, id);
+        Layout();
+        Activate(panes[^1]);
+    }
+
+    // Плитка с сессией, без изменения раскладки.
+    private string AddPane(string alias, string? initialInput)
     {
         var id = Guid.NewGuid().ToString("N");
         var view = new TerminalView();
@@ -170,10 +205,7 @@ internal sealed class TileHost : UserControl, IDisposable
             view.Focus(FocusState.Programmatic);
         };
         panes.Add(pane);
-        layout = layout == null ? RelayaCoreMethods.TilesAutomatic(new List<string> { id })
-            : edge is { } e ? RelayaCoreMethods.TilesInserting(layout, id, e, target) : RelayaCoreMethods.TilesAppending(layout, id);
-        Layout();
-        Activate(pane);
+        return id;
     }
 
     // Плитки другой вкладки переезжают сюда (перетаскивание вкладки): первая — к краю цели, остальные — рядом с ней.
