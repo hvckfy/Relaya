@@ -49,7 +49,12 @@ internal static class McpHost
 
     private sealed class Backend : McpBackend
     {
-        public List<SshHost> Hosts() => Data.AppState.Hosts;
+        // ~/.ssh/config мог измениться, пока агент держит сервер открытым.
+        public List<SshHost> Hosts()
+        {
+            Data.AppState.LoadHosts();
+            return Data.AppState.Hosts;
+        }
 
         public McpPolicy Policy() => LoadPolicy();
 
@@ -62,8 +67,14 @@ internal static class McpHost
         // Подтверждение каждой команды — системное окно поверх всех (Touch ID на Mac).
         public bool Confirm(SshHost host, string command, string client)
         {
-            var text = Strings.L("%@ хочет выполнить на %@:", client, host.alias) + "\n\n" + command;
-            return MessageBoxW(IntPtr.Zero, text, "Relaya", 0x4 | 0x20 | 0x40000 | 0x10000) == 6;
+            // Процесс --mcp без XAML: системное окно. «Нет» по умолчанию (MB_DEFBUTTON2) — Enter/пробел не одобряют команду.
+            const int limit = 1500;
+            var shown = command.Length > limit
+                ? command[..limit] + "\n…\n" + Strings.L("(показано %@ из %@ символов)", limit, command.Length)
+                : command;
+            var text = Strings.L("%@ хочет выполнить на %@:", client, host.alias) + "\n\n" + shown;
+            const uint flags = 0x4 /* YESNO */ | 0x30 /* ICONWARNING */ | 0x100 /* DEFBUTTON2 */ | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */;
+            return MessageBoxW(IntPtr.Zero, text, "Relaya", flags) == 6;
         }
 
         public void Log(McpLogEntry entry)

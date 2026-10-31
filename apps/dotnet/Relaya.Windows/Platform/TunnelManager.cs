@@ -32,9 +32,10 @@ internal sealed class TunnelManager
         {
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true,
         };
-        var passwordOnly = CredentialStore.Has(t.hostAlias);
+        var passwordOnly = Askpass.PasswordOnly(t.hostAlias);
         foreach (var a in RelayaCoreMethods.TunnelSshArguments(t, passwordOnly)) info.ArgumentList.Add(a);
-        if (passwordOnly) Askpass.Configure(info, t.hostAlias);
+        // Опции «только пароль» уже в аргументах ядра — askpass нужен только для самого пароля.
+        if (passwordOnly) { Askpass.SetEnvironment(info, t.hostAlias); }
         Process p;
         try { p = Process.Start(info)!; }
         catch (Exception e) { running[t.id] = (null!, State.Failed, e.Message); Changed?.Invoke(); return; }

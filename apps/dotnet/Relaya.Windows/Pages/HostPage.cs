@@ -59,7 +59,8 @@ internal sealed class HostPage : UserControl
             {
                 var item = new MenuFlyoutItem { Text = L(a.title) };
                 // Как на Mac: команда вставляется в терминал без Enter — пользователь видит её и запускает сам.
-                item.Click += (_, _) => MainWindow.Current?.OpenSession(h.alias, (a.needsRoot ? "sudo " : "") + a.command);
+                // sudo уже в команде ядра; под root его нет смысла звать (а на Alpine его может не быть).
+                item.Click += (_, _) => MainWindow.Current?.OpenSession(h.alias, h.user == "root" ? WithoutSudo(a.command) : a.command);
                 menu.Items.Add(item);
             }
             osButtons.Children.Add(new DropDownButton { Content = L("Действия"), Flyout = menu });
@@ -192,7 +193,7 @@ internal sealed class HostPage : UserControl
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             actions.Children.Add(Ui.Button(L("Подключиться"),
-                () => MainWindow.Current?.OpenSession(host.alias, RelayaCoreMethods.TmuxAttachCommand(s.name, 0) + "\r")));
+                () => MainWindow.Current?.OpenSession(host.alias, RelayaCoreMethods.TmuxAttachCommand(s.name, long.TryParse(Platform.Settings.Get("tmux.idle", "60"), out var ttl) ? ttl : 60) + "\r")));
             actions.Children.Add(Ui.IconButton("", L("Завершить"), async () =>
             {
                 await AppState.RunOnHost(host.alias, RelayaCoreMethods.TmuxKillCommand(new() { s.name }));
@@ -251,4 +252,8 @@ internal sealed class HostPage : UserControl
             await Platform.DesktopLauncher.Message(XamlRoot, r.Status == 0 ? L("Не удалось определить систему") : Problem(r));
         }
     }
+
+    // Ведущий `sudo ` — в начале и после &&, ;, |.
+    private static string WithoutSudo(string command) =>
+        System.Text.RegularExpressions.Regex.Replace(command, @"(^|&&|;|\|)(\s*)sudo\s+", "$1$2");
 }

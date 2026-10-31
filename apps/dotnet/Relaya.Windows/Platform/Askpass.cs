@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 namespace Relaya.Platform;
 
@@ -19,14 +20,25 @@ internal static class Askpass
     }
 
     /// Окружение для ssh/sftp: askpass, если пароль хоста сохранён; иначе BatchMode, чтобы фоновый процесс не завис на запросе.
+    /// Только пароль: пароль сохранён, а ключа у хоста нет — иначе ssh-agent переберёт ключи и сервер оборвёт вход.
+    public static bool PasswordOnly(string alias) =>
+        CredentialStore.Has(alias) && Data.AppState.Host(alias)?.identityFile == null;
+
+    public static void SetEnvironment(ProcessStartInfo info, string alias)
+    {
+        info.Environment["SSH_ASKPASS"] = Environment.ProcessPath ?? "Relaya.exe";
+        info.Environment["SSH_ASKPASS_REQUIRE"] = "force";
+        info.Environment["RELAYA_ASKPASS_ACCOUNT"] = alias;
+        info.Environment["DISPLAY"] = "relaya";
+    }
+
     public static void Configure(ProcessStartInfo info, string alias, bool interactive = false)
     {
         if (CredentialStore.Has(alias))
         {
-            info.Environment["SSH_ASKPASS"] = Environment.ProcessPath ?? "Relaya.exe";
-            info.Environment["SSH_ASKPASS_REQUIRE"] = "force";
-            info.Environment["RELAYA_ASKPASS_ACCOUNT"] = alias;
-            info.Environment["DISPLAY"] = "relaya";
+            if (PasswordOnly(alias))
+                foreach (var o in uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().Reverse<string>()) info.ArgumentList.Insert(0, o);
+            SetEnvironment(info, alias);
         }
         else if (!interactive)
         {

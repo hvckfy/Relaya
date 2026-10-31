@@ -86,7 +86,7 @@ internal sealed class SftpPage : UserControl
     private async Task<AppState.Result> Batch(params string[] commands)
     {
         busy.Visibility = Visibility.Visible;
-        var r = await AppState.Run(AppState.SftpExe, new[] { "-b", "-", "-o", "ConnectTimeout=10", alias }, alias,
+        var r = await AppState.Run(AppState.SftpExe, new[] { "-o", "BatchMode=no", "-b", "-", "-o", "ConnectTimeout=10", alias }, alias,
             string.Join("\n", commands) + "\n", 600);
         busy.Visibility = Visibility.Collapsed;
         if (r.Status != 0)
