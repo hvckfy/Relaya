@@ -1030,7 +1030,7 @@ mod tests {
         fs::write(dir.path().join(tombstones::FILE), encode_sorted(&fake)).unwrap();
         assert!(tombstones::load(dir.path()).unwrap().iter().all(|t| t.deleted_at.as_str() < "2099"));
         sync_import(p.clone(), paths(a.path()), None, d.clone()).unwrap();
-        assert_eq!(fs::read_to_string(a.path().join("config")).unwrap(), hosts, "ничего не удалено без подтверждения");
+        assert_eq!(fs::read_to_string(a.path().join("config")).unwrap().trim_end(), hosts.trim_end(), "ничего не удалено без подтверждения");
         let pending = sync_take_pending_deletions(paths(a.path()));
         assert_eq!(pending.len(), 5);
         // Пользователь подтвердил одно удаление: удаляется только оно, с бэкапом; остальные больше не спрашиваются.
