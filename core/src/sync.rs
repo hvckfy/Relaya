@@ -209,9 +209,10 @@ pub fn sync_export(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
         if let Some(d) = read(&paths.support("mcp.json")) { write_if_changed(dir, "relaya/mcp.json", &d, &mut changed)?; }
     }
     if let (true, Some(pass)) = (items.contains(&SyncItem::Keys), passphrase) {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let used: HashSet<String> = hosts.iter().filter_map(|h| h.identity_file.clone())
-            .map(|p| if let Some(rest) = p.strip_prefix("~/") { format!("{home}/{rest}") } else { p }).collect();
+        // `~` раскрывается через папку .ssh из SyncPaths (на Windows HOME обычно не задан), разделители и регистр — как у Windows.
+        let used: HashSet<String> = hosts.iter().flat_map(|h| {
+            if h.identity_files.is_empty() { h.identity_file.clone().into_iter().collect() } else { h.identity_files.clone() }
+        }).map(|p| key_path_norm(&paths.ssh, &p)).collect();
         changed.extend(keys_export(&paths.ssh, &pass, Some(&used), dir)?);
     }
     Ok(changed)
@@ -242,28 +243,41 @@ pub fn sync_import(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
 
     if items.contains(&SyncItem::SshConfig) {
         if let Ok(incoming) = fs::read_to_string(dir.join("ssh/config")) {
+            // Профиль «группа work» не должен приносить чужие хосты из общего файла.
+            let incoming = if profile.scope.all_hosts { incoming } else {
+                let wanted: Vec<String> = parse_config(incoming.clone()).into_iter()
+                    .filter(|h| profile.contains(h) && !h.is_git_service()).map(|h| h.alias).collect();
+                config_extract(incoming, wanted)
+            };
             let local = fs::read_to_string(paths.config()).unwrap_or_default();
             let merged = config_merge(local.clone(), incoming);
             if merged != local {
                 fs::create_dir_all(&paths.ssh)?;
+                // Без копии конфиг не меняем: ошибка бэкапа прерывает импорт.
                 if paths.config().exists() {
                     let bak = Path::new(&paths.ssh).join("config.bak");
-                    let _ = fs::remove_file(&bak);
-                    let _ = fs::copy(paths.config(), &bak);
+                    fs::copy(paths.config(), &bak).map_err(|e| CoreError::Io(format!("config.bak: {e}")))?;
+                    set_private(&bak);
                 }
-                fs::write(paths.config(), merged)?;
-                set_private(&paths.config());
+                write_private_atomic(&paths.config(), merged.as_bytes())?;
                 changed.push(SyncItem::SshConfig);
             }
         }
     }
-    if items.contains(&SyncItem::Snippets) && merge_list::<Snippet>(&dir.join("relaya/snippets.json"), &paths.support("snippets.json"), |x| x.id.clone())? {
+    if items.contains(&SyncItem::Snippets) && merge_list_where::<Snippet>(&dir.join("relaya/snippets.json"), &paths.support("snippets.json"), |x| x.id.clone(), |_| true)? {
         changed.push(SyncItem::Snippets);
     }
-    if items.contains(&SyncItem::Tunnels) && merge_list::<Tunnel>(&dir.join("relaya/tunnels.json"), &paths.support("tunnels.json"), |x| x.id.clone())? {
+    // Хосты профиля по общему файлу: туннели и рабочие столы чужих хостов не приходят.
+    let scoped: HashSet<String> = fs::read_to_string(dir.join("ssh/config")).map(|t| parse_config(t).into_iter()
+        .filter(|h| profile.contains(h)).map(|h| h.alias).collect()).unwrap_or_default();
+    let all = profile.scope.all_hosts;
+    if items.contains(&SyncItem::Tunnels) && merge_list_where::<Tunnel>(&dir.join("relaya/tunnels.json"), &paths.support("tunnels.json"), |x| x.id.clone(),
+        |t| all || scoped.contains(&t.host_alias))? {
         changed.push(SyncItem::Tunnels);
     }
-    if items.contains(&SyncItem::Desktops) && merge_list::<RemoteDesktop>(&dir.join("relaya/desktops.json"), &paths.support("desktops.json"), |x| x.id.clone())? {
+    if items.contains(&SyncItem::Desktops) && merge_list_where::<RemoteDesktop>(&dir.join("relaya/desktops.json"), &paths.support("desktops.json"), |x| x.id.clone(),
+        |d| all || d.group.as_ref().map(|g| profile.scope.groups.contains(g)).unwrap_or(false)
+            || d.via_ssh_host.as_ref().map(|v| scoped.contains(v)).unwrap_or(false))? {
         changed.push(SyncItem::Desktops);
     }
     if items.contains(&SyncItem::Agents) {
@@ -276,17 +290,24 @@ pub fn sync_import(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
         }
     }
     if let (true, Some(pass)) = (items.contains(&SyncItem::Keys), passphrase) {
-        if !keys_import(&paths.ssh, &pass, dir)?.is_empty() { changed.push(SyncItem::Keys); }
+        // Только ключи, которыми пользуются хосты профиля (по имени файла внутри .ssh).
+        let only: Option<HashSet<String>> = (!all).then(|| fs::read_to_string(dir.join("ssh/config")).map(|t| parse_config(t).into_iter()
+            .filter(|h| scoped.contains(&h.alias)).flat_map(|h| h.identity_files.into_iter())
+            .filter_map(|p| p.replace('\\', "/").rsplit('/').next().map(str::to_string)).collect()).unwrap_or_default());
+        let (added, renamed) = keys_import(&paths.ssh, &pass, dir, only.as_ref())?;
+        if !added.is_empty() { changed.push(SyncItem::Keys); }
+        if !renamed.is_empty() { remember_renamed(&paths, renamed); }
     }
     Ok(changed)
 }
 
 /// Пришедшие элементы заменяют свои по id, новые добавляются, остальные остаются.
-fn merge_list<T>(incoming: &Path, local: &Path, id: impl Fn(&T) -> String) -> Result<bool, CoreError>
+fn merge_list_where<T>(incoming: &Path, local: &Path, id: impl Fn(&T) -> String, keep: impl Fn(&T) -> bool) -> Result<bool, CoreError>
 where T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone {
     let Ok(j) = fs::read_to_string(incoming) else { return Ok(false) };
     let name = incoming.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let theirs: Vec<T> = try_decode_list(&j).map_err(|e| broken(&format!("{name} в папке синхронизации"), e))?;
+    let theirs: Vec<T> = try_decode_list::<T>(&j).map_err(|e| broken(&format!("{name} в папке синхронизации"), e))?
+        .into_iter().filter(|x| keep(x)).collect();
     let mut mine: Vec<T> = match fs::read_to_string(local) {
         Ok(s) => match try_decode_list(&s) {
             Ok(v) => v,
@@ -313,6 +334,15 @@ where T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone {
 }
 
 #[cfg(unix)]
+/// Временный файл рядом → права 0600 → rename: ssh никогда не прочтёт половину конфига, а ключ не будет открыт.
+fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
+    let tmp = dest.with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+    fs::write(&tmp, data)?;
+    set_private(&tmp);
+    if let Err(e) = fs::rename(&tmp, dest) { let _ = fs::remove_file(&tmp); return Err(e.into()); }
+    Ok(())
+}
+
 fn set_private(p: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
@@ -356,6 +386,16 @@ pub fn key_decrypt(blob: Vec<u8>, passphrase: String) -> Result<Vec<u8>, CoreErr
     cipher.decrypt(Nonce::from_slice(&blob[25..37]), &blob[37..]).map_err(|_| CoreError::Decrypt)
 }
 
+/// Путь ключа для сравнения: `~/.ssh/x` и `~\\.ssh\\x` → `<ssh>/x`, `\\` → `/`, на Windows без учёта регистра.
+fn key_path_norm(ssh: &str, p: &str) -> String {
+    let p = p.trim().trim_matches('"').replace('\\', "/");
+    let ssh = ssh.replace('\\', "/").trim_end_matches('/').to_string();
+    let full = if let Some(rest) = p.strip_prefix("~/.ssh/") { format!("{ssh}/{rest}") }
+        else if let Some(rest) = p.strip_prefix("~/") { format!("{}/{rest}", ssh.rsplit_once('/').map(|x| x.0).unwrap_or("")) }
+        else { p };
+    if cfg!(windows) { full.to_lowercase() } else { full }
+}
+
 fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path) -> Result<Vec<String>, CoreError> {
     let keys_dir = dir.join("keys");
     let mut changed = Vec::new();
@@ -365,7 +405,7 @@ fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path
     for name in names {
         let base = name.trim_end_matches(".pub").to_string();
         let private = Path::new(ssh).join(&base);
-        if let Some(only) = only { if !only.contains(private.to_string_lossy().as_ref()) { continue; } }
+        if let Some(only) = only { if !only.contains(&key_path_norm(ssh, &private.to_string_lossy())) { continue; } }
         let Some(key) = read(&private) else { continue };
         fs::create_dir_all(&keys_dir)?;
         let out = keys_dir.join(format!("{base}.relaya-key"));
@@ -377,24 +417,56 @@ fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path
     Ok(changed)
 }
 
-fn keys_import(ssh: &str, pass: &str, dir: &Path) -> Result<Vec<String>, CoreError> {
+/// Ключ из синхронизации не встал под своим именем: там уже лежит другой ключ.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamedKey { pub name: String, pub saved_as: String }
+
+fn keys_import(ssh: &str, pass: &str, dir: &Path, only: Option<&HashSet<String>>) -> Result<(Vec<String>, Vec<RenamedKey>), CoreError> {
     let keys_dir = dir.join("keys");
-    let mut added = Vec::new();
-    let Ok(entries) = fs::read_dir(&keys_dir) else { return Ok(added) };
+    let (mut added, mut renamed) = (Vec::new(), Vec::new());
+    let Ok(entries) = fs::read_dir(&keys_dir) else { return Ok((added, renamed)) };
     let mut names: Vec<String> = entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).filter(|n| n.ends_with(".relaya-key")).collect();
     names.sort();
     for name in names {
         let base = name.trim_end_matches(".relaya-key").to_string();
-        let dest = Path::new(ssh).join(&base);
-        if dest.exists() { continue; }
+        if let Some(only) = only { if !only.contains(&base) { continue; } }
         let key = key_decrypt(fs::read(keys_dir.join(&name))?, pass.into())?;
+        let mut target = base.clone();
+        let dest_of = |t: &str| Path::new(ssh).join(t);
+        if let Some(existing) = read(&dest_of(&target)) {
+            if existing == key { continue; }
+            // Одноимённый, но другой ключ: свой не трогаем, пришедший кладём рядом и сообщаем клиенту.
+            target = format!("{base}.from-sync");
+            let mut n = 2;
+            while let Some(e) = read(&dest_of(&target)) { if e == key { break; } target = format!("{base}.from-sync-{n}"); n += 1; }
+            if read(&dest_of(&target)).as_deref() == Some(key.as_slice()) { continue; }
+            renamed.push(RenamedKey { name: base.clone(), saved_as: target.clone() });
+        }
         fs::create_dir_all(ssh)?;
-        fs::write(&dest, key)?;
-        set_private(&dest);
-        if let Some(p) = read(&keys_dir.join(format!("{base}.pub"))) { let _ = fs::write(Path::new(ssh).join(format!("{base}.pub")), p); }
-        added.push(base);
+        write_private_atomic(&dest_of(&target), &key)?;
+        if let Some(p) = read(&keys_dir.join(format!("{base}.pub"))) { let _ = fs::write(Path::new(ssh).join(format!("{target}.pub")), p); }
+        added.push(target);
     }
-    Ok(added)
+    Ok((added, renamed))
+}
+
+fn warnings_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-warnings.json") }
+
+fn remember_renamed(paths: &SyncPaths, mut renamed: Vec<RenamedKey>) {
+    let mut all: Vec<RenamedKey> = fs::read_to_string(warnings_file(paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    all.append(&mut renamed);
+    let _ = fs::create_dir_all(&paths.support);
+    let _ = fs::write(warnings_file(paths), encode_sorted(&all));
+}
+
+/// Ключи, переименованные при импорте с прошлого вызова (git_sync, folder_sync_merge, sync_import), — показать
+/// пользователю один раз: `id_ed25519` из синхронизации лежит как `id_ed25519.from-sync`.
+#[uniffi::export]
+pub fn sync_take_renamed_keys(paths: SyncPaths) -> Vec<RenamedKey> {
+    let list = fs::read_to_string(warnings_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let _ = fs::remove_file(warnings_file(&paths));
+    list
 }
 
 // MARK: - Git
@@ -446,11 +518,31 @@ impl Git {
         }
         let _ = fs::remove_dir_all(&self.repo);
         fs::create_dir_all(&self.repo)?;
-        self.run(&["init", "-q", "-b", BRANCH], false)?;
-        self.run(&["remote", "add", "origin", remote], false)?;
-        self.run(&["fetch", "-q", "origin"], false)?;
-        if self.remote_has_branch() { self.run(&["reset", "-q", "--hard", &format!("origin/{BRANCH}")], false)?; }
-        Ok(())
+        let r = (|| {
+            self.run(&["init", "-q", "-b", BRANCH], false)?;
+            self.run(&["remote", "add", "origin", remote], false)?;
+            self.run(&["fetch", "-q", "origin"], false)?;
+            if self.remote_has_branch() { self.run(&["reset", "-q", "--hard", &format!("origin/{BRANCH}")], false)?; }
+            Ok(())
+        })();
+        // Неудачный первый fetch не должен оставить .git со своим корнем — повтор начнёт с нуля.
+        if r.is_err() { let _ = fs::remove_dir_all(&self.repo); }
+        r
+    }
+
+    fn head(&self) -> Option<String> { self.stdout(&["rev-parse", "HEAD"]).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) }
+    fn marker(&self) -> PathBuf { self.repo.join(".git").join("relaya-imported") }
+
+    /// Разнести репозиторий по локальным файлам, если с последнего удачного импорта HEAD другой:
+    /// первый запуск (reset на origin) и упавший прошлый импорт тоже импортируются.
+    fn import_if_new(&self, profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>) -> Result<Vec<SyncItem>, CoreError> {
+        let Some(head) = self.head() else { return Ok(vec![]) };
+        if fs::read_to_string(self.marker()).ok().map(|m| m.trim() == head).unwrap_or(false) { return Ok(vec![]); }
+        let keys_pending = profile.effective_items().contains(&SyncItem::Keys) && passphrase.is_none();
+        let imported = sync_import(profile, paths, passphrase, self.repo.to_string_lossy().into_owned())?;
+        // Ключи без пароля синхронизации пропущены — импорт повторится, когда пароль появится.
+        if !keys_pending { let _ = fs::write(self.marker(), &head); }
+        Ok(imported)
     }
 
     fn conflicts(&self) -> Result<Vec<SyncConflict>, CoreError> {
@@ -479,7 +571,10 @@ pub fn git_sync(repo: String, remote: String, machine: String, profile: SyncProf
     let mut pulled = false;
     if git.remote_has_branch() {
         let head = git.stdout(&["rev-parse", "HEAD"]).unwrap_or_default();
-        let merge = git.run(&["merge", "-q", "--no-edit", &format!("origin/{BRANCH}")], true)?;
+        let mut merge = git.run(&["merge", "-q", "--no-edit", &format!("origin/{BRANCH}")], true)?;
+        if !merge.status.success() && String::from_utf8_lossy(&merge.stderr).contains("unrelated histories") {
+            merge = git.run(&["merge", "-q", "--no-edit", "--allow-unrelated-histories", &format!("origin/{BRANCH}")], true)?;
+        }
         if !merge.status.success() {
             let c = git.conflicts()?;
             if !c.is_empty() { return Ok(SyncOutcome::Conflict { conflicts: c }); }
@@ -487,12 +582,12 @@ pub fn git_sync(repo: String, remote: String, machine: String, profile: SyncProf
         }
         pulled = git.stdout(&["rev-parse", "HEAD"]).unwrap_or_default() != head;
     }
-    let imported = if pulled { sync_import(profile, paths, passphrase, repo)? } else { vec![] };
+    let imported = git.import_if_new(profile, paths, passphrase)?;
     let ahead = git.run(&["rev-list", "--count", &format!("origin/{BRANCH}..HEAD")], true)
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<i64>().unwrap_or(1)).unwrap_or(1);
     let needs_push = !git.remote_has_branch() || ahead > 0;
     if needs_push && git.ok(&["rev-parse", "--verify", "-q", "HEAD"]) { git.run(&["push", "-q", "origin", &format!("HEAD:{BRANCH}")], false)?; }
-    Ok(if dirty || pulled || needs_push { SyncOutcome::Synced { pulled, imported } } else { SyncOutcome::UpToDate })
+    Ok(if dirty || pulled || needs_push || !imported.is_empty() { SyncOutcome::Synced { pulled, imported } } else { SyncOutcome::UpToDate })
 }
 
 /// Разрешить конфликт (`keep_mine` по пути), закоммитить, разнести и отправить.
@@ -505,7 +600,7 @@ pub fn git_resolve(repo: String, keep_mine: std::collections::HashMap<String, bo
         git.run(&["add", "--", path], false)?;
     }
     git.run(&["commit", "-q", "--no-edit"], false)?;
-    let imported = sync_import(profile, paths, passphrase, repo)?;
+    let imported = git.import_if_new(profile, paths, passphrase)?;
     git.run(&["push", "-q", "origin", &format!("HEAD:{BRANCH}")], false)?;
     Ok(imported)
 }
@@ -700,9 +795,9 @@ mod tests {
                    SyncOutcome::Synced { pulled: false, imported: vec![] });
         // Вторая машина: подтягивает с сервера (setUp сбрасывает на origin) и разносит.
         let out = git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
-        assert!(matches!(out, SyncOutcome::Synced { .. } | SyncOutcome::UpToDate));
+        assert!(matches!(&out, SyncOutcome::Synced { imported, .. } if imported.contains(&SyncItem::SshConfig)), "{out:?}");
         assert!(fs::read_to_string(Path::new(&rb).join("ssh/config")).unwrap().contains("Host a"), "пустой Mac не должен обнулять общий файл");
-        sync_import(p.clone(), paths(lb.path()), None, rb.clone()).unwrap();
+        // Первое подключение разносит пришедшее само, без ручного sync_import.
         assert!(fs::read_to_string(lb.path().join("config")).unwrap().contains("Host a"));
 
         fs::write(la.path().join("config"), "Host a\n    HostName from-A\n").unwrap();
