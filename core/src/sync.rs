@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "camelCase")]
@@ -423,7 +422,7 @@ struct Git { repo: PathBuf }
 
 impl Git {
     fn run(&self, args: &[&str], allow_failure: bool) -> Result<std::process::Output, CoreError> {
-        let out = Command::new("git")
+        let out = crate::command("git")
             .args(["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "-C"]).arg(&self.repo).args(args)
             .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=15").env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_AUTHOR_NAME", "Relaya").env("GIT_AUTHOR_EMAIL", "relaya@localhost")
@@ -691,7 +690,7 @@ mod tests {
     #[test]
     fn git_two_machines_conflict() {
         let bare = tempfile::tempdir().unwrap();
-        assert!(Command::new("git").args(["init", "-q", "--bare", "-b", "main"]).arg(bare.path()).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(["init", "-q", "--bare", "-b", "main"]).arg(bare.path()).status().unwrap().success());
         let (la, lb, ra, rb) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let (ra, rb) = (ra.path().join("repo").to_string_lossy().to_string(), rb.path().join("repo").to_string_lossy().to_string());
         let remote = bare.path().to_string_lossy().to_string();

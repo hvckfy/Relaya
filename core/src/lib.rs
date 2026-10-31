@@ -26,6 +26,20 @@ pub mod webdav;
 
 pub use error::CoreError;
 
+/// Все процессы ядра создаются здесь: на Windows без консольного окна (CREATE_NO_WINDOW), иначе GUI-приложение
+/// показывает вспыхивающую консоль на каждый вызов git. Дочерние процессы (ssh из GIT_SSH_COMMAND) консоль не получают.
+pub(crate) fn command(program: &str) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut c = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        c.creation_flags(CREATE_NO_WINDOW);
+    }
+    c
+}
+
 /// Строка в одинарных кавычках для POSIX sh.
 pub fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
