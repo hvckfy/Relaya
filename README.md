@@ -3,7 +3,7 @@
 <h1 align="center">Relaya</h1>
 
 <p align="center">
-  A native SSH client for macOS and Windows where your keys live in <code>~/.ssh</code> — not in our vault.
+  A native SSH client for macOS and Windows (Linux in progress) where your keys live in <code>~/.ssh</code> — not in our vault.
 </p>
 
 <p align="center">
@@ -16,11 +16,11 @@
 
 ---
 
-Relaya is a free, open source alternative to Termius-style SSH managers: SwiftUI on macOS, WinUI 3 on Windows, one shared Rust core. It has **no proprietary storage and no vendor cloud**:
+Relaya is a free, open source alternative to Termius-style SSH managers: SwiftUI on macOS, WinUI 3 on Windows, Uno Platform on Linux (in progress), one shared Rust core. It has **no proprietary storage and no vendor cloud**:
 
 - your host list **is** your `~/.ssh/config`,
 - your keys are plain files in `~/.ssh`,
-- passwords and passphrases live in the macOS **Keychain** / Windows **Credential Manager**,
+- passwords and passphrases live in the macOS **Keychain** / Windows **Credential Manager** / Linux **Secret Service**,
 - optional sync goes through **your own** git repository or folder.
 
 Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code, git, Ansible — anything that speaks SSH.
@@ -47,10 +47,13 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 - **Command palette (⌘K)**: fuzzy search over hosts, remote desktops, layouts, snippets, tunnels and actions.
 
 **Passwords & keys**
-- Passwords live in Keychain and are typed in automatically when the server asks — after **Touch ID** (or your Mac password). They never appear in process arguments or environment variables.
-- **sudo** prompts get a one-click "Fill in" from Keychain, again behind Touch ID.
+- Passwords live in Keychain and are typed in automatically when ssh asks for the login password — after **Touch ID** (or your Mac password). They never appear in process arguments or environment variables.
+- After login, a password prompt (`sudo`, `su`, `mysql -p`…) gets a one-click "Fill in" banner instead of automatic input, again behind Touch ID; broadcast input pauses while a password is being typed.
+- Hosts whose ssh runs programs from `~/.ssh/config` (`ProxyCommand`, `LocalCommand`, `KnownHostsCommand`, `Match exec`) never get a saved password automatically — those programs would inherit it.
+- Optional: ask Touch ID for **every** use of a saved password by ssh (tunnels, files, host panels, agents).
 - **"Set up key login" wizard**: generates an ed25519 key, installs it on the server (OpenWrt/Dropbear too), verifies a passwordless login and only then updates your config.
-- **Keys screen**: every key pair in `~/.ssh` with fingerprints, agent status and the hosts using it.
+- **Keys screen**: every key pair in `~/.ssh` with fingerprints, agent status and the hosts using it. Choose which hosts and **git servers** (GitHub, GitLab, your own Forgejo) use a key — Relaya writes `IdentityFile` + `IdentitiesOnly yes`, which fixes "Too many authentication failures".
+- Errors from ssh, git, RDP and VNC are explained in plain words: what happened and what to do.
 
 **Terminal**
 - Tabs, host-key fingerprint check on first connect, a loud warning when a server's key changes, auto-reconnect, find (⌘F), output highlighting.
@@ -89,13 +92,14 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 
 **Sync (free, no cloud of ours)**
 - Sync profiles: each has its own git repository (your own server over SSH, Gitea, GitLab, GitHub) or an iCloud Drive folder, and its own hosts — all of them, chosen groups or individual hosts.
-- Hosts, their tunnels, remote desktops, snippets and agent permissions merge without deleting anything; `~/.ssh/config` is backed up before every change.
-- Conflicts show both versions side by side. SSH keys sync only if you ask, only for the profile's hosts, encrypted with your password. Server passwords are never synced.
+- Hosts, their tunnels, remote desktops, snippets and agent permissions are merged three-way (git or folder); deletions sync too, an edit wins over a deletion, and a machine with an empty config never wipes the shared one. `~/.ssh/config` is backed up before every change.
+- Conflicts show both versions side by side. SSH keys sync only if you ask, only for the profile's hosts, encrypted with your password; a key that differs from yours is saved next to it as `.from-sync`, and keys skipped for a missing password are reported. Server passwords are never synced.
+- Note: anyone who can write to your sync repository or folder controls the synced data — use a private repository.
 
 **Looks**
 - Relaya themes or the native macOS style, **Liquid Glass** on macOS 26, light/dark/system.
 - A background image shared by the whole workspace — tiles, terminals and panels show it through, with adjustable opacity.
-- Terminal color schemes and fonts. English and Russian UI.
+- Terminal color schemes and fonts. English and Russian builds (the language is fixed per download).
 
 **Plain system ssh**
 - Sessions run `/usr/bin/ssh`, so ProxyJump, ssh-agent, FIDO keys and every config option behave exactly like in Terminal.app.
@@ -116,11 +120,15 @@ Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary
 
 ### Windows (preview)
 
-1. Download `Relaya-X.Y.Z-windows-x64-setup.exe` from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. A portable `…-windows-x64.zip` is there too.
+1. Download `Relaya-X.Y.Z-windows-x64-en-setup.exe` (English) or `…-ru-setup.exe` (Russian) from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. Portable `…-windows-x64-<lang>.zip` builds are there too.
 2. The installer isn't code-signed yet, so SmartScreen asks once: *More info → Run anyway*.
 3. Needs Windows 10 1809+ (Mica background on Windows 11) and the built-in **OpenSSH Client** (*Settings → Apps → Optional features*). Sync needs [Git for Windows](https://git-scm.com).
 
-The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, RDP (via Remote Desktop Connection) and VNC (via an installed viewer). Not yet on Windows: Windows Hello confirmation (macOS uses Touch ID), session recording, built-in VNC/RDP windows.
+The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, Windows Hello confirmation, RDP (via Remote Desktop Connection for now) and VNC (via an installed viewer). In progress: a built-in RDP tab on FreeRDP (H.264, sound, clipboard, RD Gateway). Not yet on Windows: session recording.
+
+### Linux (in progress)
+
+A Linux client on Uno Platform (X11, Wayland via XWayland) sharing the Windows C# code is being built: terminal, Secret Service passwords and the hardened askpass are done; packages (AppImage, .deb) will appear in Releases when it's ready.
 
 ## Keyboard shortcuts
 
@@ -147,7 +155,7 @@ macOS (on Windows: Ctrl+Shift+C/V copy/paste, Ctrl+Shift+F find, Ctrl+Shift+D/W 
 ## Security model
 
 - **Nothing is written without confirmation.** Config edits, new key files and server changes are previewed as a diff first.
-- **Secrets stay in Keychain / Credential Manager.** For non-interactive operations (e.g. installing a key on a server) ssh receives the secret through an askpass helper — Relaya itself, launched by ssh, reads it from Keychain (Credential Manager on Windows) on demand.
+- **Secrets stay in Keychain / Credential Manager / Secret Service.** For non-interactive operations (tunnels, SFTP, host panels, installing a key) ssh receives the secret through an askpass helper — Relaya itself, launched by ssh. The process that started ssh hands out a one-time token over a private socket (named pipe on Windows) and gives the secret only to its own ssh child for a real password prompt; the Keychain entry name is never in the environment, so other programs of the same user can't ask for it.
 - **Known limitation:** `ssh-keygen` only accepts a new key's passphrase as an argument, so it is briefly visible in the process list while the key is generated.
 - **Server changes only after confirmation.** Disabling password login, for example, asks first, shows the command and warns if the host has no key; OS actions are inserted into the terminal without Enter.
 - **AI agents need your approval.** On hosts in "confirm" mode every command is shown in a Touch ID prompt (a system confirmation dialog on Windows).
@@ -159,12 +167,12 @@ core/                 Rust core (relaya-core): ~/.ssh/config, sync, MCP policy, 
                       shared by every client through UniFFI bindings; tested on macOS, Linux and Windows
 apps/swift/           Apple clients — SwiftPM package: macOS app now; iOS/iPadOS later share
                       RelayaCore (Swift facades over the core) and the SwiftUI code here
-apps/dotnet/          .NET clients: Relaya.Windows (WinUI 3), installer (Inno Setup); Linux will live here too,
-                      sharing the C# layer with Windows
+apps/dotnet/          .NET clients: Relaya.Shared (pages, terminal, sync — common C#), Relaya.Windows (WinUI 3),
+                      Relaya.Linux (Uno Platform, in progress), installer (Inno Setup)
 resources/            shared assets: localization (ru/en strings), app icon sources
-scripts/              build-core-macos.sh, bundle-macos.sh, build-core-windows.ps1
+scripts/              build-core-macos.sh, bundle-macos.sh [version] [ru|en], build-core-windows.ps1, build-core-linux.sh
 docs/                 UI spec, design notes, screenshots
-.github/workflows/    ci (macOS), core (Rust on 3 OSes), windows, release
+.github/workflows/    ci (macOS), core (Rust on 3 OSes), windows, linux, freerdp, freerdp-watch, release
 ```
 
 ## Building from source
@@ -181,9 +189,11 @@ swift test
 swift run Relaya
 ```
 
-To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build/Relaya.app`. Releases are built by GitHub Actions on every `v*` tag.
+To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build/Relaya.app` with both languages, or `scripts/bundle-macos.sh 0.1.0 en` → `build/en/Relaya.app` with one. Releases are built by GitHub Actions on every `v*` tag.
 
-Windows (needs Rust, .NET 8 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild; `apps/dotnet/installer/Relaya.iss` (Inno Setup 6) builds the installer.
+Windows (needs Rust, .NET 10 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild (add `-p:RelayaLang=en` or `ru` for a single-language build); `apps/dotnet/installer/Relaya.iss` (Inno Setup 6) builds the installer.
+
+Linux (needs Rust and .NET 10): `scripts/build-core-linux.sh`, then `dotnet publish apps/dotnet/Relaya.Linux -r linux-x64`.
 
 See [docs/UI_SPEC.md](docs/UI_SPEC.md) for the full UI specification (in Russian).
 
@@ -195,4 +205,4 @@ Issues and pull requests are welcome. Please keep the core idea intact: `~/.ssh`
 
 [MIT](LICENSE) © 2026 hvckfy and Relaya contributors.
 
-Relaya uses [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm), [RoyalVNCKit](https://github.com/royalapplications/royalvnc) and [RDPKit](https://github.com/steelbrain/RDPKit) (MIT). Distro logos are from [Simple Icons](https://simpleicons.org) (CC0); they are trademarks of their owners.
+Relaya uses [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm), [RoyalVNCKit](https://github.com/royalapplications/royalvnc) and [RDPKit](https://github.com/steelbrain/RDPKit) (MIT) on macOS; [alacritty_terminal](https://github.com/alacritty/alacritty) (Apache-2.0), [FreeRDP](https://github.com/FreeRDP/FreeRDP) (Apache-2.0) and [UniFFI](https://github.com/mozilla/uniffi-rs) (MPL-2.0) in the core; [Win2D](https://github.com/microsoft/Win2D) on Windows and [Uno Platform](https://github.com/unoplatform/uno) on Linux. H.264 on macOS/Linux uses OpenH264 Video Codec provided by Cisco Systems, Inc., downloaded only when you turn it on. Distro logos are from [Simple Icons](https://simpleicons.org) (CC0); they are trademarks of their owners.
