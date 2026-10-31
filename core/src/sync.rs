@@ -220,7 +220,16 @@ fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
         }
     }
     if items.contains(&SyncItem::Agents) {
-        if let Some(d) = read(&paths.support("mcp.json")) { write_if_changed(dir, "relaya/mcp.json", &d, &mut changed)?; }
+        // Своё сливается с общим по хостам; временный доступ (grants) в общий файл не попадает.
+        if let Some(d) = read(&paths.support("mcp.json")) {
+            let mine: crate::mcp::McpPolicy = serde_json::from_slice(&d).map_err(|e| broken("mcp.json", e.into()))?;
+            let mut out = match read(&dir.join("relaya/mcp.json")) {
+                Some(s) => crate::mcp::mcp_policy_merge(serde_json::from_slice(&s).map_err(|e| broken_shared("mcp.json", e.into()))?, mine),
+                None => mine,
+            };
+            out.grants = None;
+            write_if_changed(dir, "relaya/mcp.json", encode_sorted(&out).as_bytes(), &mut changed)?;
+        }
     }
     if let (true, Some(pass)) = (items.contains(&SyncItem::Keys), passphrase) {
         // `~` раскрывается через папку .ssh из SyncPaths (на Windows HOME обычно не задан), разделители и регистр — как у Windows.
@@ -309,10 +318,19 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
         changed.push(SyncItem::Desktops);
     }
     if items.contains(&SyncItem::Agents) {
+        // Слияние, а не замена: пришедшие режимы хостов и правила добавляются, свои глобальные переключатели и
+        // временный доступ остаются (mcp_policy_merge). Нечитаемый файл — синхронизация останавливается.
         if let Some(d) = read(&dir.join("relaya/mcp.json")) {
-            if read(&paths.support("mcp.json")).as_deref() != Some(d.as_slice()) {
+            let theirs: crate::mcp::McpPolicy = serde_json::from_slice(&d).map_err(|e| broken_shared("mcp.json", e.into()))?;
+            let local = read(&paths.support("mcp.json"));
+            let merged = match &local {
+                Some(l) => crate::mcp::mcp_policy_merge(serde_json::from_slice(l).map_err(|e| broken("mcp.json", e.into()))?, theirs),
+                None => crate::mcp::mcp_policy_merge(crate::mcp::McpPolicy { enabled: false, ..Default::default() }, theirs),
+            };
+            let bytes = encode_sorted(&merged).into_bytes();
+            if local.as_deref() != Some(bytes.as_slice()) {
                 fs::create_dir_all(&paths.support)?;
-                fs::write(paths.support("mcp.json"), d)?;
+                write_atomic(&paths.support("mcp.json"), &bytes)?;
                 changed.push(SyncItem::Agents);
             }
         }
@@ -1012,6 +1030,23 @@ mod tests {
         git_sync(rc, remote.clone(), "C".into(), p.clone(), paths(lc.path()), None).unwrap();
         git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
         assert!(fs::read_to_string(la.path().join("config")).unwrap().contains("Host keep"));
+    }
+
+    #[test]
+    fn agent_policy_is_merged_not_replaced() {
+        let (a, b, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let p = sync_new_profile("all".into());
+        let mut p = p; p.items.push(SyncItem::Agents);
+        fs::write(a.path().join("mcp.json"), r#"{"defaultMode":"trusted","enabled":true,"hosts":{"web":"confirm"},"grants":{"web":{"mode":"trusted","until":9e9}}}"#).unwrap();
+        fs::write(b.path().join("mcp.json"), r#"{"defaultMode":"readOnly","enabled":false,"hosts":{"nas":"off"}}"#).unwrap();
+        let d = dir.path().to_string_lossy().to_string();
+        sync_export(p.clone(), paths(a.path()), None, d.clone()).unwrap();
+        assert!(!fs::read_to_string(dir.path().join("relaya/mcp.json")).unwrap().contains("grants"));
+        sync_import(p, paths(b.path()), None, d).unwrap();
+        let m = crate::mcp::mcp_policy_decode(fs::read_to_string(b.path().join("mcp.json")).unwrap());
+        assert!(!m.enabled && m.default_mode == crate::mcp::McpMode::ReadOnly, "свои переключатели не меняются");
+        assert_eq!((m.hosts["web"], m.hosts["nas"]), (crate::mcp::McpMode::Confirm, crate::mcp::McpMode::Off));
+        assert!(m.grants.is_none());
     }
 
     #[test]

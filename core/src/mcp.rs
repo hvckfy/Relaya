@@ -101,6 +101,26 @@ pub fn mcp_policy_is_unreadable(json: String) -> bool {
 #[uniffi::export]
 pub fn mcp_policy_encode(policy: McpPolicy) -> String { crate::models::encode_sorted(&policy) }
 
+/// Слияние политик при синхронизации: режимы хостов — пришедшие заменяют одноимённые, остальные остаются;
+/// правила allow/deny — объединение по хосту без дублей. Глобальные `enabled`/`default_mode` и временный доступ
+/// (`grants`) — свои у каждой машины: другая машина не может включить агентов или выдать доступ здесь.
+#[uniffi::export]
+pub fn mcp_policy_merge(local: McpPolicy, incoming: McpPolicy) -> McpPolicy {
+    let mut out = local;
+    out.hosts.extend(incoming.hosts);
+    let union = |mine: Option<HashMap<String, Vec<String>>>, theirs: Option<HashMap<String, Vec<String>>>| {
+        let mut m = mine.unwrap_or_default();
+        for (host, rules) in theirs.unwrap_or_default() {
+            let list = m.entry(host).or_default();
+            for r in rules { if !list.contains(&r) { list.push(r); } }
+        }
+        (!m.is_empty()).then_some(m)
+    };
+    out.allow = union(out.allow.take(), incoming.allow);
+    out.deny = union(out.deny.take(), incoming.deny);
+    out
+}
+
 // MARK: - Только чтение
 
 /// Строгий белый список «только чтения»: утилита (или пара «утилита подкоманда»), её короткие флаги буквами
@@ -607,6 +627,23 @@ mod tests {
         assert_eq!(mcp_mask_secrets("curl -H 'Authorization: Bearer abc.def' u?token=XYZ&a=1".into()), "curl -H 'Authorization: Bearer ***' u?token=***&a=1");
         assert_eq!(mcp_mask_secrets("export DB_PASSWORD=s3cr3t; API_KEY: \"k\"".into()), "export DB_PASSWORD=***; API_KEY: \"***\"");
         assert_eq!(mcp_mask_secrets("uptime".into()), "uptime");
+    }
+
+    #[test]
+    fn policies_merge_per_host_and_keep_local_switches() {
+        let mut local = McpPolicy { enabled: false, default_mode: McpMode::ReadOnly, ..Default::default() };
+        local.hosts.insert("web".into(), McpMode::Confirm);
+        local.allow = Some(HashMap::from([("web".into(), vec!["uptime".into()])]));
+        local.grants = Some(HashMap::from([("db".into(), McpGrant { mode: McpMode::Trusted, until: 1.0 })]));
+        let mut theirs = McpPolicy { enabled: true, default_mode: McpMode::Trusted, ..Default::default() };
+        theirs.hosts.insert("nas".into(), McpMode::Off);
+        theirs.allow = Some(HashMap::from([("web".into(), vec!["uptime".into(), "df -h".into()])]));
+        theirs.grants = Some(HashMap::from([("web".into(), McpGrant { mode: McpMode::Trusted, until: 9e9 })]));
+        let m = mcp_policy_merge(local, theirs);
+        assert!(!m.enabled && m.default_mode == McpMode::ReadOnly, "глобальные переключатели — свои");
+        assert_eq!((m.hosts["web"], m.hosts["nas"]), (McpMode::Confirm, McpMode::Off));
+        assert_eq!(m.allow.unwrap()["web"], vec!["uptime".to_string(), "df -h".to_string()]);
+        assert!(m.grants.unwrap().get("web").is_none(), "временный доступ с другой машины не приходит");
     }
 
     #[test]
