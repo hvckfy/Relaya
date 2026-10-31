@@ -28,6 +28,9 @@ internal static class HostActions
         groups.Items.Add(GroupItem(h, null, L("Без группы")));
         foreach (var g in AppState.Groups()) groups.Items.Add(GroupItem(h, g, g));
         menu.Items.Add(groups);
+        menu.Items.Add(Item(L("Пароль…"), "\ue8d7", async () => await HostEditor.AskPassword(anchor.XamlRoot, h.alias)));
+        if (Platform.CredentialStore.Has(h.alias))
+            menu.Items.Add(Item(L("Забыть пароль"), "\ue8d8", () => Platform.CredentialStore.Delete(h.alias)));
         menu.Items.Add(Item(L("Копировать ssh-команду"), "", () => Ui.Copy(AppState.SshCommand(h))));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item(L("Удалить…"), "", async () =>

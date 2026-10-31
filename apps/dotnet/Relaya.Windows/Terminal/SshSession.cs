@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Linq;
 using Relaya.Platform;
 
 namespace Relaya.Terminal;
@@ -39,12 +40,18 @@ internal sealed class SshSession : IDisposable
         try
         {
             // Хост с tmux (как на Mac): сессия живёт на сервере и переживает разрыв связи.
-            var command = $"\"{ssh}\" \"{alias}\"";
-            if (Relaya.Data.AppState.Host(alias)?.tmux == true)
+            // Только пароль: сохранён пароль, а ключа у хоста нет — ssh-agent не перебирает ключи,
+            // и сервер не рвёт вход с «Too many authentication failures» до запроса пароля.
+            var host = Relaya.Data.AppState.Host(alias);
+            var options = host?.identityFile == null && Relaya.Platform.CredentialStore.Has(alias)
+                ? string.Concat(uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().Select(o => " " + Arg(o)))
+                : "";
+            var command = $"{Arg(ssh)}{options} {Arg(alias)}";
+            if (host?.tmux == true)
             {
                 var ttl = long.TryParse(Relaya.Platform.Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
                 var attach = uniffi.relaya_core.RelayaCoreMethods.TmuxAttachCommand(tmuxName, ttl);
-                command = $"{Arg(ssh)} -t {Arg(alias)} {Arg(attach)}";
+                command = $"{Arg(ssh)}{options} -t {Arg(alias)} {Arg(attach)}";
             }
             pc = new PseudoConsole(command, (short)size.cols, (short)size.rows);
         }

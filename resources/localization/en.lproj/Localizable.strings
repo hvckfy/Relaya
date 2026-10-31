@@ -840,3 +840,9 @@
 "Git-сервер" = "Git server";
 "GitHub, GitLab, свой Gitea или Forgejo: вход как git с этим ключом. Git-серверы не показываются среди хостов и не синхронизируются." = "GitHub, GitLab, your own Gitea or Forgejo: log in as git with this key. Git servers aren't listed among hosts and aren't synced.";
 "Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента. Git-серверы (User git) не показываются в списке хостов и не синхронизируются." = "The selected hosts and git servers use only this key (IdentitiesOnly), without trying the agent's other keys. Git servers (User git) aren't listed among hosts and aren't synced.";
+"Сохранён — введите новый, чтобы сменить" = "Saved — type a new one to change it";
+"Если сервер входит по паролю" = "If the server signs in with a password";
+"Забыть" = "Forget";
+"Хранится в диспетчере учётных данных Windows" = "Stored in Windows Credential Manager";
+"Пароль…" = "Password…";
+"Забыть пароль" = "Forget Password";

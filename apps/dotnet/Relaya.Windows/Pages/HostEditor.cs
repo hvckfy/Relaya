@@ -44,6 +44,25 @@ internal static class HostEditor
         foreach (var o in all) os.Items.Add(RelayaCoreMethods.OsTitle(o));
         os.SelectedIndex = source?.os is { } so ? all.IndexOf(so) + 1 : 0;
         var agent = new ToggleSwitch { Header = L("Пробрасывать ssh-agent (ForwardAgent)"), IsOn = source?.forwardAgent == true };
+        var saved = editing && Platform.CredentialStore.Has(source!.alias);
+        var forget = false;
+        var password = new PasswordBox
+        {
+            Header = L("Пароль"),
+            PlaceholderText = saved ? L("Сохранён — введите новый, чтобы сменить") : L("Если сервер входит по паролю"),
+        };
+        var forgetButton = new HyperlinkButton { Content = L("Забыть"), Visibility = saved ? Visibility.Visible : Visibility.Collapsed, Padding = new Thickness(0) };
+        forgetButton.Click += (_, _) =>
+        {
+            forget = true;
+            forgetButton.Visibility = Visibility.Collapsed;
+            password.PlaceholderText = L("Если сервер входит по паролю");
+        };
+        var passwordNote = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8,
+            Children = { Ui.Secondary(L("Хранится в диспетчере учётных данных Windows")), forgetButton },
+        };
         var tmux = new ToggleSwitch { Header = L("Сессии в tmux (переживают разрыв связи)"), IsOn = source?.tmux == true };
         var preview = new TextBlock
         {
@@ -95,7 +114,7 @@ internal static class HostEditor
                     Spacing = 10, MinWidth = 440,
                     Children =
                     {
-                        alias, address, user, port, key, jump, group, tags, os, agent, tmux,
+                        alias, address, user, port, password, passwordNote, key, jump, group, tags, os, agent, tmux,
                         Ui.Section(L("Будет записано в ~/.ssh/config")), Ui.Card(preview), error,
                     },
                 },
@@ -117,6 +136,8 @@ internal static class HostEditor
                     Platform.CredentialStore.Write(h.alias, pass);
                     Platform.CredentialStore.Delete(source.alias);
                 }
+                if (forget) Platform.CredentialStore.Delete(h.alias);
+                if (password.Password.Length > 0) Platform.CredentialStore.Write(h.alias, password.Password);
             }
             catch (Exception e) { error.Text = e.Message; args.Cancel = true; }
         };
