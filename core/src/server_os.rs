@@ -212,7 +212,10 @@ pub fn os_password_login_command(os: ServerOs, enabled: bool) -> String {
     let v = if enabled { "yes" } else { "no" };
     let script = password_script(enabled, "/etc/ssh/sshd_config", "/etc/ssh/sshd_config.d") + "; sshd -t";
     // После перезапуска — проверка действующего значения: другой Include или Match могли его перебить.
-    let verify = format!("sshd -T 2>/dev/null | grep -qix 'passwordauthentication {v}' || {{ echo RELAYA_SSHD_MISMATCH >&2; exit 1; }}");
+    // sshd -T читает ключи хоста и без root падает: тогда проверку пропускаем с понятной меткой, а не ложным MISMATCH.
+    let verify = format!("s=$(command -v sshd || echo /usr/sbin/sshd); \
+        if [ \"$(id -u)\" != 0 ]; then echo RELAYA_SSHD_UNVERIFIED: нужен root для sshd -T >&2; exit 0; fi; \
+        \"$s\" -T 2>/dev/null | grep -qix 'passwordauthentication {v}' || {{ echo RELAYA_SSHD_MISMATCH >&2; exit 1; }}");
     format!("{sudo}sh -c {} && {reload} && {sudo}sh -c {}", crate::shell_quote(&script), crate::shell_quote(&verify))
 }
 
@@ -251,7 +254,13 @@ mod tests {
         for os in os_all() { assert_eq!(ServerOs::from_raw(os.raw()), Some(os)); }
         let off = os_password_login_command(ServerOs::Ubuntu, false);
         assert!(off.contains("PasswordAuthentication no") && off.contains("KbdInteractiveAuthentication no"), "{off}");
-        assert!(off.contains("sshd -T") && off.contains("RELAYA_SSHD_MISMATCH"));
+        assert!(off.contains(" -T") && off.contains("RELAYA_SSHD_MISMATCH") && off.contains("RELAYA_SSHD_UNVERIFIED"));
+        // Без root (как в CI) проверка не даёт ложного MISMATCH.
+        if cfg!(unix) && std::process::Command::new("id").arg("-u").output().map(|o| o.stdout != b"0\n").unwrap_or(false) {
+            let verify = off.rsplit(" && sudo sh -c ").next().unwrap();
+            let out = std::process::Command::new("sh").arg("-c").arg(format!("sh -c {verify}")).output().unwrap();
+            assert!(out.status.success() && String::from_utf8_lossy(&out.stderr).contains("RELAYA_SSHD_UNVERIFIED"), "{out:?}");
+        }
         let on = os_password_login_command(ServerOs::Ubuntu, true);
         assert!(on.contains("PasswordAuthentication yes") && !on.contains("KbdInteractive"));
         assert!(os_password_login_command(ServerOs::Openwrt, false).contains("PasswordAuth='off'"));
