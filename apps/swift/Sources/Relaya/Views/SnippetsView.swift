@@ -214,7 +214,7 @@ private struct RunOnHostsSheet: View {
                 .toggleStyle(.checkbox)
             }
             .frame(height: 220)
-            Text(L("Откроется вкладка для каждого хоста; команда выполнится после входа."))
+            Text(L("Для каждого хоста откроется вкладка, все они будут показаны плитками; команда выполнится после входа."))
                 .font(.system(size: 12)).foregroundStyle(Theme.tx2)
             HStack {
                 Spacer()
@@ -222,6 +222,9 @@ private struct RunOnHostsSheet: View {
                 Button(L("Выполнить на %@", "\(chosen.count)")) {
                     let cmd = snippet.filled(values)
                     for h in model.hosts where chosen.contains(h.alias) { model.run(cmd, on: h) }
+                    // Терминал (и ssh) создаётся, когда вкладка видна: сетка показывает все вкладки сразу,
+                    // и команда выполняется на каждом хосте, а не только в активной вкладке.
+                    if chosen.count > 1 { model.gridMode = true }
                     dismiss()
                 }
                 .buttonStyle(.relayaPrimary)
