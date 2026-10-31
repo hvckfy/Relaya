@@ -825,3 +825,5 @@
 "Ни один хост не указывает этот ключ в IdentityFile. «Изменить…» — выбрать хосты и git-серверы (gitlab.com, свой Forgejo), которые ходят только с этим ключом." = "No host uses this key as IdentityFile. Edit… to choose the hosts and git servers (gitlab.com, your own Forgejo) that use only this key.";
 "tmux: закрывать брошенные сессии через, мин" = "tmux: close abandoned sessions after, min";
 "Для хостов с tmux: сессия без подключений живёт на сервере столько минут" = "For tmux hosts: a session with no clients stays on the server this many minutes";
+"Подсветка вывода" = "Output highlighting";
+"Ошибки, предупреждения, успех, IP-адреса и ссылки — цветами темы; полноэкранные программы не трогаются" = "Errors, warnings, success, IP addresses and links in theme colours; full-screen programs are left alone";

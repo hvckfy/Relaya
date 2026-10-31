@@ -355,19 +355,51 @@ internal sealed class TerminalView : UserControl
 
     private const double Pad = 8;
 
+    private sealed record Rule(System.Text.RegularExpressions.Regex Pattern, int Color, bool Bold);
+
+    // Правила по умолчанию — те же, что на Mac (TerminalHighlighter): цвета — индексы ANSI, подходят к любой теме.
+    private static readonly Rule[] Rules =
+    {
+        new(new(@"\b(error|errors|failed|failure|fatal|panic|denied|refused|critical|exception)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), 9, true),
+        new(new(@"\b(warn|warning|warnings|deprecated)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), 11, false),
+        new(new(@"\b(ok|success|successful|succeeded|done|passed|active \(running\))\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), 10, false),
+        new(new(@"\b(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?\b"), 14, false),
+        new(new(@"\bhttps?://[^\s'""<>]+"), 12, false),
+    };
+
+    private static (int Color, bool Bold)?[]? Highlights(TermSnapshot s, int row)
+    {
+        var text = new StringBuilder((int)s.cols);
+        for (var c = 0; c < s.cols; c++) text.Append(s.cells[row * (int)s.cols + c].ch is { Length: > 0 } ch ? ch[0] : ' ');
+        var line = text.ToString();
+        if (line.Trim().Length == 0) return null;
+        (int, bool)?[]? marks = null;
+        foreach (var rule in Rules)
+            foreach (System.Text.RegularExpressions.Match m in rule.Pattern.Matches(line))
+            {
+                marks ??= new (int, bool)?[s.cols];
+                for (var i = m.Index; i < m.Index + m.Length && i < marks.Length; i++) marks[i] ??= (rule.Color, rule.Bold);
+            }
+        return marks;
+    }
+
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         if (!measured) Measure(sender);
         var ds = args.DrawingSession;
         ds.Clear(Theme.Background);
         var s = Emulator.Snapshot();
+        var highlight = !s.altScreen && Platform.Settings.Get("terminal.highlight", "1") == "1";
         for (var r = 0; r < s.rows; r++)
         {
             var y = Pad + r * cellH;
+            var marks = highlight ? Highlights(s, r) : null;
             for (var c = 0; c < s.cols; c++)
             {
                 var cell = s.cells[r * (int)s.cols + c];
                 var inverse = (cell.flags & 8) != 0;
+                // Подсветка (как на Mac) — только текста цвета по умолчанию: раскрашенное сервером не трогаем.
+                if (marks?[c] is { } mark && cell.fg == 0 && !inverse) cell = cell with { fg = 0x0200_0000u | (uint)mark.Color, flags = (ushort)(cell.flags | (mark.Bold ? 1 : 0)) };
                 var fg = Theme.Resolve(inverse ? cell.bg : cell.fg, !inverse, (cell.flags & 1) != 0);
                 var bg = Theme.Resolve(inverse ? cell.fg : cell.bg, inverse, false);
                 var x = Pad + c * cellW;
