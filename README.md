@@ -144,7 +144,8 @@ Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary
 core/                 Rust core (relaya-core): ~/.ssh/config, sync, MCP policy, terminal emulator, …
                       shared by every client through UniFFI bindings; tested on macOS, Linux and Windows
 apps/macos/           macOS client — SwiftPM package (SwiftUI), Swift facades over the core
-apps/windows/         Windows client — WinUI 3 (C#), early preview
+apps/dotnet/          .NET clients: Relaya.Windows (WinUI 3, early preview); Linux will live here too,
+                      sharing the C# layer with Windows
 resources/            shared assets: localization (ru/en strings), app icon sources
 scripts/              build-core-macos.sh, bundle-macos.sh, build-core-windows.ps1
 docs/                 UI spec, design notes, screenshots
@@ -167,7 +168,7 @@ swift run Relaya
 
 To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build/Relaya.app`. Releases are built by GitHub Actions on every `v*` tag.
 
-Windows (needs Rust, .NET 8 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/windows/Relaya.Windows/Relaya.Windows.csproj` with MSBuild.
+Windows (needs Rust, .NET 8 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild.
 
 See [docs/UI_SPEC.md](docs/UI_SPEC.md) for the full UI specification (in Russian).
 

@@ -13,6 +13,6 @@ apps/macos/Frameworks/
 !core/src/bin/
 
 # Windows-клиент
-apps/windows/**/bin/
-apps/windows/**/obj/
-apps/windows/Relaya.Windows/Core/*.cs
+apps/dotnet/**/bin/
+apps/dotnet/**/obj/
+apps/dotnet/Relaya.Windows/Core/*.cs
