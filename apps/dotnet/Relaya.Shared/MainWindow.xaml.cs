@@ -47,7 +47,7 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Relaya.ico"));
 #endif
         Title = "Relaya";
-        AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1280, Height = 820 });
+        RestoreBounds();
         ConfigPath.Text = AppState.ConfigPath;
         Search.PlaceholderText = L("Поиск хостов");
         NewHostText.Text = L("Новый хост…");
@@ -64,6 +64,36 @@ public sealed partial class MainWindow : Window
         // Свёрнутые группы запоминаются, как на Mac.
         Nav.Expanding += (_, a) => { if (a.ExpandingItemContainer?.Tag is string t && t.StartsWith("group:")) Platform.Settings.Set(t.Replace("group:", "group."), "1"); };
         Nav.Collapsed += (_, a) => { if (a.CollapsedItemContainer?.Tag is string t && t.StartsWith("group:")) Platform.Settings.Set(t.Replace("group:", "group."), "0"); };
+    }
+
+    // Размер и позиция окна запоминаются (UI-W1): window.bounds = x,y,w,h в физических пикселях. Если сохранённое
+    // место вне экранов (монитор отключили), окно открывается по центру рабочей области. Минимум — 800×560.
+    private void RestoreBounds()
+    {
+        var saved = Platform.Settings.Get("window.bounds", "").Split(',');
+        var rect = new Windows.Graphics.RectInt32(0, 0, 1280, 820);
+        var restored = saved.Length == 4 && int.TryParse(saved[0], out rect.X) && int.TryParse(saved[1], out rect.Y)
+            && int.TryParse(saved[2], out rect.Width) && int.TryParse(saved[3], out rect.Height) && rect.Width >= 400 && rect.Height >= 300;
+#if !HAS_UNO
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter p) { p.PreferredMinimumWidth = 800; p.PreferredMinimumHeight = 560; }
+        var area = Microsoft.UI.Windowing.DisplayArea.GetFromRect(rect, Microsoft.UI.Windowing.DisplayAreaFallback.None);
+        if (restored && area != null) AppWindow.MoveAndResize(rect);
+        else
+        {
+            var work = Microsoft.UI.Windowing.DisplayArea.Primary.WorkArea;
+            AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
+                work.X + Math.Max(0, (work.Width - rect.Width) / 2), work.Y + Math.Max(0, (work.Height - rect.Height) / 2),
+                Math.Min(rect.Width, work.Width), Math.Min(rect.Height, work.Height)));
+        }
+        AppWindow.Changed += (w, e) =>
+        {
+            if (!(e.DidSizeChange || e.DidPositionChange) || w.Presenter is Microsoft.UI.Windowing.OverlappedPresenter { State: not Microsoft.UI.Windowing.OverlappedPresenterState.Restored })
+                return;
+            Platform.Settings.Set("window.bounds", $"{w.Position.X},{w.Position.Y},{w.Size.Width},{w.Size.Height}");
+        };
+#else
+        AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = rect.Width, Height = rect.Height });
+#endif
     }
 
     /// Группы из ~/.ssh/config — настройки синхронизации отличают по ним группы от хостов.
