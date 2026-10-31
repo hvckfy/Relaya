@@ -111,6 +111,17 @@ pub struct RemoteDesktop {
     pub rdp_retina: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub group: Option<String>,
+    /// RD Gateway: `host` или `host:port`. Пароль шлюза — в связке ключей, не в JSON.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[uniffi(default = None)]
+    pub gateway_host: Option<String>,
+    /// Пусто — те же учётные данные, что для сервера.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[uniffi(default = None)]
+    pub gateway_user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[uniffi(default = None)]
+    pub gateway_domain: Option<String>,
 }
 
 /// Содержимое .rdp-файла для Windows App / mstsc.
@@ -123,6 +134,17 @@ pub fn desktop_rdp_file(d: RemoteDesktop, host: String, port: i64) -> String {
         "use multimon:i:0".into(), "dynamic resolution:i:1".into(),
     ];
     if !d.user.is_empty() { lines.push(format!("username:s:{}", d.user)); }
+    // RD Gateway для mstsc: шлюз всегда, учётные данные шлюза — свои или те же, что у сервера.
+    if let Some(g) = d.gateway_host.as_deref().filter(|g| !g.is_empty()) {
+        lines.push(format!("gatewayhostname:s:{g}"));
+        lines.push("gatewayusagemethod:i:1".into());
+        lines.push("gatewayprofileusagemethod:i:1".into());
+        lines.push(format!("promptcredentialonce:i:{}", if d.gateway_user.is_none() { 1 } else { 0 }));
+        if let Some(u) = d.gateway_user.as_deref().filter(|u| !u.is_empty()) {
+            let full = match d.gateway_domain.as_deref().filter(|x| !x.is_empty()) { Some(dom) => format!("{dom}\\{u}"), None => u.to_string() };
+            lines.push(format!("gatewayusername:s:{full}"));
+        }
+    }
     lines.join("\r\n") + "\r\n"
 }
 
@@ -220,8 +242,14 @@ mod tests {
         let d = r#"[{"address":"10.0.0.5","fullScreen":false,"id":"A","kind":"rdp","name":"win","port":3389,"user":"u","viaSSHHost":"bastion"}]"#;
         let list = desktops_decode(d.into());
         assert_eq!(list[0].via_ssh_host.as_deref(), Some("bastion"));
-        let back = desktops_encode(list);
-        assert!(back.contains("\"viaSSHHost\"") && !back.contains("rdpWidth"));
+        let back = desktops_encode(list.clone());
+        assert!(back.contains("\"viaSSHHost\"") && !back.contains("rdpWidth") && !back.contains("gateway"));
+        let mut g = list[0].clone();
+        g.gateway_host = Some("gw.example.com".into());
+        g.gateway_user = Some("bob".into());
+        let enc = desktops_encode(vec![g.clone()]);
+        assert!(enc.contains("\"gatewayHost\" : \"gw.example.com\"") && !enc.contains("gatewayDomain"), "{enc}");
+        assert_eq!(desktops_decode(enc)[0].gateway_user.as_deref(), Some("bob"));
     }
 }
 
