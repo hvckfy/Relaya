@@ -2,6 +2,12 @@
 //! Бинарь Cisco не входит в пакет Relaya: пользователь включает кодек, клиент скачивает архив с ciscobinary.openh264.org,
 //! проверяет sha256 и показывает `OPENH264_NOTICE`. Хеши закреплены здесь (получены workflow openh264-pin.yml,
 //! MD5 сверен с подписанным списком Cisco) и обновляются вместе с core/native/freerdp.version.
+//!
+//! Требования к загрузке (TOCTOU между проверкой и dlopen):
+//! - библиотека лежит в каталоге данных Relaya, куда пишет только Relaya (не во временной и не в общей папке);
+//! - `openh264_verify_archive` — сразу после скачивания, `openh264_verify` — до любого использования;
+//! - движок загружает только результат `checked_copy`: копия в приватном каталоге сессии, хеш считается по самой
+//!   копии непосредственно перед dlopen, так что подменить файл между проверкой и загрузкой нельзя.
 
 /// Надпись, которую лицензия Cisco требует показывать рядом с включением кодека.
 pub const OPENH264_NOTICE: &str = "OpenH264 Video Codec provided by Cisco Systems, Inc.";
@@ -89,6 +95,27 @@ pub fn openh264_verify(path: String) -> bool {
     sha256_file(&path).map(|h| h == openh264_info(platform).library_sha256).unwrap_or(false)
 }
 
+/// Скопировать библиотеку в приватный каталог (0700, только этот процесс) и проверить хеш копии. Вернуть путь копии
+/// для dlopen; None — файл не тот или копия не удалась. Вызывать непосредственно перед загрузкой кодека.
+#[allow(dead_code)]
+pub(crate) fn checked_copy(path: &str) -> Option<std::path::PathBuf> {
+    let platform = openh264_current_platform()?;
+    let dir = std::env::temp_dir().join(format!("relaya-openh264-{}-{}", std::process::id(), crate::models::new_id()));
+    std::fs::create_dir(&dir).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).ok()?;
+    }
+    let copy = dir.join(openh264_info(platform).file_name);
+    std::fs::copy(path, &copy).ok()?;
+    if sha256_file(&copy.to_string_lossy())? != openh264_info(platform).library_sha256 {
+        let _ = std::fs::remove_dir_all(&dir);
+        return None;
+    }
+    Some(copy)
+}
+
 /// Проверка скачанного архива .bz2 до распаковки.
 #[uniffi::export]
 pub fn openh264_verify_archive(path: String, platform: CodecPlatform) -> bool {
@@ -114,5 +141,6 @@ mod tests {
         std::fs::write(&f, b"not cisco").unwrap();
         assert!(!openh264_verify(f.to_string_lossy().into()));
         assert!(!openh264_verify("/nonexistent".into()));
+        assert!(checked_copy(&f.to_string_lossy()).is_none(), "чужой файл не копируется для загрузки");
     }
 }

@@ -58,8 +58,9 @@ pub struct RdpConfig {
     pub gateway_password: Option<String>,
     #[uniffi(default = None)]
     pub gateway_domain: Option<String>,
-    /// Путь к библиотеке H.264 (OpenH264 от Cisco, скачанной пользователем; проверить `openh264_verify`).
-    /// Пусто — системный декодер (Windows) или без H.264.
+    /// Путь к библиотеке H.264 (OpenH264 от Cisco, скачанной пользователем). Только из каталога данных Relaya, куда
+    /// пишет одна Relaya; клиент проверяет `openh264_verify` до передачи, а движок загружает не этот файл, а
+    /// `openh264::checked_copy` (хеш копии сразу перед dlopen). Пусто — системный декодер (Windows) или без H.264.
     #[uniffi(default = None)]
     pub h264_library_path: Option<String>,
 }
