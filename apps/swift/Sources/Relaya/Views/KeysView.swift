@@ -103,88 +103,78 @@ struct KeysView: View {
         .help(Self.agentHelp)
     }
 
+    // Инспектор ключа по HIG: сгруппированная форма с секциями, LabeledContent и системные кнопки,
+    // а не свои подписи-капсом и плашки.
     private func inspector(_ key: SSHKey) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(key.name).font(.system(size: 15, weight: .bold))
-                    Text([key.type,
-                          key.created.map { L("создан %@", "\($0.formatted(date: .abbreviated, time: .omitted))") },
-                          key.hasPassphrase ? L("с passphrase") : L("без passphrase")]
-                        .compactMap { $0 }.joined(separator: " · "))
-                        .font(.system(size: 12)).foregroundStyle(Theme.tx2)
+        let using = (try? model.store.loadDocument().text).map { KeyHosts.hosts($0, key: key.path) } ?? []
+        return Form {
+            Section {
+                LabeledContent(L("Тип"), value: key.type)
+                if let created = key.created {
+                    LabeledContent(L("Создан"), value: created.formatted(date: .abbreviated, time: .omitted))
                 }
-
-                caption(L("Публичный ключ")) {
-                    Button(L("Копировать")) {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(key.publicKey, forType: .string)
-                    }
-                    .buttonStyle(.relaya(.ghost, height: 22))
+                LabeledContent(L("Passphrase"), value: key.hasPassphrase ? L("есть") : L("нет"))
+                LabeledContent(L("Отпечаток")) {
+                    Text(key.fingerprint).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        .multilineTextAlignment(.trailing)
                 }
-                Text(key.publicKey)
-                    .font(.system(size: 11, design: .monospaced))
-                    .textSelection(.enabled)
-                    .lineLimit(4)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.bg2, in: .rect(cornerRadius: 8, style: .continuous))
-
-                caption(L("Отпечаток")) { EmptyView() }
-                Text(key.fingerprint).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
-
-                let using = (try? model.store.loadDocument().text).map { KeyHosts.hosts($0, key: key.path) } ?? []
-                caption(L("Используется хостами · %@", "\(using.count)")) {
-                    Button(L("Изменить…")) { editHosts = key }.buttonStyle(.relaya(.ghost, height: 22))
-                }
-                if using.isEmpty {
-                    Text(L("Ни один хост не указывает этот ключ в IdentityFile. «Изменить…» — выбрать хосты и git-серверы (gitlab.com, свой Forgejo), которые ходят только с этим ключом."))
-                        .font(.system(size: 12)).foregroundStyle(Theme.tx2)
-                } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(using, id: \.self) { alias in
-                            let h = model.hosts.first { $0.alias == alias }
-                            Text("\(alias)  ").font(.system(size: 12.5)) + Text(h?.subtitle ?? L("git-сервер")).font(.system(size: 11)).foregroundColor(Theme.tx2)
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Button(L("Разложить на хосты…")) { deploy = key }.buttonStyle(.relayaPrimary)
-                    HStack(spacing: 6) {
-                        if inAgent.contains(key.fingerprint) {
-                            Label(L("В агенте"), systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(Theme.grn)
-                                .help(Self.agentHelp)
-                            Button(L("Убрать из агента")) { Task { await removeFromAgent(key) } }
-                                .buttonStyle(.relaya)
-                                .help(L("ssh-add -d: выгрузить ключ из памяти ssh-agent. Файлы ключа и passphrase в Keychain остаются."))
-                        } else {
-                            Button(L("Добавить в агент")) {
-                                if key.hasPassphrase { askPassphrase = key } else { Task { await addToAgent(key, passphrase: nil) } }
-                            }
-                            .buttonStyle(.relaya)
-                            .help(Self.agentHelp)
-                        }
-                    }
-                    Button(L("В Корзину…"), role: .destructive) { confirmDelete = key }.buttonStyle(.relaya(.ghost))
-                }
-                Text(L("При удалении покажем, какие хосты перестанут подключаться."))
-                    .font(.system(size: 11)).foregroundStyle(Theme.tx2)
+            } header: {
+                Text(key.name).font(.headline)
             }
-            .padding(16)
+
+            Section {
+                Text(key.publicKey)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .lineLimit(5)
+                Button(L("Копировать публичный ключ")) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(key.publicKey, forType: .string)
+                }
+            } header: {
+                Text(L("Публичный ключ"))
+            }
+
+            Section {
+                if using.isEmpty {
+                    Text(L("Ни один хост не указывает этот ключ в IdentityFile."))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(using, id: \.self) { alias in
+                    LabeledContent(alias, value: model.hosts.first { $0.alias == alias }?.subtitle ?? L("git-сервер"))
+                }
+                Button(L("Изменить хосты…")) { editHosts = key }
+            } header: {
+                Text(L("Используется хостами · %@", "\(using.count)"))
+            } footer: {
+                Text(L("Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента."))
+            }
+
+            Section {
+                Button(L("Разложить на хосты…")) { deploy = key }
+                if inAgent.contains(key.fingerprint) {
+                    LabeledContent(L("ssh-agent"), value: L("ключ загружен"))
+                    Button(L("Убрать из агента")) { Task { await removeFromAgent(key) } }
+                        .help(L("ssh-add -d: выгрузить ключ из памяти ssh-agent. Файлы ключа и passphrase в Keychain остаются."))
+                } else {
+                    Button(L("Добавить в агент")) {
+                        if key.hasPassphrase { askPassphrase = key } else { Task { await addToAgent(key, passphrase: nil) } }
+                    }
+                    .help(Self.agentHelp)
+                }
+            } header: {
+                Text(L("Действия"))
+            }
+
+            Section {
+                Button(L("В Корзину…"), role: .destructive) { confirmDelete = key }
+            } footer: {
+                Text(L("При удалении покажем, какие хосты перестанут подключаться."))
+            }
         }
-        .foregroundStyle(Theme.tx)
-        .font(.system(size: 13))
+        .formStyle(.grouped)
     }
 
-    private func caption<Trailing: View>(_ text: String, @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack {
-            Text(text.uppercased()).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.tx2)
-            Spacer()
-            trailing()
-        }
-    }
 
     private func hosts(using key: SSHKey) -> [SSHHost] {
         model.hosts.filter { h in h.identityFile.map(SSHPaths.expand) == key.path }
@@ -436,12 +426,17 @@ private struct KeyHostsSheet: View {
                 } footer: {
                     Text(L("Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.bak."))
                 }
-                Section(L("Добавить сервер")) {
+                Section {
                     HStack {
-                        TextField(L("например, gitlab.com или git.example.com"), text: $newHost)
+                        TextField(L("Сервер"), text: $newHost, prompt: Text("gitlab.com"))
                             .onSubmit(add)
-                        Button(L("Добавить"), action: add).disabled(newHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                        Button(L("Добавить"), action: add)
+                            .disabled(newHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
+                } header: {
+                    Text(L("Добавить сервер"))
+                } footer: {
+                    Text(L("Хост, которого ещё нет в ~/.ssh/config, например git-сервер. Для него появится короткий блок с этим ключом."))
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
