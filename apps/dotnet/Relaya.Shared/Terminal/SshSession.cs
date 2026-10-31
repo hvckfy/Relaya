@@ -103,6 +103,12 @@ internal sealed class SshSession : IDisposable
             var reply = view.Emulator.TakeOutput();
             if (reply.Length > 0) pc.Write(reply);
         };
+        // Сбой в обработке вывода — не немой пустой экран: текст ошибки прямо в терминал.
+        pc.HandlerFailed += e =>
+        {
+            try { view.Feed(Encoding.UTF8.GetBytes($"\r\n\x1b[31mRelaya: ошибка вывода терминала: {e.Message}\x1b[0m\r\n")); }
+            catch (Exception) { }
+        };
         pc.Exited += code => { if (console == pc) End($"\x1b[2m[сессия завершена, код {code}]\x1b[0m"); };
         pc.Start();
         StateChanged?.Invoke(true);

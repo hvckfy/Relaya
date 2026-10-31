@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;
@@ -40,9 +41,33 @@ internal sealed class TerminalView : UserControl, IDisposable
         canvas.RemoveFromVisualTree();
     }
 
+    // UI-очередь снимается в конструкторе (UI-поток): Feed приходит из фонового потока ConPTY.
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+    private readonly object feedLock = new();
+
+    // Диагностика пустого экрана: %APPDATA%\Relaya\terminal.log — сбои Feed/OnDraw больше не немые.
+    internal static void Trace(string message)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(Data.AppState.Support);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(Data.AppState.Support, "terminal.log"), $"{DateTime.Now:O} {message}\n");
+        }
+        catch (Exception) { }
+    }
+
+    private void Redraw()
+    {
+        if (ui == null) { Trace("Feed: no UI DispatcherQueue"); return; }
+        if (!ui.TryEnqueue(canvas.Invalidate)) Trace("Feed: TryEnqueue returned false");
+    }
+
     public TerminalView()
     {
         ApplySettings();
+        // Вкладку создают свёрнутой и потом показывают: перерисовать, как только она загружена и видима.
+        Loaded += (_, _) => { Trace($"Loaded {ActualWidth}x{ActualHeight}"); canvas.Invalidate(); };
+        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => canvas.Invalidate());
         Platform.Settings.Changed += OnSettingsChanged;
         Content = canvas;
         canvas.Draw += OnDraw;
@@ -335,10 +360,14 @@ internal sealed class TerminalView : UserControl, IDisposable
         e.Handled = true;
     }
 
+    private bool fedOnce;
+
+    /// Из фонового потока ConPTY: эмулятор под замком, перерисовка — через UI-очередь, снятую в конструкторе.
     public void Feed(byte[] data)
     {
-        Emulator.Feed(data);
-        DispatcherQueue.TryEnqueue(canvas.Invalidate);
+        lock (feedLock) Emulator.Feed(data);
+        if (!fedOnce) { fedOnce = true; Trace($"Feed: first {data.Length} bytes"); }
+        Redraw();
     }
 
     private void Measure(ICanvasResourceCreator device)
@@ -392,7 +421,39 @@ internal sealed class TerminalView : UserControl, IDisposable
         return marks;
     }
 
+    private bool drawnText;
+    private string? drawError;
+
+    /// Для самопроверки: отрисован ли хоть один кадр с текстом и была ли ошибка отрисовки.
+    internal bool DrawnText => drawnText;
+    internal string? DrawError => drawError;
+
+    // Исключение в кадре с текстом не должно навсегда оставить первый пустой кадр: в лог и на экран.
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
+    {
+        try
+        {
+            lock (feedLock) DrawFrame(sender, args);
+            if (!drawnText && Emulator.ScreenText().FirstOrDefault(l => l.Trim().Length > 0) is { } first)
+            {
+                drawnText = true;
+                Trace($"OnDraw: first text «{first.Trim()}» canvas {sender.ActualWidth}x{sender.ActualHeight}");
+            }
+        }
+        catch (Exception e)
+        {
+            if (drawError == null) Trace("OnDraw: " + e);
+            drawError = e.Message;
+            try
+            {
+                args.DrawingSession.Clear(Microsoft.UI.Colors.Black);
+                args.DrawingSession.DrawText("Relaya: " + e.Message, 12, 12, Microsoft.UI.Colors.IndianRed);
+            }
+            catch (Exception) { }
+        }
+    }
+
+    private void DrawFrame(CanvasControl sender, CanvasDrawEventArgs args)
     {
         if (!measured) Measure(sender);
         var ds = args.DrawingSession;

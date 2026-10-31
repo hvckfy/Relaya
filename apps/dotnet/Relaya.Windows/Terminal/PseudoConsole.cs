@@ -20,6 +20,9 @@ internal sealed class PseudoConsole : IDisposable
     public event Action<byte[]>? Output;
     public event Action<int>? Exited;
 
+    /// Исключение подписчика Output: чтение продолжается, а сессия пишет ошибку в лог и в терминал.
+    public event Action<Exception>? HandlerFailed;
+
     public PseudoConsole(string commandLine, short cols, short rows)
     {
         if (!CreatePipe(out var inRead, out var inWrite, IntPtr.Zero, 0) ||
@@ -88,11 +91,27 @@ internal sealed class PseudoConsole : IDisposable
                 // Исключение подписчика не должно останавливать чтение: иначе ConPTY встаёт,
                 // вкладка чёрная, а ssh через время выходит с кодом 255.
                 try { Output?.Invoke(buf[..n]); }
-                catch (Exception e) { System.Diagnostics.Debug.WriteLine($"ConPTY output handler: {e}"); }
+                catch (Exception e)
+                {
+                    Log("ConPTY output handler: " + e);
+                    try { HandlerFailed?.Invoke(e); } catch (Exception) { }
+                }
             }
         }
         catch (IOException) { }
         catch (ObjectDisposedException) { }
+    }
+
+    // %APPDATA%\Relaya\terminal.log — тот же файл, что у TerminalView.
+    private static void Log(string message)
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Relaya");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "terminal.log"), $"{DateTime.Now:O} {message}\n");
+        }
+        catch (Exception) { }
     }
 
     public void Write(byte[] data)

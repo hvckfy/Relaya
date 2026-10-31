@@ -18,6 +18,10 @@ public static class Program
         if (Array.IndexOf(args, "--mcp") >= 0)
             return Platform.McpHost.Run();
 
+        // Самопроверка терминала в CI: настоящий TerminalView, Feed из фонового потока, отрисованный кадр.
+        if (Array.IndexOf(args, "--selftest-terminal") is var i and >= 0)
+            Terminal.TerminalSelfTest.LogPath = i + 1 < args.Length ? args[i + 1] : "selftest.log";
+
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Application.Start(p =>
         {

@@ -52,6 +52,18 @@ jobs:
         run: |
           $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.0.0' }
           msbuild apps/dotnet/Relaya.Windows/Relaya.Windows.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:Version=$version
+      # Настоящий TerminalView (WinUI + Win2D): Feed из фонового потока, проверка отрисованного кадра.
+      - name: Terminal view selftest
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem apps/dotnet/Relaya.Windows/bin/x64/Release -Recurse -Filter Relaya.exe | Select-Object -First 1
+          $log = "$env:RUNNER_TEMP\selftest.log"
+          $p = Start-Process $exe.FullName -ArgumentList "--selftest-terminal", "`"$log`"" -PassThru
+          if (-not $p.WaitForExit(90000)) { $p.Kill(); Write-Host "selftest: timeout" }
+          if (Test-Path $log) { Get-Content $log } else { Write-Host "no selftest log" }
+          $tl = "$env:APPDATA\Relaya\terminal.log"
+          if (Test-Path $tl) { Get-Content $tl }
+          if (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern "selftest: OK" -Quiet)) { exit 1 }
       # Установщик (Inno Setup есть на образе windows-latest; если нет — ставим через choco).
       - name: Build installer
         shell: pwsh

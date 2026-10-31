@@ -10,6 +10,12 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (Terminal.TerminalSelfTest.LogPath != null)
+        {
+            window = new Window { Title = "Relaya selftest" };
+            Terminal.TerminalSelfTest.Run(window);
+            return;
+        }
         window = new MainWindow();
         window.Activate();
     }
