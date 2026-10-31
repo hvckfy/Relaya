@@ -13,6 +13,10 @@ namespace Relaya.Pages;
 /// Туннели -L/-R/-D: запуск и остановка, автостарт, статус — как на Mac.
 internal sealed class TunnelsPage : UserControl
 {
+    // UI-очередь снимается в конструкторе (UI-поток). События приходят из фоновых потоков (ConPTY, туннели,
+    // синхронизация), а свойство DispatcherQueue XAML-объекта из чужого потока в C# падает InvalidCastException.
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
     public TunnelsPage()
     {
         TunnelManager.Shared.Changed += OnChanged;
@@ -20,7 +24,7 @@ internal sealed class TunnelsPage : UserControl
         Build();
     }
 
-    private void OnChanged() => DispatcherQueue.TryEnqueue(Build);
+    private void OnChanged() => ui.TryEnqueue(Build);
 
     private void Build()
     {

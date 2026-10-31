@@ -12,6 +12,10 @@ namespace Relaya;
 
 public sealed partial class MainWindow : Window
 {
+    // UI-очередь снимается в конструкторе (UI-поток). События приходят из фоновых потоков (ConPTY, туннели,
+    // синхронизация), а свойство DispatcherQueue XAML-объекта из чужого потока в C# падает InvalidCastException.
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
     public static MainWindow? Current { get; private set; }
 
     /// Handle окна, снятый в UI-потоке: им пользуются фоновые потоки (Windows Hello для askpass).
@@ -33,11 +37,11 @@ public sealed partial class MainWindow : Window
         ConfigPath.Text = AppState.ConfigPath;
         Search.PlaceholderText = L("Поиск хостов");
         NewHostText.Text = L("Новый хост…");
-        AppState.HostsChanged += () => DispatcherQueue.TryEnqueue(() => Render(Search.Text.Trim()));
+        AppState.HostsChanged += () => ui.TryEnqueue(() => Render(Search.Text.Trim()));
         AppState.LoadHosts();
-        Platform.SyncService.Shared.Imported += () => DispatcherQueue.TryEnqueue(AppState.LoadHosts);
+        Platform.SyncService.Shared.Imported += () => ui.TryEnqueue(AppState.LoadHosts);
         Platform.SyncService.Shared.DeletionsPending += pending =>
-            DispatcherQueue.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.DeletionsDialog.Show(root, pending); });
+            ui.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.DeletionsDialog.Show(root, pending); });
         Platform.SyncService.Shared.ScheduleAuto();
         Platform.TunnelManager.Shared.StartAuto();
         Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
@@ -159,8 +163,8 @@ public sealed partial class MainWindow : Window
     {
         var tiles = new Terminal.TileHost();
         var tab = AddTab(alias, "", tiles, tiles);
-        tiles.TitleChanged += t => DispatcherQueue.TryEnqueue(() => tab.Header = t);
-        tiles.AliveChanged += alive => DispatcherQueue.TryEnqueue(() =>
+        tiles.TitleChanged += t => ui.TryEnqueue(() => tab.Header = t);
+        tiles.AliveChanged += alive => ui.TryEnqueue(() =>
             tab.IconSource = new FontIconSource { Glyph = alive ? "" : "" });
         tiles.Add(alias, initialInput);
     }

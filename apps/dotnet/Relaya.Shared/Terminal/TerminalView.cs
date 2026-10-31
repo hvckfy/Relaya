@@ -92,7 +92,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         PointerReleased += OnPointerReleased;
     }
 
-    private void OnSettingsChanged() => DispatcherQueue.TryEnqueue(() =>
+    private void OnSettingsChanged() => ui.TryEnqueue(() =>
     {
         ApplySettings();
         measured = false;

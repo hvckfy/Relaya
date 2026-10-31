@@ -14,6 +14,10 @@ namespace Relaya.Terminal;
 /// Сверху — тонкая панель: разделить с хостом, поиск по истории, размер шрифта.
 internal sealed class TileHost : UserControl, IDisposable
 {
+    // UI-очередь снимается в конструкторе (UI-поток). События приходят из фоновых потоков (ConPTY, туннели,
+    // синхронизация), а свойство DispatcherQueue XAML-объекта из чужого потока в C# падает InvalidCastException.
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
     private sealed record Pane(TerminalView View, SshSession Session, string Alias, Border Frame, TextBlock Title);
 
     private readonly List<Pane> panes = new();
@@ -97,7 +101,7 @@ internal sealed class TileHost : UserControl, IDisposable
         ask.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8), Children = { put, no } };
         put.Click += (_, _) => { ask.IsOpen = false; session.SendPassword(); view.Focus(FocusState.Programmatic); };
         no.Click += (_, _) => { ask.IsOpen = false; view.Focus(FocusState.Programmatic); };
-        session.PasswordRequested += () => DispatcherQueue.TryEnqueue(() => ask.IsOpen = true);
+        session.PasswordRequested += () => ui.TryEnqueue(() => ask.IsOpen = true);
         // Начальная команда (сниппет, tmux attach) не дождалась входа — не вводим сами, предлагаем вставить.
         var pending = new InfoBar
         {

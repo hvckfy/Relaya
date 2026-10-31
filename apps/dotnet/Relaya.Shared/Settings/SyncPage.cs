@@ -14,6 +14,10 @@ namespace Relaya.Settings;
 /// каждый профиль — раскрывающаяся карточка. Логика та же, что на Mac (ядро), хранилище — git или папка (OneDrive и т.п.).
 internal sealed class SyncPage : UserControl
 {
+    // UI-очередь снимается в конструкторе (UI-поток). События приходят из фоновых потоков (ConPTY, туннели,
+    // синхронизация), а свойство DispatcherQueue XAML-объекта из чужого потока в C# падает InvalidCastException.
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
     private readonly SyncService sync = SyncService.Shared;
     private readonly StackPanel root = new() { Spacing = 4, MaxWidth = 1000, Margin = new Thickness(36, 24, 36, 36) };
     private readonly Dictionary<string, (TextBlock Status, ProgressRing Ring, StackPanel Conflict)> rows = new();
@@ -32,7 +36,7 @@ internal sealed class SyncPage : UserControl
     {
         Content = new ScrollViewer { Content = root };
         // Новые предупреждения о ключах — перестроить страницу, иначе только обновить состояния профилей.
-        sync.Changed += () => DispatcherQueue.TryEnqueue(() => { if (sync.RenamedKeys.Count != shownRenamed || sync.SkippedKeys.Count != shownSkipped) Build(); else UpdateStates(); });
+        sync.Changed += () => ui.TryEnqueue(() => { if (sync.RenamedKeys.Count != shownRenamed || sync.SkippedKeys.Count != shownSkipped) Build(); else UpdateStates(); });
         Build();
     }
 

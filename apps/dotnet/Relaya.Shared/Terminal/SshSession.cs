@@ -98,7 +98,8 @@ internal sealed class SshSession : IDisposable
                 // После входа — только по согласию человека (баннер «Подставить» / «Нет»).
                 tail.Clear();
                 asked = pc;
-                PasswordRequested?.Invoke();
+                try { PasswordRequested?.Invoke(); }
+                catch (Exception e) { Relaya.Terminal.TerminalView.Trace("PasswordRequested: " + e.GetType().Name); }
             }
             var reply = view.Emulator.TakeOutput();
             if (reply.Length > 0) pc.Write(reply);
