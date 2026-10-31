@@ -18,11 +18,20 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        current = this;
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
         ConfigPath.Text = SshConfig;
         LoadHosts();
+        Platform.SyncService.Shared.Imported += () => DispatcherQueue.TryEnqueue(LoadHosts);
+        Platform.SyncService.Shared.ScheduleAuto();
     }
+
+    private static MainWindow? current;
+
+    /// Группы из ~/.ssh/config — настройки синхронизации отличают по ним группы от хостов.
+    public static HashSet<string> KnownGroups() =>
+        current?.hosts.Select(h => h.group).OfType<string>().ToHashSet() ?? new();
 
     // ~/.ssh/config — источник правды, как на Mac; разбирает общее Rust-ядро.
     private void LoadHosts()
@@ -162,6 +171,12 @@ public sealed partial class MainWindow : Window
 
     private void OnItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
+        if (args.IsSettingsInvoked)
+        {
+            Tabs.SelectedItem = null;
+            Show(syncPage ??= new Settings.SyncPage());
+            return;
+        }
         if (args.InvokedItemContainer?.Tag is not SshHost h) return;
         var view = new Terminal.TerminalView();
         var session = new Terminal.SshSession(view, h.alias);
@@ -169,8 +184,7 @@ public sealed partial class MainWindow : Window
         {
             Header = h.alias,
             IconSource = new FontIconSource { Glyph = "\uE756" },
-            Content = view,
-            Tag = session,
+            Tag = new Tab(session, view),
         };
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
@@ -185,9 +199,33 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    // Вкладки живут в заголовке, а их терминал — в основной области справа от сайдбара.
+    private sealed record Tab(Terminal.SshSession Session, Terminal.TerminalView View);
+
+    private Settings.SyncPage? syncPage;
+
+    private void Show(UIElement? page)
+    {
+        Page.Content = page;
+        Empty.Visibility = page is null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnTabSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if ((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t)
+        {
+            Nav.SelectedItem = null;
+            Show(t.View);
+        }
+        else if (Page.Content is Terminal.TerminalView)
+        {
+            Show(null);
+        }
+    }
+
     private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
     {
-        (args.Tab.Tag as IDisposable)?.Dispose();
+        if (args.Tab.Tag is Tab t) t.Session.Dispose();
         sender.TabItems.Remove(args.Tab);
     }
 }

@@ -24,7 +24,7 @@
                        Style="{StaticResource CaptionTextBlockStyle}" />
             <TabView x:Name="Tabs" Grid.Column="1" VerticalAlignment="Bottom"
                      IsAddTabButtonVisible="False" TabWidthMode="SizeToContent"
-                     TabCloseRequested="OnTabCloseRequested" />
+                     TabCloseRequested="OnTabCloseRequested" SelectionChanged="OnTabSelected" />
         </Grid>
 
         <NavigationView x:Name="Nav" Grid.Row="1" PaneDisplayMode="Left"
@@ -47,6 +47,7 @@
             <Grid Background="{ThemeResource LayerFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,0,0"
                   CornerRadius="8,0,0,0">
+                <ContentControl x:Name="Page" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
                 <StackPanel x:Name="Empty" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
                     <FontIcon Glyph="&#xE756;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock x:Name="EmptyTitle" Text="Выберите хост слева" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
