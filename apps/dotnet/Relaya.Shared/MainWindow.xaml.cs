@@ -169,6 +169,11 @@ public sealed partial class MainWindow : Window
         AddTab(L("Файлы: %@", alias), "", page, null);
     }
 
+    /// Вкладка с произвольным содержимым (удалённый стол и т. п.); owner закрывается вместе с вкладкой
+    /// (если null, а содержимое — IDisposable, закрывается оно само).
+    public void OpenTab(string title, string glyph, UIElement content, IDisposable? owner) =>
+        AddTab(title, glyph, content, owner ?? content as IDisposable);
+
     private TabViewItem AddTab(string title, string glyph, UIElement content, IDisposable? owner)
     {
         var tab = new TabViewItem

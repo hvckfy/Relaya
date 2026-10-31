@@ -14,27 +14,31 @@ namespace Relaya.Platform;
 /// VNC — установленный VNC-клиент (TightVNC, RealVNC, UltraVNC, TigerVNC). Через SSH-хост — локальный туннель.
 internal static class DesktopLauncher
 {
-    public static async void Open(RemoteDesktop d, XamlRoot root)
+    /// RDP — во вкладке (FreeRDP в ядре); VNC — внешний клиент.
+    public static void Open(RemoteDesktop d, XamlRoot root)
     {
-        var host = d.address;
-        var port = d.port;
-        string? tunnelId = null;
-        if (d.viaSshHost is { Length: > 0 } via)
-        {
-            // Один туннель на удалённый стол: повторное открытие берёт уже работающий, закрытие клиента его гасит.
-            tunnelId = "desktop:" + d.id;
-            var tunnel = TunnelManager.Shared.StartTemporary(
-                new Tunnel(tunnelId, L("%@ (удалённый стол)", d.name), via, TunnelKind.Local, FreePort(), d.address, d.port, false));
-            var local = tunnel.listenPort;
-            for (var i = 0; i < 20 && TunnelManager.Shared.StatusOf(tunnel).State == TunnelManager.State.Starting; i++) await Task.Delay(250);
-            if (TunnelManager.Shared.StatusOf(tunnel) is { State: TunnelManager.State.Failed } f)
-            {
-                await Message(root, L("SSH-туннель: %@", f.Error ?? ""));
-                return;
-            }
-            host = "localhost";
-            port = local;
-        }
+        if (d.kind == DesktopKind.Rdp && MainWindow.Current is { } w) { w.OpenTab(d.name, "\ue7f4", new Desktop.RdpView(d), null); return; }
+        OpenExternal(d, root);
+    }
+
+    /// Куда подключаться: напрямую или через SSH-хост (локальный туннель `desktop:<id>`, один на стол).
+    public static async Task<(string Host, long Port, string? TunnelId, string? Error)> Endpoint(RemoteDesktop d)
+    {
+        if (d.viaSshHost is not { Length: > 0 } via) return (d.address, d.port, null, null);
+        var tunnelId = "desktop:" + d.id;
+        var tunnel = TunnelManager.Shared.StartTemporary(
+            new Tunnel(tunnelId, L("%@ (удалённый стол)", d.name), via, TunnelKind.Local, FreePort(), d.address, d.port, false));
+        for (var i = 0; i < 20 && TunnelManager.Shared.StatusOf(tunnel).State == TunnelManager.State.Starting; i++) await Task.Delay(250);
+        if (TunnelManager.Shared.StatusOf(tunnel) is { State: TunnelManager.State.Failed } f)
+            return ("", 0, tunnelId, L("SSH-туннель: %@", f.Error ?? ""));
+        return ("localhost", tunnel.listenPort, tunnelId, null);
+    }
+
+    /// Запасной путь: mstsc с .rdp из ядра или установленный VNC-клиент.
+    public static async void OpenExternal(RemoteDesktop d, XamlRoot root)
+    {
+        var (host, port, tunnelId, error) = await Endpoint(d);
+        if (error != null) { await Message(root, error); return; }
         if (d.kind == DesktopKind.Rdp)
         {
             var file = Path.Combine(Path.GetTempPath(), $"relaya-{d.id}.rdp");

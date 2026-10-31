@@ -1055,3 +1055,16 @@
 "%@ в папке синхронизации повреждён, синхронизация остановлена: %@" = "%@ in the sync folder is damaged, sync stopped: %@";
 "%@ повреждён, синхронизация остановлена: %@" = "%@ is damaged, sync stopped: %@";
 "агент" = "agent";
+"Введите пароль, чтобы подключиться." = "Enter the password to connect.";
+"Вписать" = "Fit";
+"Нужен пароль" = "Password required";
+"Общий буфер обмена" = "Shared Clipboard";
+"Открыть в Подключении к удалённому рабочему столу" = "Open in Remote Desktop Connection";
+"Отпечаток изменился" = "Fingerprint changed";
+"Отправить сочетание" = "Send Keys";
+"Подключение…" = "Connecting…";
+"Проверьте сертификат сервера" = "Check the Server Certificate";
+"Раньше у этого сервера был другой сертификат. Убедитесь, что подключаетесь к нужному серверу." = "This server used a different certificate before. Make sure you are connecting to the right server.";
+"Сеанс завершён." = "The session has ended.";
+"Соединение закрыто" = "Connection closed";
+"Сохранить в диспетчере учётных данных" = "Save in Credential Manager";
