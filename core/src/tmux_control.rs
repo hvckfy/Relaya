@@ -13,7 +13,8 @@ pub enum TmuxEvent {
 /// Пошаговый разбор: держит хвост строки и незавершённый ответ между вызовами.
 #[derive(Default, uniffi::Object)]
 pub struct TmuxParser {
-    state: std::sync::Mutex<(Vec<u8>, Option<Vec<String>>)>,
+    /// Хвост строки и открытый ответ: «время номер» из `%begin` и его строки.
+    state: std::sync::Mutex<(Vec<u8>, Option<(String, Vec<String>)>)>,
 }
 
 #[uniffi::export]
@@ -39,17 +40,25 @@ impl TmuxParser {
     }
 }
 
-fn parse_line(bytes: &[u8], reply: &mut Option<Vec<String>>) -> Option<TmuxEvent> {
+/// `%begin 1700000000 42 1` → `1700000000 42`: ответ закрывает только `%end`/`%error` с тем же временем и номером.
+fn guard(line: &str) -> Option<String> {
+    let f: Vec<&str> = line.split(' ').collect();
+    (f.len() >= 3).then(|| format!("{} {}", f[1], f[2]))
+}
+
+fn parse_line(bytes: &[u8], reply: &mut Option<(String, Vec<String>)>) -> Option<TmuxEvent> {
     let line = String::from_utf8_lossy(bytes).to_string();
-    if let Some(r) = reply.as_mut() {
-        if line.starts_with("%end ") || line.starts_with("%error ") {
-            let lines = reply.take().unwrap_or_default();
+    if let Some((id, r)) = reply.as_mut() {
+        let closes = (line.starts_with("%end ") || line.starts_with("%error ")) && guard(&line).as_deref() == Some(id.as_str());
+        if closes {
+            let lines = reply.take().map(|r| r.1).unwrap_or_default();
             return Some(TmuxEvent::Reply { lines, error: line.starts_with("%error") });
         }
+        // В выводе команды может встретиться строка «%end …» — это данные, а не конец ответа.
         r.push(line);
         return None;
     }
-    if line.starts_with("%begin ") { *reply = Some(Vec::new()); return None; }
+    if line.starts_with("%begin ") { *reply = Some((guard(&line).unwrap_or_default(), Vec::new())); return None; }
     let parts: Vec<&str> = line.splitn(3, ' ').collect();
     match parts[0] {
         "%output" if parts.len() >= 2 => {
@@ -127,6 +136,11 @@ mod tests {
             TmuxEvent::WindowClose { window: "@2".into() },
             TmuxEvent::Exit { reason: None },
         ]);
+        // Чужой `%end` внутри ответа — строка ответа; незнакомые %-строки вне ответа пропускаются.
+        let q = TmuxParser::new();
+        assert_eq!(q.feed(b"%begin 5 7 1\n%end 5 8 1\nline\n%end 5 7 1\n%sessions-changed\n%pane-mode-changed %1\n".to_vec()),
+                   vec![TmuxEvent::Reply { lines: vec!["%end 5 8 1".into(), "line".into()], error: false }]);
+        assert_eq!(q.feed(b"%begin 6 9 1\n%error 6 9 1\n".to_vec()), vec![TmuxEvent::Reply { lines: vec![], error: true }]);
         assert_eq!(tmux_cc_send_keys("%1".into(), vec![0x6c, 0x73, 0x0d]), "send-keys -t %1 -H 6c 73 0d");
         assert_eq!(tmux_cc_parse_windows(vec!["@1 %1 bash".into(), "junk".into(), "@2 %4 my editor".into()])[1].name, "my editor");
     }
