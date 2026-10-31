@@ -11,6 +11,8 @@ struct SettingsView: View {
                 .tabItem { Label(L("Подсветка"), systemImage: "highlighter") }
             BehaviorSettings()
                 .tabItem { Label(L("Подключения"), systemImage: "bolt.horizontal") }
+            SyncSettings()
+                .tabItem { Label(L("Синхронизация"), systemImage: "arrow.triangle.2.circlepath") }
         }
         .frame(width: 640)
     }

@@ -23,6 +23,7 @@ struct MainView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                if !model.sync.activeProfiles.isEmpty { SyncToolbarButton() }
                 if !model.allTags.isEmpty {
                     Menu {
                         ForEach(model.allTags, id: \.self) { tag in
