@@ -3,6 +3,13 @@ name: CI
 on:
   push:
     branches: ["**"]
+    # Только свои файлы: коммит другой платформы не запускает и не отменяет этот прогон (теги — всегда).
+    paths:
+      - "apps/swift/**"
+      - "core/**"
+      - "resources/**"
+      - "scripts/*macos*"
+      - ".github/workflows/ci.yml"
   pull_request:
 
 concurrency:
