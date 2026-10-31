@@ -5,11 +5,16 @@ using static Relaya.Strings;
 
 namespace Relaya.Platform;
 
-/// Удалённые столы на Linux: RDP — FreeRDP (xfreerdp3/xfreerdp), иначе Remmina; VNC — TigerVNC vncviewer, иначе Remmina.
-/// Встроенной вкладки пока нет. Туннель и запуск — в Relaya.Shared.
+/// Удалённые столы на Linux: RDP — во вкладке (IronRDP в ядре), запасной путь — FreeRDP (xfreerdp3/xfreerdp) или Remmina;
+/// VNC — TigerVNC vncviewer, иначе Remmina. Туннель и запуск — в Relaya.Shared.
 internal static partial class DesktopLauncher
 {
-    private static partial bool OpenInTab(RemoteDesktop d) => false;
+    private static partial bool OpenInTab(RemoteDesktop d)
+    {
+        if (d.kind != DesktopKind.Rdp || MainWindow.Current is not { } w) return false;
+        w.OpenTab(d.name, "\ue7f4", new Desktop.RdpView(d), null);
+        return true;
+    }
 
     private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing)
     {
