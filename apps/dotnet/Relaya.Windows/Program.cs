@@ -11,8 +11,10 @@ public static class Program
     private static int Main(string[] args)
     {
         // Askpass-режим: ssh.exe запускает этот же Relaya.exe с текстом запроса в аргументе (как на Mac).
-        if (Environment.GetEnvironmentVariable("RELAYA_ASKPASS_ACCOUNT") is { } account)
-            return Platform.Askpass.Run(account, string.Join(' ', args));
+        // Старый режим с учёткой в окружении отдавал пароль любому процессу — теперь только отказ.
+        if (Environment.GetEnvironmentVariable("RELAYA_ASKPASS_ACCOUNT") != null) return 1;
+        if (Environment.GetEnvironmentVariable("RELAYA_ASKPASS_TOKEN") is { } token)
+            return Platform.Askpass.Run(Environment.GetEnvironmentVariable("RELAYA_ASKPASS_PIPE") ?? "", token, string.Join(' ', args));
         if (Array.IndexOf(args, "--mcp") >= 0)
             return Platform.McpHost.Run();
 

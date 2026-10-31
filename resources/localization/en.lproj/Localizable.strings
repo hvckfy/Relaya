@@ -903,3 +903,6 @@
 "ssh просит %@ для %@" = "ssh asks for the %@ for %@";
 "Touch ID при каждом использовании пароля ssh" = "Touch ID for every ssh password use";
 "Сохранённые пароль или passphrase отдаются ssh (туннели, файлы, панели хоста, агенты) только после Touch ID или пароля Mac." = "Saved passwords and passphrases are given to ssh (tunnels, files, host panels, agents) only after Touch ID or your Mac password.";
+"ssh просит пароль %@:" = "ssh asks for the password of %@:";
+"Подтверждать каждое использование пароля" = "Confirm every password use";
+"Перед тем как фоновый ssh (туннель, SFTP, панели хоста, агенты) получит сохранённый пароль, Relaya спросит вас" = "Before a background ssh (tunnel, SFTP, host panels, agents) gets a saved password, Relaya asks you";

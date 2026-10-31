@@ -19,6 +19,13 @@ internal static class Settings
         catch (Exception) { return new(); }
     }
 
+    /// Прямо из файла: для фонового процесса (--mcp), который живёт дольше изменения настройки в окне.
+    public static string GetFresh(string key, string fallback)
+    {
+        try { return JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(File_))?.GetValueOrDefault(key) ?? fallback; }
+        catch (Exception) { return fallback; }
+    }
+
     public static string Get(string key, string fallback) => Values.TryGetValue(key, out var v) ? v : fallback;
 
     public static void Set(string key, string value)

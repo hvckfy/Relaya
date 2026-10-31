@@ -5,18 +5,27 @@ using System.Linq;
 
 namespace Relaya.Platform;
 
-/// Askpass: секрет из Credential Manager печатается только в ответ на ожидаемый запрос
-/// (пароль сервера или passphrase ключа), иначе — отказ. Так фоновые ssh (туннели, SFTP, панели) входят по паролю.
+/// Askpass: так фоновые ssh (туннели, SFTP, панели) входят по паролю. Сам Credential Manager askpass не читает:
+/// он шлёт одноразовый токен и текст запроса в pipe процесса Relaya, запустившего ssh (AskpassBroker), и печатает ответ.
 internal static class Askpass
 {
-    public static int Run(string account, string prompt)
+    public static int Run(string pipe, string token, string prompt)
     {
-        var passphrase = Environment.GetEnvironmentVariable("RELAYA_ASKPASS_KIND") == "passphrase";
-        var expected = passphrase ? prompt.Contains("passphrase", StringComparison.OrdinalIgnoreCase) : PasswordPrompt.Matches(prompt);
-        if (!expected || CredentialStore.Read(account) is not { } secret) return 1;
-        Console.Out.Write(secret + "\n");
-        Console.Out.Flush();
-        return 0;
+        try
+        {
+            using var client = new System.IO.Pipes.NamedPipeClientStream(".", pipe, System.IO.Pipes.PipeDirection.InOut,
+                System.IO.Pipes.PipeOptions.CurrentUserOnly); // сервер pipe — процесс того же пользователя
+            client.Connect(5000);
+            var request = System.Text.Encoding.UTF8.GetBytes(token + "\n" + prompt.Replace("\n", " ") + "\n");
+            client.Write(request);
+            client.Flush();
+            using var reader = new System.IO.StreamReader(client, new System.Text.UTF8Encoding(false));
+            if (reader.ReadLine() != "OK" || reader.ReadLine() is not { } secret) return 1;
+            Console.Out.Write(secret + "\n");
+            Console.Out.Flush();
+            return 0;
+        }
+        catch (Exception) { return 1; }
     }
 
     /// Окружение для ssh/sftp: askpass, если пароль хоста сохранён; иначе BatchMode, чтобы фоновый процесс не завис на запросе.
@@ -28,7 +37,8 @@ internal static class Askpass
     {
         info.Environment["SSH_ASKPASS"] = Environment.ProcessPath ?? "Relaya.exe";
         info.Environment["SSH_ASKPASS_REQUIRE"] = "force";
-        info.Environment["RELAYA_ASKPASS_ACCOUNT"] = alias;
+        info.Environment["RELAYA_ASKPASS_PIPE"] = AskpassBroker.PipeName;
+        info.Environment["RELAYA_ASKPASS_TOKEN"] = AskpassBroker.Issue(alias);
         info.Environment["DISPLAY"] = "relaya";
     }
 

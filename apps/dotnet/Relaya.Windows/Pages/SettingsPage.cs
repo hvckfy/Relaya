@@ -87,6 +87,12 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("\uE8A1", L("tmux: закрывать брошенные сессии через, мин"),
             L("Для хостов с tmux: сессия без подключений живёт на сервере столько минут"), idle));
 
+        list.Children.Add(Ui.Section(L("Безопасность")));
+        var confirm = new ToggleSwitch { IsOn = Platform.Settings.Get("security.confirmPassword", "0") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
+        confirm.Toggled += (_, _) => Platform.Settings.Set("security.confirmPassword", confirm.IsOn ? "1" : "0");
+        list.Children.Add(Ui.Row("\uE72E", L("Подтверждать каждое использование пароля"),
+            L("Перед тем как фоновый ssh (туннель, SFTP, панели хоста, агенты) получит сохранённый пароль, Relaya спросит вас"), confirm));
+
         list.Children.Add(Ui.Section(L("Клавиши")));
         foreach (var (k, d) in new[]
         {
