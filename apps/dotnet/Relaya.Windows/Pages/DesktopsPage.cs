@@ -18,6 +18,7 @@ internal sealed class DesktopsPage : UserControl
     {
         var (page, body) = Ui.Scaffold(L("Удалённые столы"), Ui.Button(L("Новый стол"), async () => await Edit(null), accent: true, glyph: ""));
         Content = page;
+        Ui.UnreadableBar(body, "desktops.json");
         var list = AppState.Desktops;
         if (list.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Добавьте RDP- или VNC-подключение. Можно ходить через SSH-хост — туннель поднимется сам."))));
         foreach (var d in list)

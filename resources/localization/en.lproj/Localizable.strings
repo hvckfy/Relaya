@@ -906,3 +906,5 @@
 "ssh просит пароль %@:" = "ssh asks for the password of %@:";
 "Подтверждать каждое использование пароля" = "Confirm every password use";
 "Перед тем как фоновый ssh (туннель, SFTP, панели хоста, агенты) получит сохранённый пароль, Relaya спросит вас" = "Before a background ssh (tunnel, SFTP, host panels, agents) gets a saved password, Relaya asks you";
+"Файл %@ не прочитан" = "%@ couldn’t be read";
+"Оригинал сохранён как %@. Список начат заново." = "The original is saved as %@. The list starts empty.";

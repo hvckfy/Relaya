@@ -26,6 +26,7 @@ internal sealed class TunnelsPage : UserControl
     {
         var (page, body) = Ui.Scaffold(L("Туннели"), Ui.Button(L("Новый туннель"), async () => await Edit(null), accent: true, glyph: ""));
         Content = page;
+        Ui.UnreadableBar(body, "tunnels.json");
         var list = AppState.Tunnels;
         var temporary = TunnelManager.Shared.Temporary;
         if (list.Count == 0 && temporary.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Туннелей пока нет. Локальный (-L) открывает порт сервера у вас, удалённый (-R) — ваш порт на сервере, SOCKS (-D) — прокси через сервер."))));

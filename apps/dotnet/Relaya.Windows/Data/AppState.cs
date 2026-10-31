@@ -78,20 +78,38 @@ internal static class AppState
 
     public static List<Snippet> Snippets
     {
-        get => RelayaCoreMethods.SnippetsDecode(Read("snippets.json"));
+        get => Checked("snippets.json", RelayaCoreMethods.SnippetsDecodeChecked);
         set => Write("snippets.json", RelayaCoreMethods.SnippetsEncode(value));
     }
 
     public static List<Tunnel> Tunnels
     {
-        get => RelayaCoreMethods.TunnelsDecode(Read("tunnels.json"));
+        get => Checked("tunnels.json", RelayaCoreMethods.TunnelsDecodeChecked);
         set => Write("tunnels.json", RelayaCoreMethods.TunnelsEncode(value));
     }
 
     public static List<RemoteDesktop> Desktops
     {
-        get => RelayaCoreMethods.DesktopsDecode(Read("desktops.json"));
+        get => Checked("desktops.json", RelayaCoreMethods.DesktopsDecodeChecked);
         set => Write("desktops.json", RelayaCoreMethods.DesktopsEncode(value));
+    }
+
+    /// Файлы, которые не прочитались (C16): имя → куда отложен оригинал. Страница показывает InfoBar.
+    public static System.Collections.Concurrent.ConcurrentDictionary<string, string> Unreadable { get; } = new();
+
+    // Нечитаемый файл не перезаписывается: оригинал откладывается в .bak, список считается пустым.
+    private static List<T> Checked<T>(string name, Func<string, List<T>> decode)
+    {
+        var text = Read(name);
+        try { return decode(text); }
+        catch (Exception)
+        {
+            var p = Path.Combine(Support, name);
+            var bak = p + $".unreadable-{DateTime.Now:yyyyMMdd-HHmmss}.bak";
+            try { if (File.Exists(p)) File.Move(p, bak); } catch (IOException) { }
+            Unreadable[name] = bak;
+            return new List<T>();
+        }
     }
 
     private static string Read(string name)

@@ -245,7 +245,7 @@ internal sealed class HostPage : UserControl
         var r = await AppState.RunOnHost(host.alias, RelayaCoreMethods.OsProbeCommand());
         if (RelayaCoreMethods.OsParseProbe(r.Stdout) is { } os)
         {
-            AppState.Upsert(host with { os = os }, host.alias);
+            AppState.SetMeta(host with { os = os }); // только строка `# relaya:` (C2)
             Refresh();
         }
         else

@@ -62,6 +62,19 @@ internal static class Ui
         return card;
     }
 
+    /// Файл списка не прочитался и отложен в .bak (C16) — предупреждение над страницей.
+    public static void UnreadableBar(StackPanel body, string file)
+    {
+        if (!Data.AppState.Unreadable.TryGetValue(file, out var bak)) return;
+        var bar = new InfoBar
+        {
+            Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 0, 0, 8),
+            Title = Strings.L("Файл %@ не прочитан", file), Message = Strings.L("Оригинал сохранён как %@. Список начат заново.", bak),
+        };
+        bar.Closed += (_, _) => Data.AppState.Unreadable.TryRemove(file, out _);
+        body.Children.Insert(0, bar);
+    }
+
     public static Border Card(UIElement child) => new()
     {
         Child = child, Padding = new Thickness(16, 10, 16, 10), CornerRadius = new CornerRadius(4),

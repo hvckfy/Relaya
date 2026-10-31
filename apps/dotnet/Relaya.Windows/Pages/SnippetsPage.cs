@@ -20,6 +20,7 @@ internal sealed class SnippetsPage : UserControl
     {
         var (page, body) = Ui.Scaffold(L("Сниппеты"), Ui.Button(L("Новый сниппет"), async () => await Edit(null), accent: true, glyph: ""));
         Content = page;
+        Ui.UnreadableBar(body, "snippets.json");
         var list = AppState.Snippets.OrderBy(s => s.name).ToList();
         if (list.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Сниппетов пока нет. Сниппет — команда, которую можно вставить в терминал; {{переменные}} спрашиваются перед вставкой."))));
         foreach (var s in list)
