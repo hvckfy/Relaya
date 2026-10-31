@@ -1049,3 +1049,9 @@
 "Liquid Glass" = "Liquid Glass";
 "Passphrase" = "Passphrase";
 "ssh-agent" = "ssh-agent";
+
+/* Ошибки ядра: core_error_localized */
+"Недопустимое значение «%@»: перевод строки в ~/.ssh/config запрещён" = "Invalid value “%@”: line breaks are not allowed in ~/.ssh/config";
+"%@ в папке синхронизации повреждён, синхронизация остановлена: %@" = "%@ in the sync folder is damaged, sync stopped: %@";
+"%@ повреждён, синхронизация остановлена: %@" = "%@ is damaged, sync stopped: %@";
+"агент" = "agent";

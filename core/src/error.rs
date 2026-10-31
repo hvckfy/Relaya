@@ -1,4 +1,5 @@
-/// Ошибки ядра. Тексты — по-русски, как во всём приложении; клиенты показывают их как есть.
+/// Ошибки ядра. Тексты — русские ключи локализации: клиенты разбирают сообщение `core_error_localized` и
+/// переводят `L(key, args)`. Новый текст ошибки — добавить шаблон в localize.rs и строку в en.lproj.
 #[derive(Debug, thiserror::Error, uniffi::Error, PartialEq)]
 #[uniffi(flat_error)]
 pub enum CoreError {

@@ -245,6 +245,11 @@ where T: for<'de> Deserialize<'de> + Clone {
 /// Файл не читается: синхронизация останавливается и ничего не перезаписывает.
 fn broken(name: &str, e: CoreError) -> CoreError { CoreError::Json(format!("{name} повреждён, синхронизация остановлена: {e}")) }
 
+/// То же для файла в папке или репозитории синхронизации (отдельный ключ локализации).
+fn broken_shared(name: &str, e: CoreError) -> CoreError {
+    CoreError::Json(format!("{name} в папке синхронизации повреждён, синхронизация остановлена: {e}"))
+}
+
 /// Влить в локальные файлы содержимое `dir`. Возвращает изменившиеся пункты.
 /// Надгробия из `relaya/deleted.json` удаляют локальные элементы, которые не правились с прошлой синхронизации.
 #[uniffi::export]
@@ -327,7 +332,7 @@ fn merge_list_where<T>(incoming: &Path, local: &Path, id: impl Fn(&T) -> String,
 where T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone {
     let Ok(j) = fs::read_to_string(incoming) else { return Ok(false) };
     let name = incoming.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let theirs: Vec<T> = try_decode_list::<T>(&j).map_err(|e| broken(&format!("{name} в папке синхронизации"), e))?
+    let theirs: Vec<T> = try_decode_list::<T>(&j).map_err(|e| broken_shared(&name, e))?
         .into_iter().filter(|x| keep(x)).collect();
     let mut mine: Vec<T> = match fs::read_to_string(local) {
         Ok(s) => match try_decode_list(&s) {

@@ -462,7 +462,7 @@ fn mode_raw(m: McpMode) -> &'static str {
 impl McpServer {
     #[uniffi::constructor]
     pub fn new(backend: std::sync::Arc<dyn McpBackend>) -> Self {
-        McpServer { backend, client: Mutex::new("агент".into()), session: crate::models::new_id() }
+        McpServer { backend, client: Mutex::new(crate::localize::MCP_UNKNOWN_CLIENT.into()), session: crate::models::new_id() }
     }
 
     /// Одно сообщение JSON-RPC; None — ответ не нужен (уведомление).
