@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import RelayaRust
 
 /// Раскладка терминалов плитками: дерево разбиений без наложений.
 /// `row` — дети рядом по горизонтали, `column` — друг под другом.
@@ -17,67 +18,43 @@ public indirect enum TileLayout<ID: Hashable & Sendable>: Equatable, Sendable {
         }
     }
 
+    // Операции над деревом — в Rust-ядре (`core/src/tile_layout.rs`), общем с Windows-клиентом.
+    // Идентификаторы туда уходят как строки `t0`, `t1`… и возвращаются обратно.
+
     /// По умолчанию — ряды по два; нечётный последний занимает всю ширину.
     public static func automatic(_ ids: [ID]) -> TileLayout? {
-        guard !ids.isEmpty else { return nil }
-        var layout = TileLayout.leaf(ids[0])
-        for id in ids.dropFirst() { layout = layout.appending(id) }
-        return layout
+        let codec = Codec(ids)
+        return tilesAutomatic(ids: ids.map(codec.key)).flatMap(codec.decode)
     }
 
     /// Новая плитка: дополняет последний неполный ряд или начинает новый снизу.
     public func appending(_ id: ID) -> TileLayout {
-        switch self {
-        case .leaf: return .row([self, .leaf(id)])
-        case .row(let c) where c.count < 2: return .row(c + [.leaf(id)])
-        case .row: return .column([self, .leaf(id)])
-        case .column(var rows):
-            switch rows.last {
-            case .leaf(let last)?: rows[rows.count - 1] = .row([.leaf(last), .leaf(id)])
-            case .row(let r)? where r.count < 2: rows[rows.count - 1] = .row(r + [.leaf(id)])
-            default: rows.append(.leaf(id))
-            }
-            return .column(rows)
-        }
+        let codec = Codec(ids + [id])
+        return tilesAppending(layout: codec.encode(self), id: codec.key(id)).flatMap(codec.decode) ?? self
     }
 
     public func removing(_ id: ID) -> TileLayout? {
-        switch self {
-        case .leaf(let x): return x == id ? nil : self
-        case .row(let c): return Self.make(row: true, c.compactMap { $0.removing(id) })
-        case .column(let c): return Self.make(row: false, c.compactMap { $0.removing(id) })
-        }
+        let codec = Codec(ids + [id])
+        return tilesRemoving(layout: codec.encode(self), id: codec.key(id)).flatMap(codec.decode)
     }
 
     /// Вставить `id` у края плитки `target` (nil — у края всей раскладки, на всю ширину/высоту).
     public func inserting(_ id: ID, at edge: Edge, of target: ID?) -> TileLayout {
-        let base = removing(id) ?? .leaf(id)
-        guard base.ids != [id] else { return base }
-        let row = edge == .left || edge == .right
-        let before = edge == .left || edge == .top
-        guard let target, base.ids.contains(target) else {
-            return Self.join(base, .leaf(id), row: row, before: before)
-        }
-        return base.replacingLeaf(target) { leaf in Self.join(leaf, .leaf(id), row: row, before: before) }
+        let codec = Codec(ids + [id] + (target.map { [$0] } ?? []))
+        return tilesInserting(layout: codec.encode(self), id: codec.key(id), edge: edge.rust, target: target.map(codec.key))
+            .flatMap(codec.decode) ?? self
     }
 
     /// Поменять две плитки местами.
     public func swapping(_ a: ID, _ b: ID) -> TileLayout {
-        switch self {
-        case .leaf(let x): return .leaf(x == a ? b : x == b ? a : x)
-        case .row(let c): return .row(c.map { $0.swapping(a, b) })
-        case .column(let c): return .column(c.map { $0.swapping(a, b) })
-        }
+        let codec = Codec(ids + [a, b])
+        return tilesSwapping(layout: codec.encode(self), a: codec.key(a), b: codec.key(b)).flatMap(codec.decode) ?? self
     }
 
     /// Привести к списку открытых: закрытые убрать, новые добавить.
     public func synced(with ids: [ID]) -> TileLayout? {
-        var layout: TileLayout? = self
-        for id in self.ids where !ids.contains(id) { layout = layout?.removing(id) }
-        for id in ids where !(layout?.ids.contains(id) ?? false) {
-            layout = layout?.appending(id) ?? .leaf(id)
-        }
-        return layout
+        let codec = Codec(self.ids + ids)
+        return tilesSynced(layout: codec.encode(self), ids: ids.map(codec.key)).flatMap(codec.decode)
     }
 
     /// Прямоугольники плиток внутри `rect` (дети делят место поровну — как при первом показе).
@@ -100,26 +77,10 @@ public indirect enum TileLayout<ID: Hashable & Sendable>: Equatable, Sendable {
         }
     }
 
-    /// Соседняя плитка в направлении `edge` (для ⌥⌘стрелок): ближайшая по центру среди лежащих в ту сторону.
+    /// Соседняя плитка в направлении `edge` от `id` (для ⌥⌘стрелок).
     public func neighbor(of id: ID, toward edge: Edge) -> ID? {
-        let f = frames(in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        guard let me = f[id] else { return nil }
-        let eps = 1e-9
-        let candidates = f.filter { other, r in
-            guard other != id else { return false }
-            switch edge {
-            case .left: return r.maxX <= me.minX + eps && r.maxY > me.minY && r.minY < me.maxY
-            case .right: return r.minX >= me.maxX - eps && r.maxY > me.minY && r.minY < me.maxY
-            case .top: return r.maxY <= me.minY + eps && r.maxX > me.minX && r.minX < me.maxX
-            case .bottom: return r.minY >= me.maxY - eps && r.maxX > me.minX && r.minX < me.maxX
-            }
-        }
-        func distance(_ r: CGRect) -> CGFloat {
-            let dx = r.midX - me.midX
-            let dy = r.midY - me.midY
-            return dx * dx + dy * dy
-        }
-        return candidates.min { distance($0.value) < distance($1.value) }?.key
+        let codec = Codec(ids + [id])
+        return tilesNeighbor(layout: codec.encode(self), id: codec.key(id), edge: edge.rust).flatMap(codec.id)
     }
 
     /// Та же раскладка с другими идентификаторами (вкладки ↔ алиасы хостов); nil — плитка выпадает.
@@ -135,36 +96,61 @@ public indirect enum TileLayout<ID: Hashable & Sendable>: Equatable, Sendable {
         }
     }
 
-    // MARK: - Внутреннее
+    /// Перевод дерева в JSON ядра (`{"leaf":…}`, `{"row":[…]}`, `{"column":[…]}`) и обратно.
+    struct Codec {
+        private var keys: [ID: String] = [:]
+        private var back: [String: ID] = [:]
 
-    private func replacingLeaf(_ target: ID, with f: (TileLayout) -> TileLayout) -> TileLayout {
-        switch self {
-        case .leaf(let x): return x == target ? f(self) : self
-        case .row(let c): return Self.make(row: true, c.map { $0.replacingLeaf(target, with: f) }) ?? self
-        case .column(let c): return Self.make(row: false, c.map { $0.replacingLeaf(target, with: f) }) ?? self
-        }
-    }
-
-    private static func join(_ a: TileLayout, _ b: TileLayout, row: Bool, before: Bool) -> TileLayout {
-        make(row: row, before ? [b, a] : [a, b])!
-    }
-
-    /// Собирает разбиение: один ребёнок — сам по себе, вложенное той же ориентации — сплющивается.
-    private static func make(row: Bool, _ children: [TileLayout]) -> TileLayout? {
-        var flat: [TileLayout] = []
-        for c in children {
-            switch c {
-            case .row(let inner) where row: flat += inner
-            case .column(let inner) where !row: flat += inner
-            default: flat.append(c)
+        init(_ ids: [ID]) {
+            for id in ids where keys[id] == nil {
+                let k = "t\(keys.count)"
+                keys[id] = k
+                back[k] = id
             }
         }
-        switch flat.count {
-        case 0: return nil
-        case 1: return flat[0]
-        default: return row ? .row(flat) : .column(flat)
+
+        func key(_ id: ID) -> String { keys[id]! }
+        func id(_ key: String) -> ID? { back[key] }
+
+        func encode(_ l: TileLayout) -> String {
+            let data = try! JSONSerialization.data(withJSONObject: json(l))
+            return String(decoding: data, as: UTF8.self)
+        }
+
+        private func json(_ l: TileLayout) -> Any {
+            switch l {
+            case .leaf(let id): ["leaf": key(id)]
+            case .row(let c): ["row": c.map(json)]
+            case .column(let c): ["column": c.map(json)]
+            }
+        }
+
+        func decode(_ s: String) -> TileLayout? {
+            guard let obj = try? JSONSerialization.jsonObject(with: Data(s.utf8)) else { return nil }
+            return value(obj)
+        }
+
+        private func value(_ obj: Any) -> TileLayout? {
+            guard let d = obj as? [String: Any], let (k, v) = d.first else { return nil }
+            switch k {
+            case "leaf": return (v as? String).flatMap(id).map { .leaf($0) }
+            case "row": return (v as? [Any]).map { .row($0.compactMap(value)) }
+            case "column": return (v as? [Any]).map { .column($0.compactMap(value)) }
+            default: return nil
+            }
         }
     }
 }
 
 extension TileLayout: Codable where ID: Codable {}
+
+extension TileLayout.Edge {
+    var rust: RelayaRust.Edge {
+        switch self {
+        case .left: .left
+        case .right: .right
+        case .top: .top
+        case .bottom: .bottom
+        }
+    }
+}

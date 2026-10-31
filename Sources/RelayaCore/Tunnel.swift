@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Проброс порта через ssh. Запускается отдельным процессом `ssh -N`.
 public struct Tunnel: Codable, Hashable, Identifiable, Sendable {
@@ -50,10 +51,15 @@ public struct Tunnel: Codable, Hashable, Identifiable, Sendable {
         self.autoStart = autoStart
     }
 
-    /// Спецификация проброса для ssh: `8080:localhost:80` или `1080`.
-    public var spec: String {
-        kind == .dynamic ? "\(listenPort)" : "\(listenPort):\(targetHost):\(targetPort)"
+    /// Тот же туннель в Rust-ядре.
+    var rust: RelayaRust.Tunnel {
+        RelayaRust.Tunnel(id: id.uuidString, name: name, hostAlias: hostAlias,
+                          kind: { switch kind { case .local: .local; case .remote: .remote; case .dynamic: .dynamic } }(),
+                          listenPort: Int64(listenPort), targetHost: targetHost, targetPort: Int64(targetPort), autoStart: autoStart)
     }
+
+    /// Спецификация проброса для ssh: `8080:localhost:80` или `1080`.
+    public var spec: String { tunnelSpec(t: rust) }
 
     /// Короткое описание: `localhost:8080 → db:5432 через web`.
     public var summary: String {
@@ -75,12 +81,7 @@ public struct Tunnel: Codable, Hashable, Identifiable, Sendable {
     }
 
     /// Аргументы `ssh` без секретов. Пароль, если нужен, — через askpass.
-    public func sshArguments(passwordOnly: Bool) -> [String] {
-        var args = ["-N", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=30",
-                    "-o", "ServerAliveCountMax=3", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"]
-        args += passwordOnly ? KeyInstaller.passwordOnlyOptions : ["-o", "BatchMode=yes"]
-        return args + [kind.flag, spec, hostAlias]
-    }
+    public func sshArguments(passwordOnly: Bool) -> [String] { tunnelSshArguments(t: rust, passwordOnly: passwordOnly) }
 }
 
 /// Список туннелей в Application Support (не в ~/.ssh/config: там пробросы

@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Права AI-агентов на хосты. Хранится в Application Support, редактируется в приложении.
 public struct MCPPolicy: Codable, Equatable, Sendable {
@@ -41,74 +42,56 @@ public struct MCPPolicy: Codable, Equatable, Sendable {
         self.hosts = hosts
     }
 
+    // Логика — в Rust-ядре (`core/src/mcp.rs`), общем с Windows-клиентом.
+
     public func mode(for alias: String, now: Date = Date()) -> Mode {
-        guard enabled else { return .off }
-        if let g = grants?[alias], g.until > now { return g.mode }
-        return hosts[alias] ?? defaultMode
+        Mode(rust: mcpMode(policy: rust, alias: alias, nowRefSeconds: now.timeIntervalSinceReferenceDate))
     }
 
     /// Активный временный доступ к хосту.
     public func grant(for alias: String, now: Date = Date()) -> Grant? {
-        grants?[alias].flatMap { $0.until > now ? $0 : nil }
+        mcpGrant(policy: rust, alias: alias, nowRefSeconds: now.timeIntervalSinceReferenceDate)
+            .map { Grant(mode: Mode(rust: $0.mode), until: Date(timeIntervalSinceReferenceDate: $0.until)) }
     }
 
     public func allowPatterns(for alias: String) -> [String] { (allow?["*"] ?? []) + (allow?[alias] ?? []) }
     public func denyPatterns(for alias: String) -> [String] { (deny?["*"] ?? []) + (deny?[alias] ?? []) }
 
-    /// Совпадение команды с шаблоном shell (`*`, `?`, `[…]`); пробелы по краям не важны.
-    public static func matches(_ command: String, pattern: String) -> Bool {
-        let c = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        let p = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !p.isEmpty else { return false }
-        return fnmatch(p, c, 0) == 0
-    }
+    /// Совпадение команды с шаблоном shell (`*`, `?`, `[…]`).
+    public static func matches(_ command: String, pattern: String) -> Bool { mcpPatternMatches(command: command, pattern: pattern) }
 
-    public func isDenied(_ command: String, on alias: String) -> Bool {
-        denyPatterns(for: alias).contains { Self.matches(command, pattern: $0) }
-    }
+    public func isDenied(_ command: String, on alias: String) -> Bool { mcpIsDenied(policy: rust, command: command, alias: alias) }
 
-    /// Разрешено шаблоном без подтверждения. Цепочки команд (`;`, `&&`, `|`, подстановки) шаблоном не разрешаются.
-    public func isAllowed(_ command: String, on alias: String) -> Bool {
-        for bad in [";", "&", "|", "`", "$(", "\n", ">", "<"] where command.contains(bad) { return false }
-        return allowPatterns(for: alias).contains { Self.matches(command, pattern: $0) }
-    }
-
-    // MARK: - Только чтение
-
-    /// Команды, которые ничего не меняют. Проверяется первое слово каждого звена конвейера.
-    static let readOnlyCommands: Set<String> = [
-        "ls", "cat", "head", "tail", "grep", "egrep", "zgrep", "less", "wc", "sort", "uniq", "cut", "awk", "sed",
-        "df", "du", "free", "uptime", "uname", "hostname", "whoami", "id", "date", "ps", "pgrep", "top",
-        "stat", "file", "find", "which", "lsblk", "lscpu", "lsof", "ss", "netstat", "ip", "ping", "dig",
-        "nslookup", "journalctl", "dmesg", "env", "printenv", "echo", "pwd", "tree", "md5sum", "sha256sum",
-        "ubus", "logread", "iwinfo", "sw_vers", "vm_stat", "nproc",
-    ]
-    /// Двухсловные команды, разрешённые в режиме чтения.
-    static let readOnlyPairs: Set<String> = [
-        "systemctl status", "systemctl list-units", "systemctl --failed", "systemctl is-active",
-        "docker ps", "docker logs", "docker images", "docker inspect", "docker stats",
-        "kubectl get", "kubectl describe", "kubectl logs", "git status", "git log", "git diff",
-        "apt list", "dpkg -l", "rpm -qa", "opkg list-installed", "uci show", "nginx -t",
-    ]
+    /// Разрешено шаблоном без подтверждения. Цепочки команд шаблоном не разрешаются.
+    public func isAllowed(_ command: String, on alias: String) -> Bool { mcpIsAllowed(policy: rust, command: command, alias: alias) }
 
     /// Можно ли выполнить команду в режиме «только чтение».
-    public static func isReadOnly(_ command: String) -> Bool {
-        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        // Перенаправления, подстановки, последовательности и фон — запрещены.
-        for bad in [";", "&", ">", "<", "`", "$(", "\n", "\\"] where trimmed.contains(bad) { return false }
-        for segment in trimmed.split(separator: "|") {
-            let words = segment.split(whereSeparator: \.isWhitespace).map(String.init)
-            guard let first = words.first else { return false }
-            if first == "sudo" { return false }
-            // sed/awk/find умеют писать файлы — только безопасные формы.
-            if first == "sed", words.contains(where: { $0.hasPrefix("-i") }) { return false }
-            if first == "find", words.contains(where: { ["-delete", "-exec", "-execdir", "-fprint", "-ok"].contains($0) }) { return false }
-            if first == "awk", segment.contains("system(") { return false }
-            let pair = words.prefix(2).joined(separator: " ")
-            if !readOnlyCommands.contains(first) && !readOnlyPairs.contains(pair) { return false }
+    public static func isReadOnly(_ command: String) -> Bool { mcpIsReadOnly(command: command) }
+
+    /// Та же политика в Rust-ядре.
+    var rust: McpPolicy {
+        McpPolicy(enabled: enabled, defaultMode: defaultMode.rust, hosts: hosts.mapValues(\.rust), allow: allow, deny: deny,
+                  grants: grants?.mapValues { McpGrant(mode: $0.mode.rust, until: $0.until.timeIntervalSinceReferenceDate) })
+    }
+}
+
+extension MCPPolicy.Mode {
+    var rust: McpMode {
+        switch self {
+        case .off: .off
+        case .readOnly: .readOnly
+        case .confirm: .confirm
+        case .trusted: .trusted
         }
-        return true
+    }
+
+    init(rust: McpMode) {
+        switch rust {
+        case .off: self = .off
+        case .readOnly: self = .readOnly
+        case .confirm: self = .confirm
+        case .trusted: self = .trusted
+        }
     }
 }
 
@@ -208,15 +191,20 @@ public struct MCPLog: Sendable {
         public var changes: [MCPLogEntry]
     }
 
+    /// Сводка по сессиям — в Rust-ядре (`core/src/mcp.rs`); здесь — перевод к Swift-записям журнала.
     public static func summaries(_ entries: [MCPLogEntry]) -> [SessionSummary] {
-        let changing = entries.filter { $0.changes == true && $0.exitCode != nil && $0.session != nil }
-        let grouped = Dictionary(grouping: changing) { $0.session! }
-        return grouped.map { id, list in
-            let sorted = list.sorted { $0.date < $1.date }
-            var hosts: [String] = []
-            for e in sorted where !hosts.contains(e.host) { hosts.append(e.host) }
-            return SessionSummary(id: id, client: sorted[0].client, started: sorted[0].date, hosts: hosts, changes: sorted)
+        let f = ISO8601DateFormatter()
+        let byID = Dictionary(entries.map { ($0.id.uuidString, $0) }, uniquingKeysWith: { a, _ in a })
+        let rust = entries.map { e in
+            McpLogEntry(id: e.id.uuidString, date: f.string(from: e.date), client: e.client, tool: e.tool, host: e.host,
+                        detail: e.detail, decision: e.decision, exitCode: e.exitCode, session: e.session?.uuidString,
+                        changes: e.changes, output: e.output)
         }
-        .sorted { $0.started > $1.started }
+        return mcpSummaries(entries: rust).compactMap { s in
+            let changes = s.changes.compactMap { byID[$0.id] }
+            guard let first = changes.first, let id = UUID(uuidString: s.id) else { return nil }
+            return SessionSummary(id: id, client: s.client, started: first.date, hosts: s.hosts, changes: changes)
+        }
     }
+
 }

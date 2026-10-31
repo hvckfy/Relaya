@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Сохранённая команда. Переменные — `{{имя}}`, их значения спрашиваются перед вставкой.
 public struct Snippet: Codable, Hashable, Identifiable, Sendable {
@@ -13,28 +14,11 @@ public struct Snippet: Codable, Hashable, Identifiable, Sendable {
         self.tags = tags
     }
 
-    /// Имена переменных в порядке появления, без повторов.
-    public var variables: [String] {
-        guard let regex = try? NSRegularExpression(pattern: #"\{\{\s*([\p{L}_][^{}\s]*)\s*\}\}"#) else { return [] }
-        let ns = command as NSString
-        var seen = Set<String>()
-        return regex.matches(in: command, range: NSRange(location: 0, length: ns.length)).compactMap { m in
-            let name = ns.substring(with: m.range(at: 1))
-            return seen.insert(name).inserted ? name : nil
-        }
-    }
+    /// Имена переменных в порядке появления, без повторов (Rust-ядро, `core/src/models.rs`).
+    public var variables: [String] { snippetVariables(command: command) }
 
     /// Команда с подставленными значениями; незаполненные переменные остаются как есть.
-    public func filled(_ values: [String: String]) -> String {
-        var out = command
-        for name in variables {
-            guard let value = values[name] else { continue }
-            out = out.replacingOccurrences(of: #"\{\{\s*\#(NSRegularExpression.escapedPattern(for: name))\s*\}\}"#,
-                                           with: NSRegularExpression.escapedTemplate(for: value),
-                                           options: .regularExpression)
-        }
-        return out
-    }
+    public func filled(_ values: [String: String]) -> String { snippetFilled(command: command, values: values) }
 
     public static let examples: [Snippet] = [
         Snippet(name: L("Логи сервиса"), command: "journalctl -u {{service}} -n 200 --no-pager", tags: ["linux"]),

@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Сессия tmux, созданная Relaya на сервере.
 public struct TmuxSession: Identifiable, Hashable, Sendable {
@@ -30,88 +31,51 @@ public enum Tmux {
     public static let keepSeconds = 24 * 3600
     public static let cap = 10
 
-    /// `relaya-<alias>-<8 символов>`: только [a-z0-9-], чтобы имя не требовало кавычек ни в sh, ни в tmux.
-    public static func sessionName(alias: String, id: UUID) -> String {
-        hostPrefix(alias) + String(id.uuidString.lowercased().prefix(8))
-    }
+    // Логика — в Rust-ядре (`core/src/tmux.rs`).
 
-    public static func hostPrefix(_ alias: String) -> String {
-        let safe = alias.lowercased().map { $0.isASCII && ($0.isLetter || $0.isNumber) ? $0 : "-" }
-        return prefix + String(safe) + "-"
-    }
+    /// `relaya-<alias>-<8 символов>`: только [a-z0-9-], чтобы имя не требовало кавычек.
+    public static func sessionName(alias: String, id: UUID) -> String { tmuxSessionName(alias: alias, id: id.uuidString) }
 
-    /// Хук на отключение клиента: запомнить время, подождать `ttl` и убить сессию,
-    /// если к ней так никто и не подключился (повторные отключения сдвигают срок).
-    static func reaperHook(_ name: String, ttl: Int) -> String {
-        let script = "tmux set -t \(name) @relaya_det $(date +%s); sleep \(ttl); "
-            + "[ -n \"$(tmux list-clients -t \(name) 2>/dev/null)\" ] && exit 0; "
-            + "d=$(tmux show -qv -t \(name) @relaya_det); "
-            + "[ $(( $(date +%s) - ${d:-0} )) -ge \(max(ttl - 5, 0)) ] && tmux kill-session -t \(name)"
-        return "run-shell -b '\(script)'"
-    }
+    public static func hostPrefix(_ alias: String) -> String { tmuxHostPrefix(alias: alias) }
 
     /// Команда для `ssh -t host <cmd>`: подключиться к сессии или создать её; без tmux — обычный shell.
     public static func attachCommand(name: String, ttlMinutes: Int) -> String {
-        let ttl = max(ttlMinutes, 1) * 60
-        return "if command -v tmux >/dev/null 2>&1; then "
-            + "exec tmux new-session -A -s \(name) \\; set -u -t \(name) @relaya_keep \\; "
-            + "set-hook -t \(name) client-detached \(quote(reaperHook(name, ttl: ttl))); "
-            + "else exec \"${SHELL:-sh}\" -l; fi"
+        tmuxAttachCommand(name: name, ttlMinutes: Int64(ttlMinutes))
     }
 
-    /// Подготовка сессии для control mode (обычным ssh, до `tmux -CC attach`): создать, если нет,
-    /// окна — каждое своего размера, и тот же хук-уборщик по таймеру, что у обычных сессий.
+    /// Подготовка сессии для control mode (обычным ssh, до `tmux -CC attach`).
     public static func prepareControlCommand(name: String, ttlMinutes: Int) -> String {
-        let ttl = max(ttlMinutes, 1) * 60
-        return "command -v tmux >/dev/null 2>&1 || { echo RELAYA_NO_TMUX; exit 0; }; "
-            + "tmux has-session -t \(name) 2>/dev/null || tmux new-session -d -s \(name); "
-            + "tmux set-option -t \(name) window-size manual; "
-            + "tmux set-hook -t \(name) client-detached \(quote(reaperHook(name, ttl: ttl)))"
+        tmuxPrepareControlCommand(name: name, ttlMinutes: Int64(ttlMinutes))
     }
 
     /// Перед «оставить на сервере»: пометить и продлить срок до суток.
-    public static func keepCommand(name: String) -> String {
-        "tmux set -t \(name) @relaya_keep 1 \\; set-hook -t \(name) client-detached \(quote(reaperHook(name, ttl: keepSeconds)))"
-    }
+    public static func keepCommand(name: String) -> String { tmuxKeepCommand(name: name) }
 
-    public static let listCommand =
-        "tmux list-sessions -F '#{session_name}|#{session_attached}|#{session_created}|#{session_activity}|#{@relaya_det}|#{@relaya_keep}' 2>/dev/null | grep '^\(prefix)'; true"
+    public static var listCommand: String { tmuxListCommand() }
 
-    public static func killCommand(_ names: [String]) -> String {
-        names.map { "tmux kill-session -t \(quote($0)) 2>/dev/null" }.joined(separator: "; ") + "; true"
-    }
+    public static func killCommand(_ names: [String]) -> String { tmuxKillCommand(names: names) }
 
     public static func parse(_ output: String) -> [TmuxSession] {
-        output.split(whereSeparator: \.isNewline).compactMap { line in
-            let f = line.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
-            guard f.count >= 4, f[0].hasPrefix(prefix),
-                  let attached = Int(f[1]), let created = Double(f[2]), let activity = Double(f[3]) else { return nil }
-            let det = f.count > 4 ? Double(f[4]).map { Date(timeIntervalSince1970: $0) } : nil
-            return TmuxSession(name: f[0], attached: attached,
-                               created: Date(timeIntervalSince1970: created),
-                               activity: Date(timeIntervalSince1970: activity),
-                               detachedAt: det, keep: f.count > 5 && f[5] == "1")
-        }
+        tmuxParse(output: output).map { TmuxSession(rust: $0) }
     }
 
     /// Какие сессии хоста убрать: не подключённые, не открытые во вкладках и просроченные; сверх `cap` — самые старые.
     public static func stale(_ sessions: [TmuxSession], alias: String, open: Set<String>,
                              ttlMinutes: Int, now: Date = Date()) -> [String] {
-        let mine = sessions.filter { $0.name.hasPrefix(hostPrefix(alias)) }
-        let idle = mine.filter { $0.attached == 0 && !open.contains($0.name) }
-        var kill = Set(idle.filter { s in
-            let ttl = s.keep ? Double(keepSeconds) : Double(max(ttlMinutes, 1) * 60)
-            return now.timeIntervalSince(s.detachedAt ?? s.activity) >= ttl
-        }.map(\.name))
-        let excess = mine.count - kill.count - cap
-        if excess > 0 {
-            let oldest = idle.filter { !kill.contains($0.name) }.sorted { $0.activity < $1.activity }
-            kill.formUnion(oldest.prefix(excess).map(\.name))
-        }
-        return mine.map(\.name).filter(kill.contains)
+        tmuxStale(sessions: sessions.map(\.rust), alias: alias, open: Array(open), ttlMinutes: Int64(ttlMinutes),
+                  now: now.timeIntervalSince1970)
+    }
+}
+
+extension TmuxSession {
+    init(rust s: RelayaRust.TmuxSession) {
+        self.init(name: s.name, attached: Int(s.attached), created: Date(timeIntervalSince1970: s.created),
+                  activity: Date(timeIntervalSince1970: s.activity),
+                  detachedAt: s.detachedAt.map { Date(timeIntervalSince1970: $0) }, keep: s.keep)
     }
 
-    static func quote(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
+    var rust: RelayaRust.TmuxSession {
+        RelayaRust.TmuxSession(name: name, attached: Int64(attached), created: created.timeIntervalSince1970,
+                               activity: activity.timeIntervalSince1970, detachedAt: detachedAt?.timeIntervalSince1970, keep: keep)
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import LocalAuthentication
+import RelayaRust
 
 /// MCP-сервер Relaya: JSON-RPC 2.0 построчно через stdin/stdout.
 ///
@@ -18,7 +19,6 @@ public final class MCPServer {
     private let log: MCPLog?
     private let execute: Executor
     private let confirm: Confirmer
-    private var clientName = "агент"
 
     public init(hosts: @escaping () -> [SSHHost], policy: @escaping () -> MCPPolicy, log: MCPLog?,
                 execute: @escaping Executor, confirm: @escaping Confirmer) {
@@ -71,164 +71,60 @@ public final class MCPServer {
     }
 
     /// Обрабатывает одно сообщение; nil — ответ не нужен (уведомление).
+    /// Сам протокол, права и журнал — в Rust-ядре (`core/src/mcp.rs`); ядро вызывает наш бэкенд синхронно,
+    /// поэтому работает в отдельном потоке, а не в пуле Swift Concurrency.
     public func handle(_ line: String) async -> String? {
-        guard let data = line.data(using: .utf8),
-              let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return Self.encode(["jsonrpc": "2.0", "id": NSNull(), "error": ["code": -32700, "message": "Parse error"]])
-        }
-        let id = message["id"]
-        let method = message["method"] as? String ?? ""
-        let params = message["params"] as? [String: Any] ?? [:]
-        guard let id else { return nil }   // уведомления (notifications/initialized и т.п.)
-
-        let result: [String: Any]
-        switch method {
-        case "initialize":
-            if let info = params["clientInfo"] as? [String: Any], let name = info["name"] as? String { clientName = name }
-            result = [
-                "protocolVersion": params["protocolVersion"] as? String ?? "2025-06-18",
-                "capabilities": ["tools": [String: Any]()],
-                "serverInfo": ["name": "relaya", "version": Self.version],
-                "instructions": "Доступ к SSH-серверам пользователя из ~/.ssh/config. Права на каждый хост задаёт пользователь в приложении Relaya; команды на хостах «с подтверждением» он одобряет вручную.",
-            ]
-        case "ping":
-            result = [:]
-        case "tools/list":
-            result = ["tools": Self.tools]
-        case "tools/call":
-            let name = params["name"] as? String ?? ""
-            let args = params["arguments"] as? [String: Any] ?? [:]
-            let (text, isError) = await call(name, args)
-            result = ["content": [["type": "text", "text": text]], "isError": isError]
-        default:
-            return Self.encode(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Method not found: \(method)"]])
-        }
-        return Self.encode(["jsonrpc": "2.0", "id": id, "result": result])
-    }
-
-    // MARK: - Инструменты
-
-    nonisolated(unsafe) static let tools: [[String: Any]] = [
-        [
-            "name": "list_hosts",
-            "description": "Список SSH-хостов пользователя с адресом, ОС, группой, метками и уровнем доступа агента.",
-            "inputSchema": ["type": "object", "properties": [String: Any]()],
-        ],
-        [
-            "name": "run_command",
-            "description": "Выполнить shell-команду на хосте по SSH. В режиме «только чтение» разрешены лишь безопасные команды без перенаправлений; в режиме «с подтверждением» пользователь одобряет каждую команду.",
-            "inputSchema": [
-                "type": "object",
-                "properties": [
-                    "host": ["type": "string", "description": "Алиас хоста из list_hosts"],
-                    "command": ["type": "string", "description": "Команда для выполнения"],
-                    "timeout_seconds": ["type": "integer", "description": "Таймаут, по умолчанию 60, максимум 600"],
-                ],
-                "required": ["host", "command"],
-            ],
-        ],
-        [
-            "name": "read_file",
-            "description": "Прочитать файл на хосте (не больше max_bytes, по умолчанию 65536). Считается операцией чтения.",
-            "inputSchema": [
-                "type": "object",
-                "properties": [
-                    "host": ["type": "string"],
-                    "path": ["type": "string"],
-                    "max_bytes": ["type": "integer"],
-                ],
-                "required": ["host", "path"],
-            ],
-        ],
-    ]
-
-    private func call(_ name: String, _ args: [String: Any]) async -> (String, Bool) {
-        let policy = policy()
-        guard policy.enabled else { return ("Доступ агентов выключен в Relaya (раздел «Агенты»).", true) }
-
-        switch name {
-        case "list_hosts":
-            let list = hosts().filter { policy.mode(for: $0.alias) != .off }.map { h -> [String: Any] in
-                [
-                    "host": h.alias, "address": h.subtitle, "os": h.os?.title ?? "неизвестно",
-                    "group": h.group ?? "", "tags": h.tags, "access": policy.mode(for: h.alias).rawValue,
-                ]
-            }
-            return (Self.encode(["hosts": list]) ?? "[]", false)
-
-        case "run_command", "read_file":
-            guard let alias = args["host"] as? String, let host = hosts().first(where: { $0.alias == alias }) else {
-                return ("Хост не найден. Вызовите list_hosts.", true)
-            }
-            let command: String
-            let isRead: Bool
-            if name == "read_file" {
-                guard let path = args["path"] as? String, !path.isEmpty else { return ("Укажите path.", true) }
-                let limit = min(max(args["max_bytes"] as? Int ?? 65536, 1), 1_048_576)
-                command = "head -c \(limit) -- \(Self.shellQuote(path))"
-                isRead = true
-            } else {
-                guard let c = args["command"] as? String, !c.isEmpty else { return ("Укажите command.", true) }
-                command = c
-                isRead = MCPPolicy.isReadOnly(c)
-            }
-            let timeout = Duration.seconds(min(max(args["timeout_seconds"] as? Int ?? 60, 1), 600))
-
-            if policy.isDenied(command, on: alias) {
-                record(name, alias, command, "запрещено: правило")
-                return ("Команда запрещена правилом пользователя для \(alias).", true)
-            }
-            let decision: String
-            let mode = policy.mode(for: alias)
-            if mode != .off, !isRead, policy.isAllowed(command, on: alias) {
-                decision = "разрешено: правило"
-            } else {
-            switch mode {
-            case .off:
-                record(name, alias, command, "запрещено: нет доступа")
-                return ("У агента нет доступа к хосту \(alias).", true)
-            case .readOnly:
-                guard isRead else {
-                    record(name, alias, command, "запрещено: только чтение")
-                    return ("Хост \(alias) открыт только для чтения, а эта команда может что-то изменить. Попросите пользователя выполнить её самому или повысить доступ в Relaya.", true)
-                }
-                decision = "разрешено: чтение"
-            case .confirm:
-                guard await confirm(host, command, clientName) else {
-                    record(name, alias, command, "отклонено пользователем")
-                    return ("Пользователь отклонил выполнение команды на \(alias).", true)
-                }
-                decision = "одобрено пользователем"
-            case .trusted:
-                decision = policy.grant(for: alias) != nil ? "разрешено: временный доступ" : "разрешено: доверенный"
-            }
-            }
-
-            let r = await execute(host, command, timeout)
-            record(name, alias, command, decision, exit: r.status, changes: !isRead,
-                   output: String((r.stdout + (r.stderr.isEmpty ? "" : "\n" + r.stderr)).suffix(2000)))
-            var text = r.stdout
-            if !r.stderr.isEmpty { text += (text.isEmpty ? "" : "\n") + "[stderr]\n" + r.stderr }
-            if text.count > 50_000 { text = String(text.prefix(50_000)) + "\n…[вывод обрезан]" }
-            text += "\n[exit code: \(r.status)]"
-            return (text, r.status != 0)
-
-        default:
-            return ("Неизвестный инструмент \(name).", true)
+        let core = self.core
+        return await withCheckedContinuation { cont in
+            Thread.detachNewThread { cont.resume(returning: core.handle(line: line)) }
         }
     }
 
-    /// Один запуск сервера = одна «сессия агента»: по ней собирается сводка изменений.
-    private let session = UUID()
+    private lazy var core = RelayaRust.McpServer(backend: Backend(owner: self))
 
-    private func record(_ tool: String, _ host: String, _ detail: String, _ decision: String, exit: Int32? = nil,
-                        changes: Bool = false, output: String? = nil) {
-        var e = MCPLogEntry(client: clientName, tool: tool, host: host, detail: detail, decision: decision, exitCode: exit)
-        e.session = session
-        e.changes = changes
-        e.output = output
-        log?.append(e)
+    /// Мост «ядро → платформа»: хосты, политика, ssh, подтверждение, журнал.
+    private final class Backend: McpBackend, @unchecked Sendable {
+        unowned let owner: MCPServer
+        init(owner: MCPServer) { self.owner = owner }
+
+        /// Дождаться async-вызова из синхронного потока ядра.
+        private func wait<T>(_ body: @escaping () async -> T) -> T {
+            let box = UnsafeBox<T>()
+            let sem = DispatchSemaphore(value: 0)
+            // Поток ядра ждёт здесь, пока задача не закончится, — гонки нет.
+            let work = UncheckedSendable(value: body)
+            Task.detached { box.value = await work.value(); sem.signal() }
+            sem.wait()
+            return box.value!
+        }
+
+        func hosts() -> [RelayaRust.SshHost] { owner.hosts().map(\.rust) }
+        func policy() -> McpPolicy { owner.policy().rust }
+
+        func execute(host: RelayaRust.SshHost, command: String, timeoutSeconds: UInt32) -> ExecResult {
+            let h = SSHHost(rust: host), run = owner.execute
+            let r = wait { await run(h, command, .seconds(Int(timeoutSeconds))) }
+            return ExecResult(status: r.status, stdout: r.stdout, stderr: r.stderr)
+        }
+
+        func confirm(host: RelayaRust.SshHost, command: String, client: String) -> Bool {
+            let h = SSHHost(rust: host), ask = owner.confirm
+            return wait { await ask(h, command, client) }
+        }
+
+        func log(entry: McpLogEntry) {
+            let f = ISO8601DateFormatter()
+            var e = MCPLogEntry(date: f.date(from: entry.date) ?? Date(), client: entry.client, tool: entry.tool, host: entry.host,
+                                detail: entry.detail, decision: entry.decision, exitCode: entry.exitCode)
+            e.session = entry.session.flatMap(UUID.init(uuidString:))
+            e.changes = entry.changes
+            e.output = entry.output
+            owner.log?.append(e)
+        }
     }
+
+    private final class UnsafeBox<T>: @unchecked Sendable { var value: T? }
+    private struct UncheckedSendable<V>: @unchecked Sendable { let value: V }
 
     // MARK: - Помощники
 

@@ -121,16 +121,16 @@ final class SyncManager {
                 guard !p.remote.trimmingCharacters(in: .whitespaces).isEmpty else {
                     throw GitSync.Failure(message: L("Укажите репозиторий."))
                 }
-                let git = self.git(p)
-                try await git.setUp()
-                let outcome = try await git.sync(machine: machine) {
-                    try Sync.export(p, passphrase: pass, to: git.repo)
-                }
-                if case .conflict(let c) = outcome {
+                let outcome = try await git(p).sync(machine: machine, profile: p, passphrase: pass)
+                switch outcome {
+                case .conflict(let c):
                     states[id] = .conflict(c)
                     return
+                case .synced(_, let items):
+                    imported = items
+                case .upToDate:
+                    break
                 }
-                if outcome == .synced(pulled: true) { imported = try Sync.import(p, passphrase: pass, from: git.repo) }
             }
             finish(id, imported)
         } catch {
@@ -146,8 +146,7 @@ final class SyncManager {
         states[id] = .syncing
         var imported: [Sync.Item] = []
         do {
-            try await git.resolve(choices)
-            imported = try Sync.import(p, passphrase: pass, from: git.repo)
+            imported = try await git.resolve(choices, profile: p, passphrase: pass)
             finish(id, imported)
         } catch {
             states[id] = .failed(error.localizedDescription)

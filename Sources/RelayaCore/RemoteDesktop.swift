@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Подключение к удалённому рабочему столу (VNC или RDP).
 ///
@@ -79,19 +80,12 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
         return c.url
     }
 
-    /// Содержимое .rdp-файла для Windows App / Remote Desktop.
+    /// Содержимое .rdp-файла для Windows App / Remote Desktop (Rust-ядро, `core/src/models.rs`).
     public func rdpFile(host: String, port: Int) -> String {
-        var lines = [
-            "full address:s:\(host):\(port)",
-            "screen mode id:i:\(fullScreen ? 2 : 1)",
-            "prompt for credentials:i:1",
-            "redirectclipboard:i:1",
-            "audiomode:i:0",
-            "use multimon:i:0",
-            "dynamic resolution:i:1",
-        ]
-        if !user.isEmpty { lines.append("username:s:\(user)") }
-        return lines.joined(separator: "\r\n") + "\r\n"
+        desktopRdpFile(d: RelayaRust.RemoteDesktop(
+            id: id.uuidString, name: name, kind: kind == .vnc ? .vnc : .rdp, address: address, port: Int64(port), user: user,
+            viaSshHost: viaSSHHost, fullScreen: fullScreen, scaleToFit: scaleToFit, rdpWidth: rdpWidth.map(Int64.init),
+            rdpHeight: rdpHeight.map(Int64.init), rdpRetina: rdpRetina, group: group), host: host, port: Int64(port))
     }
 
     /// Свободен ли порт на localhost.

@@ -90,31 +90,27 @@ struct SyncTests {
         let a = GitSync(repo: tempDir().appending(path: "repo"), remote: bare.path)
         let b = GitSync(repo: tempDir().appending(path: "repo"), remote: bare.path)
         let p = Sync.Profile(name: "all")
+        let pa = paths(localA), pb = paths(localB)
 
         try Data("Host a\n    HostName 1\n".utf8).write(to: localA.appending(path: "config"))
-        try await a.setUp()
-        let pa = paths(localA), pb = paths(localB)
-        let repoA = a.repo, repoB = b.repo
-        #expect(try await a.sync(machine: "A") { try Sync.export(p, paths: pa, to: repoA) } == .synced(pulled: false))
+        #expect(try await a.sync(machine: "A", profile: p, paths: pa) == .synced(pulled: false, imported: []))
 
-        try await b.setUp()
-        _ = try await b.sync(machine: "B") { try Sync.export(p, paths: pb, to: repoB) }
-        #expect(try String(contentsOf: repoB.appending(path: "ssh/config"), encoding: .utf8).contains("Host a"),
-                "пустой Mac не должен обнулять общий файл")
-        try Sync.import(p, paths: paths(localB), from: b.repo)
+        // Пустой Mac не обнуляет общий файл и получает хосты.
+        _ = try await b.sync(machine: "B", profile: p, paths: pb)
+        #expect(try String(contentsOf: b.repo.appending(path: "ssh/config"), encoding: .utf8).contains("Host a"))
+        try Sync.import(p, paths: pb, from: b.repo)
         #expect(try String(contentsOf: localB.appending(path: "config"), encoding: .utf8).contains("Host a"))
 
         try Data("Host a\n    HostName from-A\n".utf8).write(to: localA.appending(path: "config"))
-        _ = try await a.sync(machine: "A") { try Sync.export(p, paths: pa, to: repoA) }
+        _ = try await a.sync(machine: "A", profile: p, paths: pa)
         try Data("Host a\n    HostName from-B\n".utf8).write(to: localB.appending(path: "config"))
-        let outcome = try await b.sync(machine: "B") { try Sync.export(p, paths: pb, to: repoB) }
+        let outcome = try await b.sync(machine: "B", profile: p, paths: pb)
         guard case .conflict(let c) = outcome else { Issue.record("expected conflict, got \(outcome)"); return }
         #expect(c.map(\.path) == ["ssh/config"])
         #expect(c[0].mine.contains("from-B") && c[0].theirs.contains("from-A"))
 
-        try await b.resolve(["ssh/config": false])
-        try Sync.import(p, paths: pb, from: repoB)
+        _ = try await b.resolve(["ssh/config": false], profile: p, paths: pb)
         #expect(try String(contentsOf: localB.appending(path: "config"), encoding: .utf8).contains("from-A"))
-        #expect(try await b.sync(machine: "B") { try Sync.export(p, paths: pb, to: repoB) } == .upToDate)
+        #expect(try await b.sync(machine: "B", profile: p, paths: pb) == .upToDate)
     }
 }

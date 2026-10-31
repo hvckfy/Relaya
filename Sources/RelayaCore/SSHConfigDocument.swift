@@ -1,25 +1,20 @@
 import Foundation
+import RelayaRust
 
-/// Построчная модель `~/.ssh/config` для правок.
+/// Построчная модель `~/.ssh/config` для правок. Логика — в Rust-ядре (`core/src/ssh_config.rs`).
 ///
 /// Меняет только блок нужного хоста: остальной файл, комментарии и незнакомые
 /// директивы внутри блока сохраняются как есть.
 public struct SSHConfigDocument: Sendable {
-    public private(set) var lines: [String]
-
-    /// Директивы, которыми управляет редактор Relaya. Остальные строки блока не трогаются.
-    static let managedKeys: Set<String> = [
-        "hostname", "user", "port", "identityfile", "proxyjump",
-        "forwardagent", "serveraliveinterval", "compression", "usekeychain", "addkeystoagent",
-    ]
+    public private(set) var text: String
 
     public init(text: String) {
-        var lines = text.components(separatedBy: "\n")
-        if lines.last == "" { lines.removeLast() }
-        self.lines = lines
+        // Как раньше: текст нормализуется к виду «строки + завершающий перевод строки».
+        let lines = configLines(text: text)
+        self.text = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
     }
 
-    public var text: String { lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n" }
+    public var lines: [String] { configLines(text: text) }
 
     /// Где лежит блок хоста.
     public struct Block: Sendable, Equatable {
@@ -32,77 +27,17 @@ public struct SSHConfigDocument: Sendable {
     }
 
     public func block(for alias: String) -> Block? {
-        for (i, raw) in lines.enumerated() {
-            let (key, value) = SSHConfigParser.splitKeyValue(raw.trimmingCharacters(in: .whitespaces))
-            guard key == "host" else { continue }
-            let aliases = SSHConfigParser.aliases(in: value)
-            guard aliases.contains(alias) else { continue }
-
-            var end = i + 1
-            while end < lines.count {
-                let (k, _) = SSHConfigParser.splitKeyValue(lines[end].trimmingCharacters(in: .whitespaces))
-                if k == "host" || k == "match" { break }
-                end += 1
-            }
-            // Хвостовые пустые строки и мета следующего блока к этому хосту не относятся.
-            while end > i + 1 {
-                let t = lines[end - 1].trimmingCharacters(in: .whitespaces)
-                if t.isEmpty || SSHConfigParser.parseMeta(t) != nil { end -= 1 } else { break }
-            }
-            var start = i
-            if i > 0, SSHConfigParser.parseMeta(lines[i - 1].trimmingCharacters(in: .whitespaces)) != nil {
-                start = i - 1
-            }
-            return Block(range: start..<end, hostLine: i, isShared: aliases.count > 1)
+        configBlock(text: text, alias: alias).map {
+            Block(range: Int($0.start)..<Int($0.end), hostLine: Int($0.hostLine), isShared: $0.isShared)
         }
-        return nil
     }
 
     /// Строки, которые сейчас занимает хост (для превью).
-    public func currentLines(for alias: String) -> [String] {
-        guard let block = block(for: alias) else { return [] }
-        return Array(lines[block.range])
-    }
+    public func currentLines(for alias: String) -> [String] { configCurrentLines(text: text, alias: alias) }
 
     /// Строки блока после сохранения `host`. Незнакомые директивы из старого блока сохраняются.
     public func renderedLines(for host: SSHHost, replacing originalAlias: String?) -> [String] {
-        var out: [String] = []
-        var meta: [String] = []
-        if let g = host.group, !g.isEmpty { meta.append("group=\(SSHConfigParser.metaValue(g))") }
-        let tags = SSHConfigParser.splitTags(host.tags.joined(separator: ","))
-        if !tags.isEmpty { meta.append("tags=\(SSHConfigParser.metaValue(tags.joined(separator: ",")))") }
-        if let c = host.color, !c.isEmpty { meta.append("color=\(c)") }
-        if let os = host.os { meta.append("os=\(os.rawValue)") }
-        if host.tmux { meta.append("tmux=on") }
-        if !meta.isEmpty { out.append("# relaya: " + meta.joined(separator: " ")) }
-
-        out.append("Host \(host.alias)")
-        func add(_ key: String, _ value: String?) {
-            if let value, !value.isEmpty { out.append("    \(key) \(value)") }
-        }
-        add("HostName", host.hostName)
-        add("User", host.user)
-        add("Port", host.port.map(String.init))
-        add("IdentityFile", host.identityFile)
-        if host.identityFile?.isEmpty == false {
-            // passphrase ключа — в системный Keychain, ключ — в ssh-agent при первом использовании.
-            add("UseKeychain", "yes")
-            add("AddKeysToAgent", "yes")
-        }
-        add("ProxyJump", host.proxyJump)
-        if host.forwardAgent == true { add("ForwardAgent", "yes") }
-        add("ServerAliveInterval", host.serverAliveInterval.map(String.init))
-        if host.compression == true { add("Compression", "yes") }
-
-        if let originalAlias, let block = block(for: originalAlias) {
-            for raw in lines[(block.hostLine + 1)..<block.range.upperBound] {
-                let t = raw.trimmingCharacters(in: .whitespaces)
-                if t.isEmpty { continue }
-                let (key, _) = SSHConfigParser.splitKeyValue(t)
-                if t.hasPrefix("#") || !Self.managedKeys.contains(key) { out.append(raw) }
-            }
-        }
-        return out
+        configRenderedLines(text: text, host: host.rust, originalAlias: originalAlias)
     }
 
     public enum EditError: Error, Equatable, LocalizedError {
@@ -121,38 +56,23 @@ public struct SSHConfigDocument: Sendable {
 
     /// Добавляет хост (`originalAlias == nil`) или заменяет блок существующего.
     public mutating func upsert(_ host: SSHHost, originalAlias: String?) throws {
-        if host.alias != originalAlias, block(for: host.alias) != nil {
-            throw EditError.aliasTaken(host.alias)
-        }
-        let rendered = renderedLines(for: host, replacing: originalAlias)
+        // Те же проверки, что в ядре, — чтобы ошибки были типизированными, а не текстом.
+        if host.alias != originalAlias, block(for: host.alias) != nil { throw EditError.aliasTaken(host.alias) }
         if let originalAlias {
-            guard let block = block(for: originalAlias) else { throw EditError.notFound(originalAlias) }
-            guard !block.isShared else { throw EditError.sharedBlock(originalAlias) }
-            lines.replaceSubrange(block.range, with: rendered)
-        } else {
-            if let last = lines.last, !last.trimmingCharacters(in: .whitespaces).isEmpty { lines.append("") }
-            lines.append(contentsOf: rendered)
+            guard let b = block(for: originalAlias) else { throw EditError.notFound(originalAlias) }
+            guard !b.isShared else { throw EditError.sharedBlock(originalAlias) }
         }
+        text = try configUpsert(text: text, host: host.rust, originalAlias: originalAlias)
+    }
+
+    public mutating func remove(alias: String) throws {
+        guard let b = block(for: alias) else { throw EditError.notFound(alias) }
+        guard !b.isShared else { throw EditError.sharedBlock(alias) }
+        text = try configRemove(text: text, alias: alias)
     }
 
     /// Заменить блок хоста готовыми строками или добавить их в конец (для синхронизации).
     public mutating func replaceOrAppend(alias: String, with block: [String]) {
-        if let b = self.block(for: alias) {
-            lines.replaceSubrange(b.range, with: block)
-        } else {
-            if let last = lines.last, !last.trimmingCharacters(in: .whitespaces).isEmpty { lines.append("") }
-            lines.append(contentsOf: block)
-        }
-    }
-
-    public mutating func remove(alias: String) throws {
-        guard let block = block(for: alias) else { throw EditError.notFound(alias) }
-        guard !block.isShared else { throw EditError.sharedBlock(alias) }
-        var range = block.range
-        // Убираем и пустую строку-разделитель после блока, чтобы не копились пробелы.
-        if range.upperBound < lines.count, lines[range.upperBound].trimmingCharacters(in: .whitespaces).isEmpty {
-            range = range.lowerBound..<(range.upperBound + 1)
-        }
-        lines.removeSubrange(range)
+        text = configMerge(local: text, incoming: block.joined(separator: "\n") + "\n")
     }
 }

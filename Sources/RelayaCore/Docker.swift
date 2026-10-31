@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Контейнер Docker на сервере (из `docker ps -a --format '{{json .}}'`).
 public struct DockerContainer: Identifiable, Hashable, Sendable {
@@ -34,43 +35,29 @@ public enum Docker {
         case failed(String)
     }
 
-    public static let listCommand = #"command -v docker >/dev/null 2>&1 || { echo RELAYA_NO_DOCKER; exit 0; }; docker ps -a --format '{{json .}}'"#
+    // Логика — в Rust-ядре (`core/src/docker.rs`).
+    public static var listCommand: String { dockerListCommand() }
 
     public static func parse(stdout: String, stderr: String, status: Int32) -> ListResult {
-        if stdout.contains("RELAYA_NO_DOCKER") { return .notInstalled }
-        if stderr.contains("permission denied") || stderr.contains("Got permission denied") { return .permissionDenied }
-        var list: [DockerContainer] = []
-        for line in stdout.split(whereSeparator: \.isNewline) {
-            guard let data = line.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-            func str(_ k: String) -> String { obj[k] as? String ?? "" }
-            list.append(DockerContainer(id: str("ID"), name: str("Names"), image: str("Image"),
-                                        state: str("State").lowercased(), status: str("Status"), ports: str("Ports")))
+        switch dockerParse(stdout: stdout, stderr: stderr, status: status) {
+        case .containers(let list):
+            return .containers(list.map { DockerContainer(id: $0.id, name: $0.name, image: $0.image, state: $0.state,
+                                                          status: $0.status, ports: $0.ports) })
+        case .notInstalled: return .notInstalled
+        case .permissionDenied: return .permissionDenied
+        case .failed(let m): return .failed(m)
         }
-        if list.isEmpty, status != 0 {
-            let message = stderr.split(whereSeparator: \.isNewline).last.map(String.init) ?? "exit \(status)"
-            return .failed(message)
-        }
-        return .containers(list.sorted {
-            $0.isRunning != $1.isRunning ? $0.isRunning : $0.name.localizedStandardCompare($1.name) == .orderedAscending
-        })
     }
 
     /// Имя контейнера для командной строки (POSIX sh).
-    public static func quoted(_ name: String) -> String {
-        "'" + name.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
-    }
+    public static func quoted(_ name: String) -> String { coreShellQuote(s: name) }
 
     public static func actionCommand(_ action: String, container: DockerContainer) -> String {
-        "docker \(action) \(quoted(container.name))"
+        dockerActionCommand(action: action, name: container.name)
     }
 
-    public static func logsCommand(_ container: DockerContainer) -> String {
-        "docker logs -f --tail 200 \(quoted(container.name))"
-    }
+    public static func logsCommand(_ container: DockerContainer) -> String { dockerLogsCommand(name: container.name) }
 
     /// Оболочка внутри контейнера: bash, если есть, иначе sh.
-    public static func shellCommand(_ container: DockerContainer) -> String {
-        "docker exec -it \(quoted(container.name)) sh -c 'command -v bash >/dev/null && exec bash || exec sh'"
-    }
+    public static func shellCommand(_ container: DockerContainer) -> String { dockerShellCommand(name: container.name) }
 }

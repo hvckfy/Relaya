@@ -1,10 +1,11 @@
 import Foundation
+import RelayaRust
 
-/// Читает `~/.ssh/config` в список хостов.
+/// Читает `~/.ssh/config` в список хостов. Логика — в Rust-ядре (`core/src/ssh_config.rs`), общем с Windows-клиентом.
 ///
 /// Поддерживается базовое подмножество: блоки `Host` с конкретными алиасами и ключи
 /// HostName, User, Port, IdentityFile, ProxyJump, ForwardAgent, ServerAliveInterval,
-/// Compression. Шаблоны (`*`, `?`, `!`), `Match` и `Include` пока пропускаются.
+/// Compression. Шаблоны (`*`, `?`, `!`), `Match` и `Include` пропускаются.
 public enum SSHConfigParser {
     public static var defaultConfigURL: URL {
         RelayaPaths.sshDirectory.appending(path: "config")
@@ -16,149 +17,26 @@ public enum SSHConfigParser {
     }
 
     public static func parse(_ text: String) -> [SSHHost] {
-        var hosts: [SSHHost] = []
-        var current: [SSHHost] = []
-        var pendingMeta = Meta()
-        var inMatch = false
-
-        func flush() {
-            hosts.append(contentsOf: current)
-            current = []
-        }
-
-        for rawLine in text.components(separatedBy: .newlines) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty { continue }
-
-            if line.hasPrefix("#") {
-                if let meta = parseMeta(line) { pendingMeta = meta }
-                continue
-            }
-
-            let (key, value) = splitKeyValue(line)
-            switch key {
-            case "host":
-                flush()
-                inMatch = false
-                current = aliases(in: value)
-                    .filter { !isPattern($0) }
-                    .map {
-                        var h = SSHHost(alias: $0, group: pendingMeta.group,
-                                        tags: pendingMeta.tags, color: pendingMeta.color, os: pendingMeta.os)
-                        h.tmux = pendingMeta.tmux
-                        return h
-                    }
-                pendingMeta = Meta()
-            case "match":
-                flush()
-                inMatch = true
-            default:
-                guard !inMatch else { continue }
-                for i in current.indices {
-                    apply(key: key, value: value, to: &current[i])
-                }
-            }
-        }
-        flush()
-        return hosts
+        parseConfig(text: text).map(SSHHost.init(rust:))
     }
 
-    // MARK: - Общие помощники (используются и SSHConfigDocument)
-
-    struct Meta {
-        var group: String?
-        var tags: [String] = []
-        var color: String?
-        var os: ServerOS?
-        var tmux = false
-    }
-
-    static func aliases(in value: String) -> [String] {
-        value.split(whereSeparator: \.isWhitespace).map(String.init)
-    }
-
-    public static func isPattern(_ alias: String) -> Bool {
-        alias.contains(where: { "*?!".contains($0) })
-    }
-
-    private static func apply(key: String, value: String, to host: inout SSHHost) {
-        // В ssh_config побеждает первое значение — повторы не перезаписывают.
-        switch key {
-        case "hostname" where host.hostName == nil: host.hostName = value
-        case "user" where host.user == nil: host.user = value
-        case "port" where host.port == nil: host.port = Int(value)
-        case "identityfile" where host.identityFile == nil: host.identityFile = value
-        case "proxyjump" where host.proxyJump == nil: host.proxyJump = value
-        case "forwardagent" where host.forwardAgent == nil: host.forwardAgent = value.lowercased() == "yes"
-        case "serveraliveinterval" where host.serverAliveInterval == nil: host.serverAliveInterval = Int(value)
-        case "compression" where host.compression == nil: host.compression = value.lowercased() == "yes"
-        default: break
-        }
-    }
-
-    /// `Key value`, `Key=value` или `Key = "value"`.
-    static func splitKeyValue(_ line: String) -> (String, String) {
-        let separators = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "="))
-        guard let r = line.rangeOfCharacter(from: separators) else { return (line.lowercased(), "") }
-        let key = String(line[..<r.lowerBound]).lowercased()
-        var value = String(line[r.upperBound...]).trimmingCharacters(in: separators)
-        if value.count >= 2, value.hasPrefix("\""), value.hasSuffix("\"") {
-            value = String(value.dropFirst().dropLast())
-        }
-        return (key, value)
-    }
-
-    /// `# relaya: group="мои сервера" tags=prod,db color=orange`
-    static func parseMeta(_ line: String) -> Meta? {
-        let body = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
-        guard body.lowercased().hasPrefix("relaya:") else { return nil }
-        var meta = Meta()
-        for pair in metaTokens(String(body.dropFirst("relaya:".count))) {
-            let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
-            guard kv.count == 2 else { continue }
-            switch kv[0].lowercased() {
-            case "group": meta.group = kv[1]
-            case "tags": meta.tags += splitTags(kv[1])
-            // Старый формат v0.0.2: окружение становится меткой.
-            case "env": meta.tags.append(kv[1].lowercased())
-            case "color": meta.color = kv[1].lowercased()
-            case "os": meta.os = ServerOS(rawValue: kv[1].lowercased())
-            case "tmux": meta.tmux = ["on", "yes", "true", "1"].contains(kv[1].lowercased())
-            default: break
-            }
-        }
-        return meta
-    }
-
-    /// Делит по пробелам, но не внутри кавычек; кавычки снимает.
-    private static func metaTokens(_ s: String) -> [String] {
-        var tokens: [String] = []
-        var current = ""
-        var quoted = false
-        for ch in s {
-            if ch == "\"" {
-                quoted.toggle()
-            } else if ch.isWhitespace, !quoted {
-                if !current.isEmpty { tokens.append(current); current = "" }
-            } else {
-                current.append(ch)
-            }
-        }
-        if !current.isEmpty { tokens.append(current) }
-        return tokens
-    }
+    public static func isPattern(_ alias: String) -> Bool { RelayaRust.isPattern(alias: alias) }
 
     /// `prod, db` → `["prod", "db"]` без пустых и повторов.
-    public static func splitTags(_ s: String) -> [String] {
-        var seen = Set<String>()
-        return s.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+    public static func splitTags(_ s: String) -> [String] { RelayaRust.splitTags(s: s) }
+}
+
+extension SSHHost {
+    init(rust h: RelayaRust.SshHost) {
+        self.init(alias: h.alias, hostName: h.hostName, user: h.user, port: h.port.map(Int.init), identityFile: h.identityFile,
+                  proxyJump: h.proxyJump, forwardAgent: h.forwardAgent, serverAliveInterval: h.serverAliveInterval.map(Int.init),
+                  compression: h.compression, group: h.group, tags: h.tags, color: h.color, os: h.os.flatMap(ServerOS.init(rust:)))
+        tmux = h.tmux
     }
 
-    /// Значение для `# relaya:`: в кавычках, если в нём есть пробелы.
-    static func metaValue(_ s: String) -> String {
-        let clean = s.replacingOccurrences(of: "\"", with: "")
-        return clean.contains(where: \.isWhitespace) ? "\"\(clean)\"" : clean
+    var rust: RelayaRust.SshHost {
+        RelayaRust.SshHost(alias: alias, hostName: hostName, user: user, port: port.map(Int64.init), identityFile: identityFile,
+                           proxyJump: proxyJump, forwardAgent: forwardAgent, serverAliveInterval: serverAliveInterval.map(Int64.init),
+                           compression: compression, group: group, tags: tags, color: color, os: os?.rust, tmux: tmux)
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Файл или папка на сервере.
 public struct RemoteFile: Identifiable, Hashable, Sendable {
@@ -100,21 +101,10 @@ public struct SFTPClient: Sendable {
 
     /// Строки `ls -la` из sftp: `drwxr-xr-x  2 root root 4096 Oct 29 12:00 name with spaces`.
     public static func parseListing(_ output: String) -> [RemoteFile] {
-        var files: [RemoteFile] = []
-        for raw in output.split(whereSeparator: \.isNewline) {
-            let line = String(raw)
-            guard let first = line.first, "-dlcbps".contains(first) else { continue }
-            let parts = line.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: true).map(String.init)
-            guard parts.count == 9 else { continue }
-            var name = parts[8]
-            if first == "l", let arrow = name.range(of: " -> ") { name = String(name[..<arrow.lowerBound]) }
-            if name == "." || name == ".." { continue }
-            files.append(RemoteFile(name: name, isDirectory: first == "d", isLink: first == "l",
-                                    size: Int64(parts[4]) ?? 0, permissions: parts[0],
-                                    modified: "\(parts[5]) \(parts[6]) \(parts[7])"))
-        }
-        return files.sorted {
-            $0.isDirectory != $1.isDirectory ? $0.isDirectory : $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        // Логика — в Rust-ядре (`core/src/models.rs`).
+        sftpParseListing(output: output).map {
+            RemoteFile(name: $0.name, isDirectory: $0.isDirectory, isLink: $0.isLink, size: $0.size,
+                       permissions: $0.permissions, modified: $0.modified)
         }
     }
 
