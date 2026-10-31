@@ -78,10 +78,14 @@ internal sealed class SshSession : IDisposable
         var autofill = Askpass.CanAutofill(alias); // M8-1: не для хостов с ProxyCommand/LocalCommand
         var loggedIn = false;
         var tail = new StringBuilder();
+        var decoder = Encoding.UTF8.GetDecoder();
         pc.Output += data =>
         {
             view.Feed(data);
-            tail.Append(Encoding.UTF8.GetString(data));
+            // Decoder с состоянием: многобайтовый символ на границе кусков не превращается в «�» (С6).
+            var chars = new char[decoder.GetCharCount(data, 0, data.Length)];
+            decoder.GetChars(data, 0, data.Length, chars, 0);
+            tail.Append(chars);
             if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
             var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
