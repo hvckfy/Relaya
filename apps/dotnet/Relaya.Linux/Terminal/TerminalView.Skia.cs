@@ -46,13 +46,28 @@ internal sealed partial class TerminalView
 
     private partial void InvalidateCanvas() => canvas.Invalidate();
 
-    private SKFont Font(bool bold = false, bool italic = false) => new(SKTypeface.FromFamilyName(fontFamily,
-        bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
-        italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright), fontSize) { Subpixel = true };
+    // Шрифты кэшируются (П12): поиск в fontconfig — на смену шрифта или размера, а не на каждый кадр.
+    private readonly Dictionary<(bool, bool), SKFont> fonts = new();
+    private (string Family, float Size) fontKey;
+
+    private SKFont Font(bool bold = false, bool italic = false)
+    {
+        if (fontKey != (fontFamily, fontSize))
+        {
+            foreach (var f in fonts.Values) f.Dispose();
+            fonts.Clear();
+            fontKey = (fontFamily, fontSize);
+        }
+        if (!fonts.TryGetValue((bold, italic), out var font))
+            fonts[(bold, italic)] = font = new SKFont(SKTypeface.FromFamilyName(fontFamily,
+                bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
+                italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright), fontSize) { Subpixel = true };
+        return font;
+    }
 
     private partial (double Width, double Height) MeasureCell()
     {
-        using var font = Font();
+        var font = Font();
         return (font.MeasureText("MMMMMMMMMM") / 10, font.Spacing);
     }
 
@@ -68,7 +83,6 @@ internal sealed partial class TerminalView
     private sealed class Painter(SKCanvas canvas, TerminalView view) : IPainter, System.IDisposable
     {
         private readonly SKPaint paint = new() { IsAntialias = true };
-        private readonly Dictionary<(bool, bool), SKFont> fonts = new();
 
         private static SKColor C(Color c) => new(c.R, c.G, c.B, c.A);
 
@@ -92,16 +106,12 @@ internal sealed partial class TerminalView
         // y — верх ячейки, как у Win2D; Skia рисует от базовой линии.
         public void Text(string text, double x, double y, Color color, bool bold, bool italic)
         {
-            if (!fonts.TryGetValue((bold, italic), out var font)) fonts[(bold, italic)] = font = view.Font(bold, italic);
+            var font = view.Font(bold, italic);
             paint.Style = SKPaintStyle.Fill;
             paint.Color = C(color);
             canvas.DrawText(text, (float)x, (float)(y - font.Metrics.Ascent), font, paint);
         }
 
-        public void Dispose()
-        {
-            foreach (var f in fonts.Values) f.Dispose();
-            paint.Dispose();
-        }
+        public void Dispose() => paint.Dispose();
     }
 }
