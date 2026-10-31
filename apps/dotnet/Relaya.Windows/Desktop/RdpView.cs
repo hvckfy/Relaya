@@ -50,6 +50,7 @@ internal sealed class RdpView : UserControl, IDisposable
     private RemoteSession? session;
     private string? tunnelId;
     private bool connected, disposed, imeActive, settingClipboard, fullScreenApplied;
+    private string? pendingSave;
     private readonly bool[] buttons = new bool[5];
 
     public RdpView(RemoteDesktop d)
@@ -224,7 +225,8 @@ internal sealed class RdpView : UserControl, IDisposable
             PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || box.Password.Length == 0) return null;
-        if (save.IsChecked == true) CredentialStore.Write(PasswordAccount, box.Password);
+        // Сохраняем только после успешного входа (К12, как на Mac): неверный пароль в хранилище не попадает.
+        pendingSave = save.IsChecked == true ? box.Password : null;
         return box.Password;
     }
 
@@ -304,6 +306,12 @@ internal sealed class RdpView : UserControl, IDisposable
         ui.TryEnqueue(() =>
         {
             connected = true;
+            if (pendingSave is { } pass)
+            {
+                pendingSave = null;
+                try { CredentialStore.Write(PasswordAccount, pass); }
+                catch (Exception e) { Terminal.TerminalView.Trace("RDP password save: " + e.GetType().Name); }
+            }
             connecting.Visibility = Visibility.Collapsed;
             problem.IsOpen = false;
             Focus(FocusState.Programmatic);
