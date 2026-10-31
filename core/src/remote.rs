@@ -80,6 +80,63 @@ pub trait RemoteClipboardListener: Send + Sync {
     fn on_remote_clipboard(&self, text: String);
 }
 
+/// PCM-формат звука: всегда несжатый little-endian, сервер получает в предложении только PCM.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct AudioFormat { pub sample_rate: u32, pub channels: u16, pub bits_per_sample: u16 }
+
+/// Звук удалённой машины (RDPSND). Необязательный слушатель: `RemoteSession::set_audio_listener` до `connect`;
+/// без него звук сервер не присылает. Воспроизведение, громкость и отключение — на стороне клиента.
+#[uniffi::export(with_foreign)]
+pub trait RemoteAudioListener: Send + Sync {
+    /// Кусок PCM; `timestamp` — метка сервера (мс), по ней можно выравнивать задержку.
+    fn on_audio(&self, format: AudioFormat, timestamp: u32, pcm: Vec<u8>);
+    /// Громкость, которую выставил сервер, 0..=65535 на канал.
+    fn on_audio_volume(&self, left: u16, right: u16);
+    /// Сервер закрыл звуковой поток.
+    fn on_audio_closed(&self);
+}
+
+/// Что предлагаем серверу: только PCM 16 бит, сервер выбирает сам; сжатые форматы не объявляются.
+const PCM_OFFER: &[(u32, u16)] = &[(48_000, 2), (44_100, 2), (22_050, 2), (44_100, 1)];
+
+#[derive(Debug)]
+struct Audio {
+    formats: Vec<ironrdp::rdpsnd::pdu::AudioFormat>,
+    listener: ListenerBox,
+}
+
+/// `Arc<dyn RemoteAudioListener>` без Debug — обёртка для требований IronRDP.
+struct ListenerBox(Arc<dyn RemoteAudioListener>);
+impl std::fmt::Debug for ListenerBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str("RemoteAudioListener") }
+}
+
+impl Audio {
+    fn new(listener: Arc<dyn RemoteAudioListener>) -> Self {
+        let formats = PCM_OFFER.iter().map(|&(rate, ch)| {
+            let block = ch * 2;
+            ironrdp::rdpsnd::pdu::AudioFormat {
+                format: ironrdp::rdpsnd::pdu::WaveFormat::PCM, n_channels: ch, n_samples_per_sec: rate,
+                n_avg_bytes_per_sec: rate * u32::from(block), n_block_align: block, bits_per_sample: 16, data: None,
+            }
+        }).collect();
+        Audio { formats, listener: ListenerBox(listener) }
+    }
+}
+
+impl ironrdp::rdpsnd::client::RdpsndClientHandler for Audio {
+    fn get_formats(&self) -> &[ironrdp::rdpsnd::pdu::AudioFormat] { &self.formats }
+    fn wave(&mut self, format_no: usize, ts: u32, data: std::borrow::Cow<'_, [u8]>) {
+        let Some(f) = self.formats.get(format_no) else { return };
+        if f.format != ironrdp::rdpsnd::pdu::WaveFormat::PCM { return; }
+        let format = AudioFormat { sample_rate: f.n_samples_per_sec, channels: f.n_channels, bits_per_sample: f.bits_per_sample };
+        self.listener.0.on_audio(format, ts, data.into_owned());
+    }
+    fn set_volume(&mut self, v: ironrdp::rdpsnd::pdu::VolumePdu) { self.listener.0.on_audio_volume(v.volume_left, v.volume_right); }
+    fn set_pitch(&mut self, _: ironrdp::rdpsnd::pdu::PitchPdu) {}
+    fn close(&mut self) { self.listener.0.on_audio_closed(); }
+}
+
 enum Cmd {
     Input(Vec<Operation>),
     Resize(u16, u16),
@@ -135,13 +192,14 @@ pub struct RemoteSession {
     commands: Mutex<Option<Sender<Cmd>>>,
     cert_answer: Mutex<Option<Sender<bool>>>,
     clipboard: Mutex<Option<Arc<dyn RemoteClipboardListener>>>,
+    audio: Mutex<Option<Arc<dyn RemoteAudioListener>>>,
 }
 
 #[uniffi::export]
 impl RemoteSession {
     #[uniffi::constructor]
     pub fn rdp(config: RdpConfig, listener: Arc<dyn RemoteListener>) -> Arc<Self> {
-        Arc::new(RemoteSession { config, listener, commands: Mutex::new(None), cert_answer: Mutex::new(None), clipboard: Mutex::new(None) })
+        Arc::new(RemoteSession { config, listener, commands: Mutex::new(None), cert_answer: Mutex::new(None), clipboard: Mutex::new(None), audio: Mutex::new(None) })
     }
 
     /// Запустить сессию в своём потоке. Повторный вызов ничего не делает.
@@ -191,6 +249,11 @@ impl RemoteSession {
     /// Получать текст, скопированный на удалённой машине. Без слушателя буфер обмена только отдаётся серверу.
     pub fn set_clipboard_listener(&self, listener: Arc<dyn RemoteClipboardListener>) {
         *self.clipboard.lock().unwrap() = Some(listener);
+    }
+
+    /// Получать звук удалённой машины. Вызывать до `connect`: от этого зависит, попросим ли мы звук у сервера.
+    pub fn set_audio_listener(&self, listener: Arc<dyn RemoteAudioListener>) {
+        *self.audio.lock().unwrap() = Some(listener);
     }
 
     /// Текст из локального буфера обмена: станет доступен для вставки на удалённой машине.
@@ -302,7 +365,7 @@ impl RemoteSession {
             enable_server_pointer: true,
             request_data: None,
             autologon: false,
-            enable_audio_playback: false,
+            enable_audio_playback: self.audio.lock().unwrap().is_some(),
             compression_type: None,
             pointer_software_rendering: true,
             multitransport_flags: None,
@@ -368,6 +431,9 @@ impl RemoteSession {
         let mut connector = connector::ClientConnector::new(self.connector_config(), client_addr)
             .with_static_channel(drdynvc)
             .with_static_channel(CliprdrClient::new(Box::new(TextClipboard { events: clip_tx })));
+        if let Some(l) = self.audio.lock().unwrap().clone() {
+            connector = connector.with_static_channel(ironrdp::rdpsnd::client::Rdpsnd::new(Box::new(Audio::new(l))));
+        }
 
         let mut framed = ironrdp_blocking::Framed::new(tcp);
         let should_upgrade = ironrdp_blocking::connect_begin(&mut framed, &mut connector).map_err(connector_close)?;
@@ -577,6 +643,24 @@ mod tests {
         // За пределами изображения — обрезается, а не падает.
         let edge = crop(&image, &r(3, 2, 50, 50));
         assert_eq!((edge.width, edge.height), (1, 1));
+    }
+
+    #[test]
+    fn offers_only_pcm_and_reports_chosen_format() {
+        use ironrdp::rdpsnd::client::RdpsndClientHandler as _;
+        struct A(Mutex<Vec<(AudioFormat, usize)>>);
+        impl RemoteAudioListener for A {
+            fn on_audio(&self, f: AudioFormat, _: u32, pcm: Vec<u8>) { self.0.lock().unwrap().push((f, pcm.len())); }
+            fn on_audio_volume(&self, _: u16, _: u16) {}
+            fn on_audio_closed(&self) {}
+        }
+        let l = Arc::new(A(Mutex::new(vec![])));
+        let mut a = Audio::new(l.clone());
+        assert!(a.get_formats().iter().all(|f| f.format == ironrdp::rdpsnd::pdu::WaveFormat::PCM && f.bits_per_sample == 16));
+        assert_eq!(a.get_formats()[0].n_block_align, 4);
+        a.wave(1, 0, std::borrow::Cow::Borrowed(&[0u8; 8]));
+        a.wave(99, 0, std::borrow::Cow::Borrowed(&[0u8; 8]));
+        assert_eq!(l.0.lock().unwrap().as_slice(), &[(AudioFormat { sample_rate: 44_100, channels: 2, bits_per_sample: 16 }, 8)]);
     }
 
     #[test]
