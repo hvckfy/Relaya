@@ -48,7 +48,7 @@ final class KeyWizardModel {
         self.host = host
         self.model = model
         fileName = "id_ed25519_\(host.alias)"
-        comment = "\(NSUserName())@\(ProcessInfo.processInfo.hostName.split(separator: ".").first ?? "mac") · \(host.alias)"
+        comment = "\(NSUserName())@\(KeyComment.machine) · \(host.alias)"
         hasSavedPassword = model.keychain.hasPassword(for: host.keychainAccount)
     }
 

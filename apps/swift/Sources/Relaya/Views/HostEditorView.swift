@@ -283,7 +283,8 @@ struct HostEditorView: View {
         h.identityFile = clean(h.identityFile)
         h.proxyJump = clean(h.proxyJump)
         let port = Int(portText.trimmingCharacters(in: .whitespaces))
-        h.port = port == 22 ? nil : port
+        // Явный «Port 22» из конфига сохраняется; новый 22 не пишется (это значение по умолчанию).
+        h.port = port == 22 && original?.port != 22 ? nil : port
         h.serverAliveInterval = Int(keepAliveText.trimmingCharacters(in: .whitespaces))
         h.tags = SSHConfigParser.splitTags(h.tags.joined(separator: ","))
         return h

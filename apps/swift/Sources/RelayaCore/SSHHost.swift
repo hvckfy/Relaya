@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Хост из `~/.ssh/config`. Relaya не хранит хосты у себя — это проекция конфига.
 public struct SSHHost: Identifiable, Hashable, Sendable {
@@ -60,12 +61,8 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
     }
 
     /// Запись для git-хостинга (GitHub, GitLab, Bitbucket…), а не сервер: в список хостов не попадает.
-    public var isGitService: Bool {
-        let name = (hostName ?? alias).lowercased()
-        let known = ["github.com", "gitlab.com", "bitbucket.org", "ssh.dev.azure.com", "vs-ssh.visualstudio.com",
-                     "codeberg.org", "gitea.com", "ssh.github.com", "altssh.gitlab.com", "altssh.bitbucket.org"]
-        return user == "git" || known.contains(name)
-    }
+    /// Правило одно на все платформы — ядро (в том числе `git@` в алиасе или HostName).
+    public var isGitService: Bool { hostIsGitService(host: rust) }
 
     /// Подпись `user@hostname:port` для списка хостов.
     public var subtitle: String {
@@ -77,4 +74,14 @@ public struct SSHHost: Identifiable, Hashable, Sendable {
 
     /// Вход по ключу явно настроен в конфиге.
     public var usesKey: Bool { identityFile != nil }
+}
+
+/// Короткое имя этого Mac для комментария нового ключа — без обратного DNS-запроса, который может заморозить UI.
+public enum KeyComment {
+    public static var machine: String {
+        var buf = [CChar](repeating: 0, count: 256)
+        guard gethostname(&buf, buf.count) == 0 else { return "mac" }
+        let name = String(cString: buf).split(separator: ".").first.map(String.init) ?? ""
+        return name.isEmpty ? "mac" : name
+    }
 }

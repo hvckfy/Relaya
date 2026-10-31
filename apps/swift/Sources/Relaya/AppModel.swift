@@ -547,7 +547,9 @@ final class AppModel {
         case .rdp:
             let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "Relaya")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let file = dir.appending(path: "\(desktop.name.isEmpty ? "desktop" : desktop.name).rdp")
+            // Имя файла из названия стола: «/» и «:» дали бы вложенный путь или недопустимое имя.
+            let safe = (desktop.name.isEmpty ? "desktop" : desktop.name).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+            let file = dir.appending(path: "\(safe).rdp")
             do {
                 try desktop.rdpFile(host: host, port: port).write(to: file, atomically: true, encoding: .utf8)
             } catch {

@@ -1106,3 +1106,4 @@
 "Не найден VNC-клиент. Установите TigerVNC (vncviewer) или Remmina." = "No VNC client found. Install TigerVNC (vncviewer) or Remmina.";
 "Сервер ещё не знаком" = "The server is not known yet";
 "Подключитесь к нему один раз в терминале Relaya и подтвердите ключ сервера — после этого синхронизация и туннели заработают." = "Connect to it once in the Relaya terminal and confirm the server key — after that sync and tunnels will work.";
+"Пароли от серверов не синхронизируются никогда. Удаления передаются на другие машины; если удаляется сразу много, Relaya спросит." = "Server passwords are never synced. Deletions are passed on to your other machines; if a lot is deleted at once, Relaya asks first.";

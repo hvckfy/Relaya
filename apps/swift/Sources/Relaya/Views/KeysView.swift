@@ -181,8 +181,10 @@ struct KeysView: View {
     }
 
 
+    /// Хосты ключа — по всем IdentityFile (ядро), как и в инспекторе.
     private func hosts(using key: SSHKey) -> [SSHHost] {
-        model.hosts.filter { h in h.identityFile.map(SSHPaths.expand) == key.path }
+        let aliases = Set((try? model.store.loadDocument().text).map { KeyHosts.hosts($0, key: key.path) } ?? [])
+        return model.hosts.filter { aliases.contains($0.alias) }
     }
 
     private func reload() async {
@@ -255,7 +257,7 @@ private struct GenerateKeySheet: View {
     @Environment(\.dismiss) private var dismiss
     let created: (String) -> Void
     @State private var name = "id_ed25519"
-    @State private var comment = "\(NSUserName())@\(ProcessInfo.processInfo.hostName.split(separator: ".").first ?? "mac")"
+    @State private var comment = "\(NSUserName())@\(KeyComment.machine)"
     @State private var passphrase = ""
     @State private var error: String?
     @State private var working = false

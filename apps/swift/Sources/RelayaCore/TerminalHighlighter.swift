@@ -93,7 +93,13 @@ public struct TerminalHighlighter {
             flushPlain()
             guard let end = escapeEnd(scalars, from: i) else {
                 // Последовательность оборвалась на границе куска — доделаем со следующим.
-                carry = String(String.UnicodeScalarView(scalars[i...]))
+                // Незакрытая последовательность (бинарный вывод) не копится бесконечно: больше 4 КБ — отдаём как текст.
+                let rest = String(String.UnicodeScalarView(scalars[i...]))
+                if rest.utf8.count > 4096 {
+                    out.append(contentsOf: rest.unicodeScalars)
+                } else {
+                    carry = rest
+                }
                 break
             }
             let seq = String(String.UnicodeScalarView(scalars[i..<end]))

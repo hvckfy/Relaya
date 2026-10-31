@@ -146,11 +146,11 @@ struct HostMenuItems: View {
     var body: some View {
         Button(L("Подключить")) { model.connect(host) }
         Button(L("Открыть файлы (SFTP)")) { model.openFiles(host) }
+            .keyboardShortcut(shortcuts ? KeyboardShortcut("o", modifiers: [.command, .shift]) : nil)
         Button(L("Открыть в Finder…")) { model.finderMountRequest = host }
             .help(L("Подключить файлы хоста как диск в Finder"))
         Button(L("Окна tmux как вкладки")) { Task { await model.openTmuxControl(host) } }
             .help(L("tmux control mode: каждое окно tmux на сервере — отдельная вкладка Relaya"))
-            .keyboardShortcut(shortcuts ? KeyboardShortcut("o", modifiers: [.command, .shift]) : nil)
         Divider()
         Button(L("Изменить…")) { model.editor = EditorRequest(original: host) }
             .keyboardShortcut(shortcuts ? KeyboardShortcut("e") : nil)
