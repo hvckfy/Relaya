@@ -90,33 +90,170 @@ pub fn mcp_policy_encode(policy: McpPolicy) -> String { crate::models::encode_so
 
 // MARK: - Только чтение
 
-const READ_ONLY: &[&str] = &["ls", "cat", "head", "tail", "grep", "egrep", "zgrep", "less", "wc", "sort", "uniq", "cut", "awk", "sed",
-    "df", "du", "free", "uptime", "uname", "hostname", "whoami", "id", "date", "ps", "pgrep", "top", "stat", "file", "find", "which",
-    "lsblk", "lscpu", "lsof", "ss", "netstat", "ip", "ping", "dig", "nslookup", "journalctl", "dmesg", "env", "printenv", "echo", "pwd",
-    "tree", "md5sum", "sha256sum", "ubus", "logread", "iwinfo", "sw_vers"];
-const READ_ONLY_EXTRA: &[&str] = &["vm_stat", "nproc"];
-const READ_ONLY_PAIRS: &[&str] = &["systemctl status", "systemctl list-units", "systemctl --failed", "systemctl is-active",
-    "docker ps", "docker logs", "docker images", "docker inspect", "docker stats", "kubectl get", "kubectl describe", "kubectl logs",
-    "git status", "git log", "git diff", "apt list", "dpkg -l", "rpm -qa", "opkg list-installed", "uci show"];
+/// Строгий белый список «только чтения»: утилита (или пара «утилита подкоманда»), её короткие флаги буквами
+/// и длинные флаги (`--name`, сравнение до `=`). Любой неизвестный флаг — запрет. Аргументы без `-` разрешены.
+struct Tool { name: &'static str, short: &'static str, long: &'static [&'static str] }
 
-/// Можно ли выполнить в режиме «только чтение»: безопасные команды без перенаправлений, подстановок и sudo.
+const fn t(name: &'static str, short: &'static str, long: &'static [&'static str]) -> Tool { Tool { name, short, long } }
+
+const READ_ONLY: &[Tool] = &[
+    t("ls", "lahtrRS1dFiGn", &["--all", "--human-readable", "--color", "--sort", "--time-style", "--full-time", "--recursive"]),
+    t("cat", "nAbevst", &["--number", "--show-all"]),
+    t("head", "nc", &["--lines", "--bytes", "--quiet"]),
+    t("tail", "ncfFq", &["--lines", "--bytes", "--follow", "--quiet"]),
+    t("grep", "iEFvnclrRwxohHsqAB C m", &["--ignore-case", "--extended-regexp", "--fixed-strings", "--invert-match", "--line-number",
+        "--count", "--files-with-matches", "--recursive", "--word-regexp", "--only-matching", "--color", "--include", "--exclude",
+        "--max-count", "--context", "--after-context", "--before-context", "--no-filename", "--with-filename"]),
+    t("egrep", "ivnclrwohHs", &["--color"]),
+    t("zgrep", "ivnclwohHs", &[]),
+    t("wc", "lwcm", &["--lines", "--words", "--bytes", "--chars"]),
+    // sort: без -o/--output/-T/--compress-program — они пишут файлы.
+    t("sort", "nrkthufbV", &["--numeric-sort", "--reverse", "--key", "--human-numeric-sort", "--unique", "--field-separator"]),
+    // uniq: второй позиционный аргумент — файл вывода, см. `positional_limit`.
+    t("uniq", "cdiu", &["--count", "--repeated", "--ignore-case", "--unique"]),
+    t("cut", "dfcb", &["--delimiter", "--fields", "--characters", "--bytes"]),
+    t("awk", "Fv", &[]),
+    t("sed", "nEr", &["--quiet", "--regexp-extended"]),
+    t("df", "hTiPk", &["--human-readable", "--print-type", "--inodes"]),
+    t("du", "hsdcax", &["--human-readable", "--summarize", "--max-depth", "--total"]),
+    t("free", "hmgkbt", &["--human", "--mega", "--giga"]),
+    t("uptime", "ps", &["--pretty", "--since"]),
+    t("uname", "asnrvmpio", &["--all"]),
+    t("whoami", "", &[]),
+    t("id", "unG", &[]),
+    t("ps", "aeuxfwlo", &["--sort", "--forest", "--no-headers"]),
+    t("pgrep", "lafx", &["--list-name", "--full", "--exact"]),
+    t("top", "bnoHc", &["--batch"]),
+    t("stat", "Lcf", &["--format", "--dereference"]),
+    t("file", "bLi", &["--brief", "--mime"]),
+    t("which", "a", &[]),
+    t("lsblk", "fapo", &["--fs", "--output"]),
+    t("lscpu", "", &[]),
+    t("lsof", "inPpcu", &[]),
+    t("netstat", "tulnpar", &[]),
+    t("ping", "cWinq", &[]),
+    t("dig", "", &["+short"]),
+    t("nslookup", "", &[]),
+    t("journalctl", "unbfrxkpqS", &["--unit", "--lines", "--boot", "--since", "--until", "--priority", "--no-pager", "--follow",
+        "--reverse", "--output", "--grep", "--catalog", "--dmesg", "--list-boots", "--disk-usage"]),
+    t("echo", "neE", &[]),
+    t("pwd", "LP", &[]),
+    t("tree", "adfhLsD", &[]),
+    t("md5sum", "bc", &["--check"]),
+    t("sha256sum", "bc", &["--check"]),
+    t("logread", "elf", &[]),
+    t("iwinfo", "", &[]),
+    t("sw_vers", "", &[]),
+    t("vm_stat", "", &[]),
+    t("nproc", "", &["--all"]),
+    t("systemctl status", "nl", &["--no-pager", "--lines", "--full"]),
+    t("systemctl list-units", "at", &["--type", "--state", "--all", "--no-pager", "--failed"]),
+    t("systemctl --failed", "", &["--no-pager"]),
+    t("systemctl is-active", "q", &["--quiet"]),
+    t("docker ps", "aqn", &["--all", "--format", "--filter", "--no-trunc", "--last"]),
+    t("docker logs", "nft", &["--tail", "--since", "--until", "--follow", "--timestamps"]),
+    t("docker images", "aq", &["--all", "--format", "--filter"]),
+    t("docker inspect", "f", &["--format", "--type"]),
+    t("docker stats", "a", &["--no-stream", "--all", "--format", "--no-trunc"]),
+    t("kubectl get", "onlAw", &["--namespace", "--output", "--selector", "--all-namespaces", "--show-labels", "--context"]),
+    t("kubectl describe", "nlA", &["--namespace", "--selector", "--all-namespaces", "--context"]),
+    t("kubectl logs", "nfcp", &["--namespace", "--container", "--tail", "--since", "--previous", "--follow", "--timestamps", "--context"]),
+    t("git status", "sbu", &["--short", "--branch", "--porcelain"]),
+    // git log/diff: без --output и --ext-diff.
+    t("git log", "np", &["--oneline", "--graph", "--decorate", "--stat", "--since", "--until", "--author", "--format", "--pretty",
+        "--max-count", "--all", "--no-merges", "--name-only", "--name-status"]),
+    t("git diff", "U", &["--stat", "--cached", "--staged", "--name-only", "--name-status", "--no-ext-diff", "--color"]),
+    t("apt list", "", &["--installed", "--upgradable"]),
+    t("dpkg -l", "", &[]),
+    t("rpm -qa", "", &[]),
+    t("opkg list-installed", "", &[]),
+    t("uci show", "", &[]),
+    t("nginx -t", "", &[]),
+];
+
+/// `find`: предикаты с одним дефисом; запись и запуск (-delete, -exec, -fprint, -ok…) сюда не входят.
+const FIND_PREDICATES: &[&str] = &["-name", "-iname", "-path", "-ipath", "-type", "-maxdepth", "-mindepth", "-mtime", "-mmin",
+    "-atime", "-ctime", "-size", "-newer", "-user", "-group", "-perm", "-print", "-print0", "-ls", "-empty", "-not", "-o", "-a",
+    "-and", "-or", "-xdev", "-follow", "-L", "-H", "-P", "-regex", "-iregex", "-links"];
+
+/// Слова с учётом кавычек и `|` вне кавычек; `None`, если кавычка не закрыта.
+fn segments(command: &str) -> Option<Vec<Vec<String>>> {
+    let (mut segs, mut words, mut cur, mut quote, mut has) = (Vec::new(), Vec::new(), String::new(), None, false);
+    for c in command.chars() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), c) => cur.push(c),
+            (None, '\'' | '"') => { quote = Some(c); has = true; }
+            (None, '|') => { if has || !cur.is_empty() { words.push(std::mem::take(&mut cur)); } has = false; segs.push(std::mem::take(&mut words)); }
+            (None, c) if c.is_whitespace() => { if has || !cur.is_empty() { words.push(std::mem::take(&mut cur)); } has = false; }
+            (None, c) => cur.push(c),
+        }
+    }
+    if quote.is_some() { return None; }
+    if has || !cur.is_empty() { words.push(cur); }
+    segs.push(words);
+    Some(segs)
+}
+
+/// Скрипт sed без записи и запуска: `[адрес[,адрес]](p|d|q|=)` или `s/…/…/[gpI0-9]`.
+fn sed_script_ok(script: &str) -> bool {
+    let s = script.trim();
+    if let Some(rest) = s.strip_prefix('s') {
+        let Some(d) = rest.chars().next() else { return false };
+        if d.is_alphanumeric() || d.is_whitespace() { return false; }
+        let parts: Vec<&str> = rest[d.len_utf8()..].split(d).collect();
+        return parts.len() == 3 && parts[2].chars().all(|c| "gpI0123456789".contains(c));
+    }
+    let Some(cmd) = s.chars().last() else { return false };
+    if !"pdq=".contains(cmd) { return false; }
+    let addr = &s[..s.len() - 1];
+    addr.split(',').all(|a| a.is_empty() || a == "$" || a.chars().all(|c| c.is_ascii_digit())
+        || (a.len() >= 2 && a.starts_with('/') && a.ends_with('/') && !a[1..a.len() - 1].contains('/')))
+}
+
+fn segment_ok(words: &[String]) -> bool {
+    let Some(first) = words.first() else { return false };
+    if first == "find" {
+        // `-mtime -1`, `-size -10M` — значения, а не предикаты.
+        let value = |w: &str| w[1..].chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false);
+        return words[1..].iter().all(|w| !w.starts_with('-') || value(w) || FIND_PREDICATES.contains(&w.as_str()));
+    }
+    let pair = words.iter().take(2).cloned().collect::<Vec<_>>().join(" ");
+    let (tool, rest) = match READ_ONLY.iter().find(|t| t.name == pair) {
+        Some(t) => (t, &words[2.min(words.len())..]),
+        None => match READ_ONLY.iter().find(|t| t.name == first.as_str()) { Some(t) => (t, &words[1..]), None => return false },
+    };
+    let mut positional = Vec::new();
+    let mut flags_done = false;
+    for w in rest {
+        if flags_done || !w.starts_with('-') || w == "-" { positional.push(w.as_str()); continue; }
+        if w == "--" { flags_done = true; continue; }
+        if let Some(long) = w.strip_prefix("--") {
+            let name = format!("--{}", long.split('=').next().unwrap_or(""));
+            if !tool.long.contains(&name.as_str()) { return false; }
+        } else if !w[1..].chars().all(|c| c.is_ascii_digit()) && !w[1..].chars().all(|c| tool.short.contains(c) && c != ' ') {
+            return false;
+        }
+    }
+    match tool.name {
+        "uniq" => positional.len() <= 1,
+        "sed" => positional.first().map(|s| sed_script_ok(s)).unwrap_or(false),
+        "awk" => !rest.iter().any(|w| w.contains("system") || w.contains("getline") || w.contains("print >")),
+        _ => true,
+    }
+}
+
+/// Можно ли выполнить в режиме «только чтение»: строгий белый список утилит и их флагов,
+/// без перенаправлений, подстановок, цепочек и sudo.
 #[uniffi::export]
 pub fn mcp_is_read_only(command: String) -> bool {
     let t = command.trim();
     if t.is_empty() { return false; }
-    if [";", "&", ">", "<", "`", "$(", "\n", "\\"].iter().any(|b| t.contains(b)) { return false; }
-    for seg in t.split('|') {
-        let words: Vec<&str> = seg.split_whitespace().collect();
-        let Some(first) = words.first() else { return false };
-        if *first == "sudo" { return false; }
-        if *first == "sed" && words.iter().any(|w| w.starts_with("-i")) { return false; }
-        if *first == "find" && words.iter().any(|w| ["-delete", "-exec", "-execdir", "-fprint", "-ok"].contains(w)) { return false; }
-        if *first == "awk" && seg.contains("system(") { return false; }
-        let pair = words.iter().take(2).copied().collect::<Vec<_>>().join(" ");
-        if !READ_ONLY.contains(first) && !READ_ONLY_EXTRA.contains(first) && !READ_ONLY_PAIRS.contains(&pair.as_str())
-            && pair != "nginx -t" { return false; }
+    if [";", "&", ">", "<", "`", "$", "\n", "\r", "\\"].iter().any(|b| t.contains(b)) { return false; }
+    match segments(t) {
+        Some(segs) => segs.iter().all(|w| segment_ok(w)),
+        None => false,
     }
-    true
 }
 
 // MARK: - Журнал
@@ -366,8 +503,19 @@ mod tests {
 
     #[test]
     fn read_only_rules() {
-        for ok in ["ls -la /var/log", "df -h", "journalctl -u nginx -n 50 | grep error", "docker ps"] { assert!(mcp_is_read_only(ok.into()), "{ok}"); }
-        for bad in ["rm -rf /", "sudo ls", "cat a > b", "ls; rm x", "sed -i s/a/b/ f", "find / -delete", "echo $(id)"] { assert!(!mcp_is_read_only(bad.into()), "{bad}"); }
+        for ok in ["ls -la /var/log", "df -h", "journalctl -u nginx -n 50 | grep error", "docker ps", "tail -50 /var/log/syslog",
+                   "grep -i 'a|b c' f", "sed -n '1,20p' f", "sed 's/a/b/g' f", "sed -n /err/p f", "find /var -name '*.log' -mtime -1",
+                   "sort -rn f | uniq -c | head -5", "git log --oneline -n 5", "systemctl status nginx --no-pager", "ps aux"] {
+            assert!(mcp_is_read_only(ok.into()), "{ok}");
+        }
+        for bad in ["rm -rf /", "sudo ls", "cat a > b", "ls; rm x", "sed -i s/a/b/ f", "sed --in-place s/a/b/ f", "sed 's/a/b/w out' f",
+                    "sed 's/a/date/e' f", "sed '1w out' f", "find / -delete", "find / -exec rm {} +", "find / -fprint x", "echo $(id)",
+                    "echo $HOME", "sort -o out f", "sort --output=out f", "uniq in out", "journalctl --vacuum-size=1M", "journalctl --rotate",
+                    "env", "printenv", "ip link set eth0 down", "ubus call system reboot", "date -s 2020-01-01", "hostname evil", "dmesg -C",
+                    "ss -K", "ls --unknown", "grep -P x", "git diff --output=x", "git log --ext-diff", "awk 'BEGIN{system(\"id\")}'",
+                    "cat 'unclosed", "less f"] {
+            assert!(!mcp_is_read_only(bad.into()), "{bad}");
+        }
     }
 
     #[test]
