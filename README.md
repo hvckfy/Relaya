@@ -143,7 +143,8 @@ Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary
 ```
 core/                 Rust core (relaya-core): ~/.ssh/config, sync, MCP policy, terminal emulator, …
                       shared by every client through UniFFI bindings; tested on macOS, Linux and Windows
-apps/macos/           macOS client — SwiftPM package (SwiftUI), Swift facades over the core
+apps/swift/           Apple clients — SwiftPM package: macOS app now; iOS/iPadOS later share
+                      RelayaCore (Swift facades over the core) and the SwiftUI code here
 apps/dotnet/          .NET clients: Relaya.Windows (WinUI 3, early preview); Linux will live here too,
                       sharing the C# layer with Windows
 resources/            shared assets: localization (ru/en strings), app icon sources
@@ -160,7 +161,7 @@ macOS (needs Xcode 26 and Rust):
 git clone https://github.com/hvckfy/Relaya.git
 cd Relaya
 scripts/build-core-macos.sh
-cd apps/macos
+cd apps/swift
 swift build
 swift test
 swift run Relaya

@@ -7,8 +7,8 @@ xcuserdata/
 DerivedData/
 core/target/
 core/build/
-apps/macos/Sources/RelayaRust/*.swift
-apps/macos/Frameworks/
+apps/swift/Sources/RelayaRust/*.swift
+apps/swift/Frameworks/
 # Глобальный .gitignore может игнорировать bin/ — генератор UniFFI нужен в репозитории.
 !core/src/bin/
 

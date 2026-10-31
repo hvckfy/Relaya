@@ -29,14 +29,14 @@ jobs:
           scripts/build-core-macos.sh
       - uses: actions/cache@v4
         with:
-          path: apps/macos/.build
-          key: spm-${{ runner.os }}-${{ hashFiles('apps/macos/Package.resolved', 'apps/macos/Package.swift') }}
+          path: apps/swift/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('apps/swift/Package.resolved', 'apps/swift/Package.swift') }}
           restore-keys: spm-${{ runner.os }}-
 
       - name: Build
         run: swift build
-        working-directory: apps/macos
+        working-directory: apps/swift
 
       - name: Test
         run: swift test
-        working-directory: apps/macos
+        working-directory: apps/swift

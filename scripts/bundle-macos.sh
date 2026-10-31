@@ -7,7 +7,7 @@ VERSION="${1:-0.0.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build/Relaya.app"
 
-cd "$ROOT/apps/macos"
+cd "$ROOT/apps/swift"
 # По архитектуре отдельно: мульти-arch сборка уходит в xcbuild, который не тянет плагин SwiftTerm.
 BINS=()
 for ARCH in arm64 x86_64; do
@@ -36,7 +36,7 @@ for SIZE in 16 32 128 256 512; do
 done
 iconutil -c icns "$ROOT/build/Relaya.iconset" -o "$APP/Contents/Resources/Relaya.icns"
 
-# Переводы интерфейса: ключи — русские строки, en.lproj — английский (см. apps/macos/Sources/RelayaCore/Localization.swift).
+# Переводы интерфейса: ключи — русские строки, en.lproj — английский (см. apps/swift/Sources/RelayaCore/Localization.swift).
 cp -R "$ROOT/resources/localization/"*.lproj "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST

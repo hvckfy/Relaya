@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Собирает Rust-ядро (core/) в универсальную статическую библиотеку для macOS (arm64 + x86_64),
 # генерирует Swift-обёртки UniFFI и кладёт всё туда, откуда их берёт SwiftPM:
-#   apps/macos/Frameworks/RelayaCoreFFI.xcframework — библиотека + заголовок + modulemap
-#   apps/macos/Sources/RelayaRust/relaya_core.swift  — сгенерированный Swift API
+#   apps/swift/Frameworks/RelayaCoreFFI.xcframework — библиотека + заголовок + modulemap
+#   apps/swift/Sources/RelayaRust/relaya_core.swift  — сгенерированный Swift API
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORE="$ROOT/core"
 OUT="$CORE/build"
-MAC="$ROOT/apps/macos"
+MAC="$ROOT/apps/swift"
 cd "$CORE"
 
 TARGETS=(aarch64-apple-darwin x86_64-apple-darwin)
