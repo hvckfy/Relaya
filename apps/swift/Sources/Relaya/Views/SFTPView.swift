@@ -28,7 +28,7 @@ struct SFTPView: View {
     private var client: SFTPClient {
         let usePassword = !host.usesKey && model.keychain.hasPassword(for: host.keychainAccount)
         return SFTPClient(alias: host.alias,
-                          password: usePassword ? .init(store: model.keychain, account: host.keychainAccount, kind: .password) : nil,
+                          password: usePassword ? .init(store: model.keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil,
                           askpassExecutable: model.askpassExecutable)
     }
 

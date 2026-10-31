@@ -643,7 +643,7 @@ final class AppModel {
         }
         if usePassword {
             env = KeyInstaller(askpassExecutable: askpassExecutable)
-                .askpassEnvironment(.init(store: keychain, account: h.keychainAccount, kind: .password))
+                .askpassEnvironment(.init(store: keychain, account: h.keychainAccount, kind: .password, alias: h.alias))
             args += KeyInstaller.passwordOnlyOptions
         } else {
             args += ["-o", "BatchMode=yes"]
@@ -759,7 +759,7 @@ final class AppModel {
         let ssh = await invocation(for: h, interactive: true, reason: L("Открыть файлы на %@", h.alias))
         let usePassword = !ssh.environment.isEmpty
         let sftp = SFTPClient(alias: h.alias,
-                              password: usePassword ? .init(store: keychain, account: h.keychainAccount, kind: .password) : nil,
+                              password: usePassword ? .init(store: keychain, account: h.keychainAccount, kind: .password, alias: h.alias) : nil,
                               askpassExecutable: askpassExecutable)
         let bridge = WebDAVBridge(host: h, remoteRoot: path, sftp: sftp, ssh: ssh)
         bridge.onStopped = { [weak self] in self?.finderBridges[h.alias] = nil }
@@ -977,7 +977,7 @@ final class AppModel {
         let installer = KeyInstaller(askpassExecutable: askpassExecutable)
         // Фоновая проверка не вызывает Touch ID: пароль берём, только если доступ уже подтверждён.
         let secret: KeyInstaller.SecretRef? = keychain.hasPassword(for: host.keychainAccount) && SecretGate.shared.isUnlocked
-            ? .init(store: keychain, account: host.keychainAccount, kind: .password) : nil
+            ? .init(store: keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil
         if let os = await installer.detectOS(alias: alias, password: secret) {
             setOS(os, for: alias, onlyIfUnknown: false)
         }

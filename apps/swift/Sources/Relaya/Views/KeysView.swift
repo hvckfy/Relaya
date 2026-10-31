@@ -385,7 +385,7 @@ private struct DeployKeySheet: View {
             results[host.alias] = .running
             do {
                 let secret: KeyInstaller.SecretRef? = model.keychain.hasPassword(for: host.keychainAccount)
-                    ? .init(store: model.keychain, account: host.keychainAccount, kind: .password) : nil
+                    ? .init(store: model.keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil
                 try await installer.install(publicKey: key.publicKey, alias: host.alias, password: secret)
                 try await installer.verify(alias: host.alias, keyPath: key.path)
                 if writeConfig, host.identityFile.map(SSHPaths.expand) != key.path {

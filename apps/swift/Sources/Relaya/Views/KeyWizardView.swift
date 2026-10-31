@@ -138,17 +138,17 @@ final class KeyWizardModel {
                     guard await SecretGate.shared.authorize(L("Использовать сохранённый пароль для %@", host.alias)) else {
                         throw KeyInstaller.Failure(L("Touch ID не подтверждён — пароль из Keychain не использован."))
                     }
-                    secret = .init(store: model.keychain, account: host.keychainAccount, kind: .password)
+                    secret = .init(store: model.keychain, account: host.keychainAccount, kind: .password, alias: host.alias)
                 } else if !serverPassword.isEmpty {
                     if saveServerPassword {
                         try model.keychain.setPassword(serverPassword, for: host.keychainAccount)
-                        secret = .init(store: model.keychain, account: host.keychainAccount, kind: .password)
+                        secret = .init(store: model.keychain, account: host.keychainAccount, kind: .password, alias: host.alias)
                         note(L("пароль сервера сохранён в Keychain"))
                     } else {
                         let a = UUID().uuidString
                         try temp.setPassword(serverPassword, for: a)
                         tempAccounts.append(a)
-                        secret = .init(store: temp, account: a, kind: .password)
+                        secret = .init(store: temp, account: a, kind: .password, alias: host.alias)
                     }
                 }
                 note("append ~/.ssh/authorized_keys on \(host.alias)")

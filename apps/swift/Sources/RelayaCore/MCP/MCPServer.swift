@@ -41,7 +41,7 @@ public final class MCPServer {
                 var env: [String: String] = [:]
                 if !host.usesKey, keychain.hasPassword(for: host.keychainAccount) {
                     env = KeyInstaller(askpassExecutable: askpassExecutable)
-                        .askpassEnvironment(.init(store: keychain, account: host.keychainAccount, kind: .password))
+                        .askpassEnvironment(.init(store: keychain, account: host.keychainAccount, kind: .password, alias: host.alias))
                     args += KeyInstaller.passwordOnlyOptions
                 } else {
                     args += ["-o", "BatchMode=yes"]

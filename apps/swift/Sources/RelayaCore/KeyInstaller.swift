@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 
 /// Генерация ключа, установка на сервер и проверка входа.
 ///
@@ -29,17 +30,26 @@ public struct KeyInstaller: Sendable {
         public var store: KeychainStore
         public var account: String
         public var kind: SecretKind
+        /// Алиас хоста, к которому идёт ssh: для пароля обязателен — по нему проверяется, не запускает ли ssh
+        /// программы из конфига (ProxyCommand и т. п.), которым пароль достаться не должен.
+        public var alias: String?
 
-        public init(store: KeychainStore, account: String, kind: SecretKind) {
+        public init(store: KeychainStore, account: String, kind: SecretKind, alias: String? = nil) {
             self.store = store
             self.account = account
             self.kind = kind
+            self.alias = alias
         }
     }
 
     /// Окружение для ssh: askpass — сам Relaya, секрет он получит у брокера этого процесса по одноразовому токену.
     /// Имя записи Keychain в окружение не попадает.
     public func askpassEnvironment(_ secret: SecretRef) -> [String: String] {
+        // M8-1: ProxyCommand / LocalCommand / KnownHostsCommand / Match exec — потомки нашего ssh с его окружением;
+        // для таких хостов пароль автоматически не выдаётся вовсе (только ручной ввод).
+        if secret.kind == .password, !Self.passwordMayBeAutomated(alias: secret.alias) {
+            return ["SSH_ASKPASS_REQUIRE": "never"]
+        }
         guard let (socket, token) = try? AskpassBroker.shared.issue(secret) else {
             return ["SSH_ASKPASS_REQUIRE": "never"]
         }
@@ -50,6 +60,14 @@ public struct KeyInstaller: Sendable {
             "RELAYA_ASKPASS_SOCKET": socket,
             "RELAYA_ASKPASS_TOKEN": token,
         ]
+    }
+
+    /// Можно ли подставлять сохранённый пароль хоста автоматически: алиас известен и ssh для него не запускает
+    /// программ из `~/.ssh/config` (логика ядра, с учётом `Host *`, Include и Match).
+    public static func passwordMayBeAutomated(alias: String?) -> Bool {
+        guard let alias else { return false }
+        let text = (try? String(contentsOf: SSHConfigParser.defaultConfigURL, encoding: .utf8)) ?? ""
+        return !configRunsCommands(text: text, alias: alias)
     }
 
     // MARK: - Шаги

@@ -101,7 +101,7 @@ final class TunnelManager {
         process.arguments = tunnel.sshArguments(passwordOnly: usePassword)
         if usePassword, let host {
             let installer = KeyInstaller(askpassExecutable: askpassExecutable)
-            let env = installer.askpassEnvironment(.init(store: keychain, account: host.keychainAccount, kind: .password))
+            let env = installer.askpassEnvironment(.init(store: keychain, account: host.keychainAccount, kind: .password, alias: host.alias))
             process.environment = ProcessInfo.processInfo.environment.merging(env) { $1 }
         }
         process.standardInput = FileHandle.nullDevice
