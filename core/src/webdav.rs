@@ -23,13 +23,16 @@ fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
     hay.get(from..)?.windows(needle.len()).position(|w| w == needle).map(|p| p + from)
 }
 
+fn hex(b: u8) -> Option<u8> { (b as char).to_digit(16).map(|d| d as u8) }
+
+/// По байтам: срез строки после `%` мог прийтись на середину символа UTF-8 и уронить разбор.
 fn percent_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%' && i + 2 < b.len() {
-            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) { out.push(v); i += 3; continue; }
+            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) { out.push(h * 16 + l); i += 3; continue; }
         }
         out.push(b[i]);
         i += 1;
@@ -55,8 +58,20 @@ impl DavParser {
     }
 }
 
+/// Пределы разбора: заголовки, тело и один chunk. Сверх них — запрос `BAD`, клиенты отвечают 400/413.
+const MAX_HEAD: usize = 64 * 1024;
+const MAX_BODY: usize = 1 << 31;
+
+fn bad(buf: &mut Vec<u8>) -> Option<DavRequest> {
+    buf.clear();
+    Some(DavRequest { method: "BAD".into(), path: "/".into(), headers: HashMap::new(), body: Vec::new() })
+}
+
 fn next(buf: &mut Vec<u8>) -> Option<DavRequest> {
-    let head_end = find(buf, b"\r\n\r\n", 0)?;
+    let Some(head_end) = find(buf, b"\r\n\r\n", 0) else {
+        return if buf.len() > MAX_HEAD { bad(buf) } else { None };
+    };
+    if head_end > MAX_HEAD { return bad(buf); }
     let head = String::from_utf8_lossy(&buf[..head_end]).to_string();
     let mut lines = head.split("\r\n");
     let first: Vec<&str> = lines.next()?.split(' ').collect();
@@ -67,9 +82,17 @@ fn next(buf: &mut Vec<u8>) -> Option<DavRequest> {
     }
     let body_start = head_end + 4;
     let (body, consumed) = if headers.get("transfer-encoding").map(|v| v.to_lowercase().contains("chunked")).unwrap_or(false) {
-        dechunk(buf, body_start)?
+        match dechunk(buf, body_start) {
+            Chunked::Done(body, consumed) => (body, consumed),
+            Chunked::More => return None,
+            Chunked::Bad => return bad(buf),
+        }
     } else {
-        let len: usize = headers.get("content-length").and_then(|v| v.parse().ok()).unwrap_or(0);
+        let len: usize = match headers.get("content-length").map(|v| v.trim().parse::<usize>()) {
+            None => 0,
+            Some(Ok(l)) if l <= MAX_BODY => l,
+            Some(_) => return bad(buf),
+        };
         if buf.len() - body_start < len { return None; }
         (buf[body_start..body_start + len].to_vec(), body_start + len)
     };
@@ -78,18 +101,25 @@ fn next(buf: &mut Vec<u8>) -> Option<DavRequest> {
     Some(DavRequest { method: first[0].to_uppercase(), path: percent_decode(raw_path), headers, body })
 }
 
-fn dechunk(data: &[u8], start: usize) -> Option<(Vec<u8>, usize)> {
+enum Chunked { Done(Vec<u8>, usize), More, Bad }
+
+fn dechunk(data: &[u8], start: usize) -> Chunked {
     let mut out = Vec::new();
     let mut i = start;
     loop {
-        let line_end = find(data, b"\r\n", i)?;
+        let Some(line_end) = find(data, b"\r\n", i) else { return if data.len() - i > 1024 { Chunked::Bad } else { Chunked::More } };
         let size_line = String::from_utf8_lossy(&data[i..line_end]).to_string();
-        let size = usize::from_str_radix(size_line.split(';').next()?.trim(), 16).ok()?;
+        let Ok(size) = usize::from_str_radix(size_line.split(';').next().unwrap_or("").trim(), 16) else { return Chunked::Bad };
+        // `ffffffffffffffff` переполнял сложение; размер тела ограничен.
         let chunk_start = line_end + 2;
-        if data.len() < chunk_start + size + 2 { return None; }
-        if size == 0 { return Some((out, find(data, b"\r\n", chunk_start)? + 2)); }
-        out.extend_from_slice(&data[chunk_start..chunk_start + size]);
-        i = chunk_start + size + 2;
+        let Some(chunk_end) = chunk_start.checked_add(size).filter(|_| out.len().saturating_add(size) <= MAX_BODY) else { return Chunked::Bad };
+        let Some(after) = chunk_end.checked_add(2) else { return Chunked::Bad };
+        if data.len() < after { return Chunked::More; }
+        if size == 0 {
+            return match find(data, b"\r\n", chunk_start) { Some(e) => Chunked::Done(out, e + 2), None => Chunked::More };
+        }
+        out.extend_from_slice(&data[chunk_start..chunk_end]);
+        i = after;
     }
 }
 
@@ -142,10 +172,26 @@ pub fn dav_lock_response(token: String, path: String) -> Vec<u8> {
             escape(&encode_path(&path))).into_bytes()
 }
 
+/// Ответ на LOCK: один токен и в заголовке `Lock-Token`, и в теле. Продление (`If: (<token>)`) возвращает тот же токен.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DavLock { pub token: String, pub lock_token_header: String, pub body: Vec<u8> }
+
+#[uniffi::export]
+pub fn dav_lock(path: String, if_header: Option<String>) -> DavLock {
+    let refreshed = if_header.as_deref().and_then(|h| {
+        let s = h.find("<opaquelocktoken:")? + 1;
+        let e = h[s..].find('>')? + s;
+        Some(h[s..e].to_string())
+    });
+    let token = refreshed.unwrap_or_else(|| format!("opaquelocktoken:{}", uuid::Uuid::new_v4()));
+    DavLock { lock_token_header: format!("<{token}>"), body: dav_lock_response(token.clone(), path), token }
+}
+
 #[uniffi::export]
 pub fn dav_response(status: u16, reason: String, headers: HashMap<String, String>, body: Vec<u8>) -> Vec<u8> {
     let mut all: Vec<(String, String)> = headers.into_iter().collect();
-    all.push(("Content-Length".into(), body.len().to_string()));
+    // HEAD передаёт свой Content-Length (размер файла) с пустым телом — второй заголовок не добавляем.
+    if !all.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-length")) { all.push(("Content-Length".into(), body.len().to_string())); }
     all.push(("DAV".into(), "1, 2".into()));
     all.push(("MS-Author-Via".into(), "DAV".into()));
     all.sort();
@@ -208,6 +254,34 @@ mod tests {
         let c = DavParser::new().feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n".to_vec());
         assert_eq!(c[0].body, b"hello world");
         assert!(DavParser::new().feed(b"PUT /g HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nab".to_vec()).is_empty());
+    }
+
+    #[test]
+    fn hostile_requests_do_not_panic() {
+        // `%` перед многобайтным символом и обрывок `%`.
+        let r = DavParser::new().feed("GET /a%ж%2 HTTP/1.1\r\n\r\n".as_bytes().to_vec());
+        assert_eq!(r[0].path, "/a%ж%2");
+        let huge = DavParser::new().feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nffffffffffffffff\r\nx".to_vec());
+        assert_eq!(huge[0].method, "BAD");
+        assert_eq!(DavParser::new().feed(b"PUT /f HTTP/1.1\r\nContent-Length: 99999999999999999999\r\n\r\n".to_vec())[0].method, "BAD");
+        assert_eq!(DavParser::new().feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\n".to_vec())[0].method, "BAD");
+        assert_eq!(DavParser::new().feed(vec![b'a'; MAX_HEAD + 1])[0].method, "BAD");
+        // После BAD разбор продолжается со следующего запроса.
+        let p = DavParser::new();
+        let _ = p.feed(b"PUT /f HTTP/1.1\r\nContent-Length: x\r\n\r\n".to_vec());
+        assert_eq!(p.feed(b"GET /ok HTTP/1.1\r\n\r\n".to_vec())[0].path, "/ok");
+    }
+
+    #[test]
+    fn head_and_lock_headers() {
+        let head = String::from_utf8(dav_response(200, "OK".into(), HashMap::from([("Content-Length".into(), "42".into())]), vec![])).unwrap();
+        assert_eq!(head.matches("Content-Length").count(), 1);
+        assert!(head.contains("Content-Length: 42"));
+        let l = dav_lock("/t/a".into(), None);
+        assert!(l.token.starts_with("opaquelocktoken:") && l.lock_token_header == format!("<{}>", l.token));
+        assert!(String::from_utf8(l.body).unwrap().contains(&l.token));
+        let again = dav_lock("/t/a".into(), Some(format!("(<{}>)", l.token)));
+        assert_eq!(again.token, l.token);
     }
 
     #[test]
