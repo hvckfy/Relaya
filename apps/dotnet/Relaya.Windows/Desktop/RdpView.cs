@@ -49,7 +49,7 @@ internal sealed class RdpView : UserControl, IDisposable
 
     private RemoteSession? session;
     private string? tunnelId;
-    private bool connected, disposed, imeActive, settingClipboard;
+    private bool connected, disposed, imeActive, settingClipboard, fullScreenApplied;
     private readonly bool[] buttons = new bool[5];
 
     public RdpView(RemoteDesktop d)
@@ -284,7 +284,9 @@ internal sealed class RdpView : UserControl, IDisposable
             connecting.Visibility = Visibility.Collapsed;
             problem.IsOpen = false;
             Focus(FocusState.Programmatic);
-            if (desktop.fullScreen) SetFullScreen(true);
+            // Во весь экран — только при первом подключении: OnResize тоже приходит сюда и не должен
+            // возвращать полноэкранный режим, из которого пользователь вышел (К11).
+            if (desktop.fullScreen && !fullScreenApplied) { fullScreenApplied = true; SetFullScreen(true); }
             SendResize();
         });
     }
@@ -436,6 +438,8 @@ internal sealed class RdpView : UserControl, IDisposable
         connected = false;
         if (disposed) return;
         if (close.kind == RemoteCloseKind.ClosedByUser) { ShowProblem(L("Отключено"), L("Сеанс завершён.")); return; }
+        // Неверный сохранённый пароль: забываем его, иначе «Подключить снова» упирается в тот же отказ (К12).
+        if (close.kind == RemoteCloseKind.AuthFailed) CredentialStore.Delete(PasswordAccount);
         if (RelayaCoreMethods.RemoteExplain(RemoteProtocol.Rdp, close.message) is { } p) ShowProblem(L(p.title), L(p.hint));
         else ShowProblem(L("Соединение закрыто"), close.message);
     });
