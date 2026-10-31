@@ -28,4 +28,4 @@ jobs:
           name: relaya-core-linux-x64
           path: |
             core/target/release/librelaya_core.so
-            apps/dotnet/Relaya.Linux/Core/
+            apps/dotnet/Relaya.Shared/Core/

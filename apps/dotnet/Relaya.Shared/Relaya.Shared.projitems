@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Общий код Windows (WinUI 3) и Linux (Uno): исходники компилируются в каждом приложении.
+     Платформенные части (pty, пароли, askpass, отрисовка терминала, запуск RDP/VNC) — в самих приложениях. -->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core/ — привязки UniFFI, их кладут scripts/build-core-*.  -->
+    <Compile Include="$(MSBuildThisFileDirectory)**\*.cs" Exclude="$(MSBuildThisFileDirectory)**\bin\**;$(MSBuildThisFileDirectory)**\obj\**" />
+    <Compile Update="$(MSBuildThisFileDirectory)MainWindow.xaml.cs" DependentUpon="MainWindow.xaml" />
+    <Page Include="$(MSBuildThisFileDirectory)MainWindow.xaml" Link="MainWindow.xaml" />
+  </ItemGroup>
+</Project>

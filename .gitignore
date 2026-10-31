@@ -15,4 +15,4 @@ apps/swift/Frameworks/
 # Windows-клиент
 apps/dotnet/**/bin/
 apps/dotnet/**/obj/
-apps/dotnet/Relaya.Windows/Core/*.cs
+apps/dotnet/Relaya.Shared/Core/*.cs

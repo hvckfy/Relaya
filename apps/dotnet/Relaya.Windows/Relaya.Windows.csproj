@@ -25,6 +25,8 @@
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
   </ItemGroup>
+  <!-- Общие с Linux страницы, логика и MainWindow. -->
+  <Import Project="..\Relaya.Shared\Relaya.Shared.projitems" Label="Shared" />
   <ItemGroup>
     <Content Include="Assets\Relaya.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
@@ -33,7 +35,7 @@
     <None Include="..\..\..\resources\localization\en.lproj\Localizable.strings" Link="Localization\en.strings"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <!-- Rust-ядро: scripts/build-core-windows.ps1 кладёт relaya_core.dll и Core/relaya_core.cs. -->
+  <!-- Rust-ядро: scripts/build-core-windows.ps1 кладёт relaya_core.dll и Relaya.Shared/Core/relaya_core.cs. -->
   <ItemGroup>
     <None Include="..\..\..\core\target\release\relaya_core.dll" Link="relaya_core.dll"
           CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\relaya_core.dll')" />
