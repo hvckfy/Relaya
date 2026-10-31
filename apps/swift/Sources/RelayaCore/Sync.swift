@@ -299,6 +299,29 @@ extension Sync {
         syncTakeRenamedKeys(paths: paths.rust).map { ($0.name, $0.savedAs) }
     }
 
+    /// Удаление, пришедшее с другой машины и ждущее подтверждения (слишком много сразу).
+    public struct PendingDeletion: Identifiable, Hashable, Sendable {
+        public var id: String { kind + ":" + key }
+        public var kind: String
+        public var key: String
+        public var name: String
+        public var deletedAt: String
+        public var machine: String
+    }
+
+    public static func takePendingDeletions(paths: Paths = Paths()) -> [PendingDeletion] {
+        syncTakePendingDeletions(paths: paths.rust).map {
+            PendingDeletion(kind: $0.kind, key: $0.key, name: $0.name, deletedAt: $0.deletedAt, machine: $0.machine)
+        }
+    }
+
+    /// Применить отмеченные удаления; остальные отклоняются и больше не спрашиваются. Возвращает изменённые виды.
+    @discardableResult
+    public static func applyDeletions(_ confirmed: [PendingDeletion], paths: Paths = Paths()) throws -> [Item] {
+        try syncApplyDeletions(paths: paths.rust, confirmed: confirmed.map { DeletionKey(kind: $0.kind, key: $0.key) })
+            .map(Item.init(rust:))
+    }
+
     /// Ключи из синхронизации, которые не загружены: нет пароля шифрования ключей или он неверный.
     /// Ядро отдаёт результат последнего импорта один раз.
     public static func takeSkippedKeys(paths: Paths = Paths()) -> (noPassphrase: [String], wrongPassphrase: [String]) {

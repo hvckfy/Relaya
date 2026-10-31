@@ -1082,3 +1082,11 @@
 "Максимальный размер журналов, КБ" = "Maximum log size, KB";
 "terminal.log и журнал агентов: переросший файл становится .old, запись продолжается в новый" = "terminal.log and the agent log: a file that grows past this becomes .old and logging continues in a new one";
 "Открыть папку журналов" = "Open Logs Folder";
+"Синхронизация хочет удалить %@ элемент(ов)" = "Sync wants to delete %@ item(s)";
+"Удаления пришли с другой машины. Отмеченное будет удалено, остальное останется и больше не будет предлагаться к удалению. Перед удалением делается резервная копия." = "These deletions came from another machine. Checked items will be deleted; the rest stay and won't be offered for deletion again. A backup is made before deleting.";
+"Выбрать все" = "Select All";
+"Оставить все" = "Keep All";
+"Удалить отмеченные" = "Delete Checked";
+"сниппет" = "snippet";
+"туннель" = "tunnel";
+"удалённый стол" = "remote desktop";

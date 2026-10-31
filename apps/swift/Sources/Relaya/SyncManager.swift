@@ -180,11 +180,24 @@ final class SyncManager {
     var renamedKeys: [(name: String, savedAs: String)] = []
     /// Пришедшие ключи не загружены (нет или неверный пароль шифрования) — показывается в настройках синхронизации.
     var skippedKeysNotice: String?
+    /// Массовые удаления с другой машины ждут подтверждения пользователя (ядро не применяет их само).
+    var pendingDeletions: [Sync.PendingDeletion] = []
+
+    func resolveDeletions(confirm: [Sync.PendingDeletion]) {
+        do {
+            let changed = try Sync.applyDeletions(confirm)
+            if !changed.isEmpty { onImported?(changed) }
+        } catch {
+            skippedKeysNotice = error.localizedDescription
+        }
+        pendingDeletions = []
+    }
 
     private func finish(_ id: Sync.Profile.ID, _ imported: [Sync.Item]) {
         lastSync[id.uuidString] = Date()
         states[id] = .idle
         renamedKeys += Sync.takeRenamedKeys()
+        pendingDeletions += Sync.takePendingDeletions().filter { p in !pendingDeletions.contains(p) }
         let skipped = Sync.takeSkippedKeys()
         skippedKeysNotice = skipped.wrongPassphrase.isEmpty && skipped.noPassphrase.isEmpty ? nil
             : !skipped.wrongPassphrase.isEmpty

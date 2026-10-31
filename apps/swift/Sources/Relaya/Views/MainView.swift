@@ -63,6 +63,10 @@ struct MainView: View {
         .searchable(text: $model.searchText, placement: .sidebar, prompt: L("Хосты и подключения"))
         // Без своей заливки тулбара: сайдбар идёт на всю высоту окна (как в Finder),
         // а над рабочей областью виден её фон.
+        .sheet(isPresented: Binding(get: { !model.sync.pendingDeletions.isEmpty },
+                                    set: { if !$0, !model.sync.pendingDeletions.isEmpty { model.sync.resolveDeletions(confirm: []) } })) {
+            PendingDeletionsSheet(items: model.sync.pendingDeletions) { model.sync.resolveDeletions(confirm: $0) }
+        }
         .sheet(item: $model.desktopEditor) { d in
             DesktopEditor(desktop: d).environment(model)
         }

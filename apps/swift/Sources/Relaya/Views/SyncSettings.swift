@@ -309,3 +309,55 @@ struct SyncToolbarButton: View {
         }
     }
 }
+
+/// Синхронизация хочет удалить сразу много элементов (пришло с другой машины): по HIG — лист с формой,
+/// по умолчанию ничего не удаляется, удалить можно только отмеченное.
+struct PendingDeletionsSheet: View {
+    let items: [Sync.PendingDeletion]
+    let done: ([Sync.PendingDeletion]) -> Void
+    @State private var checked: Set<String> = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    ForEach(items) { item in
+                        Toggle(isOn: Binding(get: { checked.contains(item.id) },
+                                             set: { if $0 { checked.insert(item.id) } else { checked.remove(item.id) } })) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.name)
+                                Text("\(Self.kindTitle(item.kind)) · \(item.machine) · \(item.deletedAt)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text(L("Синхронизация хочет удалить %@ элемент(ов)", "\(items.count)"))
+                } footer: {
+                    Text(L("Удаления пришли с другой машины. Отмеченное будет удалено, остальное останется и больше не будет предлагаться к удалению. Перед удалением делается резервная копия."))
+                }
+            }
+            .formStyle(.grouped)
+            Divider()
+            HStack {
+                Button(L("Выбрать все")) { checked = Set(items.map(\.id)) }
+                Spacer()
+                Button(L("Оставить все")) { done([]) }.keyboardShortcut(.cancelAction)
+                Button(L("Удалить отмеченные"), role: .destructive) { done(items.filter { checked.contains($0.id) }) }
+                    .disabled(checked.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 520, height: 460)
+    }
+
+    static func kindTitle(_ kind: String) -> String {
+        switch kind {
+        case "host": L("хост")
+        case "snippet": L("сниппет")
+        case "tunnel": L("туннель")
+        case "desktop": L("удалённый стол")
+        default: kind
+        }
+    }
+}
