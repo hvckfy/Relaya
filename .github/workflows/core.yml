@@ -39,7 +39,7 @@ jobs:
           git config --global user.email ci@localhost
       - name: Test
         run: cargo test
-      # Встроенный RDP собирается только для Windows и Linux; Mac-сборка его не тянет.
+      # Встроенный RDP/VNC: Windows и Linux сейчас, Mac — позже; проверяем, что собирается и на darwin.
+      # Mac-сборка приложения (build-core-macos.sh, ci.yml) фичу не включает.
       - name: Test with remote-desktop
-        if: runner.os != 'macOS'
         run: cargo test --features remote-desktop
