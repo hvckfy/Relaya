@@ -13,7 +13,7 @@ namespace Relaya.Terminal;
 /// Процесс в псевдотерминале Linux: те же события и методы, что у PseudoConsole (ConPTY) на Windows.
 /// Без fork() из управляемого кода: posix_spawnp с POSIX_SPAWN_SETSID, а slave открывается уже в новой
 /// сессии и становится управляющим терминалом (glibc делает setsid до file actions).
-internal sealed class UnixPty : IDisposable
+internal sealed class UnixPty : IPty
 {
     private readonly int master;
     private readonly int pid;
@@ -22,6 +22,7 @@ internal sealed class UnixPty : IDisposable
 
     public event Action<byte[]>? Output;
     public event Action<int>? Exited;
+    public event Action<Exception>? HandlerFailed;
 
     public int ProcessId => pid;
 
@@ -96,7 +97,11 @@ internal sealed class UnixPty : IDisposable
             while ((n = stream.Read(buf)) > 0)
             {
                 try { Output?.Invoke(buf[..n]); }
-                catch (Exception e) { System.Diagnostics.Debug.WriteLine($"pty output handler: {e}"); }
+                catch (Exception e)
+                {
+                    System.Diagnostics.Debug.WriteLine($"pty output handler: {e}");
+                    try { HandlerFailed?.Invoke(e); } catch (Exception) { }
+                }
             }
         }
         catch (IOException) { }

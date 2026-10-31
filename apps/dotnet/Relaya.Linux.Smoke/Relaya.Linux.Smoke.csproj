@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\Relaya.Linux\Terminal\UnixPty.cs" Link="UnixPty.cs" />
+    <Compile Include="..\Relaya.Shared\Terminal\IPty.cs" Link="IPty.cs" />
   </ItemGroup>
 </Project>

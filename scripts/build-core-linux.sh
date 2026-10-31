@@ -4,7 +4,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/core"
-cargo build --release --lib
+# remote-desktop: встроенный RDP (IronRDP), как на Windows.
+cargo build --release --lib --features remote-desktop
 if ! command -v uniffi-bindgen-cs >/dev/null; then
   cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
 fi

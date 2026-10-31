@@ -6,13 +6,13 @@ using Relaya.Platform;
 
 namespace Relaya.Terminal;
 
-/// SSH-сессия во вкладке: ssh.exe из Windows OpenSSH в ConPTY ↔ нативный TerminalView.
+/// SSH-сессия во вкладке: ssh (Windows OpenSSH / системный на Linux) в псевдотерминале ↔ нативный TerminalView.
 /// После разрыва Enter переподключает в той же вкладке.
 internal sealed class SshSession : IDisposable
 {
     private readonly TerminalView view;
     private readonly string alias;
-    private PseudoConsole? console;
+    private IPty? console;
     private volatile bool ended;
     // Имя tmux-сессии постоянно на всю вкладку: переподключение возвращает в ту же сессию.
     private readonly string tmuxName;
@@ -23,7 +23,7 @@ internal sealed class SshSession : IDisposable
     /// После входа удалённая программа (su, sudo, mysql…) спросила пароль — вкладка предлагает подставить пароль хоста.
     public event Action? PasswordRequested;
 
-    private PseudoConsole? asked;
+    private IPty? asked;
 
     /// Подставить сохранённый пароль — только в ту же сессию, где был запрос (не в переподключённую).
     public void SendPassword()
@@ -46,10 +46,9 @@ internal sealed class SshSession : IDisposable
     {
         console?.Dispose();
         ended = false;
-        var system = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "OpenSSH", "ssh.exe");
-        var ssh = File.Exists(system) ? system : "ssh.exe";
+        var ssh = Relaya.Data.AppState.SshExe;
         var size = view.Emulator.Snapshot();
-        PseudoConsole pc;
+        IPty pc;
         try
         {
             // Хост с tmux (как на Mac): сессия живёт на сервере и переживает разрыв связи.
@@ -57,16 +56,16 @@ internal sealed class SshSession : IDisposable
             // и сервер не рвёт вход с «Too many authentication failures» до запроса пароля.
             var host = Relaya.Data.AppState.Host(alias);
             var options = Askpass.PasswordOnly(alias)
-                ? string.Concat(uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().Select(o => " " + Arg(o)))
-                : "";
-            var command = $"{Arg(ssh)}{options} {Arg(alias)}";
+                ? uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().ToArray()
+                : [];
+            string[] argv = [ssh, .. options, alias];
             if (host?.tmux == true)
             {
                 var ttl = long.TryParse(Relaya.Platform.Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
                 var attach = uniffi.relaya_core.RelayaCoreMethods.TmuxAttachCommand(tmuxName, ttl);
-                command = $"{Arg(ssh)}{options} -t {Arg(alias)} {Arg(attach)}";
+                argv = [ssh, .. options, "-t", alias, attach];
             }
-            pc = new PseudoConsole(command, (short)size.cols, (short)size.rows);
+            pc = Pty.Spawn(argv, (short)size.cols, (short)size.rows);
         }
         catch (Exception e)
         {
@@ -125,21 +124,6 @@ internal sealed class SshSession : IDisposable
     {
         if (!ended) { console?.Write(data); return; }
         if (data.Length == 1 && data[0] == '\r') Start();
-    }
-
-    // Аргумент командной строки Windows (правила CommandLineToArgvW): кавычки и обратные слэши перед ними.
-    private static string Arg(string a)
-    {
-        var sb = new StringBuilder("\"");
-        var slashes = 0;
-        foreach (var c in a)
-        {
-            if (c == '\\') { slashes++; continue; }
-            if (c == '"') { sb.Append('\\', slashes * 2 + 1).Append('"'); }
-            else { sb.Append('\\', slashes).Append(c); }
-            slashes = 0;
-        }
-        return sb.Append('\\', slashes * 2).Append('"').ToString();
     }
 
     public void Dispose() => console?.Dispose();

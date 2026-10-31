@@ -126,14 +126,16 @@ internal static class AppState
 
     // --- Запуск ssh без терминала (панели, SFTP, ключи) ---
 
-    public static string SshExe => Tool("ssh.exe");
-    public static string SftpExe => Tool("sftp.exe");
-    public static string KeygenExe => Tool("ssh-keygen.exe");
+    public static string SshExe => Tool("ssh");
+    public static string SftpExe => Tool("sftp");
+    public static string KeygenExe => Tool("ssh-keygen");
 
+    // Windows: встроенный OpenSSH из System32; Linux: системный ssh из PATH.
     private static string Tool(string name)
     {
-        var system = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "OpenSSH", name);
-        return File.Exists(system) ? system : name;
+        if (!OperatingSystem.IsWindows()) return name;
+        var system = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "OpenSSH", name + ".exe");
+        return File.Exists(system) ? system : name + ".exe";
     }
 
     public sealed record Result(int Status, string Stdout, string Stderr);
