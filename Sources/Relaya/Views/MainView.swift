@@ -156,7 +156,9 @@ struct MainView: View {
             DesktopsView()
         } else if model.screen == .agents {
             AgentsView()
-        } else if model.gridMode, model.tileableSessions.count >= 2 {
+        } else if model.gridMode, model.tileableSessions.count >= 2,
+                  // VNC/RDP в плитки не входят: их вкладка показывается сама, а не сетка за ней.
+                  model.activeSession.map({ s in model.tileableSessions.contains { $0.id == s.id } }) ?? true {
             SessionGrid()
         } else if let session = model.activeSession {
             // id привязывает содержимое к вкладке — при переключении процессы не пересоздаются.
