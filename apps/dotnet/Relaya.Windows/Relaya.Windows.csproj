@@ -21,6 +21,10 @@
     <NoWarn>$(NoWarn);CS8618;CS8625;CS8603;CS8604;CS0168</NoWarn>
   </PropertyGroup>
   <!-- Язык интерфейса при сборке (ADR-002): -p:RelayaLang=ru|en; без флага — по языку Windows. -->
+  <!-- Самопроверка TerminalView (Relaya.exe --selftest-terminal) — только в CI: -p:RelayaSelftest=true. -->
+  <PropertyGroup Condition="'$(RelayaSelftest)' == 'true'">
+    <DefineConstants>$(DefineConstants);RELAYA_SELFTEST</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(RelayaLang)' == 'ru'">
     <DefineConstants>$(DefineConstants);RELAYA_LANG_RU</DefineConstants>
   </PropertyGroup>

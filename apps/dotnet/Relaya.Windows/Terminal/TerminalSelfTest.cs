@@ -1,3 +1,4 @@
+#if RELAYA_SELFTEST
 using System;
 using System.IO;
 using System.Linq;
@@ -49,3 +50,4 @@ internal static class TerminalSelfTest
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern void ExitProcess(uint code);
 }
+#endif

@@ -63,12 +63,16 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     private readonly object feedLock = new();
 
     // Диагностика пустого экрана: %APPDATA%\Relaya\terminal.log — сбои Feed/OnDraw больше не немые.
+    // Только факты и размеры (содержимое терминала — лишь в selftest-сборке); не больше 256 КБ, один terminal.log.old.
     internal static void Trace(string message)
     {
         try
         {
             System.IO.Directory.CreateDirectory(Data.AppState.Support);
-            System.IO.File.AppendAllText(System.IO.Path.Combine(Data.AppState.Support, "terminal.log"), $"{DateTime.Now:O} {message}\n");
+            var file = System.IO.Path.Combine(Data.AppState.Support, "terminal.log");
+            if (System.IO.File.Exists(file) && new System.IO.FileInfo(file).Length > 256 * 1024)
+                System.IO.File.Move(file, file + ".old", overwrite: true);
+            System.IO.File.AppendAllText(file, $"{DateTime.Now:O} {message}\n");
         }
         catch (Exception) { }
     }
@@ -449,7 +453,11 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             if (!drawnText && Emulator.ScreenText().FirstOrDefault(l => l.Trim().Length > 0) is { } first)
             {
                 drawnText = true;
+#if RELAYA_SELFTEST
                 Trace($"OnDraw: first text «{first.Trim()}» canvas {ActualWidth}x{ActualHeight}");
+#else
+                Trace($"OnDraw: first text, {first.Trim().Length} chars, canvas {ActualWidth}x{ActualHeight}");
+#endif
             }
         }
         catch (Exception e)

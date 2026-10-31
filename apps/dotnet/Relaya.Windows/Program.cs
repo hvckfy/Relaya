@@ -19,8 +19,11 @@ public static class Program
             return Platform.McpHost.Run();
 
         // Самопроверка терминала в CI: настоящий TerminalView, Feed из фонового потока, отрисованный кадр.
+#if RELAYA_SELFTEST
+        // Только в CI-сборке (-p:RelayaSelftest=true): релизный Relaya.exe этот режим не знает.
         if (Array.IndexOf(args, "--selftest-terminal") is var i and >= 0)
             Terminal.TerminalSelfTest.LogPath = i + 1 < args.Length ? args[i + 1] : "selftest.log";
+#endif
 
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Application.Start(p =>

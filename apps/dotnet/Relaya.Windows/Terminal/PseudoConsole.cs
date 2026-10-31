@@ -109,7 +109,9 @@ internal sealed class PseudoConsole : IDisposable
         {
             var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Relaya");
             Directory.CreateDirectory(dir);
-            File.AppendAllText(Path.Combine(dir, "terminal.log"), $"{DateTime.Now:O} {message}\n");
+            var file = Path.Combine(dir, "terminal.log");
+            if (File.Exists(file) && new FileInfo(file).Length > 256 * 1024) File.Move(file, file + ".old", overwrite: true);
+            File.AppendAllText(file, $"{DateTime.Now:O} {message}\n");
         }
         catch (Exception) { }
     }

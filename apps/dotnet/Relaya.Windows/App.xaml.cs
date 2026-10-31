@@ -10,12 +10,14 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+#if RELAYA_SELFTEST
         if (Terminal.TerminalSelfTest.LogPath != null)
         {
             window = new Window { Title = "Relaya selftest" };
             Terminal.TerminalSelfTest.Run(window);
             return;
         }
+#endif
         window = new MainWindow();
         window.Activate();
     }
