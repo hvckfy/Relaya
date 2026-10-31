@@ -128,7 +128,13 @@ internal sealed class SftpPage : UserControl
         return $"{v:0.#} TB";
     }
 
-    private static nint Hwnd => WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current!);
+    // Windows: пикер привязывается к окну; на Linux (Uno) этого не нужно.
+    private static void Attach(object picker)
+    {
+#if !HAS_UNO
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current!));
+#endif
+    }
 
     private async Task Download()
     {
@@ -136,7 +142,7 @@ internal sealed class SftpPage : UserControl
         if (sel.Count == 0) { status.Text = L("Выберите файлы"); return; }
         var picker = new FolderPicker();
         picker.FileTypeFilter.Add("*");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
+        Attach(picker);
         if (await picker.PickSingleFolderAsync() is not { } folder) return;
         var r = await Batch(sel.Select(f => $"get -r {Q(Join(f.name))} {Q(folder.Path)}").ToArray());
         if (r.Status == 0) status.Text = L("Скачано в %@", folder.Path);
@@ -146,7 +152,7 @@ internal sealed class SftpPage : UserControl
     {
         var picker = new FileOpenPicker();
         picker.FileTypeFilter.Add("*");
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, Hwnd);
+        Attach(picker);
         var picked = await picker.PickMultipleFilesAsync();
         if (picked.Count > 0) await Put(picked.Select(f => f.Path));
     }

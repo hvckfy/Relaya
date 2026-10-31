@@ -20,8 +20,7 @@ internal sealed class SyncService
     public enum State { Idle, Syncing, Conflict, Failed }
 
     private const string PassphraseAccount = "relaya-sync-keys";
-    private static readonly string Support =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Relaya");
+    private static readonly string Support = Data.AppState.Support;
     private static readonly string Store = Path.Combine(Support, "sync-profiles.json");
     private static readonly SyncPaths Paths = new(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh"), Support);

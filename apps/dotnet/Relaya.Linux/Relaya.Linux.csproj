@@ -1,0 +1,29 @@
+<Project Sdk="Uno.Sdk/6.7.30">
+  <!-- Linux-клиент: Uno Platform, Skia desktop (X11). Общий код — Relaya.Shared, как у Windows. -->
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-desktop</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <UnoSingleProject>true</UnoSingleProject>
+    <RootNamespace>Relaya</RootNamespace>
+    <AssemblyName>relaya</AssemblyName>
+    <ApplicationTitle>Relaya</ApplicationTitle>
+    <ApplicationId>app.relaya.Relaya</ApplicationId>
+    <!-- Skia: SKCanvasElement и SkiaSharp для холста терминала. -->
+    <UnoFeatures>Skia</UnoFeatures>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Сгенерированные UniFFI-привязки не проходят наши предупреждения (как в Relaya.Windows). -->
+    <NoWarn>$(NoWarn);CS8618;CS8625;CS8603;CS8604;CS0168;Uno0001</NoWarn>
+  </PropertyGroup>
+  <Import Project="..\Relaya.Shared\Relaya.Shared.projitems" Label="Shared" />
+  <ItemGroup>
+    <None Include="..\..\..\resources\localization\en.lproj\Localizable.strings" Link="Localization\en.strings"
+          CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\resources\icon\relaya-icon.png" Link="Assets\relaya.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Rust-ядро: scripts/build-core-linux.sh кладёт librelaya_core.so и Relaya.Shared/Core/relaya_core.cs. -->
+  <ItemGroup>
+    <None Include="..\..\..\core\target\release\librelaya_core.so" Link="librelaya_core.so"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\librelaya_core.so')" />
+  </ItemGroup>
+</Project>

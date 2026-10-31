@@ -21,11 +21,14 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         Current = this;
+#if !HAS_UNO
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        // Windows: вкладки в заголовке, как в Windows Terminal. Linux: заголовок и кнопки окна рисует система (GNOME HIG, SSD).
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
-        Title = "Relaya";
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Relaya.ico"));
+#endif
+        Title = "Relaya";
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 820));
         ConfigPath.Text = AppState.ConfigPath;
         Search.PlaceholderText = L("Поиск хостов");

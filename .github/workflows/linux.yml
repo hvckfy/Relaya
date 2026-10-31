@@ -1,6 +1,6 @@
 name: Linux
 
-# Ветка main — проверка ядра и pty; пакеты (AppImage, .deb) добавятся вместе с приложением на Uno.
+# Ветка main — ядро, pty smoke и сборка приложения на Uno; пакеты (AppImage, .deb) — следующим шагом.
 on:
   push:
     branches: [main]
@@ -23,9 +23,13 @@ jobs:
       # pty: вывод, управляющий терминал, размер окна, ввод, ssh из PATH.
       - name: pty smoke test
         run: dotnet run --project apps/dotnet/Relaya.Linux.Smoke -c Release
+      - name: Build Uno app
+        run: |
+          version=0.0.0
+          if [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then version="${BASH_REMATCH[1]}"; fi
+          dotnet publish apps/dotnet/Relaya.Linux/Relaya.Linux.csproj -c Release -f net10.0-desktop -r linux-x64 \
+            --self-contained -p:Version=$version -o build/relaya-linux-x64
       - uses: actions/upload-artifact@v4
         with:
-          name: relaya-core-linux-x64
-          path: |
-            core/target/release/librelaya_core.so
-            apps/dotnet/Relaya.Shared/Core/
+          name: Relaya-linux-x64
+          path: build/relaya-linux-x64/
