@@ -126,9 +126,9 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("\uE9D9", L("Максимальный размер журналов, КБ"),
             L("terminal.log и журнал агентов: переросший файл становится .old, запись продолжается в новый"), logSize));
         list.Children.Add(Ui.Row("\uE838", L("Журналы"), Data.AppState.Support,
-            Ui.Button(L("Открыть папку журналов"), () => System.Diagnostics.Process.Start("explorer.exe", Data.AppState.Support))));
+            Ui.Button(L("Открыть папку журналов"), () => Platform.Shell.OpenFolder(Data.AppState.Support))));
         list.Children.Add(Ui.Row("", L("Файлы"), Data.AppState.ConfigPath + "\n" + Data.AppState.Support,
-            Ui.Button(L("Открыть папку"), () => System.Diagnostics.Process.Start("explorer.exe", Data.AppState.Support))));
+            Ui.Button(L("Открыть папку"), () => Platform.Shell.OpenFolder(Data.AppState.Support))));
         return page;
     }
 }
