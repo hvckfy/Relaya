@@ -9,9 +9,13 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use ironrdp::cliprdr::backend::CliprdrBackend;
+use ironrdp::cliprdr::pdu::{ClipboardFormat, ClipboardFormatId, ClipboardGeneralCapabilityFlags, FileContentsRequest,
+                            FileContentsResponse, FormatDataRequest, FormatDataResponse, LockDataId, OwnedFormatDataResponse};
+use ironrdp::cliprdr::CliprdrClient;
 use ironrdp::connector::connection_activation::ConnectionActivationState;
 use ironrdp::connector::{self, ConnectorErrorKind, Credentials, Sequence as _};
-use ironrdp::core::WriteBuf;
+use ironrdp::core::{IntoOwned as _, WriteBuf};
 use ironrdp::graphics::image_processing::PixelFormat;
 use ironrdp::input::{Database, MouseButton, MousePosition, Operation, Scancode, WheelRotations};
 use ironrdp::pdu::gcc::KeyboardType;
@@ -19,7 +23,7 @@ use ironrdp::pdu::geometry::InclusiveRectangle;
 use ironrdp::pdu::rdp::capability_sets::MajorPlatformType;
 use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
 use ironrdp::session::image::DecodedImage;
-use ironrdp::session::{fast_path, ActiveStage, ActiveStageBuilder, ActiveStageOutput};
+use ironrdp::session::{fast_path, ActiveStage, ActiveStageBuilder, ActiveStageOutput, SessionErrorExt as _};
 
 type Tls = rustls::StreamOwned<rustls::ClientConnection, TcpStream>;
 type Framed = ironrdp_blocking::Framed<Tls>;
@@ -70,10 +74,58 @@ pub trait RemoteListener: Send + Sync {
     fn on_closed(&self, close: RemoteClose);
 }
 
+/// Текст из буфера обмена удалённой машины. Необязательный слушатель: `RemoteSession::set_clipboard_listener`.
+#[uniffi::export(with_foreign)]
+pub trait RemoteClipboardListener: Send + Sync {
+    fn on_remote_clipboard(&self, text: String);
+}
+
 enum Cmd {
     Input(Vec<Operation>),
     Resize(u16, u16),
+    Clipboard(String),
     Disconnect,
+}
+
+/// События канала CLIPRDR: backend IronRDP их только складывает, обрабатывает поток сессии.
+#[derive(Debug)]
+enum Clip {
+    /// Канал готов или сервер просит наш список форматов — объявить свой текст, если он есть.
+    Advertise,
+    /// На удалённой машине скопировали; есть ли текст.
+    RemoteCopy(bool),
+    /// Сервер вставляет наш буфер — отдать текст.
+    DataRequest(ClipboardFormatId),
+    /// Пришёл запрошенный текст.
+    Data(String),
+}
+
+#[derive(Debug)]
+struct TextClipboard { events: Sender<Clip> }
+
+impl ironrdp::core::AsAny for TextClipboard {
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+}
+
+impl CliprdrBackend for TextClipboard {
+    fn temporary_directory(&self) -> &str { "" }
+    fn client_capabilities(&self) -> ClipboardGeneralCapabilityFlags { ClipboardGeneralCapabilityFlags::empty() }
+    fn on_ready(&mut self) { let _ = self.events.send(Clip::Advertise); }
+    fn on_request_format_list(&mut self) { let _ = self.events.send(Clip::Advertise); }
+    fn on_process_negotiated_capabilities(&mut self, _: ClipboardGeneralCapabilityFlags) {}
+    fn on_remote_copy(&mut self, formats: &[ClipboardFormat]) {
+        let _ = self.events.send(Clip::RemoteCopy(formats.iter().any(|f| f.id == ClipboardFormatId::CF_UNICODETEXT)));
+    }
+    fn on_format_data_request(&mut self, request: FormatDataRequest) { let _ = self.events.send(Clip::DataRequest(request.format)); }
+    fn on_format_data_response(&mut self, response: FormatDataResponse<'_>) {
+        if let Ok(text) = response.to_unicode_string() { let _ = self.events.send(Clip::Data(text)); }
+    }
+    // Файлы через буфер обмена — не на этом этапе.
+    fn on_file_contents_request(&mut self, _: FileContentsRequest) {}
+    fn on_file_contents_response(&mut self, _: FileContentsResponse<'_>) {}
+    fn on_lock(&mut self, _: LockDataId) {}
+    fn on_unlock(&mut self, _: LockDataId) {}
 }
 
 #[derive(uniffi::Object)]
@@ -82,13 +134,14 @@ pub struct RemoteSession {
     listener: Arc<dyn RemoteListener>,
     commands: Mutex<Option<Sender<Cmd>>>,
     cert_answer: Mutex<Option<Sender<bool>>>,
+    clipboard: Mutex<Option<Arc<dyn RemoteClipboardListener>>>,
 }
 
 #[uniffi::export]
 impl RemoteSession {
     #[uniffi::constructor]
     pub fn rdp(config: RdpConfig, listener: Arc<dyn RemoteListener>) -> Arc<Self> {
-        Arc::new(RemoteSession { config, listener, commands: Mutex::new(None), cert_answer: Mutex::new(None) })
+        Arc::new(RemoteSession { config, listener, commands: Mutex::new(None), cert_answer: Mutex::new(None), clipboard: Mutex::new(None) })
     }
 
     /// Запустить сессию в своём потоке. Повторный вызов ничего не делает.
@@ -134,6 +187,14 @@ impl RemoteSession {
     pub fn wheel(&self, units: i16, vertical: bool) {
         self.send(Cmd::Input(vec![Operation::WheelRotations(WheelRotations { is_vertical: vertical, rotation_units: units })]));
     }
+
+    /// Получать текст, скопированный на удалённой машине. Без слушателя буфер обмена только отдаётся серверу.
+    pub fn set_clipboard_listener(&self, listener: Arc<dyn RemoteClipboardListener>) {
+        *self.clipboard.lock().unwrap() = Some(listener);
+    }
+
+    /// Текст из локального буфера обмена: станет доступен для вставки на удалённой машине.
+    pub fn set_clipboard(&self, text: String) { self.send(Cmd::Clipboard(text)); }
 
     /// Новый размер окна: через Display Control, если сервер его поддерживает.
     pub fn resize(&self, width: u16, height: u16) { self.send(Cmd::Resize(width, height)); }
@@ -303,7 +364,10 @@ impl RemoteSession {
 
         let drdynvc = ironrdp::dvc::DrdynvcClient::new()
             .with_dynamic_channel(ironrdp::displaycontrol::client::DisplayControlClient::new(|_| Ok(Vec::new())));
-        let mut connector = connector::ClientConnector::new(self.connector_config(), client_addr).with_static_channel(drdynvc);
+        let (clip_tx, clip_rx) = mpsc::channel();
+        let mut connector = connector::ClientConnector::new(self.connector_config(), client_addr)
+            .with_static_channel(drdynvc)
+            .with_static_channel(CliprdrClient::new(Box::new(TextClipboard { events: clip_tx })));
 
         let mut framed = ironrdp_blocking::Framed::new(tcp);
         let should_upgrade = ironrdp_blocking::connect_begin(&mut framed, &mut connector).map_err(connector_close)?;
@@ -332,6 +396,7 @@ impl RemoteSession {
         let mut input = Database::new();
         let mut dirty: Vec<InclusiveRectangle> = Vec::new();
         let mut last_frame = Instant::now();
+        let mut local_text: Option<String> = None;
         let net = |e: std::io::Error| close(RemoteCloseKind::Network, e);
         let proto = |e: ironrdp::session::SessionError| close(RemoteCloseKind::Protocol, e);
 
@@ -348,6 +413,10 @@ impl RemoteSession {
                         let scale = (c.scale_percent > 100).then_some(c.scale_percent);
                         if let Some(frame) = stage.encode_resize(w, h, scale, None) { framed.write_all(&frame.map_err(proto)?).map_err(net)?; }
                     }
+                    Cmd::Clipboard(text) => {
+                        local_text = Some(text);
+                        if let Some(f) = self.advertise(&mut stage).map_err(proto)? { framed.write_all(&f).map_err(net)?; }
+                    }
                     Cmd::Disconnect => {
                         for out in stage.graceful_shutdown().map_err(proto)? {
                             if let ActiveStageOutput::ResponseFrame(f) = out { let _ = framed.write_all(&f); }
@@ -355,6 +424,9 @@ impl RemoteSession {
                         return Ok(());
                     }
                 }
+            }
+            while let Ok(ev) = clip_rx.try_recv() {
+                if let Some(f) = self.clip_event(&mut stage, ev, local_text.as_deref()).map_err(proto)? { framed.write_all(&f).map_err(net)?; }
             }
             match framed.read_pdu() {
                 Ok((action, payload)) => outputs.extend(stage.process(&mut image, action, &payload).map_err(proto)?),
@@ -378,6 +450,41 @@ impl RemoteSession {
                 let rects = coalesce(std::mem::take(&mut dirty)).iter().map(|r| crop(&image, r)).collect();
                 self.listener.on_frame(rects);
                 last_frame = Instant::now();
+            }
+        }
+    }
+
+    /// Объявить серверу, что у нас в буфере обмена есть текст.
+    fn advertise(&self, stage: &mut ActiveStage) -> ironrdp::session::SessionResult<Option<Vec<u8>>> {
+        let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { return Ok(None) };
+        let msgs = c.initiate_copy(&[ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)])
+            .map_err(ironrdp::session::SessionError::pdu)?;
+        stage.process_svc_processor_messages(msgs).map(Some)
+    }
+
+    fn clip_event(&self, stage: &mut ActiveStage, ev: Clip, local: Option<&str>) -> ironrdp::session::SessionResult<Option<Vec<u8>>> {
+        match ev {
+            Clip::Advertise => if local.is_some() { self.advertise(stage) } else { Ok(None) },
+            Clip::RemoteCopy(has_text) => {
+                // Текст забираем сразу, только если клиент его ждёт.
+                if !has_text || self.clipboard.lock().unwrap().is_none() { return Ok(None); }
+                let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { return Ok(None) };
+                let msgs = c.initiate_paste(ClipboardFormatId::CF_UNICODETEXT)
+                    .map_err(ironrdp::session::SessionError::pdu)?;
+                stage.process_svc_processor_messages(msgs).map(Some)
+            }
+            Clip::DataRequest(format) => {
+                let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { return Ok(None) };
+                let response: OwnedFormatDataResponse = match (format, local) {
+                    (ClipboardFormatId::CF_UNICODETEXT, Some(t)) => FormatDataResponse::new_unicode_string(t).into_owned(),
+                    _ => FormatDataResponse::new_error(),
+                };
+                let msgs = c.submit_format_data(response).map_err(ironrdp::session::SessionError::pdu)?;
+                stage.process_svc_processor_messages(msgs).map(Some)
+            }
+            Clip::Data(text) => {
+                if let Some(l) = self.clipboard.lock().unwrap().clone() { l.on_remote_clipboard(text.trim_end_matches('\0').to_string()); }
+                Ok(None)
             }
         }
     }
