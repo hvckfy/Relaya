@@ -31,6 +31,22 @@ internal static class HostEditor
         var address = Field(L("Адрес (HostName)"), source?.hostName, "203.0.113.10");
         var user = Field(L("Пользователь"), source?.user, "root");
         var port = Field(L("Порт"), source?.port?.ToString(), "22");
+        // `user@host[:port]` в «Название» или «Адрес» раскладывается по полям (разбор — ядро, parse_destination).
+        void Split(TextBox from)
+        {
+            var text = from.Text.Trim();
+            if (!text.Contains('@') && !text.StartsWith("ssh://")) return;
+            var d = RelayaCoreMethods.ParseDestination(text);
+            if (d.host.Length == 0) return;
+            if (d.user is { } u) user.Text = u;
+            if (d.port is { } pt) port.Text = pt.ToString();
+            address.Text = d.host;
+            if (from == alias || alias.Text.Trim().Length == 0) alias.Text = d.host;
+            from.Description = L("Разложено: пользователь, адрес и порт — в своих полях.");
+        }
+        alias.LostFocus += (_, _) => Split(alias);
+        address.LostFocus += (_, _) => Split(address);
+        alias.Description = L("Короткое имя без «@» и пробелов. Можно вставить user@host:port — разложим по полям.");
         var keys = Directory.Exists(AppState.SshDir)
             ? Directory.GetFiles(AppState.SshDir, "*.pub").Select(p => "~/.ssh/" + Path.GetFileNameWithoutExtension(p))
             : Enumerable.Empty<string>();
@@ -91,6 +107,8 @@ internal static class HostEditor
         }
         void Update()
         {
+            Split(alias);
+            Split(address);
             var h = Build(out var problem);
             error.Text = problem ?? "";
             preview.Text = h == null ? "" : string.Join("\n",

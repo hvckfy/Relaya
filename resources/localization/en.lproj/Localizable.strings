@@ -854,3 +854,5 @@
 "Нет" = "No";
 "(показано %@ из %@ символов)" = "(showing %@ of %@ characters)";
 "%@ (удалённый стол)" = "%@ (remote desktop)";
+"Разложено: пользователь, адрес и порт — в своих полях." = "Split: user, address and port are now in their own fields.";
+"Короткое имя без «@» и пробелов. Можно вставить user@host:port — разложим по полям." = "A short name without “@” or spaces. You can paste user@host:port and it will be split into the fields.";
