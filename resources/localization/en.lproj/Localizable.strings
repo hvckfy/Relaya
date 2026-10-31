@@ -1090,3 +1090,10 @@
 "сниппет" = "snippet";
 "туннель" = "tunnel";
 "удалённый стол" = "remote desktop";
+"Подтвердите удаление" = "Confirm Deletion";
+"Удалить отмеченные" = "Delete Selected";
+"Оставить все" = "Keep All";
+"Удаления пришли синхронизацией с другой машины. Перед удалением делается резервная копия." = "These deletions came through sync from another machine. A backup is made before deleting.";
+"Удалено на %@, %@" = "Deleted on %@, %@";
+"Туннель" = "Tunnel";
+"Удалённый стол" = "Remote Desktop";

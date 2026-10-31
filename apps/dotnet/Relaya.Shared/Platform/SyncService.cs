@@ -52,6 +52,16 @@ internal sealed class SyncService
     public event Action? Changed;
     public event Action? Imported;
 
+    /// Синхронизация хочет удалить элементы — нужен ответ человека (из фонового потока; UI переносит сам).
+    public event Action<List<PendingDeletion>>? DeletionsPending;
+
+    /// Применить подтверждённые удаления (пустой список — оставить все); перед удалением ядро делает бэкап.
+    public void ApplyDeletions(List<DeletionKey> confirmed)
+    {
+        var changed = RelayaCoreMethods.SyncApplyDeletions(Paths, confirmed);
+        if (changed.Count > 0) Imported?.Invoke();
+    }
+
     public (State State, string? Message) StateOf(SyncProfile p) => states.GetValueOrDefault(p.id, (State.Idle, null));
     public IReadOnlyList<SyncConflict> ConflictsOf(SyncProfile p) => conflicts.GetValueOrDefault(p.id) ?? new();
 
@@ -156,6 +166,8 @@ internal sealed class SyncService
             foreach (var k in RelayaCoreMethods.SyncTakeRenamedKeys(Paths)) renamed[k.savedAs] = k;
             // Ключи, которые ядро не смогло расшифровать: нет пароля шифрования или он другой.
             SkippedKeys = RelayaCoreMethods.SyncTakeSkippedKeys(Paths);
+            // Массовые удаления с другой машины ядро откладывает до подтверждения человеком.
+            if (RelayaCoreMethods.SyncTakePendingDeletions(Paths) is { Count: > 0 } pending) DeletionsPending?.Invoke(pending);
             Set(p, State.Idle, L("Синхронизировано %@", DateTime.Now.ToString("HH:mm")));
             if (imported.Count > 0) Imported?.Invoke();
         }

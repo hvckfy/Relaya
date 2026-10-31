@@ -36,6 +36,8 @@ public sealed partial class MainWindow : Window
         AppState.HostsChanged += () => DispatcherQueue.TryEnqueue(() => Render(Search.Text.Trim()));
         AppState.LoadHosts();
         Platform.SyncService.Shared.Imported += () => DispatcherQueue.TryEnqueue(AppState.LoadHosts);
+        Platform.SyncService.Shared.DeletionsPending += pending =>
+            DispatcherQueue.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.DeletionsDialog.Show(root, pending); });
         Platform.SyncService.Shared.ScheduleAuto();
         Platform.TunnelManager.Shared.StartAuto();
         Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
