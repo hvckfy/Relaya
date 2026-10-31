@@ -55,7 +55,12 @@ const RULES: &[(&[&str], &str, &str)] = &[
     (&["could not read from remote repository", "не удалось прочитать из внешнего репозитория"],
      "Нет доступа к репозиторию",
      "Сервер git не пустил по SSH: проверьте ключ (лучше указать его для сервера в ~/.ssh/config) и адрес репозитория."),
-    (&["no such file", "not recognized as an internal or external command", "program not found", "cannot find the file", "не является внутренней или внешней", "не удается найти указанный файл", "не удаётся найти указанный файл"],
+    // sftp/scp: файла на сервере нет — раньше это ловило правило «не найдена программа».
+    (&["couldn't stat remote file", "can't open remote file", "remote open", "couldn't open remote"],
+     "Файла на сервере нет",
+     "Проверьте путь на сервере: файл могли удалить, переименовать или он лежит в другой папке."),
+    (&["command not found", "createprocess", "not recognized as an internal or external command", "program not found", "cannot find the file", "не является внутренней или внешней", "не удается найти указанный файл", "не удаётся найти указанный файл",
+        "команда не найдена"],
      "Не найдена программа",
      "Установите недостающую программу (ssh, git) и перезапустите Relaya."),
 ];
@@ -104,6 +109,10 @@ mod tests {
         assert!(ssh_explain("connect to host x port 22: Подключение не установлено, т.к. конечный компьютер отверг запрос на подключение.".into()).unwrap().title.contains("отказал в подключении"));
         assert!(ssh_explain("\"ssh\" не является внутренней или внешней командой".into()).unwrap().title.contains("программа"));
         assert!(ssh_explain("fatal: «x» не похоже на git репозиторий".into()).unwrap().title.contains("не найден"));
+        assert!(ssh_explain("Couldn't stat remote file: No such file or directory".into()).unwrap().title.contains("Файла на сервере нет"));
+        assert!(ssh_explain("Warning: Identity file ~/.ssh/x not accessible: No such file or directory.".into()).is_none());
+        assert!(ssh_explain("rm: cannot remove 'a': No such file or directory".into()).is_none());
+        assert!(ssh_explain("zsh: command not found: ssh".into()).unwrap().title.contains("программа"));
         assert_eq!(ssh_error_line("x\nfatal: bad\nand the repository exists.".into()), "fatal: bad");
     }
 }

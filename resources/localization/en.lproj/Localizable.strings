@@ -811,6 +811,8 @@
 "Проверьте адрес репозитория и что у вашего ключа есть к нему доступ." = "Check the repository address and that your key has access to it.";
 "Нет доступа к репозиторию" = "No access to the repository";
 "Сервер git не пустил по SSH: проверьте ключ (лучше указать его для сервера в ~/.ssh/config) и адрес репозитория." = "The git server refused SSH access: check the key (best set it for the server in ~/.ssh/config) and the repository address.";
+"Файла на сервере нет" = "The file is not on the server";
+"Проверьте путь на сервере: файл могли удалить, переименовать или он лежит в другой папке." = "Check the path on the server: the file may have been deleted, renamed or be in another folder.";
 "Не найдена программа" = "Program not found";
 "Установите недостающую программу (ssh, git) и перезапустите Relaya." = "Install the missing program (ssh, git) and restart Relaya.";
 "Не найден git. Установите Git for Windows (git-scm.com) и перезапустите Relaya." = "git not found. Install Git for Windows (git-scm.com) and restart Relaya.";
