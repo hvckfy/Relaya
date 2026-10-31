@@ -716,3 +716,9 @@
 "разрешено: правило" = "allowed: rule";
 "запрещено: правило" = "denied: rule";
 "разрешено: временный доступ" = "allowed: temporary access";
+"Активные" = "Active";
+"С ошибкой" = "Failed";
+"Все" = "All";
+"Упавших сервисов нет." = "No failed services.";
+"работает" = "running";
+"остановлен" = "stopped";

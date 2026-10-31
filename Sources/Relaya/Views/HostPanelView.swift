@@ -8,6 +8,19 @@ struct HostPanelView: View {
     let host: SSHHost
     @State private var showAllServices = false
     @State private var serviceFilter = ""
+    @State private var scope: Scope = .active
+
+    enum Scope: String, CaseIterable, Identifiable {
+        case active, failed, all
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .active: L("Активные")
+            case .failed: L("С ошибкой")
+            case .all: L("Все")
+            }
+        }
+    }
     @State private var confirm: (action: String, unit: ServiceUnit)?
 
     var body: some View {
@@ -35,13 +48,33 @@ struct HostPanelView: View {
     @ViewBuilder private func services(_ panel: HostPanel) -> some View {
         let failed = panel.services.filter(\.isFailed)
         let query = serviceFilter.trimmingCharacters(in: .whitespaces).lowercased()
-        let filtered = query.isEmpty ? panel.services
-            : panel.services.filter { $0.name.lowercased().contains(query) || $0.description.lowercased().contains(query) }
+        let inScope = panel.services.filter { u in
+            switch scope {
+            case .active: u.isFailed || u.isActive
+            case .failed: u.isFailed
+            case .all: true
+            }
+        }
+        let filtered = query.isEmpty ? inScope
+            : inScope.filter { $0.name.lowercased().contains(query) || $0.description.lowercased().contains(query) }
         let shown = showAllServices || !query.isEmpty ? filtered : Array(filtered.prefix(max(8, failed.count)))
         Section {
-            if panel.services.count > 8 {
-                TextField(L("Найти сервис"), text: $serviceFilter)
+            HStack {
+                Picker("", selection: $scope) {
+                    ForEach(Scope.allCases) { s in
+                        Text(s == .failed && !failed.isEmpty ? "\(s.title) (\(failed.count))" : s.title).tag(s)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                TextField(L("Найти сервис"), text: $serviceFilter, prompt: Text(L("Найти сервис")))
                     .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
+            }
+            if filtered.isEmpty {
+                Text(scope == .failed ? L("Упавших сервисов нет.") : L("Ничего не найдено"))
+                    .foregroundStyle(.secondary)
             }
             ForEach(shown) { serviceRow($0) }
             if query.isEmpty, filtered.count > shown.count || showAllServices {
@@ -58,9 +91,9 @@ struct HostPanelView: View {
     private func serviceRow(_ u: ServiceUnit) -> some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(u.isFailed ? Theme.red : u.isRunning ? Theme.grn : Theme.tx2.opacity(0.4))
+                .fill(u.isFailed ? Theme.red : u.isRunning ? Theme.grn : u.isActive ? Theme.acc : Theme.tx2.opacity(0.4))
                 .frame(width: 8, height: 8)
-                .help(u.isFailed ? L("ошибка") : "\(u.active) · \(u.sub)")
+                .help(u.isFailed ? L("ошибка") : u.isRunning ? L("работает") : u.isActive ? "\(u.active) · \(u.sub)" : L("остановлен"))
             VStack(alignment: .leading, spacing: 1) {
                 Text(u.shortName).font(.system(.callout, design: .monospaced))
                 if !u.description.isEmpty {

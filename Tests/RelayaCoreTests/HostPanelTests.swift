@@ -24,6 +24,7 @@ struct HostPanelTests {
         #expect(p.services.first?.name == "nginx.service")
         #expect(p.services.first?.isFailed == true)
         #expect(p.services.count == 3)
+        #expect(p.services.map(\.shortName) == ["nginx", "cron", "ssh"])
         #expect(p.ports.map(\.port) == [22, 53, 80])
         #expect(p.ports.first?.process == "sshd")
         #expect(p.errors.count == 1)

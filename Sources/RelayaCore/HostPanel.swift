@@ -10,6 +10,10 @@ public struct ServiceUnit: Identifiable, Hashable, Sendable {
 
     public var isFailed: Bool { active == "failed" }
     public var isRunning: Bool { active == "active" && sub == "running" }
+    /// Активен (работает или выполнился и висит как active/exited) или в процессе запуска/остановки.
+    public var isActive: Bool { active == "active" || active == "activating" || active == "reloading" || active == "deactivating" }
+    /// Порядок в списке: упавшие → работающие → прочие активные → остановленные.
+    public var rank: Int { isFailed ? 0 : isRunning ? 1 : isActive ? 2 : 3 }
     /// Имя без `.service` — для подписи.
     public var shortName: String { name.hasSuffix(".service") ? String(name.dropLast(8)) : name }
 }
@@ -96,7 +100,7 @@ public struct HostPanel: Equatable, Sendable {
         // Уникальные порты: tcp/udp × адрес; сначала меньшие номера.
         var seen = Set<String>()
         ports = ports.filter { seen.insert($0.id).inserted }.sorted { ($0.port ?? 0, $0.proto) < ($1.port ?? 0, $1.proto) }
-        services.sort { ($0.isFailed ? 0 : 1, $0.name) < ($1.isFailed ? 0 : 1, $1.name) }
+        services.sort { ($0.rank, $0.name.lowercased()) < ($1.rank, $1.name.lowercased()) }
         return HostPanel(services: services, ports: ports, errors: errors, updates: updates,
                          hasSystemd: !services.isEmpty)
     }
