@@ -158,16 +158,23 @@ final class RDPSession {
     // MARK: - Сессия
 
     private func launch(user: String, domain: String?, password: String) {
+        let name = user.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else {
+            phase = .disconnected(L("Укажите имя пользователя."))
+            return
+        }
         let credentials: RDPCredentials
-        do {
-            guard let valid = try RDPCredentials.validated(username: user, domain: domain, password: password) else {
-                phase = .disconnected(L("Укажите имя пользователя и пароль."))
+        // Учётки без пароля бывают (локальный пользователь, NLA выключен): RDPKit.validated их отвергает, собираем сами.
+        if password.isEmpty {
+            credentials = RDPCredentials(username: name, domain: domain?.trimmingCharacters(in: .whitespaces), password: "")
+        } else {
+            do {
+                guard let valid = try RDPCredentials.validated(username: name, domain: domain, password: password) else { return }
+                credentials = valid
+            } catch {
+                phase = .disconnected(L("Учётные данные: %@", "\(error.localizedDescription)"))
                 return
             }
-            credentials = valid
-        } catch {
-            phase = .disconnected(L("Учётные данные: %@", "\(error.localizedDescription)"))
-            return
         }
         phase = .connecting
         presented = 0

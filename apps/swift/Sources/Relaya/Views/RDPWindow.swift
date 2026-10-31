@@ -95,13 +95,13 @@ struct RDPContent: View {
                 .font(.system(size: 15, weight: .bold))
             Text(session.desktop.summary).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
             TextField(L("Пользователь (или DOMAIN\\user)"), text: $user).textFieldStyle(.roundedBorder)
-            SecureField(L("Пароль"), text: $password).textFieldStyle(.roundedBorder)
+            SecureField(L("Пароль (если есть)"), text: $password).textFieldStyle(.roundedBorder)
                 .onSubmit(submit)
             Toggle(L("Сохранить пароль в Keychain"), isOn: $save)
             HStack {
                 Spacer()
                 Button(L("Войти"), action: submit).buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
-                    .disabled(user.isEmpty || password.isEmpty)
+                    .disabled(user.isEmpty)
             }
         }
         .padding(20)
@@ -110,7 +110,7 @@ struct RDPContent: View {
     }
 
     private func submit() {
-        guard !user.isEmpty, !password.isEmpty else { return }
+        guard !user.isEmpty else { return }
         session.provide(user: user, password: password, save: save)
         password = ""
     }
