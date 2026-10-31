@@ -132,6 +132,8 @@ struct SnippetPalette: View {
     @State private var query = ""
     @State private var chosen: Snippet?
     @State private var values: [String: String] = [:]
+    /// Сниппет, выбранный в палитре ⌘K, — сразу открыт.
+    var preselected: Snippet?
 
     private var matches: [Snippet] {
         let q = query.lowercased()
@@ -178,6 +180,7 @@ struct SnippetPalette: View {
         .padding(16)
         .frame(width: 520)
         .background(Theme.bg)
+        .onAppear { if let preselected { pick(preselected) } }
     }
 
     private func pick(_ s: Snippet) {
