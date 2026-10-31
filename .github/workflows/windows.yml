@@ -28,10 +28,21 @@ jobs:
         run: |
           $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.0.0' }
           msbuild apps/dotnet/Relaya.Windows/Relaya.Windows.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:Version=$version
+      # Установщик (Inno Setup есть на образе windows-latest; если нет — ставим через choco).
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.0.0' }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /DAppVersion=$version apps/dotnet/installer/Relaya.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: Relaya-windows-x64
-          path: apps/dotnet/Relaya.Windows/bin/x64/Release/
+          path: |
+            apps/dotnet/Relaya.Windows/bin/x64/Release/
+            build/Relaya-*-setup.exe
       - name: Publish to release
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
@@ -41,4 +52,4 @@ jobs:
           $zip = "Relaya-$env:GITHUB_REF_NAME-windows-x64.zip"
           Compress-Archive -Path apps/dotnet/Relaya.Windows/bin/x64/Release/net8.0-windows10.0.19041.0/win-x64/* -DestinationPath $zip
           gh release view $env:GITHUB_REF_NAME 2>$null; if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --generate-notes }
-          gh release upload $env:GITHUB_REF_NAME $zip --clobber
+          gh release upload $env:GITHUB_REF_NAME $zip (Get-Item build/Relaya-*-setup.exe).FullName --clobber

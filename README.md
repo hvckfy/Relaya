@@ -3,25 +3,27 @@
 <h1 align="center">Relaya</h1>
 
 <p align="center">
-  A native macOS SSH client where your keys live in <code>~/.ssh</code> — not in our vault.
+  A native SSH client for macOS and Windows where your keys live in <code>~/.ssh</code> — not in our vault.
 </p>
 
 <p align="center">
   <a href="https://github.com/hvckfy/Relaya/releases/latest"><img src="https://img.shields.io/github/v/release/hvckfy/Relaya" alt="Latest release"></a>
   <a href="https://github.com/hvckfy/Relaya/actions/workflows/ci.yml"><img src="https://github.com/hvckfy/Relaya/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Windows-10%2F11-blue" alt="Windows 10/11">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
 </p>
 
 ---
 
-Relaya is a free, open source alternative to Termius-style SSH managers, built with SwiftUI. It has **no proprietary storage and no cloud sync**:
+Relaya is a free, open source alternative to Termius-style SSH managers: SwiftUI on macOS, WinUI 3 on Windows, one shared Rust core. It has **no proprietary storage and no vendor cloud**:
 
 - your host list **is** your `~/.ssh/config`,
 - your keys are plain files in `~/.ssh`,
-- passwords and passphrases live in the macOS **Keychain**.
+- passwords and passphrases live in the macOS **Keychain** / Windows **Credential Manager**,
+- optional sync goes through **your own** git repository or folder.
 
-Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansible — anything that speaks SSH.
+Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code, git, Ansible — anything that speaks SSH.
 
 ## Screenshots
 
@@ -100,6 +102,8 @@ Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansib
 
 ## Installation
 
+### macOS
+
 1. Download `Relaya-vX.Y.Z.zip` from [Releases](https://github.com/hvckfy/Relaya/releases/latest).
 2. Unzip and move `Relaya.app` to `/Applications`.
 3. Builds are signed with a persistent self-signed certificate (Keychain permissions survive updates) but not notarized, so remove the quarantine flag once:
@@ -110,7 +114,17 @@ xattr -dr com.apple.quarantine /Applications/Relaya.app
 
 Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary (Apple Silicon and Intel).
 
+### Windows (preview)
+
+1. Download `Relaya-X.Y.Z-windows-x64-setup.exe` from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. A portable `…-windows-x64.zip` is there too.
+2. The installer isn't code-signed yet, so SmartScreen asks once: *More info → Run anyway*.
+3. Needs Windows 10 1809+ (Mica background on Windows 11) and the built-in **OpenSSH Client** (*Settings → Apps → Optional features*). Sync needs [Git for Windows](https://git-scm.com).
+
+The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, RDP (via Remote Desktop Connection) and VNC (via an installed viewer). Not yet on Windows: Windows Hello confirmation (macOS uses Touch ID), session recording, built-in VNC/RDP windows.
+
 ## Keyboard shortcuts
+
+macOS (on Windows: Ctrl+Shift+C/V copy/paste, Ctrl+Shift+F find, Ctrl+Shift+D/W split/close tile, Ctrl+W close tab, Ctrl+Tab next tab, Ctrl+K search hosts, Ctrl+click opens links):
 
 | Action | Shortcut |
 |---|---|
@@ -133,10 +147,10 @@ Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary
 ## Security model
 
 - **Nothing is written without confirmation.** Config edits, new key files and server changes are previewed as a diff first.
-- **Secrets stay in Keychain.** For non-interactive operations (e.g. installing a key on a server) ssh receives the secret through an askpass helper — Relaya itself, launched by ssh, reads it from Keychain on demand.
+- **Secrets stay in Keychain / Credential Manager.** For non-interactive operations (e.g. installing a key on a server) ssh receives the secret through an askpass helper — Relaya itself, launched by ssh, reads it from Keychain (Credential Manager on Windows) on demand.
 - **Known limitation:** `ssh-keygen` only accepts a new key's passphrase as an argument, so it is briefly visible in the process list while the key is generated.
 - **Server changes only after confirmation.** Disabling password login, for example, asks first, shows the command and warns if the host has no key; OS actions are inserted into the terminal without Enter.
-- **AI agents need your approval.** On hosts in "confirm" mode every command is shown in a Touch ID prompt.
+- **AI agents need your approval.** On hosts in "confirm" mode every command is shown in a Touch ID prompt (a system confirmation dialog on Windows).
 
 ## Repository layout
 
@@ -145,7 +159,7 @@ core/                 Rust core (relaya-core): ~/.ssh/config, sync, MCP policy, 
                       shared by every client through UniFFI bindings; tested on macOS, Linux and Windows
 apps/swift/           Apple clients — SwiftPM package: macOS app now; iOS/iPadOS later share
                       RelayaCore (Swift facades over the core) and the SwiftUI code here
-apps/dotnet/          .NET clients: Relaya.Windows (WinUI 3, early preview); Linux will live here too,
+apps/dotnet/          .NET clients: Relaya.Windows (WinUI 3), installer (Inno Setup); Linux will live here too,
                       sharing the C# layer with Windows
 resources/            shared assets: localization (ru/en strings), app icon sources
 scripts/              build-core-macos.sh, bundle-macos.sh, build-core-windows.ps1
@@ -169,7 +183,7 @@ swift run Relaya
 
 To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build/Relaya.app`. Releases are built by GitHub Actions on every `v*` tag.
 
-Windows (needs Rust, .NET 8 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild.
+Windows (needs Rust, .NET 8 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild; `apps/dotnet/installer/Relaya.iss` (Inno Setup 6) builds the installer.
 
 See [docs/UI_SPEC.md](docs/UI_SPEC.md) for the full UI specification (in Russian).
 
