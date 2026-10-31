@@ -1078,3 +1078,7 @@
 "Пароль шлюза" = "Gateway password";
 "Максимальный размер журналов" = "Maximum log size";
 "КБ" = "KB";
+"Журналы" = "Logs";
+"Максимальный размер журналов, КБ" = "Maximum log size, KB";
+"terminal.log и журнал агентов: переросший файл становится .old, запись продолжается в новый" = "terminal.log and the agent log: a file that grows past this becomes .old and logging continues in a new one";
+"Открыть папку журналов" = "Open Logs Folder";

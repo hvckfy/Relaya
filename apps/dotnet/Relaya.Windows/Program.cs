@@ -25,6 +25,7 @@ public static class Program
             Terminal.TerminalSelfTest.LogPath = i + 1 < args.Length ? args[i + 1] : "selftest.log";
 #endif
 
+        Terminal.PseudoConsole.LogSink = Terminal.TerminalView.Trace;
         WinRT.ComWrappersSupport.InitializeComWrappers();
         Application.Start(p =>
         {

@@ -116,6 +116,16 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("", "GitHub", "https://github.com/hvckfy/Relaya",
             Ui.Button(L("Открыть"), () => _ = Windows.System.Launcher.LaunchUriAsync(new System.Uri("https://github.com/hvckfy/Relaya")))));
         list.Children.Add(Ui.Row("", L("Ядро"), "relaya-core " + uniffi.relaya_core.RelayaCoreMethods.CoreVersion()));
+        var logSize = new NumberBox
+        {
+            Minimum = Platform.LogFiles.MinKB, Maximum = Platform.LogFiles.MaxKB, SmallChange = 64, LargeChange = 1024,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, Value = Platform.LogFiles.LimitKB,
+        };
+        logSize.ValueChanged += (_, e) => { if (!double.IsNaN(e.NewValue)) Platform.Settings.Set("logs.maxKB", ((int)e.NewValue).ToString()); };
+        list.Children.Add(Ui.Row("\uE9D9", L("Максимальный размер журналов, КБ"),
+            L("terminal.log и журнал агентов: переросший файл становится .old, запись продолжается в новый"), logSize));
+        list.Children.Add(Ui.Row("\uE838", L("Журналы"), Data.AppState.Support,
+            Ui.Button(L("Открыть папку журналов"), () => System.Diagnostics.Process.Start("explorer.exe", Data.AppState.Support))));
         list.Children.Add(Ui.Row("", L("Файлы"), Data.AppState.ConfigPath + "\n" + Data.AppState.Support,
             Ui.Button(L("Открыть папку"), () => System.Diagnostics.Process.Start("explorer.exe", Data.AppState.Support))));
         return page;

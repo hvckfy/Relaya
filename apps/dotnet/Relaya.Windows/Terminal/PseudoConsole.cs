@@ -102,19 +102,10 @@ internal sealed class PseudoConsole : IDisposable
         catch (ObjectDisposedException) { }
     }
 
-    // %APPDATA%\Relaya\terminal.log — тот же файл, что у TerminalView.
-    private static void Log(string message)
-    {
-        try
-        {
-            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Relaya");
-            Directory.CreateDirectory(dir);
-            var file = Path.Combine(dir, "terminal.log");
-            if (File.Exists(file) && new FileInfo(file).Length > 256 * 1024) File.Move(file, file + ".old", overwrite: true);
-            File.AppendAllText(file, $"{DateTime.Now:O} {message}\n");
-        }
-        catch (Exception) { }
-    }
+    /// Журнал сбоев (приложение направляет его в terminal.log через LogFiles; в smoke-тесте — никуда).
+    public static Action<string>? LogSink;
+
+    private static void Log(string message) => LogSink?.Invoke(message);
 
     public void Write(byte[] data)
     {

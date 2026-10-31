@@ -84,7 +84,7 @@ internal static class McpHost
         public void Log(McpLogEntry entry)
         {
             Directory.CreateDirectory(Data.AppState.Support);
-            File.AppendAllText(LogFile, RelayaCoreMethods.McpLogLine(entry) + "\n");
+            LogFiles.Append(LogFile, RelayaCoreMethods.McpLogLine(entry) + "\n");
         }
     }
 }
