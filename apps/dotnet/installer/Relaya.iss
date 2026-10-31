@@ -1,6 +1,7 @@
 ; Установщик Relaya для Windows (Inno Setup 6): ставит в профиль пользователя без прав администратора,
 ; ярлыки в «Пуск» (и по желанию на рабочем столе), удаление через «Параметры → Приложения».
-; Собирается в CI: iscc /DAppVersion=x.y.z /DSourceDir=<папка сборки> Relaya.iss
+; Собирается в CI: iscc /DAppVersion=x.y.z /DRelayaLang=ru|en /DSourceDir=<папка сборки> Relaya.iss
+; RelayaLang (ADR-002): один язык установщика и суффикс в имени файла; без него — оба языка, как раньше.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -26,7 +27,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 OutputDir=..\..\..\build
+#ifdef RelayaLang
+OutputBaseFilename=Relaya-{#AppVersion}-windows-x64-{#RelayaLang}-setup
+#else
 OutputBaseFilename=Relaya-{#AppVersion}-windows-x64-setup
+#endif
 SetupIconFile=..\Relaya.Windows\Assets\Relaya.ico
 UninstallDisplayIcon={app}\Relaya.exe
 UninstallDisplayName=Relaya
@@ -38,8 +43,16 @@ RestartApplications=no
 LicenseFile=..\..\..\LICENSE
 
 [Languages]
+#ifdef RelayaLang
+  #if RelayaLang == "ru"
+Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+  #else
+Name: "en"; MessagesFile: "compiler:Default.isl"
+  #endif
+#else
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
