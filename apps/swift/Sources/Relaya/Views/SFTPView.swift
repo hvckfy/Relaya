@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Файлы на сервере по SFTP (UI_SPEC 3.8): навигация, скачивание, загрузка (в т.ч. из Finder).
+/// Файлы на сервере по SFTP: навигация, скачивание, загрузка (в т.ч. из Finder).
 struct SFTPView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

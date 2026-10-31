@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Экран «Агенты (MCP)» (UI_SPEC 3.12): подключение к AI-клиентам, права по хостам, журнал.
+/// Экран «Агенты (MCP)»: подключение к AI-клиентам, права по хостам, журнал.
 struct AgentsView: View {
     @Environment(AppModel.self) private var model
     @State private var policy = MCPPolicyStore().load()

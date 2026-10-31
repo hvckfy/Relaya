@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Главное окно (docs/design/Main): sidebar · вкладки · хлебные крошки · терминал · статус-бар.
+/// Главное окно: sidebar · вкладки · хлебные крошки · терминал · статус-бар.
 struct MainView: View {
     @Environment(AppModel.self) private var model
 

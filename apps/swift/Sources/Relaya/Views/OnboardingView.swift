@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Первый запуск (docs/design/Onboarding1–3, UI_SPEC 3.1).
+/// Первый запуск.
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var step = 0

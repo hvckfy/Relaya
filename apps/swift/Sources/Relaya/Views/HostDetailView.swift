@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Карточка хоста без активной сессии (UI_SPEC 3.3).
+/// Карточка хоста без активной сессии.
 struct HostDetailView: View {
     @Environment(AppModel.self) private var model
     let host: SSHHost

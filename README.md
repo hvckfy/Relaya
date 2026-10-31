@@ -195,8 +195,6 @@ Windows (needs Rust, .NET 10 and Visual Studio 2022 with the WinUI workload): ru
 
 Linux (needs Rust and .NET 10): `scripts/build-core-linux.sh`, then `dotnet publish apps/dotnet/Relaya.Linux -r linux-x64`.
 
-See [docs/UI_SPEC.md](docs/UI_SPEC.md) for the full UI specification (in Russian).
-
 ## Contributing
 
 Issues and pull requests are welcome. Please keep the core idea intact: `~/.ssh` stays the source of truth, and every change to files or servers is shown before it is applied.

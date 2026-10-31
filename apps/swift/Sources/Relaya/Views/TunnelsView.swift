@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Экран «Туннели» (UI_SPEC 3.9): пробросы портов и их состояние.
+/// Экран «Туннели»: пробросы портов и их состояние.
 struct TunnelsView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: Tunnel?

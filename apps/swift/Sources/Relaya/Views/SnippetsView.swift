@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Экран «Сниппеты» (UI_SPEC 3.10): библиотека команд, запуск на нескольких хостах.
+/// Экран «Сниппеты»: библиотека команд, запуск на нескольких хостах.
 struct SnippetsView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: Snippet?

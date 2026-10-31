@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Экран «Ключи» (docs/design/Keys, UI_SPEC 3.7): пары ключей из ~/.ssh и инспектор.
+/// Экран «Ключи»: пары ключей из ~/.ssh и инспектор.
 struct KeysView: View {
     @Environment(AppModel.self) private var model
     @State private var keys: [SSHKey] = []

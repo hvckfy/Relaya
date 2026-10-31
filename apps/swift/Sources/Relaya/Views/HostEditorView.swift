@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Редактор хоста (docs/design/HostEditor, UI_SPEC 3.4). Пишет прямо в ~/.ssh/config.
+/// Редактор хоста. Пишет прямо в ~/.ssh/config.
 struct HostEditorView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

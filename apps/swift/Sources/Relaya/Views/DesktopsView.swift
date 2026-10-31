@@ -1,7 +1,7 @@
 import SwiftUI
 import RelayaCore
 
-/// Экран «Рабочие столы» (UI_SPEC 3.11): VNC и RDP, в т.ч. через SSH-туннель.
+/// Экран «Рабочие столы»: VNC и RDP, в т.ч. через SSH-туннель.
 struct DesktopsView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: RemoteDesktop?
