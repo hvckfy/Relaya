@@ -95,8 +95,19 @@ struct SFTPView: View {
         .background(embedded ? Theme.session : Theme.bg)
         .task { await start() }
         .onDisappear {
-            queue.cancelAll()
-            edits.forEach { $0.stop() }
+            // Переключение вкладки — не закрытие: передачи и правки файлов останавливаются, только когда вкладки
+            // «Файлы» этого хоста больше нет (или закрыто отдельное окно).
+            let alias = host.alias
+            let queue = queue, edits = edits
+            Task { @MainActor in
+                if embedded {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    let open = model.sessions.contains { if case .files(let h) = $0.kind { return h.alias == alias }; return false }
+                    if open { return }
+                }
+                queue.cancelAll()
+                edits.forEach { $0.stop() }
+            }
         }
         .alert(L("Переименовать"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("Имя"), text: $renameText)
@@ -241,9 +252,12 @@ struct SFTPView: View {
         Task {
             busy = label
             error = nil
-            do { try await op() } catch { self.error = error.localizedDescription }
+            var failure: String?
+            do { try await op() } catch { failure = error.localizedDescription }
             busy = nil
             await load(path)
+            // Ошибка операции важнее: обновление списка её не стирает.
+            if let failure { error = failure }
         }
     }
 
