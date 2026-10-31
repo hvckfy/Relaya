@@ -154,3 +154,58 @@ extension TileLayout.Edge {
         }
     }
 }
+
+/// Раскладка по алиасам хостов в общем формате ядра (`{"leaf": "web"}`, `{"row": […]}`, `{"column": […]}`) —
+/// так её пишут и читают все клиенты в `layouts.json`.
+extension TileLayout where ID == String {
+    public var jsonObject: Any {
+        switch self {
+        case .leaf(let alias): ["leaf": alias]
+        case .row(let c): ["row": c.map(\.jsonObject)]
+        case .column(let c): ["column": c.map(\.jsonObject)]
+        }
+    }
+
+    public init?(jsonObject obj: Any) {
+        guard let d = obj as? [String: Any], let (k, v) = d.first else { return nil }
+        switch k {
+        case "leaf": guard let a = v as? String else { return nil }; self = .leaf(a)
+        case "row": guard let a = v as? [Any] else { return nil }; self = .row(a.compactMap(TileLayout(jsonObject:)))
+        case "column": guard let a = v as? [Any] else { return nil }; self = .column(a.compactMap(TileLayout(jsonObject:)))
+        default: return nil
+        }
+    }
+}
+
+/// Сохранённые раскладки — `layouts.json` в папке данных Relaya, формат общий с Windows и Linux:
+/// `[{ "id": "<UUID>", "name": "…", "layout": <раскладка ядра, листья — алиасы> }]`.
+public enum LayoutStore {
+    public struct Saved: Identifiable, Equatable, Sendable {
+        public var id: UUID
+        public var name: String
+        public var layout: TileLayout<String>
+        public init(id: UUID = UUID(), name: String, layout: TileLayout<String>) {
+            self.id = id
+            self.name = name
+            self.layout = layout
+        }
+    }
+
+    public static var url: URL { RelayaPaths.supportDirectory.appending(path: "layouts.json") }
+
+    public static func load() -> [Saved] {
+        guard let data = try? Data(contentsOf: url),
+              let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return list.compactMap { d in
+            guard let name = d["name"] as? String, let l = d["layout"].flatMap(TileLayout<String>.init(jsonObject:)) else { return nil }
+            return Saved(id: (d["id"] as? String).flatMap(UUID.init(uuidString:)) ?? UUID(), name: name, layout: l)
+        }
+    }
+
+    public static func save(_ list: [Saved]) {
+        let json = list.map { ["id": $0.id.uuidString, "name": $0.name, "layout": $0.layout.jsonObject] as [String: Any] }
+        guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
+    }
+}

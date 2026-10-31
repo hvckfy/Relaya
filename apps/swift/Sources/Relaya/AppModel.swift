@@ -183,17 +183,27 @@ final class AppModel {
     // MARK: - Сохранённые раскладки
 
     /// Раскладка из хостов: «мои 4 сервера плитками» одной командой.
-    struct SavedLayout: Codable, Identifiable, Equatable {
+    typealias SavedLayout = LayoutStore.Saved
+
+    /// Раскладки — в общем с Windows/Linux файле layouts.json; старые из UserDefaults переносятся один раз.
+    var savedLayouts: [SavedLayout] = {
+        if let data = UserDefaults.standard.data(forKey: "savedLayouts"),
+           let old = try? JSONDecoder().decode([LegacySavedLayout].self, from: data) {
+            let merged = LayoutStore.load() + old.map { SavedLayout(id: $0.id, name: $0.name, layout: $0.layout) }
+            LayoutStore.save(merged)
+            UserDefaults.standard.removeObject(forKey: "savedLayouts")
+            return merged
+        }
+        return LayoutStore.load()
+    }() {
+        didSet { LayoutStore.save(savedLayouts) }
+    }
+
+    /// Прежний формат (UserDefaults) — только для переноса.
+    private struct LegacySavedLayout: Codable {
         var id = UUID()
         var name: String
         var layout: TileLayout<String>
-    }
-
-    var savedLayouts: [SavedLayout] = {
-        guard let data = UserDefaults.standard.data(forKey: "savedLayouts") else { return [] }
-        return (try? JSONDecoder().decode([SavedLayout].self, from: data)) ?? []
-    }() {
-        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(savedLayouts), forKey: "savedLayouts") }
     }
     var savingLayout = false
 
