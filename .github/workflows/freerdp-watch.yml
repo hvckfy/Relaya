@@ -1,0 +1,35 @@
+name: FreeRDP watch
+
+# Раз в неделю: вышла ли новая FreeRDP и есть ли advisories на закреплённую версию.
+# Один запрос к GitHub API и один к OSV; при новостях — issue с меткой security.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare with latest release and OSV
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pinned=$(tr -d ' \n' < core/native/freerdp.version)
+          latest=$(gh api repos/FreeRDP/FreeRDP/releases/latest -q .tag_name)
+          vulns=$(curl -fsS https://api.osv.dev/v1/query -d "{\"package\":{\"name\":\"freerdp\",\"ecosystem\":\"Debian\"},\"version\":\"$pinned\"}" | jq -r '[.vulns[]?.id] | join(", ")')
+          echo "pinned=$pinned latest=$latest vulns=$vulns"
+          body=""
+          [ "$latest" != "$pinned" ] && body="Вышла FreeRDP $latest, в Relaya закреплена $pinned (core/native/freerdp.version, overrides в core/native/vcpkg.json)."
+          [ -n "$vulns" ] && body="$body"$'\n'"OSV для $pinned: $vulns"
+          if [ -n "$body" ]; then
+            title="FreeRDP: обновить с $pinned до $latest"
+            if ! gh issue list --state open --search "$title in:title" --json number -q '.[0].number' | grep -q .; then
+              gh issue create --title "$title" --label security --body "$body" || gh issue create --title "$title" --body "$body"
+            fi
+          fi

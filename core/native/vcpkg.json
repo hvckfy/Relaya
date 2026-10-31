@@ -1,0 +1,12 @@
+{
+  "name": "relaya-native",
+  "version-string": "0",
+  "description": "Native dependencies of relaya-core: FreeRDP 3 client (feature rdp-freerdp).",
+  "builtin-baseline": "9a5dfef5d1a0438a7d24856a85bd60f309d355e9",
+  "dependencies": [
+    { "name": "freerdp", "default-features": false, "features": ["client"] }
+  ],
+  "overrides": [
+    { "name": "freerdp", "version": "3.32.2" }
+  ]
+}

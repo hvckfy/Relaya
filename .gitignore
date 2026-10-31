@@ -16,3 +16,4 @@ apps/swift/Frameworks/
 apps/dotnet/**/bin/
 apps/dotnet/**/obj/
 apps/dotnet/Relaya.Shared/Core/*.cs
+core/native/vcpkg_installed/
