@@ -38,6 +38,26 @@ struct AgentsView: View {
                     }
                     Spacer()
                     Toggle(L("Доступ включён"), isOn: $policy.enabled).toggleStyle(.switch)
+                        .disabled(policyUnreadable)
+                }
+
+                // Повреждённый mcp.json: доступ выключен, файл не перезаписывается, пока политику не создадут заново.
+                if policyUnreadable {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("Файл политики агентов (mcp.json) не читается — доступ агентов выключен."))
+                            Text(MCPPolicyStore().url.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                        Spacer()
+                        Button(L("Создать политику заново")) {
+                            policyUnreadable = false
+                            policy = MCPPolicy()
+                            try? MCPPolicyStore().save(policy)
+                        }
+                    }
+                    .padding(12)
+                    .background(.orange.opacity(0.1), in: .rect(cornerRadius: 8))
                 }
 
                 card(title: L("Подключить к клиенту")) {
@@ -224,19 +244,6 @@ private struct RulesEditor: View {
             Text(L("По одному шаблону на строку, как в shell: * — любые символы. Пример: systemctl restart *"))
                 .font(.caption).foregroundStyle(.secondary)
             Form {
-                if policyUnreadable {
-                    Section {
-                        Label(L("Файл политики агентов (mcp.json) не читается — доступ агентов выключен."), systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Button(L("Создать политику заново")) {
-                            policyUnreadable = false
-                            policy = MCPPolicy()
-                            try? MCPPolicyStore().save(policy)
-                        }
-                    } footer: {
-                        Text(MCPPolicyStore().url.path)
-                    }
-                }
                 Section(L("Без подтверждения")) {
                     TextEditor(text: $allow).font(.system(.body, design: .monospaced)).frame(height: 90)
                 }

@@ -481,8 +481,8 @@ final class AppModel {
                 Task { _ = try? await exec(Tmux.killCommand([name]), on: host, interactive: false, reason: "") }
             }
             keepTmux.remove(c.tmuxName ?? "")
-        case .vnc(let s): s.disconnect()
-        case .rdp(let s): s.disconnect()
+        case .vnc(let s): s.close()
+        case .rdp(let s): s.close()
         case .files: break
         case .tmux(let w): if !w.client.ended { w.client.close(w) }
         }

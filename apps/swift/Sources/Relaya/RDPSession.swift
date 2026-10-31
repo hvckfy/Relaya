@@ -145,7 +145,16 @@ final class RDPSession {
         return parts.count == 2 ? (parts[1], parts[0]) : (desktop.user, nil)
     }
 
+    /// Вкладка закрыта: запуск, который ещё ждёт (туннель, задержка перед стартом), не должен поднять соединение без вкладки.
+    @ObservationIgnored private var closed = false
+
+    func close() {
+        closed = true
+        disconnect()
+    }
+
     func start() async {
+        guard !closed else { return }
         target = (desktop.address, desktop.port)
         if let t = desktop.tunnel(localPort: RemoteDesktop.freeLocalPort()) {
             phase = .tunneling
@@ -156,6 +165,7 @@ final class RDPSession {
                 if model.tunnels.status(of: t) == .running { break }
             }
             tunnel = t
+            if closed { model.tunnels.stop(t.id); tunnel = nil; return }
             target = ("localhost", t.listenPort)
         }
         if let saved = savedPassword(), !desktop.user.isEmpty {

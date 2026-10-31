@@ -105,7 +105,7 @@ final class SessionController {
         }
 
         // Первое приглашение shell — вход выполнен (по ключу или паролю).
-        if !loggedIn, !PasswordPrompt.matches(tail), Self.looksLikeShellPrompt(tail) {
+        if !loggedIn, !PasswordPrompt.matches(tail), loginReady() {
             loggedIn = true
             passwordPromptWithoutSaved = false
             if sawPasswordPrompt, !host.usesKey { offerKeySetup = true }

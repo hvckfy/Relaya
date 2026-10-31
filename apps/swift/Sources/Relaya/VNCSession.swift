@@ -64,7 +64,16 @@ final class VNCSession: NSObject {
         return old
     }
 
+    /// Вкладка закрыта: запуск, который ещё ждёт (туннель, задержка перед стартом), не должен поднять соединение без вкладки.
+    @ObservationIgnored private var closed = false
+
+    func close() {
+        closed = true
+        disconnect()
+    }
+
     func connect() async {
+        guard !closed else { return }
         var host = desktop.address
         var port = desktop.port
         if let t = desktop.tunnel(localPort: RemoteDesktop.freeLocalPort()) {
@@ -76,6 +85,7 @@ final class VNCSession: NSObject {
                 if model.tunnels.status(of: t) == .running { break }
             }
             tunnel = t
+            if closed { model.tunnels.stop(t.id); tunnel = nil; return }
             host = "localhost"
             port = t.listenPort
         }
