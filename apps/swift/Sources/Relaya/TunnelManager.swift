@@ -21,6 +21,8 @@ final class TunnelManager {
 
     @ObservationIgnored private var processes: [Tunnel.ID: Process] = [:]
     @ObservationIgnored private var stopping: Set<Tunnel.ID> = []
+    /// Туннели, ждущие Touch ID: остановка или удаление отменяют ожидание.
+    @ObservationIgnored private var pendingAuth: [Tunnel.ID: Task<Void, Never>] = [:]
 
     init(askpassExecutable: String) {
         self.askpassExecutable = askpassExecutable
@@ -77,9 +79,14 @@ final class TunnelManager {
         let usePassword = host.map { keychain.hasPassword(for: $0.keychainAccount) && !$0.usesKey } ?? false
         // Пароль из Keychain — только после Touch ID.
         if usePassword, !SecretGate.shared.isUnlocked {
+            guard pendingAuth[tunnel.id] == nil else { return }
             status[tunnel.id] = .starting
-            Task { @MainActor in
-                if await SecretGate.shared.authorize(L("Запустить туннель «%@»", tunnel.name.isEmpty ? tunnel.spec : tunnel.name)) {
+            pendingAuth[tunnel.id] = Task { @MainActor in
+                let ok = await SecretGate.shared.authorize(L("Запустить туннель «%@»", tunnel.name.isEmpty ? tunnel.spec : tunnel.name))
+                self.pendingAuth[tunnel.id] = nil
+                // Пока ждали Touch ID, туннель могли остановить, удалить или изменить — тогда не запускаем.
+                guard !Task.isCancelled, self.tunnels.first(where: { $0.id == tunnel.id }) == tunnel else { return }
+                if ok {
                     self.status[tunnel.id] = .stopped
                     self.start(tunnel, hosts: hosts)
                 } else {
@@ -125,6 +132,10 @@ final class TunnelManager {
     }
 
     func stop(_ id: Tunnel.ID) {
+        if let pending = pendingAuth.removeValue(forKey: id) {
+            pending.cancel()
+            status[id] = .stopped
+        }
         guard let p = processes[id] else { return }
         stopping.insert(id)
         p.terminate()
