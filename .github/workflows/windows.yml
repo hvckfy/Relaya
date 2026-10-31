@@ -11,6 +11,11 @@ permissions:
   contents: write
   actions: read # артефакт FreeRDP из freerdp.yml
 
+concurrency:
+  group: windows-${{ github.ref }}
+  # Один прогон на ветку: новый push отменяет устаревший (проверяется последний коммит, очередь не копится).
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest

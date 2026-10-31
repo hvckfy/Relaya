@@ -8,9 +8,9 @@ on:
     paths: ["core/**"]
 
 concurrency:
-  group: core-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
-  # На main не отменяем: туда пушат несколько агентов, и у каждого коммита должен быть полный прогон.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: core-${{ github.ref }}
+  # Один прогон на ветку: новый push отменяет устаревший (проверяется последний коммит, очередь не копится).
+  cancel-in-progress: true
 
 jobs:
   test:
