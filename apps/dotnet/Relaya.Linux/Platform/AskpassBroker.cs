@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace Relaya.Platform;
 
 /// Секреты для askpass без открытого доступа к Secret Service (M8, как на Mac и Windows).
-/// Процесс, который запускает ssh/sftp, слушает UNIX-сокет в $XDG_RUNTIME_DIR/relaya (каталог 0700, сокет 0600)
+/// Процесс, который запускает ssh/sftp, слушает UNIX-сокет в новом каталоге mkdtemp ($XDG_RUNTIME_DIR, иначе /tmp; 0700, сокет 0600)
 /// и выдаёт одноразовый токен на учётку: ~60 с, одно использование, только после привязки к PID запущенного
 /// ssh или sftp. Секрет отдаётся, только если собеседник (SO_PEERCRED) — тот же пользователь, его exe — наш
 /// relaya, родитель — настоящий ssh (полный путь), и это либо привязанный процесс, либо потомок привязанного sftp.
@@ -32,16 +32,16 @@ internal static class AskpassBroker
             {
                 if (socketPath == null)
                 {
+                    // Свой новый каталог через mkdtemp (0700, атомарно, существующий или симлинк не подойдёт):
+                    // заранее созданный другим пользователем /tmp/relaya не может ни занять, ни подменить сокет.
                     var runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
-                    var dir = Path.Combine(string.IsNullOrEmpty(runtime) ? Path.GetTempPath() : runtime, "relaya");
-                    Directory.CreateDirectory(dir);
-                    File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-                    var path = Path.Combine(dir, $"askpass-{Environment.ProcessId}-{Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant()}.sock");
+                    var dir = MakeTempDir(Path.Combine(string.IsNullOrEmpty(runtime) ? "/tmp" : runtime, "relaya-XXXXXX"));
+                    var path = Path.Combine(dir, "askpass.sock");
                     var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
                     listener.Bind(new UnixDomainSocketEndPoint(path));
                     File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                     listener.Listen(8);
-                    AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { File.Delete(path); } catch (Exception) { } };
+                    AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { File.Delete(path); Directory.Delete(dir); } catch (Exception) { } };
                     socketPath = path;
                     _ = Task.Run(() => Serve(listener));
                 }
@@ -68,7 +68,9 @@ internal static class AskpassBroker
     public static string Issue(string account)
     {
         if (Askpass.RunsCommands(account)) return ""; // пустой токен не совпадёт ни с одним грантом
-        _ = PipeName;
+        // Брокер не поднялся — fail-closed: без токена askpass отказывает, пароль сам не подставляется.
+        try { _ = PipeName; }
+        catch (Exception) { return ""; }
         foreach (var (k, g) in grants) if (g.Expires < DateTime.UtcNow) grants.TryRemove(k, out _);
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
         grants[token] = new Grant(account, DateTime.UtcNow.AddSeconds(60));
@@ -188,4 +190,13 @@ internal static class AskpassBroker
     private const int SolSocket = 1, SoPeercred = 17;
 
     [DllImport("libc")] private static extern uint getuid();
+
+    private static string MakeTempDir(string template)
+    {
+        var buf = System.Text.Encoding.UTF8.GetBytes(template + "\0");
+        if (mkdtemp(buf) == IntPtr.Zero) throw new IOException("mkdtemp: " + Marshal.GetLastWin32Error());
+        return System.Text.Encoding.UTF8.GetString(buf, 0, buf.Length - 1);
+    }
+
+    [DllImport("libc", SetLastError = true)] private static extern IntPtr mkdtemp(byte[] template);
 }
