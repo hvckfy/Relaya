@@ -919,14 +919,14 @@ mod tests {
         let remote = bare.path().to_string_lossy().to_string();
         let p = sync_new_profile("all".into());
         fs::write(la.path().join("config"), "Host keep\n    HostName 1\n\nHost openwrt\n    HostName 192.168.1.1\n").unwrap();
-        fs::write(la.path().join("snippets.json"), r#"[{"command":"ls","id":"S1","name":"a"},{"command":"df","id":"S2","name":"b"}]"#).unwrap();
+        fs::write(la.path().join("snippets.json"), r#"[{"command":"ls","id":"S1","name":"a","tags":[]},{"command":"df","id":"S2","name":"b","tags":[]}]"#).unwrap();
         git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
         git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
         assert!(fs::read_to_string(lb.path().join("config")).unwrap().contains("openwrt"));
 
         // B удаляет openwrt и сниппет S2 — после синхронизации их нет ни в общем, ни на A.
         fs::write(lb.path().join("config"), "Host keep\n    HostName 1\n").unwrap();
-        fs::write(lb.path().join("snippets.json"), r#"[{"command":"ls","id":"S1","name":"a"}]"#).unwrap();
+        fs::write(lb.path().join("snippets.json"), r#"[{"command":"ls","id":"S1","name":"a","tags":[]}]"#).unwrap();
         git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
         assert!(!fs::read_to_string(Path::new(&rb).join("ssh/config")).unwrap().contains("openwrt"));
         assert!(fs::read_to_string(Path::new(&rb).join(tombstones::FILE)).unwrap().contains("openwrt"));
