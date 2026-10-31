@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -24,11 +25,18 @@ internal sealed class SyncService
     private static readonly SyncPaths Paths = new(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh"), Support);
 
-    private readonly Dictionary<string, (State State, string? Message)> states = new();
-    private readonly Dictionary<string, List<SyncConflict>> conflicts = new();
+    // Таймер автосинхронизации и UI работают в разных потоках: состояния — потокобезопасные,
+    // один прогон на профиль (SemaphoreSlim), список профилей меняется под замком, наружу — копия.
+    private readonly ConcurrentDictionary<string, (State State, string? Message)> states = new();
+    private readonly ConcurrentDictionary<string, List<SyncConflict>> conflicts = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> gates = new();
+    private readonly object profilesLock = new();
+    private readonly List<SyncProfile> profiles = Load();
     private Timer? timer;
 
-    public List<SyncProfile> Profiles { get; private set; } = Load();
+    public List<SyncProfile> Profiles { get { lock (profilesLock) return profiles.ToList(); } }
+
+    private SemaphoreSlim Gate(string id) => gates.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
 
     /// Состояние профиля изменилось или пришли хосты — UI перерисовывается, список хостов перечитывается.
     public event Action? Changed;
@@ -47,24 +55,31 @@ internal sealed class SyncService
 
     public SyncProfile Add()
     {
-        var p = RelayaCoreMethods.SyncNewProfile(Profiles.Count == 0 ? "Все хосты" : $"Профиль {Profiles.Count + 1}");
-        Profiles.Add(p);
+        SyncProfile p;
+        lock (profilesLock)
+        {
+            p = RelayaCoreMethods.SyncNewProfile(profiles.Count == 0 ? "Все хосты" : $"Профиль {profiles.Count + 1}");
+            profiles.Add(p);
+        }
         Save();
         return p;
     }
 
     public void Update(SyncProfile p)
     {
-        var i = Profiles.FindIndex(x => x.id == p.id);
-        if (i < 0) return;
-        Profiles[i] = p;
+        lock (profilesLock)
+        {
+            var i = profiles.FindIndex(x => x.id == p.id);
+            if (i < 0) return;
+            profiles[i] = p;
+        }
         Save();
         ScheduleAuto();
     }
 
     public void Remove(string id)
     {
-        Profiles.RemoveAll(p => p.id == id);
+        lock (profilesLock) profiles.RemoveAll(p => p.id == id);
         Save();
     }
 
@@ -78,14 +93,22 @@ internal sealed class SyncService
 
     public async Task SyncAll(bool interactive = true)
     {
-        foreach (var p in Profiles.ToList().Where(p => p.enabled && (interactive || p.auto))) await Sync(p.id);
+        foreach (var p in Profiles.Where(p => p.enabled && (interactive || p.auto))) await Sync(p.id);
     }
 
     public async Task Sync(string id)
     {
         var p = Profiles.FirstOrDefault(x => x.id == id);
-        if (p is null || !p.enabled || StateOf(p).State == State.Syncing) return;
+        if (p is null || !p.enabled) return;
         if (string.IsNullOrWhiteSpace(p.remote)) { Set(p, State.Failed, p.backend == SyncBackend.Git ? "Укажите репозиторий." : "Укажите папку."); return; }
+        var gate = Gate(id);
+        if (!gate.Wait(0)) return; // этот профиль уже синхронизируется
+        try { await SyncLocked(p); }
+        finally { gate.Release(); }
+    }
+
+    private async Task SyncLocked(SyncProfile p)
+    {
         Set(p, State.Syncing, null);
         var pass = CredentialStore.Read(PassphraseAccount);
         try
@@ -98,7 +121,7 @@ internal sealed class SyncService
                 switch (outcome)
                 {
                     case SyncOutcome.Conflict c:
-                        conflicts[p.id] = c.conflicts;
+                        conflicts[p.id] = c.conflicts.ToList();
                         Set(p, State.Conflict, $"Конфликт в {c.conflicts.Count} файл(ах)");
                         return;
                     case SyncOutcome.Synced s: imported = s.imported; break;
@@ -124,20 +147,25 @@ internal sealed class SyncService
         var p = Profiles.FirstOrDefault(x => x.id == id);
         if (p is null || !conflicts.TryGetValue(id, out var list)) return;
         var choices = list.ToDictionary(c => c.path, _ => keepMine);
+        var gate = Gate(id);
+        if (!gate.Wait(0)) return;
+        var resolved = false;
         Set(p, State.Syncing, null);
         try
         {
             var imported = await Task.Run(() =>
                 RelayaCoreMethods.GitResolve(RepoDir(p), choices, p, Paths, CredentialStore.Read(PassphraseAccount)));
-            conflicts.Remove(id);
+            conflicts.TryRemove(id, out _);
             Set(p, State.Idle, "Конфликт разрешён");
             if (imported.Count > 0) Imported?.Invoke();
-            await Sync(id);
+            resolved = true;
         }
         catch (Exception e)
         {
             Set(p, State.Failed, GitHint(e.Message));
         }
+        finally { gate.Release(); }
+        if (resolved) await Sync(id);
     }
 
     private static string GitHint(string message) =>
