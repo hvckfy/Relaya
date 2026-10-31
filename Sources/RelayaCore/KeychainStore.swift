@@ -96,4 +96,11 @@ public enum PasswordPrompt {
         return !t.contains("sudo") && !t.contains("passphrase") && !t.contains("new password")
             && !t.contains("current password")
     }
+
+    /// Запрос пароля sudo в конце вывода: `[sudo] password for alex:` (Linux) или `[sudo] пароль для alex:`.
+    public static func isSudo(_ tail: String) -> Bool {
+        let line = tail.split(whereSeparator: \.isNewline).last.map(String.init) ?? ""
+        let t = line.trimmingCharacters(in: .whitespaces).lowercased()
+        return t.hasPrefix("[sudo]") && t.hasSuffix(":")
+    }
 }

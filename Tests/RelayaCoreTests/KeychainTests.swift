@@ -54,3 +54,12 @@ import Testing
         #expect(doc.text == "Host h\n    IdentityFile ~/.ssh/k\n    UseKeychain yes\n    AddKeysToAgent yes\n")
     }
 }
+
+struct SudoPromptTests {
+    @Test func detectsSudoPrompts() {
+        #expect(PasswordPrompt.isSudo("$ sudo apt update\n[sudo] password for alex: "))
+        #expect(PasswordPrompt.isSudo("[sudo] пароль для alex:"))
+        #expect(!PasswordPrompt.isSudo("alex@host's password:"))
+        #expect(!PasswordPrompt.matches("[sudo] password for alex:"))
+    }
+}
