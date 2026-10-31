@@ -505,6 +505,97 @@ pub fn folder_sync(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
     Ok(imported)
 }
 
+// MARK: - Папка «как в git»
+
+/// Все файлы папки (кроме скрытых, `.icloud`-заглушек и `.git`) — относительные пути через `/`.
+fn tree(dir: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    fn walk(root: &Path, dir: &Path, out: &mut std::collections::BTreeMap<String, Vec<u8>>) {
+        let Ok(entries) = fs::read_dir(dir) else { return };
+        for e in entries.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') { continue; }
+            let p = e.path();
+            if p.is_dir() { walk(root, &p, out); continue; }
+            if let (Ok(rel), Ok(data)) = (p.strip_prefix(root), fs::read(&p)) {
+                out.insert(rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"), data);
+            }
+        }
+    }
+    let mut out = Default::default();
+    walk(dir, dir, &mut out);
+    out
+}
+
+/// Записать через временный файл и rename: облачная папка не увидит половину файла.
+fn write_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
+    if let Some(parent) = dest.parent() { fs::create_dir_all(parent)?; }
+    let tmp = dest.with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+    fs::write(&tmp, data)?;
+    fs::rename(&tmp, dest)?;
+    Ok(())
+}
+
+fn put_tree(dir: &Path, files: &std::collections::BTreeMap<String, Vec<u8>>) -> Result<(), CoreError> {
+    for (rel, data) in files {
+        let dest = dir.join(rel);
+        if read(&dest).as_deref() != Some(data.as_slice()) { write_atomic(&dest, data)?; }
+    }
+    Ok(())
+}
+
+/// Папка (iCloud Drive, общая папка) с трёхсторонним слиянием, как в git.
+/// База — снимок папки после прошлой удачной синхронизации (в `support/sync/<id профиля>/base`).
+/// Своё = база + выгрузка этой машины, чужое = папка сейчас. Изменилась одна сторона — берётся она;
+/// обе и по-разному — конфликт в той же форме, что у `git_sync`. Повторный вызов с `keep_mine` по путям
+/// разрешает конфликты (true — своё, false — из папки); пока конфликт не разрешён, ничего не пишется.
+#[uniffi::export]
+pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, folder: String,
+                         keep_mine: std::collections::HashMap<String, bool>) -> Result<SyncOutcome, CoreError> {
+    let folder_p = Path::new(&folder);
+    fs::create_dir_all(folder_p)?;
+    let state = Path::new(&paths.support).join("sync").join(&profile.id);
+    let base_dir = state.join("base");
+    let theirs = tree(folder_p);
+    // Первая синхронизация: базой считается папка, своё ложится поверх неё (как reset на origin в git).
+    let base = if base_dir.exists() { tree(&base_dir) } else { theirs.clone() };
+
+    let stage = state.join("stage");
+    let _ = fs::remove_dir_all(&stage);
+    fs::create_dir_all(&stage)?;
+    put_tree(&stage, &base)?;
+    sync_export(profile.clone(), paths.clone(), passphrase.clone(), stage.to_string_lossy().into_owned())?;
+    let mine = tree(&stage);
+    let _ = fs::remove_dir_all(&stage);
+
+    let mut result = std::collections::BTreeMap::new();
+    let mut conflicts = Vec::new();
+    let names: std::collections::BTreeSet<&String> = mine.keys().chain(theirs.keys()).collect();
+    for name in names {
+        let (m, t, b) = (mine.get(name), theirs.get(name), base.get(name));
+        let pick = if m == t || t == b { m } else if m == b { t } else {
+            match keep_mine.get(name.as_str()) {
+                Some(true) => m,
+                Some(false) => t,
+                None => {
+                    let text = |d: Option<&Vec<u8>>| d.map(|d| String::from_utf8_lossy(d).into_owned()).unwrap_or_default();
+                    conflicts.push(SyncConflict { path: name.clone(), mine: text(m), theirs: text(t) });
+                    continue;
+                }
+            }
+        };
+        if let Some(d) = pick { result.insert(name.clone(), d.clone()); }
+    }
+    if !conflicts.is_empty() { return Ok(SyncOutcome::Conflict { conflicts }); }
+
+    let pulled = result.iter().any(|(k, v)| base.get(k) != Some(v) && mine.get(k) != Some(v));
+    let pushed = result.iter().any(|(k, v)| theirs.get(k) != Some(v));
+    put_tree(folder_p, &result)?;
+    let imported = sync_import(profile, paths, passphrase, folder.clone())?;
+    let _ = fs::remove_dir_all(&base_dir);
+    put_tree(&base_dir, &result)?;
+    Ok(if pulled || pushed || !imported.is_empty() { SyncOutcome::Synced { pulled, imported } } else { SyncOutcome::UpToDate })
+}
+
 #[cfg(test)]
 mod git_error_tests {
     #[test]
@@ -597,5 +688,39 @@ mod tests {
         git_resolve(rb.clone(), [("ssh/config".to_string(), false)].into(), p.clone(), paths(lb.path()), None).unwrap();
         assert!(fs::read_to_string(lb.path().join("config")).unwrap().contains("from-A"));
         assert_eq!(git_sync(rb, remote, "B".into(), p, paths(lb.path()), None).unwrap(), SyncOutcome::UpToDate);
+    }
+
+    #[test]
+    fn folder_merges_three_way_and_reports_conflicts() {
+        let (folder, a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let f = folder.path().to_string_lossy().to_string();
+        let p = sync_new_profile("all".into());
+        let none = std::collections::HashMap::new();
+        fs::write(a.path().join("config"), "Host web\n    HostName 1.1.1.1\n").unwrap();
+        assert!(matches!(folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap(), SyncOutcome::Synced { .. }));
+        // Вторая машина получает чужое и добавляет своё.
+        fs::write(b.path().join("config"), "Host nas\n    HostName 2.2.2.2\n").unwrap();
+        let out = folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap();
+        assert!(matches!(out, SyncOutcome::Synced { pulled: true, .. }), "{out:?}");
+        let cfg_b = fs::read_to_string(b.path().join("config")).unwrap();
+        assert!(cfg_b.contains("1.1.1.1") && cfg_b.contains("2.2.2.2"), "{cfg_b}");
+        // Без изменений — UpToDate.
+        assert_eq!(folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap(), SyncOutcome::UpToDate);
+        // Обе машины поменяли web по-разному — конфликт, папка не тронута.
+        let _ = folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap();
+        fs::write(a.path().join("config"), "Host web\n    HostName 9.9.9.9\n\nHost nas\n    HostName 2.2.2.2\n").unwrap();
+        assert!(matches!(folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap(), SyncOutcome::Synced { .. }));
+        fs::write(b.path().join("config"), cfg_b.replace("1.1.1.1", "5.5.5.5")).unwrap();
+        let before = fs::read(folder.path().join("ssh/config")).unwrap();
+        let SyncOutcome::Conflict { conflicts } = folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap()
+            else { panic!("ожидался конфликт") };
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].path, "ssh/config");
+        assert!(conflicts[0].mine.contains("5.5.5.5") && conflicts[0].theirs.contains("9.9.9.9"));
+        assert_eq!(fs::read(folder.path().join("ssh/config")).unwrap(), before);
+        // Разрешение «из папки»: на b приходит 9.9.9.9.
+        let keep: std::collections::HashMap<String, bool> = [("ssh/config".to_string(), false)].into();
+        assert!(matches!(folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), keep).unwrap(), SyncOutcome::Synced { .. }));
+        assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("9.9.9.9"));
     }
 }
