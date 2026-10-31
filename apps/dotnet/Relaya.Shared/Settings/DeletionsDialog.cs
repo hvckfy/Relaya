@@ -70,7 +70,7 @@ internal static class DeletionsDialog
                 ? boxes.Where(b => b.Box.IsChecked == true).Select(b => new DeletionKey(b.Item.kind, b.Item.key)).ToList()
                 : new List<DeletionKey>();
             try { SyncService.Shared.ApplyDeletions(confirmed); }
-            catch (Exception e) { await new ContentDialog { Title = L("Подтвердите удаление"), Content = e.Message, CloseButtonText = "OK", XamlRoot = root }.ShowAsync(); }
+            catch (Exception e) { await Pages.Ui.ShowError(root, L("Не удалось удалить"), e.Message); }
         }
         finally { open = false; }
     }

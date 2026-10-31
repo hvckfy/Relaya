@@ -163,14 +163,14 @@ internal sealed class SftpPage : UserControl
 
     private async Task NewFolder()
     {
-        var name = await Ask(L("Новая папка"), "");
+        var name = await Ask(L("Новая папка"), "", L("Создать"));
         if (name is { Length: > 0 }) { await Batch($"mkdir {Q(Join(name))}"); await Open(path); }
     }
 
     private async Task Rename()
     {
         if (Selected().FirstOrDefault() is not { } f) return;
-        var name = await Ask(L("Переименовать"), f.name);
+        var name = await Ask(L("Переименовать"), f.name, L("Переименовать"));
         if (name is { Length: > 0 } && name != f.name) { await Batch($"rename {Q(Join(f.name))} {Q(Join(name))}"); await Open(path); }
     }
 
@@ -190,12 +190,12 @@ internal sealed class SftpPage : UserControl
         await Open(path);
     }
 
-    private async Task<string?> Ask(string title, string text)
+    private async Task<string?> Ask(string title, string text, string action)
     {
         var box = new TextBox { Text = text };
         var d = new ContentDialog
         {
-            Title = title, Content = box, PrimaryButtonText = "OK", CloseButtonText = L("Отмена"),
+            Title = title, Content = box, PrimaryButtonText = action, CloseButtonText = L("Отмена"),
             DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         return await d.ShowAsync() == ContentDialogResult.Primary ? box.Text.Trim() : null;

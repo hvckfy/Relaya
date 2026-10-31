@@ -47,7 +47,7 @@ internal static class AgentEscalationsDialog
             };
             var accept = await dialog.ShowAsync() == ContentDialogResult.Primary;
             try { SyncService.Shared.ApplyAgentEscalations(accept); }
-            catch (Exception ex) { await new ContentDialog { Title = L("Синхронизация расширяет права агентов"), Content = ex.Message, CloseButtonText = "OK", XamlRoot = root }.ShowAsync(); }
+            catch (Exception ex) { await Pages.Ui.ShowError(root, L("Не удалось применить изменения"), ex.Message); }
         }
         finally { open = false; }
     }
