@@ -77,7 +77,7 @@ internal sealed class SnippetsPage : UserControl
         var d = new ContentDialog
         {
             Title = s == null ? L("Новый сниппет") : L("Изменить сниппет"),
-            Content = new StackPanel { Spacing = 10, MinWidth = 420, Children = { name, command, tags } },
+            Content = new StackPanel { Spacing = 12, MinWidth = 420, Children = { name, command, tags } },
             PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         if (await d.ShowAsync() != ContentDialogResult.Primary || command.Text.Trim().Length == 0) return;

@@ -92,7 +92,7 @@ internal sealed class TunnelsPage : UserControl
         var d = new ContentDialog
         {
             Title = t == null ? L("Новый туннель") : L("Изменить туннель"),
-            Content = new ScrollViewer { Content = new StackPanel { Spacing = 10, MinWidth = 400, Children = { name, host, kind, listen, target, targetPort, auto } } },
+            Content = new ScrollViewer { Content = new StackPanel { Spacing = 12, MinWidth = 400, Children = { name, host, kind, listen, target, targetPort, auto } } },
             PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         if (await d.ShowAsync() != ContentDialogResult.Primary || host.SelectedItem is not string alias) return;

@@ -158,7 +158,7 @@ internal static class HostEditor
                 MaxHeight = 560,
                 Content = new StackPanel
                 {
-                    Spacing = 10, MinWidth = 440,
+                    Spacing = 12, MinWidth = 440,
                     Children =
                     {
                         alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, os, agent, compression, tmux,

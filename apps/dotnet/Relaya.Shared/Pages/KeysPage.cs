@@ -75,8 +75,8 @@ internal sealed class KeysPage : UserControl
         var all = RelayaCoreMethods.ConfigAllAliases(text);
         var config = RelayaCoreMethods.ParseConfig(text);
         var selected = RelayaCoreMethods.ConfigKeyHosts(text, key).ToHashSet();
-        var servers = new StackPanel { Spacing = 2 };
-        var gits = new StackPanel { Spacing = 2 };
+        var servers = new StackPanel { Spacing = 4 };
+        var gits = new StackPanel { Spacing = 4 };
         void Add(string alias)
         {
             var git = IsGit(alias, config);
@@ -147,7 +147,7 @@ internal sealed class KeysPage : UserControl
         var d = new ContentDialog
         {
             Title = L("Новый ключ ed25519"),
-            Content = new StackPanel { Spacing = 10, MinWidth = 380, Children = { name, comment, pass, error } },
+            Content = new StackPanel { Spacing = 12, MinWidth = 380, Children = { name, comment, pass, error } },
             PrimaryButtonText = L("Создать"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         d.PrimaryButtonClick += async (_, args) =>

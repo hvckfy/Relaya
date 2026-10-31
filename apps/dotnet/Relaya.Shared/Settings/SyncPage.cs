@@ -212,7 +212,7 @@ internal sealed class SyncPage : UserControl
         var icon = new FontIcon { Glyph = "\uE895", FontSize = 18, Margin = new Thickness(0, 0, 16, 0) };
         var titles = new StackPanel { Children = { new TextBlock { Text = initial.name }, new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 6, Children = { ring, status },
+            Orientation = Orientation.Horizontal, Spacing = 8, Children = { ring, status },
         } } };
         Grid.SetColumn(titles, 1);
         Grid.SetColumn(enabled, 2);

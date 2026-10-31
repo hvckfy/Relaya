@@ -42,14 +42,14 @@ internal sealed class SettingsPage : UserControl
         var theme = new ComboBox { MinWidth = 220 };
         foreach (var n in TerminalTheme.Names) theme.Items.Add(n);
         theme.SelectedItem = Platform.Settings.Get("terminal.theme", "Relaya");
-        var preview = new Border { CornerRadius = new CornerRadius(6), Padding = new Thickness(12), Margin = new Thickness(0, 4, 0, 0) };
+        var preview = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(12), Margin = new Thickness(0, 4, 0, 0) };
         void Preview()
         {
             var t = TerminalTheme.Named(theme.SelectedItem as string ?? "Relaya");
             var lines = new StackPanel();
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             for (var i = 0; i < 16; i++)
-                row.Children.Add(new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(t.Ansi[i]) });
+                row.Children.Add(new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(t.Ansi[i]) });
             lines.Children.Add(new TextBlock
             {
                 Text = "user@server:~$ ls --color", Foreground = new SolidColorBrush(t.Foreground),

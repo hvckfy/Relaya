@@ -31,7 +31,7 @@ internal sealed class TileHost : UserControl, IDisposable
     // Подсветка будущего места плитки при перетаскивании вкладки.
     private readonly Border dropHint = new()
     {
-        Background = Pages.Ui.Brush("AccentFillColorDefaultBrush"), Opacity = 0.25, CornerRadius = new CornerRadius(6),
+        Background = Pages.Ui.Brush("AccentFillColorDefaultBrush"), Opacity = 0.25, CornerRadius = new CornerRadius(8),
         Visibility = Visibility.Collapsed, IsHitTestVisible = false,
         HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
     };
@@ -190,7 +190,7 @@ internal sealed class TileHost : UserControl, IDisposable
         body.Children.Add(pending);
         Grid.SetRow(view, 3);
         body.Children.Add(view);
-        var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Margin = new Thickness(2) };
+        var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(4) };
         var pane = new Pane(id, view, session, alias, frame, title) { Owner = this };
         close.Click += (_, _) => pane.Owner.Close(pane);
         view.GotFocus += (_, _) => pane.Owner.Activate(pane);
@@ -282,7 +282,7 @@ internal sealed class TileHost : UserControl, IDisposable
         {
             ((Grid)((Grid)p.Frame.Child).Children[0]).Visibility = many ? Visibility.Visible : Visibility.Collapsed;
             p.Frame.BorderThickness = new Thickness(many ? 1 : 0);
-            p.Frame.Margin = new Thickness(many ? 2 : 0);
+            p.Frame.Margin = new Thickness(many ? 4 : 0);
         }
         try
         {

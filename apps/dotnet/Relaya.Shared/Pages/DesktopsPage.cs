@@ -75,7 +75,7 @@ internal sealed class DesktopsPage : UserControl
         var dialog = new ContentDialog
         {
             Title = d == null ? L("Новый удалённый стол") : L("Изменить стол"),
-            Content = new ScrollViewer { Content = new StackPanel { Spacing = 10, MinWidth = 400, Children = { name, kind, address, port, user, via, full, gateway } } },
+            Content = new ScrollViewer { Content = new StackPanel { Spacing = 12, MinWidth = 400, Children = { name, kind, address, port, user, via, full, gateway } } },
             PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || address.Text.Trim().Length == 0) return;

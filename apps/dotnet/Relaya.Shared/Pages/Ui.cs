@@ -87,7 +87,7 @@ internal static class Ui
 
     public static Border Card(UIElement child) => new()
     {
-        Child = child, Padding = new Thickness(16, 10, 16, 10), CornerRadius = new CornerRadius(4),
+        Child = child, Padding = new Thickness(16, 12, 16, 12), CornerRadius = new CornerRadius(4),
         Background = Brush("CardBackgroundFillColorDefaultBrush"), BorderBrush = Brush("CardStrokeColorDefaultBrush"),
         BorderThickness = new Thickness(1),
     };
