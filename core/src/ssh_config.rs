@@ -32,7 +32,9 @@ impl SshHost {
         let name = self.host_name.as_deref().unwrap_or(&self.alias).to_lowercase();
         const KNOWN: &[&str] = &["github.com", "gitlab.com", "bitbucket.org", "ssh.dev.azure.com", "vs-ssh.visualstudio.com",
                                    "codeberg.org", "gitea.com", "ssh.github.com", "altssh.gitlab.com", "altssh.bitbucket.org"];
-        self.user.as_deref() == Some("git") || KNOWN.contains(&name.as_str())
+        // `git@host` в имени — git-сервер, введённый как адрес клона (старые записи «Новый хост»).
+        let typed_as_git = self.alias.to_lowercase().starts_with("git@") || name.starts_with("git@");
+        self.user.as_deref() == Some("git") || typed_as_git || KNOWN.contains(&name.as_str())
     }
 
     /// `user@hostname:port`.
@@ -46,6 +48,39 @@ impl SshHost {
 
 #[uniffi::export]
 pub fn host_is_git_service(host: SshHost) -> bool { host.is_git_service() }
+
+/// Разобранный ввод адреса `user@host:port`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct Destination {
+    pub user: Option<String>,
+    pub host: String,
+    pub port: Option<i64>,
+}
+
+/// `git@a.b` → (git, a.b), `root@1.2.3.4:2222` → (root, 1.2.3.4, 2222), `[::1]:22` → (::1, 22).
+/// Голый IPv6 (`::1`, `fe80::1`) — целиком хост; нечисловой «порт» остаётся частью хоста.
+#[uniffi::export]
+pub fn parse_destination(input: String) -> Destination {
+    let t = input.trim();
+    let t = t.strip_prefix("ssh://").unwrap_or(t).trim_end_matches('/');
+    let (user, rest) = match t.rfind('@') {
+        Some(i) => (Some(t[..i].trim()).filter(|u| !u.is_empty()).map(str::to_string), t[i + 1..].trim()),
+        None => (None, t),
+    };
+    let port_of = |p: &str| p.parse::<i64>().ok().filter(|p| (1..=65535).contains(p));
+    let (host, port) = if let Some(r) = rest.strip_prefix('[') {
+        match r.find(']') {
+            Some(i) => (r[..i].to_string(), r[i + 1..].strip_prefix(':').and_then(port_of)),
+            None => (rest.to_string(), None),
+        }
+    } else {
+        match rest.rsplit_once(':') {
+            Some((h, p)) if !h.contains(':') && port_of(p).is_some() => (h.to_string(), port_of(p)),
+            _ => (rest.to_string(), None),
+        }
+    };
+    Destination { user, host, port }
+}
 
 #[uniffi::export]
 pub fn host_subtitle(host: SshHost) -> String { host.subtitle() }
@@ -420,6 +455,26 @@ mod tests {
         let mut h = SshHost::new("gh");
         h.host_name = Some("github.com".into());
         assert!(h.is_git_service());
+        assert!(SshHost::new("git@git.lan.mftkhv.ru").is_git_service());
+        let mut h2 = SshHost::new("lan");
+        h2.host_name = Some("git@git.lan".into());
+        assert!(h2.is_git_service());
+        assert!(!SshHost::new("web").is_git_service());
         assert_eq!(split_tags("prod, db,,Prod".into()), ["prod", "db"]);
+    }
+
+    #[test]
+    fn parses_destinations() {
+        let d = |u: Option<&str>, h: &str, p: Option<i64>| Destination { user: u.map(Into::into), host: h.into(), port: p };
+        assert_eq!(parse_destination("git@a.b".into()), d(Some("git"), "a.b", None));
+        assert_eq!(parse_destination("a.b".into()), d(None, "a.b", None));
+        assert_eq!(parse_destination("root@1.2.3.4:2222".into()), d(Some("root"), "1.2.3.4", Some(2222)));
+        assert_eq!(parse_destination("[::1]:22".into()), d(None, "::1", Some(22)));
+        assert_eq!(parse_destination("me@[fe80::1]".into()), d(Some("me"), "fe80::1", None));
+        assert_eq!(parse_destination("fe80::1".into()), d(None, "fe80::1", None));
+        assert_eq!(parse_destination("  git@ git.lan.mftkhv.ru  ".into()), d(Some("git"), "git.lan.mftkhv.ru", None));
+        assert_eq!(parse_destination("ssh://u@h:22/".into()), d(Some("u"), "h", Some(22)));
+        assert_eq!(parse_destination("@h:99999".into()), d(None, "h:99999", None));
+        assert_eq!(parse_destination("".into()), d(None, "", None));
     }
 }
