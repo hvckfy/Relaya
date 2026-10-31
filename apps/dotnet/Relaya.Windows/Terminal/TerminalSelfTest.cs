@@ -35,8 +35,14 @@ internal static class TerminalSelfTest
             log.AppendLine($"drawn text: {view.DrawnText}, draw error: {view.DrawError ?? "none"}");
             var pass = ok && view.DrawError == null && screen == "relaya-selftest-line";
             log.AppendLine(pass ? "selftest: OK" : "selftest: FAIL");
-            try { File.WriteAllText(LogPath ?? "selftest.log", log.ToString()); } catch (Exception) { }
-            Environment.Exit(pass ? 0 : 1);
+            try { File.WriteAllText((LogPath ?? "selftest.log").Trim('"'), log.ToString()); }
+            catch (Exception e) { TerminalView.Trace("selftest log: " + e.Message); }
+            TerminalView.Trace(pass ? "selftest: OK" : "selftest: FAIL");
+            // Environment.Exit в WinUI-процессе может зависнуть на завершении — выходим сразу.
+            ExitProcess(pass ? 0u : 1u);
         };
     }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern void ExitProcess(uint code);
 }

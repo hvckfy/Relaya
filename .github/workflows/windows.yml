@@ -58,12 +58,12 @@ jobs:
         run: |
           $exe = Get-ChildItem apps/dotnet/Relaya.Windows/bin/x64/Release -Recurse -Filter Relaya.exe | Select-Object -First 1
           $log = "$env:RUNNER_TEMP\selftest.log"
-          $p = Start-Process $exe.FullName -ArgumentList "--selftest-terminal", "`"$log`"" -PassThru
+          $p = Start-Process $exe.FullName -ArgumentList "--selftest-terminal", $log -PassThru
           if (-not $p.WaitForExit(90000)) { $p.Kill(); Write-Host "selftest: timeout" }
           if (Test-Path $log) { Get-Content $log } else { Write-Host "no selftest log" }
           $tl = "$env:APPDATA\Relaya\terminal.log"
           if (Test-Path $tl) { Get-Content $tl }
-          if (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern "selftest: OK" -Quiet)) { exit 1 }
+          if ($p.HasExited -and $p.ExitCode -eq 0) { exit 0 } else { exit 1 }
       # Установщик (Inno Setup есть на образе windows-latest; если нет — ставим через choco).
       - name: Build installer
         shell: pwsh
