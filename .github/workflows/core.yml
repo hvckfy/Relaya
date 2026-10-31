@@ -9,7 +9,8 @@ on:
 
 concurrency:
   group: core-${{ github.ref }}
-  cancel-in-progress: true
+  # На main не отменяем: туда пушат несколько агентов, и у каждого коммита должен быть полный прогон.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:

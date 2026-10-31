@@ -62,7 +62,7 @@ final class WebDAVBridge {
         }
         self.listener = listener
         guard let url = URL(string: "http://127.0.0.1:\(port)\(server.prefix)") else { return }
-        let mp = try await Self.mount(url)
+        let mp = try await Self.mount(url, password: server.password)
         mountPoint = mp
         // Открыть в Finder — не из главного потока: обращение к диску идёт к нашему же серверу.
         if let mp { DispatchQueue.global().async { NSWorkspace.shared.open(mp) } }
@@ -82,14 +82,16 @@ final class WebDAVBridge {
         DispatchQueue.global().async { NSWorkspace.shared.open(mp) }
     }
 
-    private static func mount(_ url: URL) async throws -> URL? {
+    private static func mount(_ url: URL, password: String) async throws -> URL? {
         try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global().async {
                 let open = NSMutableDictionary()
                 open[kNAUIOptionKey] = kNAUIOptionNoUI
-                open[kNetFSUseGuestKey] = true
+                // Не гостем: сервер требует Basic-аутентификацию со случайным паролем этого подключения,
+                // иначе к диску мог бы обратиться любой локальный процесс, узнавший порт и путь.
                 var points: Unmanaged<CFArray>?
-                let status = NetFSMountURLSync(url as CFURL, nil, nil, nil, open, nil, &points)
+                let status = NetFSMountURLSync(url as CFURL, nil, DAVServer.user as CFString, password as CFString,
+                                               open, nil, &points)
                 if status == 0, let list = points?.takeRetainedValue() as? [String], let first = list.first {
                     cont.resume(returning: URL(fileURLWithPath: first))
                 } else {
@@ -104,6 +106,9 @@ final class WebDAVBridge {
 /// Обработка запросов WebDAV: состояние моста (кэш списков, служебные файлы Finder) — внутри актора.
 actor DAVServer {
     nonisolated let prefix: String
+    /// Basic-аутентификация моста: пароль случайный на каждое подключение диска.
+    nonisolated static let user = "relaya"
+    nonisolated let password = UUID().uuidString + UUID().uuidString
     private let volumeName: String
     private let sftp: SFTPClient
     private let ssh: SSHInvocation
@@ -137,17 +142,24 @@ actor DAVServer {
 
     // MARK: - Запросы
 
+    /// Путь запроса → путь на сервере. Только внутри префикса (с границей `/`) и без `.`/`..` в компонентах,
+    /// чтобы ни запрос, ни Destination у MOVE/COPY не вышли за корень диска.
     func remotePath(_ path: String) -> String? {
-        guard path.hasPrefix(prefix) else { return nil }
-        var rest = String(path.dropFirst(prefix.count))
-        while rest.hasSuffix("/") && rest.count > 1 { rest.removeLast() }
-        if rest.isEmpty || rest == "/" { return root }
-        return SFTPClient.join(root, String(rest.drop(while: { $0 == "/" })))
+        guard path == prefix || path.hasPrefix(prefix + "/") else { return nil }
+        let parts = path.dropFirst(prefix.count).split(separator: "/", omittingEmptySubsequences: true)
+        guard !parts.contains(where: { $0 == ".." || $0 == "." }) else { return nil }
+        return parts.isEmpty ? root : SFTPClient.join(root, parts.joined(separator: "/"))
+    }
+
+    private var expectedAuthorization: String {
+        "Basic " + Data("\(Self.user):\(password)".utf8).base64EncodedString()
     }
 
     func handle(_ req: WebDAV.Request) async -> Data {
-        guard !req.path.contains("/../"), !req.path.hasSuffix("/.."),
-              let remote = remotePath(req.path) else { return WebDAV.response(404, "Not Found") }
+        guard req.header("authorization") == expectedAuthorization else {
+            return WebDAV.response(401, "Unauthorized", headers: ["WWW-Authenticate": "Basic realm=\"Relaya\""])
+        }
+        guard let remote = remotePath(req.path) else { return WebDAV.response(404, "Not Found") }
         if remote == root, ["DELETE", "MOVE"].contains(req.method) { return WebDAV.response(403, "Forbidden") }
         let name = (remote as NSString).lastPathComponent
         do {
@@ -160,9 +172,10 @@ actor DAVServer {
                 return WebDAV.response(207, "Multi-Status", headers: ["Content-Type": "application/xml; charset=utf-8"],
                                        body: WebDAV.multistatus([]))
             case "LOCK":
+                let token = "opaquelocktoken:\(UUID().uuidString)"
                 return WebDAV.response(200, "OK", headers: ["Content-Type": "application/xml; charset=utf-8",
-                                                            "Lock-Token": "<opaquelocktoken:\(UUID().uuidString)>"],
-                                       body: WebDAV.lockResponse(token: "opaquelocktoken:\(UUID().uuidString)", path: req.path))
+                                                            "Lock-Token": "<\(token)>"],
+                                       body: WebDAV.lockResponse(token: token, path: req.path))
             case "UNLOCK":
                 return WebDAV.response(204, "No Content")
             case "GET", "HEAD":
