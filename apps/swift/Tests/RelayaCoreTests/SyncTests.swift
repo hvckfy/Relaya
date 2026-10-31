@@ -73,7 +73,8 @@ struct SyncTests {
         try Data("ssh-ed25519 AAAA web".utf8).write(to: ssh.appending(path: "id_web.pub"))
         try Data("OTHER".utf8).write(to: ssh.appending(path: "id_other"))
         try Data("ssh-ed25519 AAAA other".utf8).write(to: ssh.appending(path: "id_other.pub"))
-        try Data("Host web\n    IdentityFile \(ssh.appending(path: "id_web").path)\n".utf8).write(to: ssh.appending(path: "config"))
+        // Как в реальном конфиге: ключ по пути внутри ~/.ssh — ядро сопоставляет его по имени на любой машине.
+        try Data("Host web\n    IdentityFile ~/.ssh/id_web\n".utf8).write(to: ssh.appending(path: "config"))
         var p = Sync.Profile(name: "all")
         p.items = [.sshConfig, .keys]
         try Sync.export(p, paths: paths(ssh), passphrase: "pw", to: repo)
