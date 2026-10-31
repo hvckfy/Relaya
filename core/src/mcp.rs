@@ -126,7 +126,7 @@ const READ_ONLY: &[Tool] = &[
     t("uniq", "cdiu", &["--count", "--repeated", "--ignore-case", "--unique"]),
     t("cut", "dfcb", &["--delimiter", "--fields", "--characters", "--bytes"]),
     t("awk", "Fv", &[]),
-    t("sed", "nEr", &["--quiet", "--regexp-extended"]),
+    t("sed", "nEre", &["--quiet", "--regexp-extended", "--expression"]),
     t("df", "hTiPk", &["--human-readable", "--print-type", "--inodes"]),
     t("du", "hsdcax", &["--human-readable", "--summarize", "--max-depth", "--total"]),
     t("free", "hmgkbt", &["--human", "--mega", "--giga"]),
@@ -224,17 +224,27 @@ fn sed_script_ok(script: &str) -> bool {
         || (a.len() >= 2 && a.starts_with('/') && a.ends_with('/') && !a[1..a.len() - 1].contains('/')))
 }
 
-/// `-la`, `-rk3`, `-k2,2`: первая буква — известный флаг, дальше флаги или значение из цифр (`-n5`, `-k3`).
-fn short_flags_ok(flags: &str, allowed: &str) -> bool {
-    let mut chars = flags.chars();
-    let Some(first) = chars.next() else { return false };
-    if first == ' ' || !allowed.contains(first) { return false; }
-    let mut value = false;
-    for c in chars {
-        if c.is_ascii_digit() || (value && ",.".contains(c)) { value = true; continue; }
-        if value || c == ' ' || !allowed.contains(c) { return false; }
+/// Короткие флаги со значением: всё после такого флага в том же слове — значение (`-d:`, `-F,`, `-es/a/b/`, `-k2,2n`).
+const VALUE_FLAGS: &[(&str, &str)] = &[("cut", "dfcb"), ("sed", "e"), ("sort", "kt"), ("head", "nc"), ("tail", "nc"),
+    ("grep", "ABCm"), ("awk", "Fv"), ("ps", "o"), ("journalctl", "unbpS"), ("du", "d"), ("ping", "cWi"), ("lsof", "p"),
+    ("tree", "L"), ("top", "no"), ("stat", "cf"), ("lsblk", "o"), ("docker logs", "n"), ("kubectl get", "nol"),
+    ("kubectl describe", "nl"), ("kubectl logs", "ncp"), ("git log", "n"), ("git diff", "U"), ("logread", "e")];
+
+/// `-la`, `-rk3`, `-d:`: каждая буква — известный флаг; цифры и флаг со значением забирают остаток слова.
+/// Возвращает приклеенное значение `-e` (скрипт sed), чтобы проверить и его.
+fn short_flags_ok(tool: &str, flags: &str, allowed: &str) -> Option<Option<String>> {
+    let values = VALUE_FLAGS.iter().find(|v| v.0 == tool).map(|v| v.1).unwrap_or("");
+    let mut chars = flags.char_indices();
+    let (_, first) = chars.next()?;
+    if first == ' ' || !allowed.contains(first) { return None; }
+    if values.contains(first) { return Some((first == 'e').then(|| flags[first.len_utf8()..].to_string()).filter(|v| !v.is_empty())); }
+    let mut digits = false;
+    for (i, c) in chars {
+        if c.is_ascii_digit() || (digits && ",.".contains(c)) { digits = true; continue; }
+        if digits || c == ' ' || !allowed.contains(c) { return None; }
+        if values.contains(c) { return Some((c == 'e').then(|| flags[i + c.len_utf8()..].to_string()).filter(|v| !v.is_empty())); }
     }
-    true
+    Some(None)
 }
 
 fn segment_ok(words: &[String]) -> bool {
@@ -250,6 +260,7 @@ fn segment_ok(words: &[String]) -> bool {
         None => match READ_ONLY.iter().find(|t| t.name == first.as_str()) { Some(t) => (t, &words[1..]), None => return false },
     };
     let mut positional = Vec::new();
+    let mut scripts: Vec<String> = Vec::new();
     let mut flags_done = false;
     for w in rest {
         if flags_done || !w.starts_with('-') || w == "-" { positional.push(w.as_str()); continue; }
@@ -257,14 +268,17 @@ fn segment_ok(words: &[String]) -> bool {
         if let Some(long) = w.strip_prefix("--") {
             let name = format!("--{}", long.split('=').next().unwrap_or(""));
             if !tool.long.contains(&name.as_str()) { return false; }
-        } else if !w[1..].chars().all(|c| c.is_ascii_digit()) && !short_flags_ok(&w[1..], tool.short) {
-            return false;
+        } else if !w[1..].chars().all(|c| c.is_ascii_digit()) {
+            match short_flags_ok(tool.name, &w[1..], tool.short) { None => return false, Some(s) => scripts.extend(s) }
         }
     }
     match tool.name {
         "uniq" => positional.len() <= 1,
-        "sed" => positional.first().map(|s| sed_script_ok(s)).unwrap_or(false),
-        "awk" => !rest.iter().any(|w| w.contains("system") || w.contains("getline") || w.contains("print >")),
+        // Скрипт приклеен к `-e` или идёт первым словом (после `-e` или без него).
+        "sed" => if scripts.is_empty() { positional.first().map(|s| sed_script_ok(s)).unwrap_or(false) }
+                 else { scripts.iter().all(|s| sed_script_ok(s)) },
+        // `|` в программе awk — запуск команды (`print "x" | "sh"`), как и system/getline.
+        "awk" => !rest.iter().any(|w| w.contains("system") || w.contains("getline") || w.contains('|') || w.contains('>')),
         _ => true,
     }
 }
@@ -592,7 +606,8 @@ mod tests {
     fn read_only_rules() {
         for ok in ["ls -la /var/log", "df -h", "journalctl -u nginx -n 50 | grep error", "docker ps", "tail -50 /var/log/syslog",
                    "grep -i 'a|b c' f", "sed -n '1,20p' f", "sed 's/a/b/g' f", "sed -n /err/p f", "find /var -name '*.log' -mtime -1",
-                   "sort -rn f | uniq -c | head -5", "ps aux | sort -rk3 | head", "git log --oneline -n 5", "systemctl status nginx --no-pager", "ps aux"] {
+                   "sort -rn f | uniq -c | head -5", "ps aux | sort -rk3 | head", "cut -d: -f1 /etc/passwd",
+                   "sed -e 's/a/b/' f", "sed -es/a/b/ f", "awk -F: '{print NF}' f", "git log --oneline -n 5", "systemctl status nginx --no-pager", "ps aux"] {
             assert!(mcp_is_read_only(ok.into()), "{ok}");
         }
         for bad in ["rm -rf /", "sudo ls", "cat a > b", "ls; rm x", "sed -i s/a/b/ f", "sed --in-place s/a/b/ f", "sed 's/a/b/w out' f",
@@ -600,7 +615,8 @@ mod tests {
                     "echo $HOME", "sort -o out f", "sort --output=out f", "uniq in out", "journalctl --vacuum-size=1M", "journalctl --rotate",
                     "env", "printenv", "ip link set eth0 down", "ubus call system reboot", "date -s 2020-01-01", "hostname evil", "dmesg -C",
                     "ss -K", "ls --unknown", "grep -P x", "git diff --output=x", "git log --ext-diff", "awk 'BEGIN{system(\"id\")}'",
-                    "cat 'unclosed", "less f"] {
+                    "cat 'unclosed", "less f", "awk 'BEGIN{print \"x\" | \"sh\"}'", "sed -es/a/b/w f",
+                    "sed -e 's/a/b/e' f", "cut -x f"] {
             assert!(!mcp_is_read_only(bad.into()), "{bad}");
         }
     }
