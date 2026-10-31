@@ -25,16 +25,16 @@ const RULES: &[(&[&str], &str, &str)] = &[
     (&["permission denied, please try again", "permission denied (password", "authentication failed"],
      "Неверный пароль или пользователь",
      "Проверьте имя пользователя и пароль; сохранённый пароль можно изменить в карточке хоста."),
-    (&["permission denied"],
+    (&["permission denied", "отказано в доступе", "доступ запрещен", "доступ запрещён"],
      "Нет доступа",
      "Сервер отказал во входе. Проверьте пользователя, ключ или пароль."),
-    (&["could not resolve hostname", "name or service not known", "nodename nor servname", "no such host is known"],
+    (&["could not resolve hostname", "name or service not known", "nodename nor servname", "no such host is known", "этот хост неизвестен", "неизвестный хост"],
      "Адрес сервера не найден",
      "Проверьте HostName на опечатки и подключение к сети или VPN."),
-    (&["connection refused"],
+    (&["connection refused", "отверг запрос на подключение", "в подключении отказано"],
      "Сервер отказал в подключении",
      "На этом адресе и порту SSH не принимает соединения: проверьте порт и что sshd запущен."),
-    (&["connection timed out", "operation timed out", "timed out", "no route to host", "network is unreachable"],
+    (&["connection timed out", "operation timed out", "timed out", "no route to host", "network is unreachable", "попытка установить соединение была безуспешной", "превышен таймаут", "сеть недоступна"],
      "Сервер не отвечает",
      "Проверьте адрес, сеть, VPN и файрвол; сервер может быть выключен."),
     (&["kex_exchange_identification", "connection reset by peer", "connection closed by remote host"],
@@ -49,13 +49,13 @@ const RULES: &[(&[&str], &str, &str)] = &[
     (&["incorrect passphrase", "bad passphrase"],
      "Неверный пароль ключа",
      "Введите правильную passphrase или сохраните её заново."),
-    (&["repository not found", "does not appear to be a git repository", "project you were looking for could not be found"],
+    (&["repository not found", "does not appear to be a git repository", "project you were looking for could not be found", "репозиторий не найден", "не похоже на git репозиторий", "не является git репозиторием"],
      "Репозиторий не найден",
      "Проверьте адрес репозитория и что у вашего ключа есть к нему доступ."),
-    (&["could not read from remote repository"],
+    (&["could not read from remote repository", "не удалось прочитать из внешнего репозитория"],
      "Нет доступа к репозиторию",
      "Сервер git не пустил по SSH: проверьте ключ (лучше указать его для сервера в ~/.ssh/config) и адрес репозитория."),
-    (&["no such file", "not recognized as an internal or external command", "program not found", "cannot find the file"],
+    (&["no such file", "not recognized as an internal or external command", "program not found", "cannot find the file", "не является внутренней или внешней", "не удается найти указанный файл", "не удаётся найти указанный файл"],
      "Не найдена программа",
      "Установите недостающую программу (ssh, git) и перезапустите Relaya."),
 ];
@@ -97,6 +97,13 @@ mod tests {
         assert!(ssh_explain("git@x: Permission denied (publickey).".into()).unwrap().title.contains("ни один ключ"));
         assert!(ssh_explain("@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@".into()).unwrap().title.contains("не совпадает"));
         assert!(ssh_explain("all fine".into()).is_none());
+        let ru = "git@gitlab.com: Permission denied (publickey).\nfatal: Не удалось прочитать из внешнего репозитория.\n\nУдостоверьтесь, что у вас есть необходимые права доступа\nи репозиторий существует.";
+        assert!(ssh_explain(ru.into()).unwrap().title.contains("ни один ключ"));
+        assert!(ssh_explain("fatal: Не удалось прочитать из внешнего репозитория.".into()).unwrap().title.contains("к репозиторию"));
+        assert!(ssh_explain("ssh: Could not resolve hostname x: Этот хост неизвестен.".into()).unwrap().title.contains("не найден"));
+        assert!(ssh_explain("connect to host x port 22: Подключение не установлено, т.к. конечный компьютер отверг запрос на подключение.".into()).unwrap().title.contains("отказал в подключении"));
+        assert!(ssh_explain("\"ssh\" не является внутренней или внешней командой".into()).unwrap().title.contains("программа"));
+        assert!(ssh_explain("fatal: «x» не похоже на git репозиторий".into()).unwrap().title.contains("не найден"));
         assert_eq!(ssh_error_line("x\nfatal: bad\nand the repository exists.".into()), "fatal: bad");
     }
 }
