@@ -30,6 +30,12 @@ internal sealed class HostPage : UserControl
             Ui.Button(L("Изменить"), async () => await HostEditor.Show(XamlRoot, h, false), glyph: ""),
             more);
         Content = page;
+        if (Platform.CredentialStore.Has(h.alias) && Platform.Askpass.RunsCommands(h.alias))
+            body.Children.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Informational, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 0, 0, 8),
+                Message = L("У хоста есть ProxyCommand/LocalCommand — сохранённый пароль не подставляется автоматически"),
+            });
 
         body.Children.Add(Ui.Secondary(RelayaCoreMethods.HostSubtitle(h)));
         body.Children.Add(Ui.Section(L("Подключение")));

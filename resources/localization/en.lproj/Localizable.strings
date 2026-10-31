@@ -915,3 +915,4 @@
 "Мой" = "Mine";
 "С другой машины" = "From the other machine";
 "Мой: %@\nС другой машины: %@" = "Mine: %@\nFrom the other machine: %@";
+"У хоста есть ProxyCommand/LocalCommand — сохранённый пароль не подставляется автоматически" = "This host has ProxyCommand/LocalCommand — the saved password isn’t filled in automatically";

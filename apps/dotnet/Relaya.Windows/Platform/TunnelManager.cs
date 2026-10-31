@@ -46,7 +46,7 @@ internal sealed class TunnelManager
         {
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true,
         };
-        var passwordOnly = Askpass.PasswordOnly(t.hostAlias);
+        var passwordOnly = Askpass.CanAutofill(t.hostAlias) && Askpass.PasswordOnly(t.hostAlias);
         foreach (var a in RelayaCoreMethods.TunnelSshArguments(t, passwordOnly)) info.ArgumentList.Add(a);
         // Опции «только пароль» уже в аргументах ядра — askpass нужен только для самого пароля.
         if (passwordOnly) { Askpass.SetEnvironment(info, t.hostAlias); }

@@ -75,6 +75,7 @@ internal sealed class SshSession : IDisposable
         }
         console = pc;
         var passwordSent = false;
+        var autofill = Askpass.CanAutofill(alias); // M8-1: не для хостов с ProxyCommand/LocalCommand
         var loggedIn = false;
         var tail = new StringBuilder();
         pc.Output += data =>
@@ -86,13 +87,13 @@ internal sealed class SshSession : IDisposable
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
             if (!loggedIn && view.Emulator.LoginReady()) loggedIn = true;
-            if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && Relaya.Platform.CredentialStore.Read(alias) is { } password)
+            if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
                 passwordSent = true;
                 tail.Clear();
                 pc.Write(Encoding.UTF8.GetBytes(password + "\r"));
             }
-            else if (loggedIn && PasswordPrompt.IsAnyPasswordPrompt(text) && Relaya.Platform.CredentialStore.Has(alias))
+            else if (loggedIn && autofill && PasswordPrompt.IsAnyPasswordPrompt(text))
             {
                 // После входа — только по согласию человека (баннер «Подставить» / «Нет»).
                 tail.Clear();

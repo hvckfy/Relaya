@@ -50,6 +50,7 @@ internal static class AskpassBroker
     /// Токен на учётку: живёт 60 с, одно использование.
     public static string Issue(string account)
     {
+        if (Askpass.RunsCommands(account)) return ""; // пустой токен не совпадёт ни с одним грантом
         _ = PipeName;
         foreach (var (k, g) in grants) if (g.Expires < DateTime.UtcNow) grants.TryRemove(k, out _);
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));

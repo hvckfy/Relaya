@@ -49,9 +49,17 @@ internal static class Askpass
             AskpassBroker.Bind(token, process.Id);
     }
 
+    /// ssh этого хоста запускает программы из конфига (ProxyCommand, LocalCommand, KnownHostsCommand, Match exec):
+    /// они — потомки ssh и унаследовали бы токен, поэтому сохранённый пароль сам не подставляется (M8-1).
+    public static bool RunsCommands(string alias) =>
+        uniffi.relaya_core.RelayaCoreMethods.ConfigRunsCommandsIn(Data.AppState.ConfigText(), alias, Data.AppState.SshDir);
+
+    /// Пароль можно подставить автоматически: он сохранён, и конфиг хоста не запускает чужих программ.
+    public static bool CanAutofill(string alias) => CredentialStore.Has(alias) && !RunsCommands(alias);
+
     public static void Configure(ProcessStartInfo info, string alias, bool interactive = false)
     {
-        if (CredentialStore.Has(alias))
+        if (CanAutofill(alias))
         {
             if (PasswordOnly(alias))
                 foreach (var o in uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().Reverse<string>()) info.ArgumentList.Insert(0, o);
