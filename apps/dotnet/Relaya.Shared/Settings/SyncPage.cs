@@ -32,11 +32,11 @@ internal sealed class SyncPage : UserControl
     {
         Content = new ScrollViewer { Content = root };
         // Новые предупреждения о ключах — перестроить страницу, иначе только обновить состояния профилей.
-        sync.Changed += () => DispatcherQueue.TryEnqueue(() => { if (sync.RenamedKeys.Count != shownRenamed) Build(); else UpdateStates(); });
+        sync.Changed += () => DispatcherQueue.TryEnqueue(() => { if (sync.RenamedKeys.Count != shownRenamed || sync.SkippedKeys.Count != shownSkipped) Build(); else UpdateStates(); });
         Build();
     }
 
-    private int shownRenamed;
+    private int shownRenamed, shownSkipped;
 
     private static string Short(string s) => s.Length > 300 ? s[..300] + "…" : s;
 
@@ -93,6 +93,24 @@ internal sealed class SyncPage : UserControl
             };
             bar.Closed += (_, _) => sync.DismissRenamed(k);
             root.Children.Add(bar);
+        }
+
+        shownSkipped = sync.SkippedKeys.Count;
+        foreach (var (reason, key) in new[]
+        {
+            (KeySkipReason.NoPassphrase, "Ключи не загружены — задайте пароль шифрования ключей (тот же, что на другой машине): %@"),
+            (KeySkipReason.WrongPassphrase, "Ключи не загружены — пароль шифрования ключей не подошёл: %@"),
+        })
+        {
+            var names = sync.SkippedKeys.Where(k => k.reason == reason).Select(k => k.name).ToList();
+            if (names.Count == 0) continue;
+            var toPass = new Button { Content = L("Пароль шифрования ключей") };
+            toPass.Click += (_, _) => { pass.StartBringIntoView(); pass.Focus(FocusState.Programmatic); };
+            root.Children.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 8, 0, 0),
+                Message = L(key, string.Join(", ", names)), ActionButton = toPass,
+            });
         }
 
         root.Children.Add(new TextBlock { Text = L("Профили"), Style = Style("BodyStrongTextBlockStyle"), Margin = new Thickness(0, 16, 0, 4) });

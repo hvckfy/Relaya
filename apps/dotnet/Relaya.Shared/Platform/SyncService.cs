@@ -42,6 +42,9 @@ internal sealed class SyncService
     /// Ключи, пришедшие с другой машины под тем же именем, но другие: показываются, пока их не закроют.
     public List<RenamedKey> RenamedKeys => renamed.Values.OrderBy(k => k.name).ToList();
 
+    /// Пропущенные ключи последней синхронизации (нет пароля шифрования или он не подошёл).
+    public List<SkippedKey> SkippedKeys { get; private set; } = new();
+
     public void DismissRenamed(RenamedKey k) => renamed.TryRemove(k.savedAs, out _);
 
     private SemaphoreSlim Gate(string id) => gates.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
@@ -152,6 +155,8 @@ internal sealed class SyncService
                 }
             }
             foreach (var k in RelayaCoreMethods.SyncTakeRenamedKeys(Paths)) renamed[k.savedAs] = k;
+            // Ключи, которые ядро не смогло расшифровать: нет пароля шифрования или он другой.
+            SkippedKeys = RelayaCoreMethods.SyncTakeSkippedKeys(Paths);
             Set(p, State.Idle, L("Синхронизировано %@", DateTime.Now.ToString("HH:mm")));
             if (imported.Count > 0) Imported?.Invoke();
         }
