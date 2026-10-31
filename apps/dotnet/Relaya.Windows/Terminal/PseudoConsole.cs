@@ -14,7 +14,8 @@ internal sealed class PseudoConsole : IDisposable
 {
     private IntPtr hpc;
     private readonly FileStream input, output;
-    private readonly Process process;
+    // Свой handle процесса из CreateProcess: GetProcessById падает, если короткий процесс уже завершился.
+    private readonly SafeProcessHandle process;
 
     public event Action<byte[]>? Output;
     public event Action<int>? Exited;
@@ -47,8 +48,7 @@ internal sealed class PseudoConsole : IDisposable
                     ExtendedStartupInfoPresent, IntPtr.Zero, null, ref si, out var pi))
                 throw new Win32Exception();
             CloseHandle(pi.hThread);
-            CloseHandle(pi.hProcess);
-            process = Process.GetProcessById(pi.dwProcessId);
+            process = new SafeProcessHandle(pi.hProcess, ownsHandle: true);
         }
         finally
         {
@@ -66,8 +66,14 @@ internal sealed class PseudoConsole : IDisposable
         Task.Run(ReadLoop);
         Task.Run(async () =>
         {
-            await process.WaitForExitAsync();
-            Exited?.Invoke(process.ExitCode);
+            int code;
+            try
+            {
+                await Task.Run(() => WaitForSingleObject(process, Infinite));
+                code = GetExitCodeProcess(process, out var c) ? (int)c : -1;
+            }
+            catch (ObjectDisposedException) { return; } // вкладку закрыли
+            Exited?.Invoke(code);
         });
     }
 
@@ -104,7 +110,8 @@ internal sealed class PseudoConsole : IDisposable
     public void Dispose()
     {
         if (hpc != IntPtr.Zero) { ClosePseudoConsole(hpc); hpc = IntPtr.Zero; }
-        try { if (!process.HasExited) process.Kill(); } catch (InvalidOperationException) { }
+        if (!process.IsClosed && WaitForSingleObject(process, 0) != 0) TerminateProcess(process, 1);
+        process.Dispose();
         input.Dispose();
         output.Dispose();
     }
@@ -150,4 +157,15 @@ internal sealed class PseudoConsole : IDisposable
         bool inheritHandles, uint flags, IntPtr env, string? cwd, ref StartupInfoEx si, out ProcessInformation pi);
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr handle);
+
+    private const uint Infinite = 0xFFFFFFFF;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint WaitForSingleObject(SafeProcessHandle handle, uint milliseconds);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetExitCodeProcess(SafeProcessHandle handle, out uint code);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateProcess(SafeProcessHandle handle, uint code);
 }
