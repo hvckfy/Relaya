@@ -125,7 +125,8 @@ final class TmuxControlClient {
             let data = h.availableData
             guard !data.isEmpty else { h.readabilityHandler = nil; return }
             let bytes = [UInt8](data)
-            Task { @MainActor in self?.handle(bytes) }
+            // main.async — очередь FIFO: куски приходят в парсер по порядку (у отдельных Task порядок не гарантирован).
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.handle(bytes) } }
         }
         p.terminationHandler = { [weak self] _ in
             Task { @MainActor in self?.finish() }

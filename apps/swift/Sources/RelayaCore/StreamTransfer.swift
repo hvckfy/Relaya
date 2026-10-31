@@ -64,15 +64,16 @@ public enum StreamTransfer {
                             box.terminate()
                         }
                     }
+                    // Pipe читается только здесь: завершение ждёт EOF, поэтому куски пишутся строго по порядку.
+                    let eof = DispatchGroup()
+                    eof.enter()
                     reader.readabilityHandler = { h in
                         let data = h.availableData
-                        guard !data.isEmpty else { h.readabilityHandler = nil; return }
+                        guard !data.isEmpty else { h.readabilityHandler = nil; eof.leave(); return }
                         write(data)
                     }
                     process.terminationHandler = { p in
-                        reader.readabilityHandler = nil
-                        let rest = reader.readDataToEndOfFile()
-                        if !rest.isEmpty { write(rest) }
+                        eof.wait()
                         let err = String(decoding: errReader.readDataToEndOfFile(), as: UTF8.self)
                         if let e = writeError.error {
                             cont.resume(throwing: Failure(message: L("Ошибка записи на диск: %@", e.localizedDescription)))

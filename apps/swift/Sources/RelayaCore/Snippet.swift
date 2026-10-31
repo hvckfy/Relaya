@@ -46,6 +46,7 @@ public struct SnippetStore: Sendable {
     }
 
     public func save(_ snippets: [Snippet]) throws {
+        try StoreRecovery.checkWritable(url)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

@@ -1115,3 +1115,4 @@
 "Команда остановлена: превышен таймаут %@ с" = "Command stopped: timed out after %@ s";
 "SSH-туннель не поднялся за %@ с" = "The SSH tunnel didn't come up within %@ s";
 "Не удалось сохранить пароль" = "Couldn’t save the password";
+"Файл %@ не удалось прочитать — изменения не сохранены, чтобы не затереть его. Проверьте права доступа и перезапустите Relaya." = "Couldn't read %@ — changes weren't saved so it isn't overwritten. Check its permissions and restart Relaya.";

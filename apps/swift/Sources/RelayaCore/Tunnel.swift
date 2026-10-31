@@ -102,6 +102,7 @@ public struct TunnelStore: Sendable {
     }
 
     public func save(_ tunnels: [Tunnel]) throws {
+        try StoreRecovery.checkWritable(url)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

@@ -115,11 +115,11 @@ final class AppModel {
         didSet { UserDefaults.standard.set(paletteRecents, forKey: "paletteRecents") }
     }
     var desktops: [RemoteDesktop] = RemoteDesktopStore().load() {
-        didSet { try? RemoteDesktopStore().save(desktops) }
+        didSet { saveList { try RemoteDesktopStore().save(desktops) } }
     }
     var desktopStatus: [RemoteDesktop.ID: String] = [:]
     var snippets: [Snippet] = SnippetStore().load() {
-        didSet { try? SnippetStore().save(snippets) }
+        didSet { saveList { try SnippetStore().save(snippets) } }
     }
     var showOnboarding = !UserDefaults.standard.bool(forKey: "onboardingDone") && !RelayaPaths.isDemo
 
@@ -252,6 +252,11 @@ final class AppModel {
     var editor: EditorRequest?
     var pendingDelete: SSHHost?
     var alertMessage: String?
+
+    /// Сохранение сниппетов и столов: ошибка записи показывается, а не теряется (Н16).
+    private func saveList(_ save: () throws -> Void) {
+        do { try save() } catch { alertMessage = error.localizedDescription }
+    }
     /// Запуск (хосты, автостарт туннелей, синхронизация) уже выполнен — второе окно его не повторяет.
     @ObservationIgnored var started = false
     /// Хост, для которого запрошено имя новой группы.
