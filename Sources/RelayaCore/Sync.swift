@@ -98,14 +98,21 @@ public enum Sync {
             changed.append(path)
         }
 
+        // Своё добавляется к тому, что уже в папке, а не заменяет её: Mac без хостов не должен обнулить общий файл.
         if items.contains(.sshConfig) {
-            try write(Data(SyncConfig.extract(configText, aliases: aliases).utf8), "ssh/config")
+            let existing = (try? String(contentsOf: dir.appending(path: "ssh/config"), encoding: .utf8)) ?? ""
+            let mine = SyncConfig.extract(configText, aliases: aliases)
+            let merged = existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? mine
+                : SyncConfig.merge(local: existing, incoming: mine)
+            try write(Data(merged.utf8), "ssh/config")
         }
         if items.contains(.snippets), let list: [Snippet] = load(paths.snippets) {
-            try write(encode(list.sorted { $0.id.uuidString < $1.id.uuidString }), "relaya/snippets.json")
+            try write(encode(withExisting(dir, "relaya/snippets.json", list).sorted { $0.id.uuidString < $1.id.uuidString }),
+                      "relaya/snippets.json")
         }
         if items.contains(.tunnels), let list: [Tunnel] = load(paths.tunnels) {
-            try write(encode(list.filter { aliases.contains($0.hostAlias) }.sorted { $0.id.uuidString < $1.id.uuidString }),
+            let mine = list.filter { aliases.contains($0.hostAlias) }
+            try write(encode(withExisting(dir, "relaya/tunnels.json", mine).sorted { $0.id.uuidString < $1.id.uuidString }),
                       "relaya/tunnels.json")
         }
         if items.contains(.desktops), let list: [RemoteDesktop] = load(paths.desktops) {
@@ -113,7 +120,8 @@ public enum Sync {
                 profile.scope.allHosts || d.group.map { profile.scope.groups.contains($0) } ?? false
                     || d.viaSSHHost.map { aliases.contains($0) } ?? false
             }
-            try write(encode(mine.sorted { $0.id.uuidString < $1.id.uuidString }), "relaya/desktops.json")
+            try write(encode(withExisting(dir, "relaya/desktops.json", mine).sorted { $0.id.uuidString < $1.id.uuidString }),
+                      "relaya/desktops.json")
         }
         if items.contains(.agents), let data = try? Data(contentsOf: paths.mcp) {
             try write(data, "relaya/mcp.json")
@@ -168,6 +176,15 @@ public enum Sync {
             changed.append(.keys)
         }
         return changed
+    }
+
+    /// Список в папке + свои элементы (свои заменяют по id): выгрузка ничего не удаляет из общего.
+    static func withExisting<T: Codable & Identifiable>(_ dir: URL, _ rel: String, _ mine: [T]) -> [T] where T.ID: Equatable {
+        var out: [T] = load(dir.appending(path: rel)) ?? []
+        for item in mine {
+            if let i = out.firstIndex(where: { $0.id == item.id }) { out[i] = item } else { out.append(item) }
+        }
+        return out
     }
 
     /// Пришедшие элементы заменяют свои по id, новые добавляются, остальные локальные остаются.

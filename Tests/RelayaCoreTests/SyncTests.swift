@@ -98,6 +98,9 @@ struct SyncTests {
         #expect(try await a.sync(machine: "A") { try Sync.export(p, paths: pa, to: repoA) } == .synced(pulled: false))
 
         try await b.setUp()
+        _ = try await b.sync(machine: "B") { try Sync.export(p, paths: pb, to: repoB) }
+        #expect(try String(contentsOf: repoB.appending(path: "ssh/config"), encoding: .utf8).contains("Host a"),
+                "пустой Mac не должен обнулять общий файл")
         try Sync.import(p, paths: paths(localB), from: b.repo)
         #expect(try String(contentsOf: localB.appending(path: "config"), encoding: .utf8).contains("Host a"))
 
