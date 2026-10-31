@@ -206,7 +206,7 @@ public struct GitSync: Sendable {
 
     /// Ядро запускает git синхронно — не в главном потоке.
     private func offMain<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
-        try await Task.detached { do { return try body() } catch let e as CoreError { throw Failure(message: "\(e)") } }.value
+        try await Task.detached { do { return try body() } catch let e as CoreError { throw Failure(message: e.message) } }.value
     }
 
     /// Один цикл: выгрузка → коммит → слияние с сервером → разнос пришедшего → отправка.
@@ -257,5 +257,14 @@ public enum FolderSync {
     public static func sync(_ profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(), passphrase: String? = nil,
                             folder: URL) throws -> [Sync.Item] {
         try folderSync(profile: profile.rust, paths: paths.rust, passphrase: passphrase, folder: folder.path).map(Sync.Item.init(rust:))
+    }
+}
+
+extension CoreError {
+    /// Текст ошибки ядра (flat error: единственное поле — сообщение), а не `Git(message: …)`.
+    var message: String {
+        guard let value = Mirror(reflecting: self).children.first?.value else { return "\(self)" }
+        if let text = value as? String { return text }
+        return Mirror(reflecting: value).children.first?.value as? String ?? "\(self)"
     }
 }

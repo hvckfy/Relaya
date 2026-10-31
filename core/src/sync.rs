@@ -342,6 +342,19 @@ pub enum SyncOutcome {
 
 const BRANCH: &str = "main";
 
+/// Причина ошибки git, понятная человеку: строка ssh о входе важнее хвоста «make sure … the repository exists».
+fn git_error(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    const SSH: &[&str] = &["Too many authentication failures", "Permission denied", "Could not resolve hostname",
+                           "Connection refused", "Connection timed out", "Host key verification failed", "No route to host"];
+    if let Some(l) = lines.iter().find(|l| SSH.iter().any(|k| l.contains(k))) {
+        return if l.contains("Too many authentication failures") {
+            format!("{l}: ssh-agent предлагает слишком много ключей — укажите для сервера IdentityFile и IdentitiesOnly yes в ~/.ssh/config")
+        } else { l.to_string() };
+    }
+    lines.iter().find(|l| l.starts_with("fatal:") || l.starts_with("error:")).or(lines.last()).map(|l| l.to_string()).unwrap_or_else(|| "git".into())
+}
+
 struct Git { repo: PathBuf }
 
 impl Git {
@@ -354,7 +367,7 @@ impl Git {
             .output().map_err(|e| CoreError::Git(format!("git: {e}")))?;
         if !out.status.success() && !allow_failure {
             let text = format!("{}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout));
-            return Err(CoreError::Git(text.lines().filter(|l| !l.trim().is_empty()).last().unwrap_or("git").to_string()));
+            return Err(CoreError::Git(git_error(&text)));
         }
         Ok(out)
     }
@@ -447,6 +460,16 @@ pub fn folder_sync(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
     let imported = sync_import(profile.clone(), paths.clone(), passphrase.clone(), folder.clone())?;
     sync_export(profile, paths, passphrase, folder)?;
     Ok(imported)
+}
+
+#[cfg(test)]
+mod git_error_tests {
+    #[test]
+    fn picks_meaningful_line() {
+        let t = "Received disconnect from 1.2.3.4 port 22:2: Too many authentication failures\nDisconnected\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.";
+        assert!(super::git_error(t).starts_with("Received disconnect from 1.2.3.4 port 22:2: Too many authentication failures"));
+        assert_eq!(super::git_error("x\nfatal: bad\nand the repository exists."), "fatal: bad");
+    }
 }
 
 #[cfg(test)]
