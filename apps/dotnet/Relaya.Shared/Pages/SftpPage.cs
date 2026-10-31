@@ -83,11 +83,20 @@ internal sealed class SftpPage : UserControl
 
     private static string Q(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
 
-    private async Task<AppState.Result> Batch(params string[] commands)
+    // Навигация и мелкие операции — 60 с; передачи файлов ограничены только ConnectTimeout и ServerAlive (Н6):
+    // фиксированный таймаут обрывал большие загрузки посреди передачи.
+    private const int CommandTimeout = 60, TransferTimeout = 7 * 24 * 3600;
+
+    private Task<AppState.Result> Batch(params string[] commands) => Run(CommandTimeout, commands);
+
+    private Task<AppState.Result> Transfer(params string[] commands) => Run(TransferTimeout, commands);
+
+    private async Task<AppState.Result> Run(int timeoutSeconds, string[] commands)
     {
         busy.Visibility = Visibility.Visible;
-        var r = await AppState.Run(AppState.SftpExe, new[] { "-o", "BatchMode=no", "-b", "-", "-o", "ConnectTimeout=10", alias }, alias,
-            string.Join("\n", commands) + "\n", 600);
+        var r = await AppState.Run(AppState.SftpExe,
+            new[] { "-o", "BatchMode=no", "-b", "-", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", alias },
+            alias, string.Join("\n", commands) + "\n", timeoutSeconds);
         busy.Visibility = Visibility.Collapsed;
         if (r.Status != 0)
             status.Text = Platform.SshErrors.Describe(string.Join("\n", r.Stderr.Split('\n').Where(l => !l.StartsWith("sftp>"))), L("Ошибка sftp"));
@@ -133,7 +142,7 @@ internal sealed class SftpPage : UserControl
         picker.FileTypeFilter.Add("*");
         Attach(picker);
         if (await picker.PickSingleFolderAsync() is not { } folder) return;
-        var r = await Batch(sel.Select(f => $"get -r {Q(Join(f.name))} {Q(folder.Path)}").ToArray());
+        var r = await Transfer(sel.Select(f => $"get -r {Q(Join(f.name))} {Q(folder.Path)}").ToArray());
         if (r.Status == 0) status.Text = L("Скачано в %@", folder.Path);
     }
 
@@ -148,7 +157,7 @@ internal sealed class SftpPage : UserControl
 
     private async Task Put(IEnumerable<string> local)
     {
-        var r = await Batch(local.Select(l => $"put -r {Q(l)} {Q(path)}").ToArray());
+        var r = await Transfer(local.Select(l => $"put -r {Q(l)} {Q(path)}").ToArray());
         if (r.Status == 0) await Open(path);
     }
 
