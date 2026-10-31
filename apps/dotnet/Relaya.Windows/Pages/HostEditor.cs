@@ -50,7 +50,23 @@ internal static class HostEditor
         var keys = Directory.Exists(AppState.SshDir)
             ? Directory.GetFiles(AppState.SshDir, "*.pub").Select(p => "~/.ssh/" + Path.GetFileNameWithoutExtension(p))
             : Enumerable.Empty<string>();
-        var key = Combo(L("Ключ (IdentityFile)"), keys, source?.identityFile, L("необязательно"));
+        // Все IdentityFile блока по порядку (C1): ssh пробует их сверху вниз.
+        var keyLines = source == null ? new List<string>()
+            : source.identityFiles.Count > 0 ? source.identityFiles : source.identityFile is { } f1 ? new List<string> { f1 } : new List<string>();
+        var keyList = new TextBox
+        {
+            Header = L("Ключи (IdentityFile), по одному в строке"), Text = string.Join("\r", keyLines), AcceptsReturn = true,
+            PlaceholderText = L("необязательно"), MinHeight = 56, FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+        };
+        var addKeyMenu = new MenuFlyout();
+        foreach (var k in keys)
+        {
+            var item = new MenuFlyoutItem { Text = k };
+            item.Click += (_, _) => keyList.Text = keyList.Text.Trim().Length == 0 ? k : keyList.Text.TrimEnd() + "\r" + k;
+            addKeyMenu.Items.Add(item);
+        }
+        var addKey = new DropDownButton { Content = L("Добавить ключ из ~/.ssh"), Flyout = addKeyMenu, IsEnabled = addKeyMenu.Items.Count > 0 };
+        List<string> KeyFiles() => keyList.Text.Split('\r', '\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         var jump = Combo(L("Через хост (ProxyJump)"), AppState.Hosts.Select(h => h.alias), source?.proxyJump, L("необязательно"));
         var group = Combo(L("Группа"), AppState.Groups(), source?.group, L("необязательно"));
         var tags = Field(L("Метки через запятую"), source == null ? "" : string.Join(", ", source.tags), "prod, db");
@@ -59,7 +75,18 @@ internal static class HostEditor
         var all = RelayaCoreMethods.OsAll();
         foreach (var o in all) os.Items.Add(RelayaCoreMethods.OsTitle(o));
         os.SelectedIndex = source?.os is { } so ? all.IndexOf(so) + 1 : 0;
-        var agent = new ToggleSwitch { Header = L("Пробрасывать ssh-agent (ForwardAgent)"), IsOn = source?.forwardAgent == true };
+        // Тристейт (C1): «как в конфиге» не пишет строку, «да»/«нет» — явное значение.
+        ComboBox Tri(string header, string? value, bool? old)
+        {
+            var c = new ComboBox { Header = header, HorizontalAlignment = HorizontalAlignment.Stretch, Items = { L("Как в конфиге"), L("Да"), L("Нет") } };
+            var v = value ?? (old is { } b ? (b ? "yes" : "no") : null);
+            c.SelectedIndex = v == "yes" ? 1 : v == "no" ? 2 : 0;
+            return c;
+        }
+        string? TriValue(ComboBox c) => c.SelectedIndex switch { 1 => "yes", 2 => "no", _ => null };
+        bool? TriBool(ComboBox c) => c.SelectedIndex switch { 1 => true, 2 => false, _ => null };
+        var agent = Tri(L("Пробрасывать ssh-agent (ForwardAgent)"), source?.forwardAgentValue, source?.forwardAgent);
+        var compression = Tri(L("Сжатие (Compression)"), source?.compressionValue, source?.compression);
         var saved = editing && Platform.CredentialStore.Has(source!.alias);
         var forget = false;
         var password = new PasswordBox
@@ -101,11 +128,12 @@ internal static class HostEditor
                 if (!long.TryParse(p, out var v) || v is < 1 or > 65535) { problem = L("Порт — число от 1 до 65535."); return null; }
                 portValue = v;
             }
-            return new SshHost(name, Opt(address.Text), Opt(user.Text), portValue, Opt(key.Text), Opt(jump.Text),
+            var files = KeyFiles();
+            return new SshHost(name, Opt(address.Text), Opt(user.Text), portValue, files.FirstOrDefault(), Opt(jump.Text),
                 // Выключили при ForwardAgent в блоке — пишем явное no, иначе значение из блока остаётся (R2).
-                agent.IsOn ? true : (source?.forwardAgent == true || source?.forwardAgentValue != null ? false : null), source?.serverAliveInterval, source?.compression, Opt(group.Text),
+                TriBool(agent), source?.serverAliveInterval, TriBool(compression), Opt(group.Text),
                 RelayaCoreMethods.SplitTags(tags.Text), source?.color, os.SelectedIndex > 0 ? all[os.SelectedIndex - 1] : null, tmux.IsOn,
-                identityFiles: source?.identityFiles ?? new List<string>(), forwardAgentValue: source?.forwardAgentValue, compressionValue: source?.compressionValue);
+                identityFiles: files, forwardAgentValue: TriValue(agent), compressionValue: TriValue(compression));
         }
         void Update()
         {
@@ -114,10 +142,11 @@ internal static class HostEditor
             preview.Text = h == null ? "" : string.Join("\n",
                 RelayaCoreMethods.ConfigRenderedLines(AppState.ConfigText(), h, editing ? source!.alias : null));
         }
-        foreach (var t in new[] { alias, address, user, port, tags }) t.TextChanged += (_, _) => Update();
-        foreach (var c in new[] { key, jump, group }) { c.SelectionChanged += (_, _) => Update(); c.TextSubmitted += (_, _) => Update(); }
+        foreach (var t in new[] { alias, address, user, port, tags, keyList }) t.TextChanged += (_, _) => Update();
+        foreach (var c in new[] { jump, group }) { c.SelectionChanged += (_, _) => Update(); c.TextSubmitted += (_, _) => Update(); }
         os.SelectionChanged += (_, _) => Update();
-        agent.Toggled += (_, _) => Update();
+        agent.SelectionChanged += (_, _) => Update();
+        compression.SelectionChanged += (_, _) => Update();
         tmux.Toggled += (_, _) => Update();
         Update();
 
@@ -132,7 +161,7 @@ internal static class HostEditor
                     Spacing = 10, MinWidth = 440,
                     Children =
                     {
-                        alias, address, user, port, password, passwordNote, key, jump, group, tags, os, agent, tmux,
+                        alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, os, agent, compression, tmux,
                         Ui.Section(L("Будет записано в ~/.ssh/config")), Ui.Card(preview), error,
                     },
                 },

@@ -908,3 +908,6 @@
 "Перед тем как фоновый ssh (туннель, SFTP, панели хоста, агенты) получит сохранённый пароль, Relaya спросит вас" = "Before a background ssh (tunnel, SFTP, host panels, agents) gets a saved password, Relaya asks you";
 "Файл %@ не прочитан" = "%@ couldn’t be read";
 "Оригинал сохранён как %@. Список начат заново." = "The original is saved as %@. The list starts empty.";
+"Сжатие (Compression)" = "Compression";
+"Ключи (IdentityFile), по одному в строке" = "Keys (IdentityFile), one per line";
+"Добавить ключ из ~/.ssh" = "Add Key from ~/.ssh";
