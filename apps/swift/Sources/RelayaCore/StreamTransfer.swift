@@ -54,7 +54,7 @@ public enum StreamTransfer {
                     let errReader = stderr.fileHandleForReading
                     let counter = Counter()
                     // Диск полон или файл недоступен — останавливаем ssh, а не теряем данные молча.
-                    let write: (Data) -> Void = { data in
+                    let write: @Sendable (Data) -> Void = { data in
                         guard writeError.error == nil else { return }
                         do {
                             try out.write(contentsOf: data)
