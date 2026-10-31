@@ -18,16 +18,40 @@ pub struct TmuxSession {
     pub keep: bool,
 }
 
-#[uniffi::export]
-pub fn tmux_host_prefix(alias: String) -> String {
-    let safe: String = alias.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect();
-    format!("{PREFIX}{safe}-")
+/// Имя хоста в имени сессии: ASCII-буквы и цифры, остальное — одиночный `-`, без `-` по краям, чтобы `--` разделял
+/// имя хоста и id. Не-ASCII или пустое имя — короткий хеш (FNV-1a), иначе `сервер` и `хост` совпали бы.
+fn safe_alias(alias: &str) -> String {
+    let lower = alias.to_lowercase();
+    if lower.is_ascii() {
+        let mut out = String::new();
+        for c in lower.chars() {
+            if c.is_ascii_alphanumeric() { out.push(c) } else if !out.ends_with('-') { out.push('-') }
+        }
+        let out = out.trim_matches('-').to_string();
+        if !out.is_empty() { return out; }
+    }
+    let hash = alias.bytes().fold(0x811c9dc5u32, |h, b| (h ^ b as u32).wrapping_mul(0x01000193));
+    format!("h{hash:08x}")
 }
 
-/// `relaya-<alias>-<8 символов id>`.
+/// `relaya-<alias>--`: у разных хостов префиксы не вкладываются друг в друга (`a` и `a-b`).
+#[uniffi::export]
+pub fn tmux_host_prefix(alias: String) -> String {
+    format!("{PREFIX}{}--", safe_alias(&alias))
+}
+
+/// `relaya-<alias>--<8 hex id>`; сессия control mode — `relaya-<alias>--cc`.
 #[uniffi::export]
 pub fn tmux_session_name(alias: String, id: String) -> String {
-    tmux_host_prefix(alias) + &id.to_lowercase().chars().take(8).collect::<String>()
+    let hex: String = id.to_lowercase().chars().filter(|c| c.is_ascii_hexdigit()).take(8).collect();
+    tmux_host_prefix(alias) + &format!("{hex:0<8}")
+}
+
+/// Сессия этого хоста: точное совпадение `relaya-<alias>--<8 hex>` или `relaya-<alias>--cc`, а не просто префикс.
+#[uniffi::export]
+pub fn tmux_is_host_session(alias: String, name: String) -> bool {
+    let Some(rest) = name.strip_prefix(&tmux_host_prefix(alias)) else { return false };
+    rest == "cc" || (rest.len() == 8 && rest.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()))
 }
 
 fn reaper_hook(name: &str, ttl: i64) -> String {
@@ -84,8 +108,7 @@ pub fn tmux_parse(output: String) -> Vec<TmuxSession> {
 /// Что убрать: не подключённые, не открытые во вкладках и просроченные; сверх CAP — самые старые.
 #[uniffi::export]
 pub fn tmux_stale(sessions: Vec<TmuxSession>, alias: String, open: Vec<String>, ttl_minutes: i64, now: f64) -> Vec<String> {
-    let prefix = tmux_host_prefix(alias);
-    let mine: Vec<&TmuxSession> = sessions.iter().filter(|s| s.name.starts_with(&prefix)).collect();
+    let mine: Vec<&TmuxSession> = sessions.iter().filter(|s| tmux_is_host_session(alias.clone(), s.name.clone())).collect();
     let idle: Vec<&TmuxSession> = mine.iter().copied().filter(|s| s.attached == 0 && !open.contains(&s.name)).collect();
     let mut kill: std::collections::HashSet<String> = idle.iter().filter(|s| {
         let ttl = if s.keep { KEEP_SECONDS as f64 } else { (ttl_minutes.max(1) * 60) as f64 };
@@ -109,7 +132,17 @@ mod tests {
 
     #[test]
     fn names_commands_parse() {
-        assert_eq!(tmux_session_name("Web 1.prod".into(), "3F9A0000-0000".into()), "relaya-web-1-prod-3f9a0000");
+        assert_eq!(tmux_session_name("Web 1.prod".into(), "3F9A0000-0000".into()), "relaya-web-1-prod--3f9a0000");
+        assert_eq!(tmux_session_name("a".into(), "3f9a-00z0-11".into()), "relaya-a--3f9a0001");
+        assert_eq!(tmux_host_prefix("--a__b--".into()), "relaya-a-b--");
+        let ru = tmux_host_prefix("сервер".into());
+        assert!(ru.starts_with("relaya-h") && ru.len() == "relaya-h12345678--".len() && ru != tmux_host_prefix("хост".into()), "{ru}");
+        assert!(tmux_host_prefix("".into()).starts_with("relaya-h"));
+        assert!(tmux_is_host_session("a".into(), "relaya-a--3f9a0000".into()));
+        assert!(tmux_is_host_session("a".into(), "relaya-a--cc".into()));
+        assert!(!tmux_is_host_session("a".into(), "relaya-a-b--3f9a0000".into()));
+        assert!(!tmux_is_host_session("a".into(), "relaya-a--3f9a0000x".into()));
+        assert!(!tmux_is_host_session("a".into(), "relaya-a--notmine1".into()));
         let cmd = tmux_attach_command("relaya-a-1".into(), 60);
         assert!(cmd.contains("new-session -A -s relaya-a-1") && cmd.contains("sleep 3600") && cmd.contains("else exec"));
         let p = tmux_parse("relaya-a-1|0|100|200|150|1\nrelaya-a-2|1|100|300||\nother|0|1|1||\n".into());
@@ -121,11 +154,13 @@ mod tests {
     fn stale_rules() {
         let now = 10_000.0;
         let old = now - 7200.0;
-        let list = vec![s("relaya-a-old", 0, old, Some(old), false), s("relaya-a-fresh", 0, now - 60.0, Some(now - 60.0), false),
-                        s("relaya-a-on", 1, old, Some(old), false), s("relaya-a-tab", 0, old, Some(old), false),
-                        s("relaya-a-kept", 0, old, Some(old), true), s("relaya-b-old", 0, old, Some(old), false)];
-        assert_eq!(tmux_stale(list, "a".into(), vec!["relaya-a-tab".into()], 60, now), ["relaya-a-old"]);
-        let many: Vec<_> = (0..12).map(|i| s(&format!("relaya-a-{i}"), 0, 9_000.0 + i as f64, Some(now), false)).collect();
-        assert_eq!(tmux_stale(many, "a".into(), vec![], 60, now), ["relaya-a-0", "relaya-a-1"]);
+        let n = |tag: &str| format!("relaya-a--{tag:0>8}");
+        let list = vec![s(&n("01d"), 0, old, Some(old), false), s(&n("f2e5"), 0, now - 60.0, Some(now - 60.0), false),
+                        s(&n("a0"), 1, old, Some(old), false), s(&n("ab"), 0, old, Some(old), false),
+                        s(&n("ee"), 0, old, Some(old), true), s("relaya-b--0000001d", 0, old, Some(old), false),
+                        s("relaya-a-b--0000001d", 0, old, Some(old), false), s("relaya-a--cc", 0, old, Some(old), false)];
+        assert_eq!(tmux_stale(list, "a".into(), vec![n("ab")], 60, now), [n("01d"), "relaya-a--cc".into()]);
+        let many: Vec<_> = (0..12).map(|i| s(&n(&i.to_string()), 0, 9_000.0 + i as f64, Some(now), false)).collect();
+        assert_eq!(tmux_stale(many, "a".into(), vec![], 60, now), [n("0"), n("1")]);
     }
 }
