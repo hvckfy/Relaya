@@ -16,6 +16,7 @@ pub mod models;
 pub mod server_os;
 pub mod ssh_config;
 pub mod sync;
+pub mod terminal;
 pub mod tile_layout;
 pub mod tmux;
 pub mod tmux_control;
