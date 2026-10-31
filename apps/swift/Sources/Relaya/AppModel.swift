@@ -538,6 +538,11 @@ final class AppModel {
                 if case .failed(let m) = tunnels.status(of: tunnel) { desktopStatus[desktop.id] = L("Туннель: %@", "\(m)"); return }
                 if tunnels.status(of: tunnel) == .running { break }
             }
+            guard tunnels.status(of: tunnel) == .running else {
+                tunnels.stop(tunnel.id)
+                desktopStatus[desktop.id] = L("SSH-туннель не поднялся за %@ с", "5")
+                return
+            }
             host = "localhost"
             port = localPort
         }

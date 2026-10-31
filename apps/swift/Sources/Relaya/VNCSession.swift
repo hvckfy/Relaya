@@ -84,6 +84,11 @@ final class VNCSession: NSObject {
                 if case .failed(let m) = model.tunnels.status(of: t) { phase = .disconnected(L("SSH-туннель: %@", "\(m)")); return }
                 if model.tunnels.status(of: t) == .running { break }
             }
+            guard model.tunnels.status(of: t) == .running else {
+                model.tunnels.stop(t.id)
+                phase = .disconnected(L("SSH-туннель не поднялся за %@ с", "10"))
+                return
+            }
             tunnel = t
             if closed { model.tunnels.stop(t.id); tunnel = nil; return }
             host = "localhost"

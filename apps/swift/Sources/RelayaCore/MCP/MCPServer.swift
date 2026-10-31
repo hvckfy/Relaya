@@ -104,7 +104,10 @@ public final class MCPServer {
         func execute(host: RelayaRust.SshHost, command: String, timeoutSeconds: UInt32) -> ExecResult {
             let h = SSHHost(rust: host), run = owner.execute
             let r = wait { await run(h, command, .seconds(Int(timeoutSeconds))) }
-            return ExecResult(status: r.status, stdout: r.stdout, stderr: r.stderr)
+            // Остановку по таймауту агент видит словами, а не как «код выхода 15».
+            let stderr = r.timedOut ? [r.stderr, L("Команда остановлена: превышен таймаут %@ с", "\(timeoutSeconds)")]
+                .filter { !$0.isEmpty }.joined(separator: "\n") : r.stderr
+            return ExecResult(status: r.timedOut ? 124 : r.status, stdout: r.stdout, stderr: stderr)
         }
 
         func confirm(host: RelayaRust.SshHost, command: String, client: String) -> Bool {

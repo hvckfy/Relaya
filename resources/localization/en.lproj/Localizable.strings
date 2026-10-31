@@ -1112,3 +1112,5 @@
 "Синхронизация расширяет права агентов" = "Sync widens agent permissions";
 "Изменения пришли с другой машины. Без вашего согласия они не применяются; отклонённые больше не предлагаются." = "These changes came from another machine. They aren't applied without your consent; declined ones won't be offered again.";
 "Отклонить" = "Decline";
+"Команда остановлена: превышен таймаут %@ с" = "Command stopped: timed out after %@ s";
+"SSH-туннель не поднялся за %@ с" = "The SSH tunnel didn't come up within %@ s";

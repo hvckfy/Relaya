@@ -4,8 +4,10 @@ public struct ProcessResult: Sendable {
     public var status: Int32
     public var stdout: String
     public var stderr: String
+    /// Процесс остановлен по таймауту (status тогда — номер сигнала, а не код выхода программы).
+    public var timedOut = false
 
-    public var succeeded: Bool { status == 0 }
+    public var succeeded: Bool { status == 0 && !timedOut }
     /// stderr, а если он пуст — stdout: для сообщений об ошибке.
     public var message: String {
         let e = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -39,6 +41,7 @@ public enum ProcessRunner {
                 process.standardInput = input == nil ? FileHandle.nullDevice : inp
 
                 let stdout = Buffer(), stderr = Buffer()
+                let expired = Flag()
                 let eof = DispatchGroup()
                 for (pipe, buffer) in [(out, stdout), (err, stderr)] {
                     eof.enter()
@@ -54,8 +57,8 @@ public enum ProcessRunner {
                 }
                 process.terminationHandler = { p in
                     eof.notify(queue: .global()) {
-                        continuation.resume(returning: ProcessResult(status: p.terminationStatus,
-                                                                     stdout: stdout.string, stderr: stderr.string))
+                        continuation.resume(returning: ProcessResult(status: p.terminationStatus, stdout: stdout.string,
+                                                                     stderr: stderr.string, timedOut: expired.value))
                     }
                 }
                 if box.cancelled {
@@ -76,7 +79,7 @@ public enum ProcessRunner {
                 if let timeout {
                     let seconds = Double(timeout.components.seconds) + Double(timeout.components.attoseconds) / 1e18
                     DispatchQueue.global().asyncAfter(deadline: .now() + seconds) {
-                        if process.isRunning { process.terminate() }
+                        if process.isRunning { expired.set(); process.terminate() }
                     }
                 }
                 if let input {
@@ -90,6 +93,13 @@ public enum ProcessRunner {
         } onCancel: {
             box.terminate()
         }
+    }
+
+    private final class Flag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var on = false
+        func set() { lock.withLock { on = true } }
+        var value: Bool { lock.withLock { on } }
     }
 
     private final class Buffer: @unchecked Sendable {
