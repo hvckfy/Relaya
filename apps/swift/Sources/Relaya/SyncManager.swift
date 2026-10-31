@@ -116,9 +116,16 @@ final class SyncManager {
             switch p.backend {
             case .iCloud:
                 guard FolderSync.iCloudAvailable else { throw GitSync.Failure(message: L("iCloud Drive не включён на этом Mac.")) }
-                // iCloud Drive может отвечать долго — не в главном потоке.
-                let folder = FolderSync.folder(for: p)
-                imported = try await Task.detached { try FolderSync.sync(p, passphrase: pass, folder: folder) }.value
+                // Трёхстороннее слияние (C8): свежие правки на любой машине не затираются; спор — экран конфликта.
+                switch try await FolderSync.merge(p, passphrase: pass, folder: FolderSync.folder(for: p)) {
+                case .conflict(let c):
+                    states[id] = .conflict(c)
+                    return
+                case .synced(_, let items):
+                    imported = items
+                case .upToDate:
+                    break
+                }
             case .git:
                 guard !p.remote.trimmingCharacters(in: .whitespaces).isEmpty else {
                     throw GitSync.Failure(message: L("Укажите репозиторий."))
@@ -148,7 +155,12 @@ final class SyncManager {
         states[id] = .syncing
         var imported: [Sync.Item] = []
         do {
-            imported = try await git.resolve(choices, profile: p, passphrase: pass)
+            if p.backend == .iCloud {
+                if case .synced(_, let items) = try await FolderSync.merge(p, passphrase: pass, folder: FolderSync.folder(for: p),
+                                                                            keepMine: choices) { imported = items }
+            } else {
+                imported = try await git.resolve(choices, profile: p, passphrase: pass)
+            }
             finish(id, imported)
         } catch {
             states[id] = .failed(error.localizedDescription)
@@ -158,7 +170,7 @@ final class SyncManager {
     /// Отложить конфликт: слияние отменяется, ничего не меняется ни здесь, ни на сервере.
     func postpone(_ id: Sync.Profile.ID) async {
         guard let p = profiles.first(where: { $0.id == id }) else { return }
-        try? await git(p).abortMerge()
+        if p.backend == .git { try? await git(p).abortMerge() }
         states[id] = .failed(L("Есть конфликт — синхронизация отложена."))
     }
 

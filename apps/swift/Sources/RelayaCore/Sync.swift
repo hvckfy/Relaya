@@ -253,6 +253,26 @@ public enum FolderSync {
         iCloudRoot.appending(path: "Relaya Sync").appending(path: profile.name.replacingOccurrences(of: "/", with: "-"))
     }
 
+    /// Трёхстороннее слияние, как в git: снимок прошлой синхронизации, своё и пришедшее; конфликты — тем же
+    /// экраном, что у git. `keepMine` — ответы на конфликты прошлого вызова (`true` — моя версия).
+    public static func merge(_ profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(), passphrase: String? = nil,
+                             folder: URL, keepMine: [String: Bool] = [:]) async throws -> GitSync.Outcome {
+        let path = folder.path
+        return try await Task.detached { () -> GitSync.Outcome in
+            do {
+                switch try folderSyncMerge(profile: profile.rust, paths: paths.rust, passphrase: passphrase, folder: path,
+                                           keepMine: keepMine) {
+                case .upToDate: return .upToDate
+                case .synced(let pulled, let imported): return .synced(pulled: pulled, imported: imported.map(Sync.Item.init(rust:)))
+                case .conflict(let c):
+                    return .conflict(c.map { GitSync.Conflict(path: $0.path, mine: $0.mine, theirs: $0.theirs) })
+                }
+            } catch let e as CoreError {
+                throw GitSync.Failure(message: SSHErrorText.describe(e.message))
+            }
+        }.value
+    }
+
     @discardableResult
     public static func sync(_ profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(), passphrase: String? = nil,
                             folder: URL) throws -> [Sync.Item] {
