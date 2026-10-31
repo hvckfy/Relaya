@@ -83,8 +83,21 @@ pub fn mcp_grant(policy: McpPolicy, alias: String, now_ref_seconds: f64) -> Opti
 pub fn mcp_is_denied(policy: McpPolicy, command: String, alias: String) -> bool { policy.is_denied(&command, &alias) }
 #[uniffi::export]
 pub fn mcp_is_allowed(policy: McpPolicy, command: String, alias: String) -> bool { policy.is_allowed(&command, &alias) }
+/// Политика, которую не удалось прочитать: агенты выключены, пока пользователь её не пересохранит.
+fn closed_policy() -> McpPolicy { McpPolicy { enabled: false, default_mode: McpMode::ReadOnly, ..Default::default() } }
+
+/// Пустой текст (файла ещё нет) — политика по умолчанию; повреждённый — закрытая (fail-closed), а не «всё с подтверждением».
 #[uniffi::export]
-pub fn mcp_policy_decode(json: String) -> McpPolicy { serde_json::from_str(&json).unwrap_or_default() }
+pub fn mcp_policy_decode(json: String) -> McpPolicy {
+    if json.trim().is_empty() { return McpPolicy::default(); }
+    serde_json::from_str(&json).unwrap_or_else(|_| closed_policy())
+}
+
+/// Признак «политика не прочитана» для интерфейса: текст есть, но разобрать его нельзя.
+#[uniffi::export]
+pub fn mcp_policy_is_unreadable(json: String) -> bool {
+    !json.trim().is_empty() && serde_json::from_str::<McpPolicy>(&json).is_err()
+}
 #[uniffi::export]
 pub fn mcp_policy_encode(policy: McpPolicy) -> String { crate::models::encode_sorted(&policy) }
 
@@ -277,6 +290,46 @@ pub struct McpLogEntry {
     pub changes: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub output: Option<String>,
+    /// Машинный код решения; `decision` — текст для человека. У старых записей журнала нет.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[uniffi(default = None)]
+    pub decision_code: Option<McpDecision>,
+}
+
+/// Чем закончилась попытка агента — для фильтров и значков в клиентах, независимо от языка текста.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+#[serde(rename_all = "camelCase")]
+pub enum McpDecision { DeniedRule, DeniedNoAccess, DeniedReadOnly, RejectedByUser, AllowedRule, AllowedRead, ApprovedByUser, AllowedGrant, AllowedTrusted }
+
+impl McpDecision {
+    fn text(self) -> &'static str {
+        match self {
+            McpDecision::DeniedRule => "запрещено: правило",
+            McpDecision::DeniedNoAccess => "запрещено: нет доступа",
+            McpDecision::DeniedReadOnly => "запрещено: только чтение",
+            McpDecision::RejectedByUser => "отклонено пользователем",
+            McpDecision::AllowedRule => "разрешено: правило",
+            McpDecision::AllowedRead => "разрешено: чтение",
+            McpDecision::ApprovedByUser => "одобрено пользователем",
+            McpDecision::AllowedGrant => "разрешено: временный доступ",
+            McpDecision::AllowedTrusted => "разрешено: доверенный",
+        }
+    }
+}
+
+/// Пароли и токены не попадают в журнал: `password=…`, `--token x`, `Authorization: Bearer …` → `***`.
+#[uniffi::export]
+pub fn mcp_mask_secrets(text: String) -> String {
+    use std::sync::OnceLock;
+    static RULES: OnceLock<[regex::Regex; 3]> = OnceLock::new();
+    let r = RULES.get_or_init(|| [
+        regex::Regex::new(r"(?i)(authorization\s*:\s*(?:bearer|basic|token)?\s*)[^\s'\x22]+").unwrap(),
+        regex::Regex::new(r"(?i)((?:password|passwd|pwd|pass|token|secret|api[_-]?key|access[_-]?key)\s*[=:]\s*['\x22]?)[^\s'\x22&]+").unwrap(),
+        regex::Regex::new(r"(?i)(--(?:password|passwd|pass|token|secret|api-key)\s+['\x22]?)[^\s'\x22]+").unwrap(),
+    ]);
+    let mut out = text;
+    for re in r { out = re.replace_all(&out, "${1}***").into_owned(); }
+    out
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -400,11 +453,12 @@ impl McpServer {
 }
 
 impl McpServer {
-    fn record(&self, tool: &str, host: &str, detail: &str, decision: &str, exit: Option<i32>, changes: bool, output: Option<String>) {
+    fn record(&self, tool: &str, host: &str, detail: &str, decision: McpDecision, exit: Option<i32>, changes: bool, output: Option<String>) {
         self.backend.log(McpLogEntry {
             id: crate::models::new_id(), date: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            client: self.client.lock().unwrap().clone(), tool: tool.into(), host: host.into(), detail: detail.into(),
-            decision: decision.into(), exit_code: exit, session: Some(self.session.clone()), changes: Some(changes), output,
+            client: self.client.lock().unwrap().clone(), tool: tool.into(), host: host.into(), detail: mcp_mask_secrets(detail.into()),
+            decision: decision.text().into(), exit_code: exit, session: Some(self.session.clone()), changes: Some(changes),
+            output: output.map(mcp_mask_secrets), decision_code: Some(decision),
         });
     }
 
@@ -414,7 +468,8 @@ impl McpServer {
         let now = now_ref();
         match name {
             "list_hosts" => {
-                let list: Vec<Value> = self.backend.hosts().into_iter().filter(|h| policy.mode(&h.alias, now) != McpMode::Off).map(|h| json!({
+                let list: Vec<Value> = self.backend.hosts().into_iter()
+                    .filter(|h| !h.is_git_service() && policy.mode(&h.alias, now) != McpMode::Off).map(|h| json!({
                     "host": h.alias, "address": h.subtitle(), "os": h.os.map(|o| o.title()).unwrap_or("неизвестно"),
                     "group": h.group.clone().unwrap_or_default(), "tags": h.tags, "access": mode_raw(policy.mode(&h.alias, now)),
                 })).collect();
@@ -422,7 +477,7 @@ impl McpServer {
             }
             "run_command" | "read_file" => {
                 let alias = args.get("host").and_then(Value::as_str).unwrap_or("");
-                let Some(host) = self.backend.hosts().into_iter().find(|h| h.alias == alias) else {
+                let Some(host) = self.backend.hosts().into_iter().find(|h| h.alias == alias && !h.is_git_service()) else {
                     return ("Хост не найден. Вызовите list_hosts.".into(), true);
                 };
                 let (command, is_read) = if name == "read_file" {
@@ -435,34 +490,34 @@ impl McpServer {
                 };
                 let timeout = args.get("timeout_seconds").and_then(Value::as_i64).unwrap_or(60).clamp(1, 600) as u32;
                 if policy.is_denied(&command, alias) {
-                    self.record(name, alias, &command, "запрещено: правило", None, false, None);
+                    self.record(name, alias, &command, McpDecision::DeniedRule, None, false, None);
                     return (format!("Команда запрещена правилом пользователя для {alias}."), true);
                 }
                 let mode = policy.mode(alias, now);
                 let decision = if mode != McpMode::Off && !is_read && policy.is_allowed(&command, alias) {
-                    "разрешено: правило"
+                    McpDecision::AllowedRule
                 } else {
                     match mode {
                         McpMode::Off => {
-                            self.record(name, alias, &command, "запрещено: нет доступа", None, false, None);
+                            self.record(name, alias, &command, McpDecision::DeniedNoAccess, None, false, None);
                             return (format!("У агента нет доступа к хосту {alias}."), true);
                         }
                         McpMode::ReadOnly => {
                             if !is_read {
-                                self.record(name, alias, &command, "запрещено: только чтение", None, false, None);
+                                self.record(name, alias, &command, McpDecision::DeniedReadOnly, None, false, None);
                                 return (format!("Хост {alias} открыт только для чтения, а эта команда может что-то изменить. Попросите пользователя выполнить её самому или повысить доступ в Relaya."), true);
                             }
-                            "разрешено: чтение"
+                            McpDecision::AllowedRead
                         }
                         McpMode::Confirm => {
                             let client = self.client.lock().unwrap().clone();
                             if !self.backend.confirm(host.clone(), command.clone(), client) {
-                                self.record(name, alias, &command, "отклонено пользователем", None, false, None);
+                                self.record(name, alias, &command, McpDecision::RejectedByUser, None, false, None);
                                 return (format!("Пользователь отклонил выполнение команды на {alias}."), true);
                             }
-                            "одобрено пользователем"
+                            McpDecision::ApprovedByUser
                         }
-                        McpMode::Trusted => if policy.grant(alias, now).is_some() { "разрешено: временный доступ" } else { "разрешено: доверенный" },
+                        McpMode::Trusted => if policy.grant(alias, now).is_some() { McpDecision::AllowedGrant } else { McpDecision::AllowedTrusted },
                     }
                 };
                 let r = self.backend.execute(host, command.clone(), timeout);
@@ -486,7 +541,7 @@ mod tests {
 
     struct Fake { policy: McpPolicy, confirm: bool, ran: Mutex<Vec<String>>, logged: Mutex<Vec<McpLogEntry>> }
     impl McpBackend for Fake {
-        fn hosts(&self) -> Vec<SshHost> { vec![SshHost::new("web"), SshHost::new("secret")] }
+        fn hosts(&self) -> Vec<SshHost> { vec![SshHost::new("web"), SshHost::new("secret"), SshHost::new("git@forge.lan")] }
         fn policy(&self) -> McpPolicy { self.policy.clone() }
         fn execute(&self, _h: SshHost, c: String, _t: u32) -> ExecResult { self.ran.lock().unwrap().push(c); ExecResult { status: 0, stdout: "ok".into(), stderr: "".into() } }
         fn confirm(&self, _h: SshHost, _c: String, _cl: String) -> bool { self.confirm }
@@ -499,6 +554,25 @@ mod tests {
     fn call(s: &McpServer, tool: &str, args: Value) -> Value {
         let line = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": args}}).to_string();
         serde_json::from_str::<Value>(&s.handle(line).unwrap()).unwrap()["result"].clone()
+    }
+
+    #[test]
+    fn masks_secrets_in_log() {
+        assert_eq!(mcp_mask_secrets("mysql -u root --password hunter2 -e x".into()), "mysql -u root --password *** -e x");
+        assert_eq!(mcp_mask_secrets("curl -H 'Authorization: Bearer abc.def' u?token=XYZ&a=1".into()), "curl -H 'Authorization: Bearer ***' u?token=***&a=1");
+        assert_eq!(mcp_mask_secrets("export DB_PASSWORD=s3cr3t; API_KEY: \"k\"".into()), "export DB_PASSWORD=***; API_KEY: \"***\"");
+        assert_eq!(mcp_mask_secrets("uptime".into()), "uptime");
+    }
+
+    #[test]
+    fn broken_policy_fails_closed() {
+        assert!(mcp_policy_decode("".into()).enabled);
+        let broken = mcp_policy_decode("{\"enabled\": tru".into());
+        assert!(!broken.enabled);
+        assert_eq!(broken.default_mode, McpMode::ReadOnly);
+        assert!(mcp_policy_is_unreadable("{oops".into()));
+        assert!(!mcp_policy_is_unreadable("".into()));
+        assert!(!mcp_policy_is_unreadable(mcp_policy_encode(McpPolicy::default())));
     }
 
     #[test]
@@ -525,6 +599,8 @@ mod tests {
         let (s, f) = server(p.clone(), false);
         let hosts = call(&s, "list_hosts", json!({}));
         assert!(hosts["content"][0]["text"].as_str().unwrap().contains("web") && !hosts["content"][0]["text"].as_str().unwrap().contains("secret"));
+        assert!(!hosts["content"][0]["text"].as_str().unwrap().contains("forge"));
+        assert_eq!(call(&s, "run_command", json!({"host": "git@forge.lan", "command": "uptime"}))["isError"], true);
         assert_eq!(call(&s, "run_command", json!({"host": "web", "command": "rm x"}))["isError"], true);
         assert_eq!(call(&s, "run_command", json!({"host": "web", "command": "uptime"}))["isError"], false);
         assert_eq!(f.ran.lock().unwrap().as_slice(), ["uptime"]);
@@ -549,7 +625,7 @@ mod tests {
         assert_eq!(p.hosts["web"], McpMode::ReadOnly);
         assert_eq!(p.grants.as_ref().unwrap()["db"].until, 815000000.5);
         let e = McpLogEntry { id: "1".into(), date: "2026-10-31T10:00:00Z".into(), client: "Claude".into(), tool: "run_command".into(),
-            host: "web".into(), detail: "systemctl restart nginx".into(), decision: "x".into(), exit_code: Some(0), session: Some("s".into()), changes: Some(true), output: None };
+            host: "web".into(), detail: "systemctl restart nginx".into(), decision: "x".into(), exit_code: Some(0), session: Some("s".into()), changes: Some(true), output: None, decision_code: None };
         let mut read = e.clone(); read.changes = Some(false); read.detail = "ls".into();
         let s = mcp_summaries(vec![e, read]);
         assert_eq!((s.len(), s[0].changes.len(), s[0].hosts.clone()), (1, 1, vec!["web".to_string()]));
