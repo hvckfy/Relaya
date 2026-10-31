@@ -22,6 +22,21 @@ final class RDPSession {
     private(set) var certificate: String?
     /// Подключение оборвано из-за смены сертификата сервера.
     private(set) var certificateMismatch = false
+    /// Первое подключение: отпечаток сертификата ждёт решения пользователя (alert в окне).
+    private(set) var trustPrompt: String?
+    @ObservationIgnored private var trustReply: ((Bool) -> Void)?
+
+    fileprivate func askTrust(_ fingerprint: String, reply: @escaping (Bool) -> Void) {
+        trustReply = reply
+        trustPrompt = fingerprint
+    }
+
+    /// Ответ на «доверять сертификату?»: только после него отправляются учётные данные.
+    func answerTrust(_ trust: Bool) {
+        trustPrompt = nil
+        trustReply?(trust)
+        trustReply = nil
+    }
     /// Фиксированное разрешение (nil — по размеру окна) и масштаб; меняются на лету из меню окна.
     private(set) var fixedSize: (width: Int, height: Int)?
     private(set) var retina: Bool
@@ -221,6 +236,7 @@ final class RDPSession {
 
         let cancellation = RDPConnectionCancellation()
         self.cancellation = cancellation
+        let mismatch = Flag()
         let knownCertificate = UserDefaults.standard.string(forKey: certificateKey)
         let certificateKey = certificateKey
 
@@ -252,11 +268,25 @@ final class RDPSession {
                 },
                 onCertificate: { info in
                     let fingerprint = info.sha256
-                    // Доверие при первом подключении: сменившийся сертификат — отказ до отправки пароля.
                     if let known = knownCertificate, let fingerprint, known != fingerprint {
+                        // Сменившийся сертификат — отказ до отправки пароля.
+                        mismatch.value = true
                         cancellation.cancel()
                     } else if knownCertificate == nil, let fingerprint {
-                        UserDefaults.standard.set(fingerprint, forKey: certificateKey)
+                        // Первое подключение: показываем отпечаток и ждём решения, пароль пока не отправлен.
+                        let decided = DispatchSemaphore(value: 0)
+                        let answer = Flag()
+                        DispatchQueue.main.async {
+                            MainActor.assumeIsolated {
+                                guard let session = owner.value else { decided.signal(); return }
+                                session.askTrust(fingerprint) { ok in answer.value = ok; decided.signal() }
+                            }
+                        }
+                        if decided.wait(timeout: .now() + 300) == .timedOut || !answer.value {
+                            cancellation.cancel()
+                        } else {
+                            UserDefaults.standard.set(fingerprint, forKey: certificateKey)
+                        }
                     }
                     DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.certificate = fingerprint } }
                 },
@@ -264,7 +294,8 @@ final class RDPSession {
             )
             let message = report.error ?? ""
             let status = report.status
-            let certificateChanged = knownCertificate != nil && cancellation.isCancelled
+            // Только настоящая смена сертификата, а не обычная отмена или отказ доверять.
+            let certificateChanged = mismatch.value
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { owner.value?.finished(status: status, message: message, certificateChanged: certificateChanged) }
             }
@@ -316,4 +347,14 @@ final class RDPSession {
 private final class WeakSession: @unchecked Sendable {
     weak var value: RDPSession?
     init(_ value: RDPSession) { self.value = value }
+}
+
+/// Флаг, который поток сессии RDP и главный поток читают и пишут под замком.
+private final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value = false
+    var value: Bool {
+        get { lock.withLock { _value } }
+        set { lock.withLock { _value = newValue } }
+    }
 }

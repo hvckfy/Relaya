@@ -177,7 +177,14 @@ extension VNCSession: VNCConnectionDelegate {
     nonisolated func connection(_ connection: VNCConnection, stateDidChange connectionState: VNCConnection.ConnectionState) {
         let status = connectionState.status
         let error = connectionState.error.map { "\($0.localizedDescription)" }
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.stateChanged(status, error: error) } }
+        nonisolated(unsafe) let connection = connection
+        // Поздний Disconnect старого подключения (после переподключения) не должен сбрасывать новое.
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                guard self.connection == nil || self.connection === connection else { return }
+                self.stateChanged(status, error: error)
+            }
+        }
     }
 
     nonisolated func connection(_ connection: VNCConnection, credentialFor authenticationType: VNCAuthenticationType,

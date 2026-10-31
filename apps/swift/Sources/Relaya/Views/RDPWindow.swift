@@ -40,6 +40,14 @@ struct RDPContent: View {
     var body: some View {
         ZStack {
             CanvasHost(view: session.canvas)
+                .alert(L("Сертификат сервера"), isPresented: Binding(get: { session.trustPrompt != nil },
+                                                                   set: { _ in })) {
+                    Button(L("Доверять")) { session.answerTrust(true) }
+                    Button(L("Отмена"), role: .cancel) { session.answerTrust(false) }
+                } message: {
+                    Text(L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", session.desktop.summary)
+                         + "\n\n" + (session.trustPrompt ?? ""))
+                }
             switch session.phase {
             case .idle, .tunneling, .connecting:
                 VStack(spacing: 10) {

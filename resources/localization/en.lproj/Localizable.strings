@@ -879,3 +879,5 @@
 "Не удалось создать файл %@" = "Could not create file %@";
 "Ошибка записи на диск: %@" = "Disk write error: %@";
 "Не удалось прочитать файл: %@" = "Could not read the file: %@";
+"Сертификат сервера" = "Server Certificate";
+"Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:" = "First connection to %@. Check the certificate fingerprint (SHA-256) against the server:";
