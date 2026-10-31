@@ -32,6 +32,54 @@ public sealed partial class MainWindow : Window
             .Where(h => !RelayaCoreMethods.IsPattern(h.alias) && !RelayaCoreMethods.HostIsGitService(h))
             .ToList();
         Render("");
+        EmptyTitle.Text = hosts.Count == 0 ? "Хостов пока нет — добавьте первый кнопкой «Новый хост…»" : "Выберите хост слева";
+    }
+
+    // Новый хост пишется в ~/.ssh/config тем же кодом ядра, что и на Mac.
+    private async void OnNewHost(object sender, RoutedEventArgs e)
+    {
+        TextBox Field(string header, string placeholder) => new() { Header = header, PlaceholderText = placeholder };
+        var alias = Field("Название (Host)", "prod-web");
+        var address = Field("Адрес (HostName)", "203.0.113.10 или server.example.com");
+        var user = Field("Пользователь", "root");
+        var port = Field("Порт", "22");
+        var key = Field("Ключ (IdentityFile)", "~/.ssh/id_ed25519 — необязательно");
+        var group = Field("Группа", "необязательно");
+        var error = new TextBlock { Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.IndianRed), TextWrapping = TextWrapping.Wrap };
+        var dialog = new ContentDialog
+        {
+            Title = "Новый хост",
+            Content = new ScrollViewer { Content = new StackPanel { Spacing = 10, Children = { alias, address, user, port, key, group, error } } },
+            PrimaryButtonText = "Добавить",
+            CloseButtonText = "Отмена",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            string? Opt(TextBox b) => string.IsNullOrWhiteSpace(b.Text) ? null : b.Text.Trim();
+            if (Opt(alias) is not { } name || name.Contains(' ')) { error.Text = "Укажите название без пробелов."; args.Cancel = true; return; }
+            long? portValue = null;
+            if (Opt(port) is { } p)
+            {
+                if (!long.TryParse(p, out var v) || v is < 1 or > 65535) { error.Text = "Порт — число от 1 до 65535."; args.Cancel = true; return; }
+                portValue = v;
+            }
+            var host = new SshHost(name, Opt(address), Opt(user), portValue, Opt(key), null, null, null, null, Opt(group),
+                new List<string>(), null, null, false);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SshConfig)!);
+                var text = File.Exists(SshConfig) ? File.ReadAllText(SshConfig) : "";
+                File.WriteAllText(SshConfig, RelayaCoreMethods.ConfigUpsert(text, host, null));
+            }
+            catch (Exception ex)
+            {
+                error.Text = ex.Message;
+                args.Cancel = true;
+            }
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) LoadHosts();
     }
 
     // Секции и группы — как сайдбар на Mac: «Хосты», внутри сворачиваемые группы.

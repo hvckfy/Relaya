@@ -30,6 +30,14 @@
         <NavigationView x:Name="Nav" Grid.Row="1" PaneDisplayMode="Left"
                         IsBackButtonVisible="Collapsed" IsSettingsVisible="True"
                         OpenPaneLength="280" ItemInvoked="OnItemInvoked">
+            <NavigationView.PaneFooter>
+                <Button Margin="12,4,12,8" HorizontalAlignment="Stretch" Click="OnNewHost">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock Text="Новый хост…" />
+                    </StackPanel>
+                </Button>
+            </NavigationView.PaneFooter>
             <NavigationView.AutoSuggestBox>
                 <AutoSuggestBox x:Name="Search" PlaceholderText="Поиск хостов" QueryIcon="Find"
                                 TextChanged="OnSearchChanged" />
@@ -41,7 +49,7 @@
                   CornerRadius="8,0,0,0">
                 <StackPanel x:Name="Empty" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
                     <FontIcon Glyph="&#xE756;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Text="Выберите хост слева" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="EmptyTitle" Text="Выберите хост слева" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
                     <TextBlock x:Name="ConfigPath" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" />
                 </StackPanel>
             </Grid>
