@@ -1108,3 +1108,7 @@
 "Подключитесь к нему один раз в терминале Relaya и подтвердите ключ сервера — после этого синхронизация и туннели заработают." = "Connect to it once in the Relaya terminal and confirm the server key — after that sync and tunnels will work.";
 "Пароли от серверов не синхронизируются никогда. Удаления передаются на другие машины; если удаляется сразу много, Relaya спросит." = "Server passwords are never synced. Deletions are passed on to your other machines; if a lot is deleted at once, Relaya asks first.";
 "Хранилище паролей (Secret Service) недоступно — установите libsecret и gnome-keyring или KWallet." = "The password store (Secret Service) is unavailable. Install libsecret and gnome-keyring or KWallet.";
+"Разрешить без подтверждения: %@" = "Allow without confirmation: %@";
+"Синхронизация расширяет права агентов" = "Sync widens agent permissions";
+"Изменения пришли с другой машины. Без вашего согласия они не применяются; отклонённые больше не предлагаются." = "These changes came from another machine. They aren't applied without your consent; declined ones won't be offered again.";
+"Отклонить" = "Decline";

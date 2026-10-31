@@ -361,3 +361,40 @@ struct PendingDeletionsSheet: View {
         }
     }
 }
+
+/// Синхронизация хочет расширить права AI-агентов — применяется только после явного согласия.
+struct AgentEscalationsSheet: View {
+    let items: [Sync.AgentEscalation]
+    let done: (Bool) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    ForEach(items) { item in
+                        LabeledContent(item.host == "*" ? L("Все хосты") : item.host) {
+                            if let from = item.from, let to = item.to {
+                                Text("\(from.title) → \(to.title)")
+                            } else if let rule = item.rule {
+                                Text(L("Разрешить без подтверждения: %@", rule)).font(.body.monospaced())
+                            }
+                        }
+                    }
+                } header: {
+                    Text(L("Синхронизация расширяет права агентов"))
+                } footer: {
+                    Text(L("Изменения пришли с другой машины. Без вашего согласия они не применяются; отклонённые больше не предлагаются."))
+                }
+            }
+            .formStyle(.grouped)
+            Divider()
+            HStack {
+                Spacer()
+                Button(L("Отклонить")) { done(false) }.keyboardShortcut(.cancelAction)
+                Button(L("Применить")) { done(true) }.keyboardShortcut(.defaultAction)
+            }
+            .padding()
+        }
+        .frame(width: 520, height: 400)
+    }
+}

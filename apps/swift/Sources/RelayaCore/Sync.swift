@@ -322,6 +322,24 @@ extension Sync {
             .map(Item.init(rust:))
     }
 
+    /// Расширение прав агентов из синхронизации, ждущее подтверждения.
+    public struct AgentEscalation: Identifiable, Hashable, Sendable {
+        public var id: String { host + "|" + (to?.rawValue ?? "") + "|" + (rule ?? "") }
+        public var host: String
+        public var from: MCPPolicy.Mode?
+        public var to: MCPPolicy.Mode?
+        public var rule: String?
+    }
+
+    public static func takeAgentEscalations(paths: Paths = Paths()) -> [AgentEscalation] {
+        syncTakeAgentEscalations(paths: paths.rust).map { AgentEscalation(host: $0.host, from: $0.from.map(MCPPolicy.Mode.init(rust:)), to: $0.to.map(MCPPolicy.Mode.init(rust:)), rule: $0.rule) }
+    }
+
+    /// Применить или отклонить все ждущие расширения прав агентов.
+    public static func applyAgentEscalations(accept: Bool, paths: Paths = Paths()) throws {
+        try syncApplyAgentEscalations(paths: paths.rust, accept: accept)
+    }
+
     /// Ключи из синхронизации, которые не загружены: нет пароля шифрования ключей или он неверный.
     /// Ядро отдаёт результат последнего импорта один раз.
     public static func takeSkippedKeys(paths: Paths = Paths()) -> (noPassphrase: [String], wrongPassphrase: [String]) {

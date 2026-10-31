@@ -320,13 +320,18 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
     if items.contains(&SyncItem::Agents) {
         // Слияние, а не замена: пришедшие режимы хостов и правила добавляются, свои глобальные переключатели и
         // временный доступ остаются (mcp_policy_merge). Нечитаемый файл — синхронизация останавливается.
+        // Расширение прав (хост строже → мягче, новое allow-правило) не применяется молча: оно ждёт подтверждения
+        // (`sync_take_agent_escalations` / `sync_apply_agent_escalations`), остальное сливается сразу.
         if let Some(d) = read(&dir.join("relaya/mcp.json")) {
             let theirs: crate::mcp::McpPolicy = serde_json::from_slice(&d).map_err(|e| broken_shared("mcp.json", e.into()))?;
             let local = read(&paths.support("mcp.json"));
-            let merged = match &local {
-                Some(l) => crate::mcp::mcp_policy_merge(serde_json::from_slice(l).map_err(|e| broken("mcp.json", e.into()))?, theirs),
-                None => crate::mcp::mcp_policy_merge(crate::mcp::McpPolicy { enabled: false, ..Default::default() }, theirs),
+            let base = match &local {
+                Some(l) => serde_json::from_slice(l).map_err(|e| broken("mcp.json", e.into()))?,
+                None => crate::mcp::McpPolicy { enabled: false, ..Default::default() },
             };
+            let (safe, escalations) = agents::split(&base, theirs, &agents::declined(paths));
+            let merged = crate::mcp::mcp_policy_merge(base, safe);
+            agents::store_pending(paths, &escalations)?;
             let bytes = encode_sorted(&merged).into_bytes();
             if local.as_deref() != Some(bytes.as_slice()) {
                 fs::create_dir_all(&paths.support)?;
@@ -549,6 +554,101 @@ pub fn sync_take_renamed_keys(paths: SyncPaths) -> Vec<RenamedKey> {
     let list = fs::read_to_string(warnings_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     let _ = fs::remove_file(warnings_file(&paths));
     list
+}
+
+/// Расширение прав агентов, пришедшее с синхронизацией: режим хоста мягче своего или новое allow-правило.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct AgentEscalation {
+    pub host: String,
+    /// Для смены режима: было (свой режим хоста или режим по умолчанию) и станет.
+    pub from: Option<crate::mcp::McpMode>,
+    pub to: Option<crate::mcp::McpMode>,
+    /// Для allow-правила: шаблон команды.
+    pub rule: Option<String>,
+}
+
+/// Расширения прав агентов, ждущие подтверждения. Список остаётся до `sync_apply_agent_escalations`.
+#[uniffi::export]
+pub fn sync_take_agent_escalations(paths: SyncPaths) -> Vec<AgentEscalation> { agents::pending(&paths) }
+
+/// Применить (`accept`) или отклонить все ждущие расширения. Отклонённые не спрашиваются снова, пока не изменятся.
+#[uniffi::export]
+pub fn sync_apply_agent_escalations(paths: SyncPaths, accept: bool) -> Result<(), CoreError> { agents::apply(&paths, accept) }
+
+mod agents {
+    use super::*;
+    use crate::mcp::{McpMode, McpPolicy};
+
+    fn rank(m: McpMode) -> u8 { match m { McpMode::Off => 0, McpMode::ReadOnly => 1, McpMode::Confirm => 2, McpMode::Trusted => 3 } }
+    fn pending_file(p: &SyncPaths) -> PathBuf { p.support("sync-pending-agents.json") }
+    fn declined_file(p: &SyncPaths) -> PathBuf { p.support("sync-declined-agents.json") }
+
+    fn load(path: &Path) -> Vec<AgentEscalation> {
+        fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    }
+    pub(super) fn declined(p: &SyncPaths) -> Vec<AgentEscalation> { load(&declined_file(p)) }
+    pub(super) fn pending(p: &SyncPaths) -> Vec<AgentEscalation> { load(&pending_file(p)) }
+
+    /// Делит пришедшую политику на безопасную часть и расширения прав относительно `local`.
+    pub(super) fn split(local: &McpPolicy, mut theirs: McpPolicy, declined: &[AgentEscalation]) -> (McpPolicy, Vec<AgentEscalation>) {
+        let mut out = Vec::new();
+        let mut hosts: Vec<_> = theirs.hosts.drain().collect();
+        hosts.sort_by(|a, b| a.0.cmp(&b.0));
+        for (host, to) in hosts {
+            let from = *local.hosts.get(&host).unwrap_or(&local.default_mode);
+            if rank(to) > rank(from) {
+                let e = AgentEscalation { host: host.clone(), from: Some(from), to: Some(to), rule: None };
+                if !declined.contains(&e) { out.push(e); }
+            } else {
+                theirs.hosts.insert(host, to);
+            }
+        }
+        if let Some(allow) = theirs.allow.take() {
+            let mut keys: Vec<_> = allow.into_iter().collect();
+            keys.sort_by(|a, b| a.0.cmp(&b.0));
+            for (host, rules) in keys {
+                let have = local.allow.as_ref().and_then(|m| m.get(&host)).cloned().unwrap_or_default();
+                for r in rules.into_iter().filter(|r| !have.contains(r)) {
+                    let e = AgentEscalation { host: host.clone(), from: None, to: None, rule: Some(r) };
+                    if !declined.contains(&e) && !out.contains(&e) { out.push(e); }
+                }
+            }
+        }
+        (theirs, out)
+    }
+
+    pub(super) fn store_pending(p: &SyncPaths, list: &[AgentEscalation]) -> Result<(), CoreError> {
+        if list.is_empty() { let _ = fs::remove_file(pending_file(p)); return Ok(()); }
+        fs::create_dir_all(&p.support)?;
+        write_atomic(&pending_file(p), encode_sorted(&list).as_bytes())?;
+        Ok(())
+    }
+
+    pub(super) fn apply(p: &SyncPaths, accept: bool) -> Result<(), CoreError> {
+        let list = pending(p);
+        if list.is_empty() { return Ok(()); }
+        if accept {
+            let path = p.support("mcp.json");
+            let mut policy: McpPolicy = match read(&path) {
+                Some(d) => serde_json::from_slice(&d).map_err(|e| broken("mcp.json", e.into()))?,
+                None => McpPolicy { enabled: false, ..Default::default() },
+            };
+            for e in &list {
+                if let Some(to) = e.to { policy.hosts.insert(e.host.clone(), to); }
+                if let Some(r) = &e.rule {
+                    let rules = policy.allow.get_or_insert_with(Default::default).entry(e.host.clone()).or_default();
+                    if !rules.contains(r) { rules.push(r.clone()); }
+                }
+            }
+            write_atomic(&path, encode_sorted(&policy).as_bytes())?;
+        } else {
+            let mut all = declined(p);
+            all.extend(list);
+            write_atomic(&declined_file(p), encode_sorted(&all).as_bytes())?;
+        }
+        let _ = fs::remove_file(pending_file(p));
+        Ok(())
+    }
 }
 
 // MARK: - Git
@@ -1042,11 +1142,36 @@ mod tests {
         let d = dir.path().to_string_lossy().to_string();
         sync_export(p.clone(), paths(a.path()), None, d.clone()).unwrap();
         assert!(!fs::read_to_string(dir.path().join("relaya/mcp.json")).unwrap().contains("grants"));
-        sync_import(p, paths(b.path()), None, d).unwrap();
+        sync_import(p.clone(), paths(b.path()), None, d.clone()).unwrap();
         let m = crate::mcp::mcp_policy_decode(fs::read_to_string(b.path().join("mcp.json")).unwrap());
         assert!(!m.enabled && m.default_mode == crate::mcp::McpMode::ReadOnly, "свои переключатели не меняются");
-        assert_eq!((m.hosts["web"], m.hosts["nas"]), (crate::mcp::McpMode::Confirm, crate::mcp::McpMode::Off));
+        // web: readOnly → confirm — расширение, ждёт подтверждения.
+        assert!(!m.hosts.contains_key("web") && m.hosts["nas"] == crate::mcp::McpMode::Off);
         assert!(m.grants.is_none());
+        let esc = sync_take_agent_escalations(paths(b.path()));
+        assert_eq!(esc.len(), 1);
+        assert_eq!((esc[0].host.as_str(), esc[0].to), ("web", Some(crate::mcp::McpMode::Confirm)));
+        sync_apply_agent_escalations(paths(b.path()), true).unwrap();
+        let m = crate::mcp::mcp_policy_decode(fs::read_to_string(b.path().join("mcp.json")).unwrap());
+        assert_eq!(m.hosts["web"], crate::mcp::McpMode::Confirm);
+        assert!(sync_take_agent_escalations(paths(b.path())).is_empty());
+    }
+
+    #[test]
+    fn declined_agent_escalation_is_not_asked_again() {
+        let (a, b, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let mut p = sync_new_profile("all".into()); p.items.push(SyncItem::Agents);
+        fs::write(a.path().join("mcp.json"), r#"{"defaultMode":"confirm","enabled":true,"hosts":{"web":"trusted"},"allow":{"*":["systemctl restart *"]}}"#).unwrap();
+        fs::write(b.path().join("mcp.json"), r#"{"defaultMode":"readOnly","enabled":true,"hosts":{}}"#).unwrap();
+        let d = dir.path().to_string_lossy().to_string();
+        sync_export(p.clone(), paths(a.path()), None, d.clone()).unwrap();
+        sync_import(p.clone(), paths(b.path()), None, d.clone()).unwrap();
+        assert_eq!(sync_take_agent_escalations(paths(b.path())).len(), 2);
+        sync_apply_agent_escalations(paths(b.path()), false).unwrap();
+        let m = crate::mcp::mcp_policy_decode(fs::read_to_string(b.path().join("mcp.json")).unwrap());
+        assert!(m.hosts.is_empty() && m.allow.is_none());
+        sync_import(p, paths(b.path()), None, d).unwrap();
+        assert!(sync_take_agent_escalations(paths(b.path())).is_empty());
     }
 
     #[test]

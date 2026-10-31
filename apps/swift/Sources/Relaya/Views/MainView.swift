@@ -67,6 +67,10 @@ struct MainView: View {
                                     set: { if !$0, !model.sync.pendingDeletions.isEmpty { model.sync.resolveDeletions(confirm: []) } })) {
             PendingDeletionsSheet(items: model.sync.pendingDeletions) { model.sync.resolveDeletions(confirm: $0) }
         }
+        .sheet(isPresented: Binding(get: { !model.sync.agentEscalations.isEmpty },
+                                    set: { if !$0, !model.sync.agentEscalations.isEmpty { model.sync.resolveAgentEscalations(accept: false) } })) {
+            AgentEscalationsSheet(items: model.sync.agentEscalations) { model.sync.resolveAgentEscalations(accept: $0) }
+        }
         .sheet(item: $model.desktopEditor) { d in
             DesktopEditor(desktop: d).environment(model)
         }

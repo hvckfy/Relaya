@@ -183,6 +183,14 @@ final class SyncManager {
     /// Массовые удаления с другой машины ждут подтверждения пользователя (ядро не применяет их само).
     var pendingDeletions: [Sync.PendingDeletion] = []
 
+    /// Синхронизация хочет расширить права агентов — без подтверждения не применяется.
+    var agentEscalations: [Sync.AgentEscalation] = []
+
+    func resolveAgentEscalations(accept: Bool) {
+        do { try Sync.applyAgentEscalations(accept: accept) } catch { skippedKeysNotice = error.localizedDescription }
+        agentEscalations = []
+    }
+
     func resolveDeletions(confirm: [Sync.PendingDeletion]) {
         do {
             let changed = try Sync.applyDeletions(confirm)
@@ -198,6 +206,7 @@ final class SyncManager {
         states[id] = .idle
         renamedKeys += Sync.takeRenamedKeys()
         pendingDeletions += Sync.takePendingDeletions().filter { p in !pendingDeletions.contains(p) }
+        agentEscalations = Sync.takeAgentEscalations()
         let skipped = Sync.takeSkippedKeys()
         skippedKeysNotice = skipped.wrongPassphrase.isEmpty && skipped.noPassphrase.isEmpty ? nil
             : !skipped.wrongPassphrase.isEmpty
