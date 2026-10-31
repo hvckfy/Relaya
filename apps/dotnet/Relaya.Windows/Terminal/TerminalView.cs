@@ -301,12 +301,16 @@ internal sealed class TerminalView : UserControl, IDisposable
         if (!HasSelection) return;
         var s = Emulator.Snapshot();
         var (from, to) = Ordered();
+        // Окно могли уменьшить после выделения: зажимаем по границам текущего снимка.
+        int rows = (int)s.rows, cols = (int)s.cols;
+        if (rows == 0 || cols == 0 || from.Row >= rows) { ClearSelection(); return; }
+        if (to.Row >= rows) to = (rows - 1, cols - 1);
         var lines = new System.Collections.Generic.List<string>();
-        for (var r = from.Row; r <= to.Row; r++)
+        for (var r = Math.Max(0, from.Row); r <= to.Row; r++)
         {
             var sb = new StringBuilder();
-            var c0 = r == from.Row ? from.Col : 0;
-            var c1 = r == to.Row ? to.Col : (int)s.cols - 1;
+            var c0 = Math.Clamp(r == from.Row ? from.Col : 0, 0, cols - 1);
+            var c1 = Math.Clamp(r == to.Row ? to.Col : cols - 1, 0, cols - 1);
             for (var c = c0; c <= c1; c++) sb.Append(s.cells[r * (int)s.cols + c].ch);
             lines.Add(sb.ToString().TrimEnd());
         }
