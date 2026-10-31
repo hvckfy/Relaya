@@ -35,6 +35,7 @@ internal sealed class RdpView : UserControl, IDisposable
     private readonly StackPanel connecting;
     private readonly InfoBar problem = new() { Severity = InfoBarSeverity.Error, IsClosable = false, Margin = new Thickness(8) };
     private readonly AppBarToggleButton fit, clipboard;
+    private readonly RdpAudio audio;
     private readonly DispatcherQueueTimer resizeTimer;
 
     private readonly object frameLock = new();
@@ -80,12 +81,21 @@ internal sealed class RdpView : UserControl, IDisposable
         var send = new AppBarButton { Label = L("Отправить сочетание"), Icon = new FontIcon { Glyph = "" }, Flyout = keys };
         var full = new AppBarButton { Label = L("Во весь экран"), Icon = new FontIcon { Glyph = "" } };
         full.Click += (_, _) => ToggleFullScreen();
+        // Звук: громкость и «без звука» на нашей стороне, хранится в настройках стола.
+        audio = new RdpAudio(Settings.Get($"desktop.{d.id}.volume", "100"));
+        var volume = new Slider { Minimum = 0, Maximum = 100, Width = 200, Value = audio.VolumePercent, Header = L("Громкость") };
+        volume.ValueChanged += (_, e) => { audio.VolumePercent = (int)e.NewValue; Settings.Set($"desktop.{d.id}.volume", ((int)e.NewValue).ToString()); };
+        var sound = new AppBarButton
+        {
+            Label = L("Звук"), Icon = new FontIcon { Glyph = "\uE767" },
+            Flyout = new Flyout { Content = volume },
+        };
         var stop = new AppBarButton { Label = L("Отключить"), Icon = new FontIcon { Glyph = "" } };
         stop.Click += (_, _) => session?.Disconnect();
         var bar = new CommandBar
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsDynamicOverflowEnabled = true,
-            PrimaryCommands = { fit, clipboard, send, full, stop },
+            PrimaryCommands = { fit, clipboard, sound, send, full, stop },
         };
 
         connecting = new StackPanel
@@ -154,6 +164,7 @@ internal sealed class RdpView : UserControl, IDisposable
             TrustedCert(), null, null, null, null, null);
         var s = RemoteSession.Rdp(config, new Listener(this));
         s.SetClipboardListener(new ClipListener(this));
+        s.SetAudioListener(audio);
         session = s;
         await Task.Run(s.Connect);
     }
@@ -428,6 +439,7 @@ internal sealed class RdpView : UserControl, IDisposable
         try { session?.Disconnect(); } catch (Exception) { }
         session = null;
         if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);
+        audio.Dispose();
         canvas.RemoveFromVisualTree();
     }
 
