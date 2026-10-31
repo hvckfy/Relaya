@@ -18,6 +18,9 @@ required-features = ["bindgen"]
 bindgen = ["uniffi/cli"]
 # Встроенный RDP для Windows и Linux. На Mac выключено: там RDPKit, ядро не тянет IronRDP и rustls.
 remote-desktop = ["dep:ironrdp", "dep:ironrdp-blocking", "dep:rustls", "dep:x509-cert"]
+# RDP на FreeRDP 3 вместо IronRDP под тем же API. Нужна собранная FreeRDP: FREERDP_DIR с include/ и lib/
+# (артефакт workflow freerdp.yml); прослойка native/relaya_rdp.c собирается крейтом cc.
+rdp-freerdp = ["remote-desktop", "dep:cc"]
 
 [dependencies]
 uniffi = "0.28"
@@ -37,6 +40,9 @@ ironrdp = { version = "0.17", optional = true, default-features = false, feature
 ironrdp-blocking = { version = "0.10", optional = true }
 rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
 x509-cert = { version = "0.2", optional = true, default-features = false, features = ["std"] }
+
+[build-dependencies]
+cc = { version = "1", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

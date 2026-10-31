@@ -5,7 +5,7 @@
 
 use std::io::Write as _;
 use std::net::TcpStream;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -207,17 +207,24 @@ pub struct RemoteSession {
     cert_answer: Mutex<Option<Sender<bool>>>,
     clipboard: Mutex<Option<Arc<dyn RemoteClipboardListener>>>,
     audio: Mutex<Option<Arc<dyn RemoteAudioListener>>>,
+    /// Сессия FreeRDP (feature rdp-freerdp): команды идут прямо в прослойку C.
+    #[cfg(feature = "rdp-freerdp")]
+    pub(crate) native: Mutex<Option<crate::remote_freerdp::Native>>,
 }
 
 #[uniffi::export]
 impl RemoteSession {
     #[uniffi::constructor]
     pub fn rdp(config: RdpConfig, listener: Arc<dyn RemoteListener>) -> Arc<Self> {
-        Arc::new(RemoteSession { config, listener, commands: Mutex::new(None), cert_answer: Mutex::new(None), clipboard: Mutex::new(None), audio: Mutex::new(None) })
+        Arc::new(RemoteSession { config, listener, commands: Mutex::new(None), cert_answer: Mutex::new(None), clipboard: Mutex::new(None), audio: Mutex::new(None),
+                                 #[cfg(feature = "rdp-freerdp")] native: Mutex::new(None) })
     }
 
     /// Запустить сессию в своём потоке. Повторный вызов ничего не делает.
     pub fn connect(self: Arc<Self>) {
+        #[cfg(feature = "rdp-freerdp")]
+        { crate::remote_freerdp::connect(self); return; }
+        #[allow(unreachable_code)]
         let mut slot = self.commands.lock().unwrap();
         if slot.is_some() { return; }
         let (tx, rx) = mpsc::channel();
@@ -237,26 +244,41 @@ impl RemoteSession {
 
     /// Клавиша по scancode набора 1; расширенные — с префиксом 0xE0 (например 0xE04B — стрелка влево).
     pub fn key(&self, scancode: u16, down: bool) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.key(scancode, down); return; }
+       
         let s = Scancode::from_u16(scancode);
         self.send(Cmd::Input(vec![if down { Operation::KeyPressed(s) } else { Operation::KeyReleased(s) }]));
     }
 
     /// Символ, которого нет в раскладке сервера (IME, эмодзи).
     pub fn unicode(&self, codepoint: u32, down: bool) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.unicode(codepoint, down); return; }
+       
         let Some(c) = char::from_u32(codepoint) else { return };
         self.send(Cmd::Input(vec![if down { Operation::UnicodeKeyPressed(c) } else { Operation::UnicodeKeyReleased(c) }]));
     }
 
-    pub fn pointer(&self, x: u16, y: u16) { self.send(Cmd::Input(vec![Operation::MouseMove(MousePosition { x, y })])); }
+    pub fn pointer(&self, x: u16, y: u16) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.pointer(x, y); return; }
+        self.send(Cmd::Input(vec![Operation::MouseMove(MousePosition { x, y })])); }
 
     /// Кнопка мыши: 0 — левая, 1 — средняя, 2 — правая, 3 и 4 — «назад» и «вперёд».
     pub fn button(&self, button: u8, down: bool) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.button(button, down); return; }
+       
         let b = match button { 0 => MouseButton::Left, 1 => MouseButton::Middle, 2 => MouseButton::Right, 3 => MouseButton::X1, 4 => MouseButton::X2, _ => return };
         self.send(Cmd::Input(vec![if down { Operation::MouseButtonPressed(b) } else { Operation::MouseButtonReleased(b) }]));
     }
 
     /// Колесо: `units` — как WHEEL_DELTA (120 на щелчок), положительное — вверх/вправо.
     pub fn wheel(&self, units: i16, vertical: bool) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.wheel(units, vertical); return; }
+       
         self.send(Cmd::Input(vec![Operation::WheelRotations(WheelRotations { is_vertical: vertical, rotation_units: units })]));
     }
 
@@ -271,12 +293,20 @@ impl RemoteSession {
     }
 
     /// Текст из локального буфера обмена: станет доступен для вставки на удалённой машине.
-    pub fn set_clipboard(&self, text: String) { self.send(Cmd::Clipboard(text)); }
+    pub fn set_clipboard(&self, text: String) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.set_clipboard(&text); return; }
+        self.send(Cmd::Clipboard(text)); }
 
     /// Новый размер окна: через Display Control, если сервер его поддерживает.
-    pub fn resize(&self, width: u16, height: u16) { self.send(Cmd::Resize(width, height)); }
+    pub fn resize(&self, width: u16, height: u16) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.resize(width, height); return; }
+        self.send(Cmd::Resize(width, height)); }
 
     pub fn disconnect(&self) {
+        #[cfg(feature = "rdp-freerdp")]
+        if let Some(n) = self.native.lock().unwrap().as_ref() { n.disconnect(); }
         self.send(Cmd::Disconnect);
         self.accept_cert(false);
     }
@@ -318,7 +348,7 @@ fn full(image: &DecodedImage) -> InclusiveRectangle {
 }
 
 /// Объединить пересекающиеся и соседние прямоугольники, чтобы не гонять через FFI сотни мелких.
-fn coalesce(mut rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle> {
+pub(crate) fn coalesce(mut rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle> {
     let touches = |a: &InclusiveRectangle, b: &InclusiveRectangle| {
         a.left <= b.right.saturating_add(1) && b.left <= a.right.saturating_add(1)
             && a.top <= b.bottom.saturating_add(1) && b.top <= a.bottom.saturating_add(1)
@@ -348,6 +378,21 @@ impl ironrdp::connector::sspi::network_client::NetworkClient for NoNetwork {
 }
 
 impl RemoteSession {
+    /// Доверять ли сертификату: совпал с сохранённым отпечатком — да; иначе спросить клиента и ждать `accept_cert`.
+    /// Ждёт поток сессии, а не поток FFI.
+    pub(crate) fn ask_cert(&self, sha256: String, subject: String) -> bool {
+        if self.config.trusted_cert_sha256.as_deref().map(|t| t.eq_ignore_ascii_case(&sha256)) == Some(true) { return true; }
+        let (tx, rx) = mpsc::channel();
+        *self.cert_answer.lock().unwrap() = Some(tx);
+        self.listener.on_cert(sha256, subject);
+        matches!(rx.recv_timeout(CERT_TIMEOUT), Ok(true))
+    }
+
+    pub(crate) fn config(&self) -> &RdpConfig { &self.config }
+    pub(crate) fn listener(&self) -> &Arc<dyn RemoteListener> { &self.listener }
+    pub(crate) fn clipboard_listener(&self) -> Option<Arc<dyn RemoteClipboardListener>> { self.clipboard.lock().unwrap().clone() }
+    pub(crate) fn audio_listener(&self) -> Option<Arc<dyn RemoteAudioListener>> { self.audio.lock().unwrap().clone() }
+
     fn send(&self, cmd: Cmd) {
         if let Some(tx) = self.commands.lock().unwrap().as_ref() { let _ = tx.send(cmd); }
     }
@@ -415,17 +460,8 @@ impl RemoteSession {
         let public_key = parsed.tbs_certificate.subject_public_key_info.subject_public_key.as_bytes()
             .ok_or_else(|| close(RemoteCloseKind::Protocol, "bad server public key"))?.to_vec();
 
-        let sha = sha256_hex(&cert);
-        if self.config.trusted_cert_sha256.as_deref().map(|t| t.eq_ignore_ascii_case(&sha)) != Some(true) {
-            let (tx, rx) = mpsc::channel();
-            *self.cert_answer.lock().unwrap() = Some(tx);
-            self.listener.on_cert(sha, parsed.tbs_certificate.subject.to_string());
-            match rx.recv_timeout(CERT_TIMEOUT) {
-                Ok(true) => {}
-                Ok(false) | Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => {
-                    return Err(close(RemoteCloseKind::CertRejected, "certificate not accepted"));
-                }
-            }
+        if !self.ask_cert(sha256_hex(&cert), parsed.tbs_certificate.subject.to_string()) {
+            return Err(close(RemoteCloseKind::CertRejected, "certificate not accepted"));
         }
         Ok((tls, public_key))
     }

@@ -17,6 +17,8 @@ pub mod models;
 pub mod openh264;
 #[cfg(feature = "remote-desktop")]
 pub mod remote;
+#[cfg(feature = "rdp-freerdp")]
+pub mod remote_freerdp;
 pub mod server_os;
 pub mod ssh_commands;
 pub mod ssh_config;
