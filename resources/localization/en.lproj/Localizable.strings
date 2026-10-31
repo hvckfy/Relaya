@@ -1121,3 +1121,5 @@
 "Подтвердите выполнение команды агента" = "Confirm running the agent’s command";
 "Временный доступ" = "Temporary access";
 "Сохранить в связке ключей" = "Save in the keyring";
+"Подключение отменено" = "Connection cancelled";
+"SSH-туннель не поднялся за 60 секунд." = "The SSH tunnel did not come up within 60 seconds.";

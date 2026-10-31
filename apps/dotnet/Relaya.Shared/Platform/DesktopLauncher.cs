@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,8 +18,9 @@ internal static partial class DesktopLauncher
     /// Открыть во вкладке, если приложение умеет (RDP через ядро); false — внешний клиент.
     private static partial bool OpenInTab(RemoteDesktop d);
 
-    /// Команда внешнего клиента для host:port; null — клиента нет, missing — что сказать пользователю.
-    private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing);
+    /// Команда внешнего клиента для host:port; null — клиента нет, missing — что сказать пользователю,
+    /// tempFile — временный файл клиента (.rdp), удаляется при выходе клиента (аудит Н11).
+    private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing, out string? tempFile);
 
     /// Встроенная вкладка, если есть; иначе внешний клиент.
     public static void Open(RemoteDesktop d, XamlRoot root)
@@ -36,40 +39,63 @@ internal static partial class DesktopLauncher
     {
         var (host, port, tunnelId, error) = await Endpoint(d);
         if (error != null) { await Message(root, error); return; }
-        var info = Client(d, host, port, out var missing);
+        var info = Client(d, host, port, out var missing, out var tempFile);
         if (info == null)
         {
             if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);
             await Message(root, missing);
             return;
         }
-        try { StopWithClient(Process.Start(info), tunnelId); }
+        try { StopWithClient(Process.Start(info), tunnelId, tempFile); }
         catch (Exception e)
         {
             if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);
+            Delete(tempFile);
             await Message(root, e.Message);
         }
     }
 
     /// Куда подключаться: напрямую или через SSH-хост (локальный туннель `desktop:<id>`, один на стол).
-    public static async Task<(string Host, long Port, string? TunnelId, string? Error)> Endpoint(RemoteDesktop d)
+    /// Ждёт, пока туннель не поднимется (Running) или не упадёт (Failed), — клиент не стартует раньше слушателя (аудит Н11).
+    /// Отмена — через cancel; страховочный предел — 60 с.
+    public static async Task<(string Host, long Port, string? TunnelId, string? Error)> Endpoint(RemoteDesktop d, CancellationToken cancel = default)
     {
         if (d.viaSshHost is not { Length: > 0 } via) return (d.address, d.port, null, null);
         var tunnelId = "desktop:" + d.id;
         var tunnel = TunnelManager.Shared.StartTemporary(
             new Tunnel(tunnelId, L("%@ (удалённый стол)", d.name), via, TunnelKind.Local, FreePort(), d.address, d.port, false));
-        for (var i = 0; i < 20 && TunnelManager.Shared.StatusOf(tunnel).State == TunnelManager.State.Starting; i++) await Task.Delay(250);
-        if (TunnelManager.Shared.StatusOf(tunnel) is { State: TunnelManager.State.Failed } f)
-            return ("", 0, tunnelId, L("SSH-туннель: %@", f.Error ?? ""));
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (TunnelManager.Shared.StatusOf(tunnel).State == TunnelManager.State.Starting && DateTime.UtcNow < deadline)
+        {
+            if (cancel.IsCancellationRequested) { TunnelManager.Shared.Stop(tunnelId); return ("", 0, null, L("Подключение отменено")); }
+            await Task.Delay(250);
+        }
+        var status = TunnelManager.Shared.StatusOf(tunnel);
+        if (status.State == TunnelManager.State.Failed)
+            return ("", 0, tunnelId, L("SSH-туннель: %@", status.Error ?? ""));
+        if (status.State != TunnelManager.State.Running)
+            return ("", 0, tunnelId, L("SSH-туннель не поднялся за 60 секунд."));
         return ("localhost", tunnel.listenPort, tunnelId, null);
     }
 
-    // Клиент закрыли — туннель больше не нужен.
-    private static void StopWithClient(Process? client, string? tunnelId)
+    // Клиент закрыли — туннель и временный файл больше не нужны.
+    private static void StopWithClient(Process? client, string? tunnelId, string? tempFile)
     {
-        if (client == null || tunnelId == null) return;
+        if (tunnelId == null && tempFile == null) return;
+        if (client == null) { if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId); Delete(tempFile); return; }
         client.EnableRaisingEvents = true;
-        client.Exited += (_, _) => TunnelManager.Shared.Stop(tunnelId);
+        client.Exited += (_, _) =>
+        {
+            if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);
+            Delete(tempFile);
+        };
+    }
+
+    private static void Delete(string? file)
+    {
+        if (file == null) return;
+        try { File.Delete(file); }
+        catch (Exception e) { Trace.WriteLine($"DesktopLauncher: {e.Message}"); }
     }
 
     private static int FreePort()

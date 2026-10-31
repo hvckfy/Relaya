@@ -18,12 +18,14 @@ internal static partial class DesktopLauncher
         return true;
     }
 
-    private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing)
+    private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing, out string? tempFile)
     {
         missing = L("Не найден VNC-клиент. Установите TightVNC, RealVNC, UltraVNC или TigerVNC.");
+        tempFile = null;
         if (d.kind == DesktopKind.Rdp)
         {
             var file = Path.Combine(Path.GetTempPath(), $"relaya-{d.id}.rdp");
+            tempFile = file;
             File.WriteAllText(file, RelayaCoreMethods.DesktopRdpFile(d, host, port));
             return new ProcessStartInfo("mstsc.exe", $"\"{file}\"") { UseShellExecute = true };
         }

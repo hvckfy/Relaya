@@ -16,8 +16,9 @@ internal static partial class DesktopLauncher
         return true;
     }
 
-    private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing)
+    private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing, out string? tempFile)
     {
+        tempFile = null;
         if (d.kind == DesktopKind.Rdp)
         {
             missing = L("Не найден RDP-клиент. Установите FreeRDP (xfreerdp) или Remmina.");
