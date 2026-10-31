@@ -98,11 +98,27 @@ internal sealed class TileHost : UserControl, IDisposable
         put.Click += (_, _) => { ask.IsOpen = false; session.SendPassword(); view.Focus(FocusState.Programmatic); };
         no.Click += (_, _) => { ask.IsOpen = false; view.Focus(FocusState.Programmatic); };
         session.PasswordRequested += () => DispatcherQueue.TryEnqueue(() => ask.IsOpen = true);
-        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
+        // Начальная команда (сниппет, tmux attach) не дождалась входа — не вводим сами, предлагаем вставить.
+        var pending = new InfoBar
+        {
+            Title = L("Команда не вставлена"), Message = L("Сессия не дошла до приглашения shell."), Severity = InfoBarSeverity.Informational,
+            IsClosable = true, Margin = new Thickness(4, 0, 4, 4),
+        };
+        var paste = new Button { Content = L("Вставить") };
+        pending.ActionButton = paste;
+        paste.Click += (_, _) =>
+        {
+            pending.IsOpen = false;
+            if (pending.Tag is string text) { if (text.EndsWith('\r')) view.Type(text); else view.Paste(text); }
+            view.Focus(FocusState.Programmatic);
+        };
+        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         body.Children.Add(header);
         Grid.SetRow(ask, 1);
         body.Children.Add(ask);
-        Grid.SetRow(view, 2);
+        Grid.SetRow(pending, 2);
+        body.Children.Add(pending);
+        Grid.SetRow(view, 3);
         body.Children.Add(view);
         var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Margin = new Thickness(2) };
         var pane = new Pane(view, session, alias, frame, title);
@@ -115,7 +131,7 @@ internal sealed class TileHost : UserControl, IDisposable
             if (started) return;
             started = true;
             session.Start();
-            if (initialInput != null) TypeWhenReady(view, initialInput);
+            if (initialInput != null) TypeWhenReady(view, initialInput, pending);
             view.Focus(FocusState.Programmatic);
         };
         panes.Add(pane);
@@ -123,17 +139,21 @@ internal sealed class TileHost : UserControl, IDisposable
         Activate(pane);
     }
 
-    // Команда для новой сессии (сниппет, логи Docker, tmux attach) — после того как ssh вошёл и что-то вывел.
-    private static async void TypeWhenReady(TerminalView view, string text)
+    // Команда для новой сессии (сниппет, логи Docker, tmux attach) — когда ядро говорит, что вход выполнен (C23).
+    // Не дождались за 10 с — команду не вводим, а показываем InfoBar «Вставить».
+    private static async void TypeWhenReady(TerminalView view, string text, InfoBar pending)
     {
         for (var i = 0; i < 40; i++)
         {
             await System.Threading.Tasks.Task.Delay(250);
-            var s = view.Emulator.Snapshot();
-            if (s.cursorCol > 1 && view.Emulator.ScreenText().Any(l => l.TrimEnd().EndsWith('$') || l.TrimEnd().EndsWith('#') || l.TrimEnd().EndsWith('>') || l.TrimEnd().EndsWith('%')))
-                break;
+            if (view.Emulator.LoginReady())
+            {
+                if (text.EndsWith('\r')) view.Type(text); else view.Paste(text);
+                return;
+            }
         }
-        if (text.EndsWith('\r')) view.Type(text); else view.Paste(text);
+        pending.Tag = text;
+        pending.IsOpen = true;
     }
 
     private void Activate(Pane pane)

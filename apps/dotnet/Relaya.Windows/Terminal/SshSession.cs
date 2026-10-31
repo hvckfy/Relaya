@@ -84,8 +84,8 @@ internal sealed class SshSession : IDisposable
             if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
             var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
-            // Вход выполнен — первое приглашение shell в последней строке (до признака от ядра, C23).
-            if (!loggedIn && PasswordPrompt.IsShellPrompt(text)) loggedIn = true;
+            // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
+            if (!loggedIn && view.Emulator.LoginReady()) loggedIn = true;
             if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
                 passwordSent = true;
