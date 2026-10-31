@@ -81,7 +81,8 @@ internal sealed class SftpPage : UserControl
         return i <= 0 ? (p.StartsWith('/') ? "/" : p + "/..") : p[..i];
     }
 
-    private static string Q(string s) => "\"" + s.Replace("\"", "\\\"") + "\"";
+    // Аргумент sftp-батча в кавычках: сначала обратные слэши, потом кавычки (К24) — иначе `C:\dir\` ломает команду.
+    private static string Q(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
     // Навигация и мелкие операции — 60 с; передачи файлов ограничены только ConnectTimeout и ServerAlive (Н6):
     // фиксированный таймаут обрывал большие загрузки посреди передачи.
