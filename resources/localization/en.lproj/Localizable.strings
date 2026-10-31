@@ -814,3 +814,12 @@
 "Не найдена программа" = "Program not found";
 "Установите недостающую программу (ssh, git) и перезапустите Relaya." = "Install the missing program (ssh, git) and restart Relaya.";
 "Не найден git. Установите Git for Windows (git-scm.com) и перезапустите Relaya." = "git not found. Install Git for Windows (git-scm.com) and restart Relaya.";
+"Хосты…" = "Hosts…";
+"git-сервер" = "git server";
+"git-сервер или служебная запись" = "git server or service entry";
+"Хосты, которые ходят с %@" = "Hosts that use %@";
+"Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.bak." = "For the selected hosts ~/.ssh/config gets IdentityFile for this key and IdentitiesOnly yes, so ssh stops trying the agent's other keys. config.bak is saved first.";
+"Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.relaya.bak." = "For the selected hosts ~/.ssh/config gets IdentityFile for this key and IdentitiesOnly yes, so ssh stops trying the agent's other keys. config.relaya.bak is saved first.";
+"Добавить сервер" = "Add a server";
+"например, gitlab.com или git.example.com" = "e.g. gitlab.com or git.example.com";
+"Ни один хост не указывает этот ключ в IdentityFile. «Изменить…» — выбрать хосты и git-серверы (gitlab.com, свой Forgejo), которые ходят только с этим ключом." = "No host uses this key as IdentityFile. Edit… to choose the hosts and git servers (gitlab.com, your own Forgejo) that use only this key.";

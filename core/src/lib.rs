@@ -10,6 +10,7 @@ pub mod error;
 pub mod fuzzy;
 pub mod host_panel;
 pub mod host_stats;
+pub mod key_hosts;
 pub mod local_ports;
 pub mod mcp;
 pub mod models;

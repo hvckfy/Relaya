@@ -10,6 +10,7 @@ struct KeysView: View {
     @State private var loading = true
     @State private var generate = false
     @State private var deploy: SSHKey?
+    @State private var editHosts: SSHKey?
     @State private var confirmDelete: SSHKey?
     @State private var askPassphrase: SSHKey?
     @State private var message: String?
@@ -58,6 +59,9 @@ struct KeysView: View {
                     selection = path
                 }
             }
+        }
+        .sheet(item: $editHosts) { key in
+            KeyHostsSheet(key: key)
         }
         .sheet(item: $deploy) { key in
             DeployKeySheet(key: key) { Task { await reload() } }
@@ -129,15 +133,18 @@ struct KeysView: View {
                 caption(L("Отпечаток")) { EmptyView() }
                 Text(key.fingerprint).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
 
-                let using = hosts(using: key)
-                caption(L("Используется хостами · %@", "\(using.count)")) { EmptyView() }
+                let using = (try? model.store.loadDocument().text).map { KeyHosts.hosts($0, key: key.path) } ?? []
+                caption(L("Используется хостами · %@", "\(using.count)")) {
+                    Button(L("Изменить…")) { editHosts = key }.buttonStyle(.relaya(.ghost, height: 22))
+                }
                 if using.isEmpty {
-                    Text(L("Ни один хост не указывает этот ключ в IdentityFile."))
+                    Text(L("Ни один хост не указывает этот ключ в IdentityFile. «Изменить…» — выбрать хосты и git-серверы (gitlab.com, свой Forgejo), которые ходят только с этим ключом."))
                         .font(.system(size: 12)).foregroundStyle(Theme.tx2)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(using) { h in
-                            Text("\(h.alias)  ").font(.system(size: 12.5)) + Text(h.subtitle).font(.system(size: 11)).foregroundColor(Theme.tx2)
+                        ForEach(using, id: \.self) { alias in
+                            let h = model.hosts.first { $0.alias == alias }
+                            Text("\(alias)  ").font(.system(size: 12.5)) + Text(h?.subtitle ?? L("git-сервер")).font(.system(size: 11)).foregroundColor(Theme.tx2)
                         }
                     }
                 }
@@ -395,6 +402,83 @@ private struct DeployKeySheet: View {
             } catch {
                 results[host.alias] = .failed(error.localizedDescription)
             }
+        }
+    }
+}
+
+/// Хосты ключа: какие хосты и git-серверы ходят только с ним (IdentityFile + IdentitiesOnly yes в ~/.ssh/config).
+/// Так лечится «Too many authentication failures»: ssh не перебирает все ключи агента.
+private struct KeyHostsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let key: SSHKey
+    @State private var all: [String] = []
+    @State private var selected: Set<String> = []
+    @State private var newHost = ""
+    @State private var error: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    ForEach(all, id: \.self) { alias in
+                        Toggle(isOn: Binding(get: { selected.contains(alias) },
+                                             set: { if $0 { selected.insert(alias) } else { selected.remove(alias) } })) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(alias)
+                                Text(model.hosts.first { $0.alias == alias }?.subtitle ?? L("git-сервер или служебная запись"))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text(L("Хосты, которые ходят с %@", key.name))
+                } footer: {
+                    Text(L("Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.bak."))
+                }
+                Section(L("Добавить сервер")) {
+                    HStack {
+                        TextField(L("например, gitlab.com или git.example.com"), text: $newHost)
+                            .onSubmit(add)
+                        Button(L("Добавить"), action: add).disabled(newHost.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                if let error { Text(error).foregroundStyle(.red) }
+            }
+            .formStyle(.grouped)
+            Divider()
+            HStack {
+                Spacer()
+                Button(L("Отмена")) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(L("Сохранить"), action: save).keyboardShortcut(.defaultAction)
+            }
+            .padding()
+        }
+        .frame(width: 520, height: 560)
+        .onAppear {
+            let text = (try? model.store.loadDocument().text) ?? ""
+            all = KeyHosts.allAliases(text)
+            selected = Set(KeyHosts.hosts(text, key: key.path))
+        }
+    }
+
+    private func add() {
+        let name = newHost.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !name.contains(" ") else { return }
+        if !all.contains(name) { all.append(name) }
+        selected.insert(name)
+        newHost = ""
+    }
+
+    private func save() {
+        do {
+            let text = try model.store.loadDocument().text
+            let updated = KeyHosts.bind(text, key: key.path, hosts: all.filter(selected.contains))
+            try model.store.save(SSHConfigDocument(text: updated))
+            model.reloadHosts()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

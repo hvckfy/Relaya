@@ -43,6 +43,15 @@ internal static class AppState
         LoadHosts();
     }
 
+    /// Готовый текст конфига (правка ключей) — с копией и перечитыванием хостов.
+    public static void WriteConfig(string text)
+    {
+        Directory.CreateDirectory(SshDir);
+        Backup();
+        File.WriteAllText(ConfigPath, text);
+        LoadHosts();
+    }
+
     public static void Remove(string alias)
     {
         Backup();
