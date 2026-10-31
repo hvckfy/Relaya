@@ -102,7 +102,8 @@ internal static class HostEditor
                 portValue = v;
             }
             return new SshHost(name, Opt(address.Text), Opt(user.Text), portValue, Opt(key.Text), Opt(jump.Text),
-                agent.IsOn ? true : null, source?.serverAliveInterval, source?.compression, Opt(group.Text),
+                // Выключили при ForwardAgent в блоке — пишем явное no, иначе значение из блока остаётся (R2).
+                agent.IsOn ? true : (source?.forwardAgent == true || source?.forwardAgentValue != null ? false : null), source?.serverAliveInterval, source?.compression, Opt(group.Text),
                 RelayaCoreMethods.SplitTags(tags.Text), source?.color, os.SelectedIndex > 0 ? all[os.SelectedIndex - 1] : null, tmux.IsOn,
                 identityFiles: source?.identityFiles ?? new List<string>(), forwardAgentValue: source?.forwardAgentValue, compressionValue: source?.compressionValue);
         }

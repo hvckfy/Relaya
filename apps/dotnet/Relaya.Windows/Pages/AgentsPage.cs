@@ -61,9 +61,18 @@ internal sealed class AgentsPage : UserControl
         var log = McpHost.Log(200);
         if (log.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Агенты ещё ничего не выполняли."))));
         foreach (var e in Enumerable.Reverse(log).Take(100))
-            body.Children.Add(Ui.Row(e.decision.StartsWith("allow") || e.decision == "ok" ? "" : "",
+            body.Children.Add(Ui.Row(Allowed(e) ? "" : "",
                 $"{e.host}: {e.detail}", $"{e.date} · {e.client} · {e.tool} · {e.decision}" + (e.exitCode is { } c ? $" · exit {c}" : "")));
     }
+
+    // Иконка по машинному коду решения из ядра (W13); у старых записей кода нет — по тексту.
+    private static bool Allowed(McpLogEntry e) => e.decisionCode switch
+    {
+        McpDecision.AllowedRule or McpDecision.AllowedRead or McpDecision.ApprovedByUser
+            or McpDecision.AllowedGrant or McpDecision.AllowedTrusted => true,
+        null => e.decision.StartsWith("разрешено") || e.decision.StartsWith("одобрено") || e.decision.StartsWith("allow") || e.decision == "ok",
+        _ => false,
+    };
 
     private static ComboBox ModeBox(McpMode mode, Action<McpMode> changed)
     {
