@@ -92,7 +92,7 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 
 **Sync (free, no cloud of ours)**
 - Sync profiles: each has its own git repository (your own server over SSH, Gitea, GitLab, GitHub) or an iCloud Drive folder, and its own hosts — all of them, chosen groups or individual hosts.
-- Hosts, their tunnels, remote desktops, snippets and agent permissions are merged three-way (git or folder); deletions sync too, an edit wins over a deletion, and a machine with an empty config never wipes the shared one. `~/.ssh/config` is backed up before every change.
+- Hosts, their tunnels, remote desktops, and snippets are merged three-way (git or folder); agent permissions (`mcp.json`, profiles that sync all hosts) are taken from the incoming side as a whole file; deletions sync too, an edit wins over a deletion, and a machine with an empty config never wipes the shared one. `~/.ssh/config` is backed up before every change.
 - Conflicts show both versions side by side. SSH keys sync only if you ask, only for the profile's hosts, encrypted with your password; a key that differs from yours is saved next to it as `.from-sync`, and keys skipped for a missing password are reported. Server passwords are never synced.
 - Note: anyone who can write to your sync repository or folder controls the synced data — use a private repository.
 

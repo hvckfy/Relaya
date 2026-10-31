@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import LocalAuthentication
 import RelayaCore
 
@@ -10,6 +10,16 @@ import RelayaCore
 @MainActor
 final class SecretGate {
     static let shared = SecretGate()
+
+    private init() {
+        // Блокировка экрана и сон сбрасывают окно после Touch ID.
+        DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { SecretGate.shared.lock() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { SecretGate.shared.lock() }
+        }
+    }
 
     private var unlockedUntil: Date?
     private var pending: Task<Bool, Never>?

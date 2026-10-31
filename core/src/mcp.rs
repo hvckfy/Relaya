@@ -559,7 +559,8 @@ impl McpServer {
                     return (format!("Команда запрещена правилом пользователя для {alias}."), true);
                 }
                 let mode = policy.mode(alias, now);
-                let decision = if mode != McpMode::Off && !is_read && policy.is_allowed(&command, alias) {
+                // allow-правила действуют только на хостах «с подтверждением» и «доверенных»: на read-only изменяющая команда отклоняется.
+                let decision = if matches!(mode, McpMode::Confirm | McpMode::Trusted) && !is_read && policy.is_allowed(&command, alias) {
                     McpDecision::AllowedRule
                 } else {
                     match mode {
