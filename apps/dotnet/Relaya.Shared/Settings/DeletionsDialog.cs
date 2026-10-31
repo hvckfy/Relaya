@@ -28,9 +28,10 @@ internal static class DeletionsDialog
             {
                 var when = DateTimeOffset.TryParse(p.deletedAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)
                     ? t.LocalDateTime.ToString("g") : p.deletedAt;
+                // По умолчанию ничего не отмечено: удаления из синхронизации мог подделать чужой репозиторий.
                 var box = new CheckBox
                 {
-                    IsChecked = true,
+                    IsChecked = false,
                     Content = new StackPanel
                     {
                         Children =
@@ -43,6 +44,8 @@ internal static class DeletionsDialog
                 boxes.Add((box, p));
                 list.Children.Add(box);
             }
+            var selectAll = new HyperlinkButton { Content = L("Выбрать все"), Padding = new Thickness(0) };
+            selectAll.Click += (_, _) => { foreach (var b in boxes) b.Box.IsChecked = true; };
             var dialog = new ContentDialog
             {
                 Title = L("Подтвердите удаление"),
@@ -51,13 +54,17 @@ internal static class DeletionsDialog
                     Spacing = 12, MinWidth = 420,
                     Children =
                     {
+                        selectAll,
                         new ScrollViewer { Content = list, MaxHeight = 360 },
                         Pages.Ui.Secondary(L("Удаления пришли синхронизацией с другой машины. Перед удалением делается резервная копия.")),
                     },
                 },
                 PrimaryButtonText = L("Удалить отмеченные"), CloseButtonText = L("Оставить все"),
-                DefaultButton = ContentDialogButton.Close, XamlRoot = root,
+                DefaultButton = ContentDialogButton.Close, XamlRoot = root, IsPrimaryButtonEnabled = false,
             };
+            // «Удалить отмеченные» доступна, только когда что-то отмечено.
+            void Update() => dialog.IsPrimaryButtonEnabled = boxes.Any(b => b.Box.IsChecked == true);
+            foreach (var b in boxes) { b.Box.Checked += (_, _) => Update(); b.Box.Unchecked += (_, _) => Update(); }
             var delete = await dialog.ShowAsync() == ContentDialogResult.Primary;
             var confirmed = delete
                 ? boxes.Where(b => b.Box.IsChecked == true).Select(b => new DeletionKey(b.Item.kind, b.Item.key)).ToList()
