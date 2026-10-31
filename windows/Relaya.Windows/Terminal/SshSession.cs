@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using Relaya.Platform;
 
 namespace Relaya.Terminal;
 
@@ -42,9 +43,23 @@ internal sealed class SshSession : IDisposable
             return;
         }
         console = pc;
+        var passwordSent = false;
+        var tail = new StringBuilder();
         pc.Output += data =>
         {
             view.Feed(data);
+            // Пароль из Credential Manager вводится один раз за подключение, как на Mac.
+            if (!passwordSent)
+            {
+                tail.Append(Encoding.UTF8.GetString(data));
+                if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
+                var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
+                if (PasswordPrompt.Matches(text) && Relaya.Platform.CredentialStore.Read(alias) is { } password)
+                {
+                    passwordSent = true;
+                    pc.Write(Encoding.UTF8.GetBytes(password + "\r"));
+                }
+            }
             var reply = view.Emulator.TakeOutput();
             if (reply.Length > 0) pc.Write(reply);
         };

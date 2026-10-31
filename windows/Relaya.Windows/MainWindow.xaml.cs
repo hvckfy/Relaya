@@ -64,10 +64,48 @@ public sealed partial class MainWindow : Window
         Nav.MenuItems.Add(new NavigationViewItem { Content = "Сниппеты", Icon = new FontIcon { Glyph = "" } });
     }
 
+    private static async System.Threading.Tasks.Task AskPassword(FrameworkElement anchor, string alias)
+    {
+        var box = new PasswordBox { PlaceholderText = "Пароль" };
+        var dialog = new ContentDialog
+        {
+            Title = $"Пароль для {alias}",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    box,
+                    new TextBlock
+                    {
+                        Text = "Хранится в диспетчере учётных данных Windows и вводится сам, когда сервер спросит пароль.",
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                    },
+                },
+            },
+            PrimaryButtonText = "Сохранить",
+            CloseButtonText = "Отмена",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = anchor.XamlRoot,
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && box.Password.Length > 0)
+            Platform.CredentialStore.Write(alias, box.Password);
+    }
+
     private static NavigationViewItem HostItem(SshHost h)
     {
         var item = new NavigationViewItem { Content = h.alias, Tag = h, Icon = new FontIcon { Glyph = "" } };
         ToolTipService.SetToolTip(item, RelayaCoreMethods.HostSubtitle(h));
+        var menu = new MenuFlyout();
+        var save = new MenuFlyoutItem { Text = "Сохранить пароль…", Icon = new FontIcon { Glyph = "\uE8D7" } };
+        save.Click += async (_, _) => await AskPassword(item, h.alias);
+        var forget = new MenuFlyoutItem { Text = "Забыть пароль", Icon = new FontIcon { Glyph = "\uE74D" } };
+        forget.Click += (_, _) => Platform.CredentialStore.Delete(h.alias);
+        menu.Opening += (_, _) => forget.IsEnabled = Platform.CredentialStore.Has(h.alias);
+        menu.Items.Add(save);
+        menu.Items.Add(forget);
+        item.ContextFlyout = menu;
         return item;
     }
 
