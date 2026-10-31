@@ -82,6 +82,7 @@ internal sealed class SshSession : IDisposable
             if (reply.Length > 0) pc.Write(reply);
         };
         pc.Exited += code => { if (console == pc) End($"\x1b[2m[сессия завершена, код {code}]\x1b[0m"); };
+        pc.Start();
         StateChanged?.Invoke(true);
     }
 

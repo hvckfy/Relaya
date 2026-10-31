@@ -55,6 +55,11 @@ internal sealed class PseudoConsole : IDisposable
 
         input = new FileStream(inWrite, FileAccess.Write);
         output = new FileStream(outRead, FileAccess.Read);
+    }
+
+    /// Чтение и ожидание выхода — только после подписки на Output/Exited, иначе первые байты и быстрый выход теряются.
+    public void Start()
+    {
         Task.Run(ReadLoop);
         Task.Run(async () =>
         {
