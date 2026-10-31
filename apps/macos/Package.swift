@@ -18,8 +18,8 @@ let package = Package(
         .package(url: "https://github.com/royalapplications/royalvnc", revision: "8e9d3bb9cd041266df0659651f646fef251b4c71"),
     ],
     targets: [
-        // Rust-ядро (core/), общее с Windows-клиентом: собирается scripts/build-core.sh в xcframework.
-        .binaryTarget(name: "RelayaCoreFFI", path: "core/build/RelayaCoreFFI.xcframework"),
+        // Rust-ядро (core/ в корне репозитория): scripts/build-core-macos.sh кладёт xcframework в Frameworks/.
+        .binaryTarget(name: "RelayaCoreFFI", path: "Frameworks/RelayaCoreFFI.xcframework"),
         // Сгенерированный UniFFI Swift API этого ядра.
         .target(
             name: "RelayaRust",

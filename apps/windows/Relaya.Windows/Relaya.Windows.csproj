@@ -24,7 +24,7 @@
   </ItemGroup>
   <!-- Rust-ядро: scripts/build-core-windows.ps1 кладёт relaya_core.dll и Core/relaya_core.cs. -->
   <ItemGroup>
-    <None Include="..\..\core\target\release\relaya_core.dll" Link="relaya_core.dll"
-          CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\core\target\release\relaya_core.dll')" />
+    <None Include="..\..\..\core\target\release\relaya_core.dll" Link="relaya_core.dll"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\relaya_core.dll')" />
   </ItemGroup>
 </Project>

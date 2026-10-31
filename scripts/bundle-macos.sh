@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Собирает Relaya.app из SwiftPM-сборки.
-# Использование: scripts/bundle.sh [version]   →   build/Relaya.app
+# Использование: scripts/bundle-macos.sh [version]   →   build/Relaya.app
 set -euo pipefail
 
 VERSION="${1:-0.0.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build/Relaya.app"
 
-cd "$ROOT"
+cd "$ROOT/apps/macos"
 # По архитектуре отдельно: мульти-arch сборка уходит в xcbuild, который не тянет плагин SwiftTerm.
 BINS=()
 for ARCH in arm64 x86_64; do
@@ -26,8 +26,8 @@ for DYLIB in $(cd "$(dirname "${BINS[0]}")" && ls *.dylib 2>/dev/null); do
   lipo -create "${PARTS[@]}" -output "$APP/Contents/MacOS/$DYLIB"
 done
 
-# Иконка из icon-sources/ (рендер Blender, см. icon-sources/README.md) → все размеры .iconset.
-ICON_SRC="$ROOT/icon-sources/relaya-chain-r-icon.png"
+# Иконка из resources/icon/ (рендер Blender, см. resources/icon/README.md) → все размеры .iconset.
+ICON_SRC="$ROOT/resources/icon/relaya-chain-r-icon.png"
 ICONSET="$ROOT/build/Relaya.iconset"
 rm -rf "$ICONSET" && mkdir -p "$ICONSET"
 for SIZE in 16 32 128 256 512; do
@@ -36,8 +36,8 @@ for SIZE in 16 32 128 256 512; do
 done
 iconutil -c icns "$ROOT/build/Relaya.iconset" -o "$APP/Contents/Resources/Relaya.icns"
 
-# Переводы интерфейса: ключи — русские строки, en.lproj — английский (см. Sources/RelayaCore/Localization.swift).
-cp -R "$ROOT/Localization/"*.lproj "$APP/Contents/Resources/"
+# Переводы интерфейса: ключи — русские строки, en.lproj — английский (см. apps/macos/Sources/RelayaCore/Localization.swift).
+cp -R "$ROOT/resources/localization/"*.lproj "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

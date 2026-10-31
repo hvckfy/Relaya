@@ -138,23 +138,36 @@ Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary
 - **Server changes only after confirmation.** Disabling password login, for example, asks first, shows the command and warns if the host has no key; OS actions are inserted into the terminal without Enter.
 - **AI agents need your approval.** On hosts in "confirm" mode every command is shown in a Touch ID prompt.
 
+## Repository layout
+
+```
+core/                 Rust core (relaya-core): ~/.ssh/config, sync, MCP policy, terminal emulator, …
+                      shared by every client through UniFFI bindings; tested on macOS, Linux and Windows
+apps/macos/           macOS client — SwiftPM package (SwiftUI), Swift facades over the core
+apps/windows/         Windows client — WinUI 3 (C#), early preview
+resources/            shared assets: localization (ru/en strings), app icon sources
+scripts/              build-core-macos.sh, bundle-macos.sh, build-core-windows.ps1
+docs/                 UI spec, design notes, screenshots
+.github/workflows/    ci (macOS), core (Rust on 3 OSes), windows, release
+```
+
 ## Building from source
+
+macOS (needs Xcode 26 and Rust):
 
 ```bash
 git clone https://github.com/hvckfy/Relaya.git
 cd Relaya
+scripts/build-core-macos.sh
+cd apps/macos
 swift build
 swift test
 swift run Relaya
 ```
 
-To produce a universal `.app` bundle:
+To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build/Relaya.app`. Releases are built by GitHub Actions on every `v*` tag.
 
-```bash
-scripts/bundle.sh 0.1.0
-```
-
-The result is `build/Relaya.app`. Releases are built by GitHub Actions on every `v*` tag.
+Windows (needs Rust, .NET 8 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/windows/Relaya.Windows/Relaya.Windows.csproj` with MSBuild.
 
 See [docs/UI_SPEC.md](docs/UI_SPEC.md) for the full UI specification (in Russian).
 

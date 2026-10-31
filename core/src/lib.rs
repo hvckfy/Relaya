@@ -1,6 +1,6 @@
 //! Ядро Relaya: всё, что не зависит от платформы и общее для клиентов macOS и Windows.
 //! Платформенные вещи (Keychain/Credential Manager, Touch ID/Windows Hello, запуск процессов с askpass,
-//! интерфейс) — в клиентах. Swift получает API через UniFFI, Windows-клиент (Tauri) — напрямую.
+//! интерфейс) — в клиентах. Клиенты получают API через UniFFI: Swift (apps/macos) и C# (apps/windows).
 
 uniffi::setup_scaffolding!();
 

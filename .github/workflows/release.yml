@@ -30,9 +30,9 @@ jobs:
       - name: Build Rust core (universal static library + Swift bindings)
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
-          scripts/build-core.sh
+          scripts/build-core-macos.sh
       - name: Build app bundle
-        run: scripts/bundle.sh "${GITHUB_REF_NAME#v}"
+        run: scripts/bundle-macos.sh "${GITHUB_REF_NAME#v}"
 
       - name: Sign
         env:

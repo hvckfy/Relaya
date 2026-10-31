@@ -7,11 +7,12 @@ xcuserdata/
 DerivedData/
 core/target/
 core/build/
-Sources/RelayaRust/*.swift
+apps/macos/Sources/RelayaRust/*.swift
+apps/macos/Frameworks/
 # Глобальный .gitignore может игнорировать bin/ — генератор UniFFI нужен в репозитории.
 !core/src/bin/
 
 # Windows-клиент
-windows/**/bin/
-windows/**/obj/
-windows/Relaya.Windows/Core/*.cs
+apps/windows/**/bin/
+apps/windows/**/obj/
+apps/windows/Relaya.Windows/Core/*.cs

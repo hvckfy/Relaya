@@ -19,8 +19,8 @@ jobs:
       # PRI-задачи WinAppSDK есть только в MSBuild из Visual Studio, не в dotnet CLI.
       - uses: microsoft/setup-msbuild@v2
       - name: Build WinUI app
-        run: msbuild windows/Relaya.Windows/Relaya.Windows.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64
+        run: msbuild apps/windows/Relaya.Windows/Relaya.Windows.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64
       - uses: actions/upload-artifact@v4
         with:
           name: Relaya-windows-x64
-          path: windows/Relaya.Windows/bin/x64/Release/
+          path: apps/windows/Relaya.Windows/bin/x64/Release/
