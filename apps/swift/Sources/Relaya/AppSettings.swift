@@ -43,7 +43,11 @@ final class AppSettings {
 
     /// Картинка фона рабочей области: одна на всё окно, плитки и панели просвечивают.
     var backgroundImagePath: String? {
-        didSet { defaults.set(backgroundImagePath, forKey: "backgroundImagePath"); applyBackground() }
+        didSet {
+            defaults.set(backgroundImagePath, forKey: "backgroundImagePath")
+            backgroundImage = backgroundImagePath.flatMap { NSImage(contentsOfFile: $0) }
+            applyBackground()
+        }
     }
     /// Показывать картинку под терминалами и файлами.
     var backgroundUnderSessions: Bool {
@@ -58,7 +62,8 @@ final class AppSettings {
         didSet { defaults.set(backgroundPanelOpacity, forKey: "backgroundPanelOpacity"); applyBackground() }
     }
 
-    var backgroundImage: NSImage? { backgroundImagePath.flatMap { NSImage(contentsOfFile: $0) } }
+    /// Картинка фона читается с диска один раз при смене пути, а не на каждую перерисовку (П9).
+    private(set) var backgroundImage: NSImage?
 
     func applyBackground() {
         let on = backgroundImagePath != nil
@@ -156,6 +161,7 @@ final class AppSettings {
         let underInterface = defaults.object(forKey: "backgroundUnderInterface") as? Bool ?? true
         let panelOpacity = defaults.object(forKey: "backgroundPanelOpacity") as? Double ?? 0.75
         backgroundImagePath = imagePath
+        backgroundImage = imagePath.flatMap { NSImage(contentsOfFile: $0) }
         backgroundUnderSessions = underSessions
         backgroundUnderInterface = underInterface
         backgroundPanelOpacity = panelOpacity

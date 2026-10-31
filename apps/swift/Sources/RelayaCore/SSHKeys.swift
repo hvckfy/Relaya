@@ -55,12 +55,24 @@ public enum KeyScanner {
     public static func scan(directory: URL = SSHPaths.sshDirectory) async -> [SSHKey] {
         let fm = FileManager.default
         let names = (try? fm.contentsOfDirectory(atPath: directory.path)) ?? []
-        var keys: [SSHKey] = []
-        for name in names.sorted() where names.contains(name + ".pub") {
-            let path = directory.appending(path: name).path
-            if let key = await inspect(path: path) { keys.append(key) }
+        let paths = names.sorted().filter { names.contains($0 + ".pub") }.map { directory.appending(path: $0).path }
+        // По четыре ключа параллельно: на каждый два процесса ssh-keygen, последовательно 20+ ключей открываются долго (П10).
+        return await withTaskGroup(of: (Int, SSHKey?).self) { group in
+            var found = [SSHKey?](repeating: nil, count: paths.count)
+            var next = 0
+            for _ in 0..<min(4, paths.count) {
+                let i = next; next += 1
+                group.addTask { (i, await inspect(path: paths[i])) }
+            }
+            while let (i, key) = await group.next() {
+                found[i] = key
+                if next < paths.count {
+                    let j = next; next += 1
+                    group.addTask { (j, await inspect(path: paths[j])) }
+                }
+            }
+            return found.compactMap { $0 }
         }
-        return keys
     }
 
     public static func inspect(path: String) async -> SSHKey? {

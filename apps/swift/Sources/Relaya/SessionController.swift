@@ -73,9 +73,12 @@ final class SessionController {
 
     func handleOutput(_ text: String) {
         log(text)
-        let ports = LocalPorts.find(in: Self.plainText(text))
-        if !ports.isEmpty {
-            detectedPorts = Array((ports.reversed() + detectedPorts.filter { !ports.contains($0) }).prefix(4))
+        // Порты ищем только там, где они могут быть: regex и вызов ядра на каждый кусок греют CPU на `cat` (П4).
+        if Self.mayMentionLocalPort(text) {
+            let ports = LocalPorts.find(in: Self.plainText(text))
+            if !ports.isEmpty {
+                detectedPorts = Array((ports.reversed() + detectedPorts.filter { !ports.contains($0) }).prefix(4))
+            }
         }
         tail = String((tail + text).suffix(2000))
 
@@ -339,6 +342,11 @@ final class SessionController {
     private func log(_ text: String) {
         guard let logHandle else { return }
         try? logHandle.write(contentsOf: Data(Self.plainText(text).utf8))
+    }
+
+    /// Дешёвая проверка перед разбором портов: адрес localhost в каком-нибудь виде и двоеточие.
+    static func mayMentionLocalPort(_ text: String) -> Bool {
+        text.contains(":") && (text.contains("localhost") || text.contains("127.0.0.1") || text.contains("0.0.0.0") || text.contains("[::"))
     }
 
     /// Вывод терминала без ANSI-последовательностей и возвратов каретки — для читаемого лога.
