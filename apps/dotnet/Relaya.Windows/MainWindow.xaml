@@ -54,6 +54,8 @@
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,0,0"
                   CornerRadius="8,0,0,0">
                 <ContentControl x:Name="Page" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+                <!-- Содержимое всех вкладок живёт здесь постоянно; переключение — только Visibility. -->
+                <Grid x:Name="TabHost" />
                 <StackPanel x:Name="Empty" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
                     <FontIcon Glyph="&#xE756;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBlock x:Name="EmptyTitle" Text="Выберите хост слева" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />

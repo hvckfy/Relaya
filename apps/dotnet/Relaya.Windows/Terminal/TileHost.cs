@@ -133,6 +133,7 @@ internal sealed class TileHost : UserControl, IDisposable
     private void Close(Pane pane)
     {
         pane.Session.Dispose();
+        pane.View.Dispose();
         panes.Remove(pane);
         Layout();
         if (panes.Count > 0) { Activate(panes[^1]); panes[^1].View.Focus(FocusState.Programmatic); }
@@ -188,7 +189,7 @@ internal sealed class TileHost : UserControl, IDisposable
 
     public void Dispose()
     {
-        foreach (var p in panes) p.Session.Dispose();
+        foreach (var p in panes) { p.Session.Dispose(); p.View.Dispose(); }
         panes.Clear();
     }
 }

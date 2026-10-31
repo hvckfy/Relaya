@@ -13,7 +13,7 @@ using uniffi.relaya_core;
 namespace Relaya.Terminal;
 
 /// Нативный терминал: состояние экрана — эмулятор из Rust-ядра, отрисовка — Win2D (DirectX/DirectWrite).
-internal sealed class TerminalView : UserControl
+internal sealed class TerminalView : UserControl, IDisposable
 {
     private readonly CanvasControl canvas = new();
     private readonly CanvasTextFormat format = new() { WordWrapping = CanvasWordWrapping.NoWrap };
@@ -33,15 +33,20 @@ internal sealed class TerminalView : UserControl
     private (int Row, int Col)? selStart, selEnd;
     private bool selecting;
 
+    // Canvas живёт, пока жива вкладка: Unloaded приходит и при смене вкладки, и при перестройке плиток.
+    public void Dispose()
+    {
+        Platform.Settings.Changed -= OnSettingsChanged;
+        canvas.RemoveFromVisualTree();
+    }
+
     public TerminalView()
     {
         ApplySettings();
         Platform.Settings.Changed += OnSettingsChanged;
-        Unloaded += (_, _) => Platform.Settings.Changed -= OnSettingsChanged;
         Content = canvas;
         canvas.Draw += OnDraw;
         SizeChanged += (_, _) => FitToSize();
-        Unloaded += (_, _) => canvas.RemoveFromVisualTree();
         IsTabStop = true;
         UseSystemFocusVisuals = false;
         KeyDown += OnKeyDown;

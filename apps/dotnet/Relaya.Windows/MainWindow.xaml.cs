@@ -139,7 +139,11 @@ public sealed partial class MainWindow : Window
 
     private void Show(UIElement? page)
     {
-        Page.Content = page;
+        // Вкладки не вынимаются из дерева (иначе Win2D теряет Canvas) — показывается одна, остальные свёрнуты.
+        var tab = page != null && TabHost.Children.Contains(page);
+        foreach (var c in TabHost.Children) c.Visibility = c == page ? Visibility.Visible : Visibility.Collapsed;
+        Page.Content = tab ? null : page;
+        Page.Visibility = tab ? Visibility.Collapsed : Visibility.Visible;
         Empty.Visibility = page is null ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -167,6 +171,8 @@ public sealed partial class MainWindow : Window
         {
             Header = title, IconSource = new FontIconSource { Glyph = glyph }, Tag = new Tab(content, owner),
         };
+        content.Visibility = Visibility.Collapsed;
+        TabHost.Children.Add(content);
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
         return tab;
@@ -195,7 +201,7 @@ public sealed partial class MainWindow : Window
             Nav.SelectedItem = null;
             Show(t.Content);
         }
-        else if (Page.Content is Terminal.TileHost or Pages.SftpPage)
+        else if (Page.Visibility == Visibility.Collapsed)
         {
             Show(null);
         }
@@ -205,7 +211,7 @@ public sealed partial class MainWindow : Window
 
     private void CloseTab(TabViewItem tab)
     {
-        if (tab.Tag is Tab t) t.Owner?.Dispose();
+        if (tab.Tag is Tab t) { t.Owner?.Dispose(); TabHost.Children.Remove(t.Content); }
         Tabs.TabItems.Remove(tab);
         if (Tabs.TabItems.Count == 0) Show(null);
     }
