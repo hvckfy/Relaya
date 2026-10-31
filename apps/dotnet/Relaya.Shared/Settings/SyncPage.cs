@@ -126,7 +126,7 @@ internal sealed class SyncPage : UserControl
         root.Children.Add(new TextBlock { Text = L("Профили"), Style = Style("BodyStrongTextBlockStyle"), Margin = new Thickness(0, 16, 0, 4) });
         foreach (var p in sync.Profiles) root.Children.Add(ProfileCard(p));
 
-        var add = new Button { Content = L("Новый профиль"), Style = Style("AccentButtonStyle"), Margin = new Thickness(0, 8, 0, 0) };
+        var add = new Button { Content = L("Новый профиль"), Margin = new Thickness(0, 8, 0, 0) };
         add.Click += (_, _) => { sync.Add(); Build(); };
         var all = new Button { Content = L("Синхронизировать всё"), Margin = new Thickness(8, 8, 0, 0) };
         all.Click += async (_, _) => await sync.SyncAll();
@@ -141,7 +141,7 @@ internal sealed class SyncPage : UserControl
         void Change(Func<SyncProfile, SyncProfile> f) => sync.Update(f(Current()));
 
         var status = new TextBlock { Foreground = Brush("TextFillColorSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center };
-        var ring = new ProgressRing { Width = 16, Height = 16, IsActive = false, Visibility = Visibility.Collapsed };
+        var ring = new ProgressRing { Width = 20, Height = 20, IsActive = false, Visibility = Visibility.Collapsed };
         var enabled = new ToggleSwitch { IsOn = initial.enabled, OnContent = "", OffContent = "", MinWidth = 0 };
         enabled.Toggled += (_, _) => Change(p => p with { enabled = enabled.IsOn });
 
