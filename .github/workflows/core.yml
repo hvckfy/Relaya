@@ -43,17 +43,10 @@ jobs:
       # Mac-сборка приложения (build-core-macos.sh, ci.yml) фичу не включает.
       - name: Test with remote-desktop
         run: cargo test --features remote-desktop
-      # RDP на FreeRDP: пока только Windows; FreeRDP берётся из последнего удачного freerdp.yml на main.
-      - name: Fetch FreeRDP
+      # RDP на FreeRDP: пока только Windows. FreeRDP — из общего кэша или собирается тут же (Т1: без артефактов).
+      - name: FreeRDP
         if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $run = gh run list -R ${{ github.repository }} --workflow freerdp.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId'
-          gh run download $run -R ${{ github.repository }} -n freerdp-x64-windows -D "$env:RUNNER_TEMP/freerdp"
-          "FREERDP_DIR=$env:RUNNER_TEMP/freerdp".Replace('\','/') | Out-File -Append $env:GITHUB_ENV
-          "$env:RUNNER_TEMP/freerdp/bin" | Out-File -Append $env:GITHUB_PATH
+        uses: ./.github/actions/freerdp
       - name: Test with rdp-freerdp
         if: runner.os == 'Windows'
         run: cargo test --features rdp-freerdp

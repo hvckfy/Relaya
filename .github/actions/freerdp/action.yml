@@ -1,0 +1,39 @@
+name: FreeRDP
+description: >
+  FreeRDP 3 (клиент) через vcpkg для ядра (feature rdp-freerdp): кэш по core/native/vcpkg.json и freerdp.version,
+  при промахе — сборка (~15 минут). Не зависит от артефактов других workflow.
+inputs:
+  triplet:
+    description: vcpkg triplet
+    default: x64-windows
+outputs:
+  dir:
+    description: каталог с include/, lib/ и bin/
+    value: ${{ steps.dir.outputs.dir }}
+runs:
+  using: composite
+  steps:
+    - name: Cache FreeRDP
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: core/native/vcpkg_installed
+        key: freerdp-${{ inputs.triplet }}-${{ hashFiles('core/native/vcpkg.json', 'core/native/freerdp.version') }}
+    - name: Build FreeRDP
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "vcpkg.exe"
+        $baseline = (Get-Content core/native/vcpkg.json | ConvertFrom-Json).'builtin-baseline'
+        git -C $env:VCPKG_INSTALLATION_ROOT fetch -q origin
+        git -C $env:VCPKG_INSTALLATION_ROOT checkout -q $baseline
+        & $vcpkg install --x-manifest-root=core/native --x-install-root=core/native/vcpkg_installed --triplet ${{ inputs.triplet }}
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Export FREERDP_DIR
+      id: dir
+      shell: pwsh
+      run: |
+        $dir = (Resolve-Path "core/native/vcpkg_installed/${{ inputs.triplet }}").Path.Replace('\','/')
+        "dir=$dir" | Out-File -Append $env:GITHUB_OUTPUT
+        "FREERDP_DIR=$dir" | Out-File -Append $env:GITHUB_ENV
+        "$dir/bin" | Out-File -Append $env:GITHUB_PATH

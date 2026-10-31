@@ -1,6 +1,6 @@
 name: FreeRDP
 
-# Собирает FreeRDP 3 (клиент) через vcpkg и кладёт артефакт для ядра (feature rdp-freerdp).
+# Собирает FreeRDP 3 (клиент) через vcpkg (.github/actions/freerdp — тот же кэш, что у core.yml) и кладёт артефакт.
 # Версия закреплена в core/native/vcpkg.json и core/native/freerdp.version; без FFmpeg и OpenH264,
 # H.264 на Windows — Media Foundation из ОС.
 on:
@@ -24,21 +24,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Cache vcpkg output
-        uses: actions/cache@v4
+      - name: FreeRDP
+        uses: ./.github/actions/freerdp
         with:
-          path: |
-            core/native/vcpkg_installed
-            ~/AppData/Local/vcpkg/archives
-          key: freerdp-${{ matrix.triplet }}-${{ hashFiles('core/native/vcpkg.json', 'core/native/freerdp.version') }}
-      - name: Install FreeRDP
-        shell: pwsh
-        run: |
-          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "vcpkg.exe"
-          git -C $env:VCPKG_INSTALLATION_ROOT fetch -q origin
-          git -C $env:VCPKG_INSTALLATION_ROOT checkout -q 9a5dfef5d1a0438a7d24856a85bd60f309d355e9
-          & $vcpkg install --x-manifest-root=core/native --x-install-root=core/native/vcpkg_installed --triplet ${{ matrix.triplet }}
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          triplet: ${{ matrix.triplet }}
       - name: Show what was built
         shell: pwsh
         run: |
@@ -53,4 +42,4 @@ jobs:
             core/native/vcpkg_installed/${{ matrix.triplet }}/lib
             core/native/vcpkg_installed/${{ matrix.triplet }}/include
             core/native/vcpkg_installed/${{ matrix.triplet }}/share/freerdp*
-          retention-days: 30
+          retention-days: 90
