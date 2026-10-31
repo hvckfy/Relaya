@@ -28,7 +28,7 @@ struct Config {
 struct Callbacks {
     user: *mut c_void,
     on_connected: extern "C" fn(*mut c_void, u32, u32),
-    on_rect: extern "C" fn(*mut c_void, *const u8, u32, u32, u32, u32, u32),
+    on_rect: extern "C" fn(*mut c_void, *const u8, usize, u32, u32, u32, u32, u32),
     on_frame_end: extern "C" fn(*mut c_void),
     on_resize: extern "C" fn(*mut c_void, u32, u32),
     on_cert: extern "C" fn(*mut c_void, *const c_char, *const c_char) -> c_int,
@@ -94,9 +94,12 @@ extern "C" fn on_connected(user: *mut c_void, w: u32, h: u32) {
     ctx(user).session.listener().on_connected(w.min(u16::MAX as u32) as u16, h.min(u16::MAX as u32) as u16);
 }
 
-extern "C" fn on_rect(user: *mut c_void, buffer: *const u8, stride: u32, x: u32, y: u32, w: u32, h: u32) {
+extern "C" fn on_rect(user: *mut c_void, buffer: *const u8, len: usize, stride: u32, x: u32, y: u32, w: u32, h: u32) {
     if buffer.is_null() || w == 0 || h == 0 { return; }
     let (stride, row) = (stride as usize, w as usize * 4);
+    // W-RDP-5: прямоугольник целиком внутри буфера, иначе не копируем (не читаем чужую память).
+    let end = (y as usize + h as usize - 1).checked_mul(stride).and_then(|v| v.checked_add((x as usize + w as usize) * 4));
+    if end.map(|e| e > len).unwrap_or(true) || row > stride { return; }
     let mut bgra = Vec::with_capacity(row * h as usize);
     for line in y..y + h {
         let start = line as usize * stride + x as usize * 4;
@@ -170,7 +173,9 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
     let ctx = Box::into_raw(Box::new(Ctx { session: session.clone(), rects: Mutex::new(Vec::new()), closed: Mutex::new(None) }));
     let callbacks = Callbacks {
         user: ctx as *mut c_void, on_connected, on_rect, on_frame_end, on_resize, on_cert,
-        on_clipboard: Some(on_clipboard), on_audio, on_audio_volume, on_audio_closed, on_closed,
+        // W-RDP-2: без слушателя буфера обмена к моменту connect текст с сервера не запрашивается.
+        on_clipboard: session.clipboard_listener().is_some().then_some(on_clipboard as extern "C" fn(*mut c_void, *const c_char)),
+        on_audio, on_audio_volume, on_audio_closed, on_closed,
     };
     // Прослойка копирует строки конфигурации сама.
     let raw = unsafe { relaya_rdp_new(&config, &callbacks) };

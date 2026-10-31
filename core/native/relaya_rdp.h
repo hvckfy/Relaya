@@ -44,11 +44,13 @@ typedef struct
 	void* user;
 	void (*on_connected)(void* user, uint32_t width, uint32_t height);
 	/* Изменившийся прямоугольник: буфер BGRA всего экрана и его stride; после последнего — on_frame_end. */
-	void (*on_rect)(void* user, const uint8_t* buffer, uint32_t stride, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
+	/* len — размер буфера в байтах: прямоугольник проверяется по нему. */
+	void (*on_rect)(void* user, const uint8_t* buffer, size_t len, uint32_t stride, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 	void (*on_frame_end)(void* user);
 	void (*on_resize)(void* user, uint32_t width, uint32_t height);
 	/* sha256 сертификата (hex без двоеточий) и subject; вернуть 1 — принять, 0 — отказ. Может ждать ответа UI. */
 	int (*on_cert)(void* user, const char* sha256, const char* subject);
+	/* NULL — обмен буфером выключен: текст с сервера не запрашивается. */
 	void (*on_clipboard)(void* user, const char* utf8);
 	void (*on_audio)(void* user, uint32_t rate, uint16_t channels, uint16_t bits, uint32_t timestamp, const uint8_t* pcm,
 	                 size_t size);

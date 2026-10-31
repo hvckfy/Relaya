@@ -366,7 +366,7 @@ static BOOL end_paint(rdpContext* context)
 		if (x + w > gdi->width) w = gdi->width - x;
 		if (y + h > gdi->height) h = gdi->height - y;
 		if (w > 0 && h > 0 && r->cb.on_rect)
-			r->cb.on_rect(r->cb.user, gdi->primary_buffer, gdi->stride, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h);
+			r->cb.on_rect(r->cb.user, gdi->primary_buffer, (size_t)gdi->stride * (size_t)gdi->height, gdi->stride, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h);
 	}
 	if (r->cb.on_frame_end)
 		r->cb.on_frame_end(r->cb.user);
@@ -383,7 +383,7 @@ static BOOL desktop_resize(rdpContext* context)
 	if (r->cb.on_resize)
 		r->cb.on_resize(r->cb.user, w, h);
 	if (r->cb.on_rect)
-		r->cb.on_rect(r->cb.user, context->gdi->primary_buffer, context->gdi->stride, 0, 0, w, h);
+		r->cb.on_rect(r->cb.user, context->gdi->primary_buffer, (size_t)context->gdi->stride * h, context->gdi->stride, 0, 0, w, h);
 	if (r->cb.on_frame_end)
 		r->cb.on_frame_end(r->cb.user);
 	return TRUE;
@@ -414,7 +414,7 @@ static BOOL post_connect(freerdp* instance)
 	if (r->cb.on_connected)
 		r->cb.on_connected(r->cb.user, (uint32_t)gdi->width, (uint32_t)gdi->height);
 	if (r->cb.on_rect)
-		r->cb.on_rect(r->cb.user, gdi->primary_buffer, gdi->stride, 0, 0, (uint32_t)gdi->width, (uint32_t)gdi->height);
+		r->cb.on_rect(r->cb.user, gdi->primary_buffer, (size_t)gdi->stride * (size_t)gdi->height, gdi->stride, 0, 0, (uint32_t)gdi->width, (uint32_t)gdi->height);
 	if (r->cb.on_frame_end)
 		r->cb.on_frame_end(r->cb.user);
 	return TRUE;
@@ -538,12 +538,28 @@ static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 	}
 	if (r->gw_host)
 	{
-		char* colon = strrchr(r->gw_host, ':');
+		/* host, host:port, [IPv6] или [IPv6]:port; голый IPv6 (несколько двоеточий) — целиком адрес. */
 		UINT32 gw_port = 443;
-		if (colon)
+		char* host = r->gw_host;
+		if (host[0] == '[')
 		{
-			*colon = 0;
-			gw_port = (UINT32)strtoul(colon + 1, NULL, 10);
+			char* close = strchr(host, ']');
+			if (close)
+			{
+				*close = 0;
+				if (close[1] == ':')
+					gw_port = (UINT32)strtoul(close + 2, NULL, 10);
+				memmove(host, host + 1, strlen(host + 1) + 1);
+			}
+		}
+		else
+		{
+			char* colon = strchr(host, ':');
+			if (colon && colon == strrchr(host, ':'))
+			{
+				*colon = 0;
+				gw_port = (UINT32)strtoul(colon + 1, NULL, 10);
+			}
 		}
 		ok &= freerdp_settings_set_string(s, FreeRDP_GatewayHostname, r->gw_host);
 		ok &= freerdp_settings_set_uint32(s, FreeRDP_GatewayPort, gw_port ? gw_port : 443);
@@ -715,6 +731,7 @@ void relaya_rdp_run(relaya_rdp* r)
 		UINT32 e = freerdp_get_last_error(context);
 		char msg[512];
 		_snprintf(msg, sizeof(msg), "%s: %s", freerdp_get_last_error_name(e), freerdp_get_last_error_string(e));
+		msg[sizeof(msg) - 1] = 0; /* _snprintf не ставит '\0' при усечении */
 		close_once(r, close_kind(e, r->cert_rejected), msg);
 	}
 	else
@@ -735,6 +752,7 @@ void relaya_rdp_run(relaya_rdp* r)
 		UINT32 e = freerdp_get_last_error(context);
 		char msg[512];
 		_snprintf(msg, sizeof(msg), "%s: %s", freerdp_get_last_error_name(e), freerdp_get_last_error_string(e));
+		msg[sizeof(msg) - 1] = 0; /* _snprintf не ставит '\0' при усечении */
 		close_once(r, e == FREERDP_ERROR_SUCCESS ? RELAYA_CLOSE_USER : RELAYA_CLOSE_SERVER, msg);
 		freerdp_disconnect(instance);
 	}
