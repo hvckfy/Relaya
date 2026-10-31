@@ -251,7 +251,7 @@ internal sealed class SyncPage : UserControl
                 _ => message ?? (p.enabled ? L("Ещё не синхронизирован") : L("Выключен")),
             };
             row.Status.Foreground = state is SyncService.State.Failed or SyncService.State.Conflict
-                ? new SolidColorBrush(Microsoft.UI.Colors.IndianRed) : Brush("TextFillColorSecondaryBrush");
+                ? Brush("SystemFillColorCriticalBrush") : Brush("TextFillColorSecondaryBrush");
             row.Conflict.Visibility = state == SyncService.State.Conflict ? Visibility.Visible : Visibility.Collapsed;
         }
     }

@@ -112,7 +112,7 @@ internal static class HostEditor
             FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
             Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
         };
-        var error = new TextBlock { Foreground = new SolidColorBrush(Microsoft.UI.Colors.IndianRed), TextWrapping = TextWrapping.Wrap };
+        var error = new TextBlock { Foreground = Ui.Brush("SystemFillColorCriticalBrush"), TextWrapping = TextWrapping.Wrap };
 
         string? Opt(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
         SshHost? Build(out string? problem)
