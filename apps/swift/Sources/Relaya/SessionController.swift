@@ -152,7 +152,9 @@ final class SessionController {
             savedPasswordRejected = true
             return
         }
-        guard keychain.hasPassword(for: host.keychainAccount) else {
+        // Как на Windows: для хоста, где ssh запускает программы из конфига (ProxyCommand и т. п.), сохранённый пароль
+        // сам не подставляется — пользователь вводит его вручную (эшелон к M8-1).
+        guard keychain.hasPassword(for: host.keychainAccount), KeyInstaller.passwordMayBeAutomated(alias: host.alias) else {
             passwordPromptWithoutSaved = true
             return
         }
