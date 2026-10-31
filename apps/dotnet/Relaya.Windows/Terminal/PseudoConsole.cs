@@ -34,6 +34,9 @@ internal sealed class PseudoConsole : IDisposable
         InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
         var si = new StartupInfoEx();
         si.StartupInfo.cb = Marshal.SizeOf<StartupInfoEx>();
+        // Без STARTF_USESTDHANDLES дочерний процесс наследует std-хендлы родителя (если они есть — перенаправленный
+        // вывод, CI, запуск из другой программы) и пишет туда, а не в ConPTY: во вкладке пусто, ssh ждёт пароль и выходит с 255.
+        si.StartupInfo.dwFlags = 0x00000100; // STARTF_USESTDHANDLES, хендлы нулевые → консоль ConPTY
         si.lpAttributeList = Marshal.AllocHGlobal(size);
         try
         {

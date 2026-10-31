@@ -37,6 +37,13 @@ internal sealed class SyncService
 
     public List<SyncProfile> Profiles { get { lock (profilesLock) return profiles.ToList(); } }
 
+    private readonly ConcurrentDictionary<string, RenamedKey> renamed = new();
+
+    /// Ключи, пришедшие с другой машины под тем же именем, но другие: показываются, пока их не закроют.
+    public List<RenamedKey> RenamedKeys => renamed.Values.OrderBy(k => k.name).ToList();
+
+    public void DismissRenamed(RenamedKey k) => renamed.TryRemove(k.savedAs, out _);
+
     private SemaphoreSlim Gate(string id) => gates.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
 
     /// Состояние профиля изменилось или пришли хосты — UI перерисовывается, список хостов перечитывается.
@@ -133,6 +140,7 @@ internal sealed class SyncService
             {
                 imported = await Task.Run(() => RelayaCoreMethods.FolderSync(p, Paths, pass, p.remote));
             }
+            foreach (var k in RelayaCoreMethods.SyncTakeRenamedKeys(Paths)) renamed[k.savedAs] = k;
             Set(p, State.Idle, L("Синхронизировано %@", DateTime.Now.ToString("HH:mm")));
             if (imported.Count > 0) Imported?.Invoke();
         }

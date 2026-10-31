@@ -31,9 +31,12 @@ internal sealed class SyncPage : UserControl
     public SyncPage()
     {
         Content = new ScrollViewer { Content = root };
-        sync.Changed += () => DispatcherQueue.TryEnqueue(UpdateStates);
+        // Новые предупреждения о ключах — перестроить страницу, иначе только обновить состояния профилей.
+        sync.Changed += () => DispatcherQueue.TryEnqueue(() => { if (sync.RenamedKeys.Count != shownRenamed) Build(); else UpdateStates(); });
         Build();
     }
+
+    private int shownRenamed;
 
     private void Build()
     {
@@ -49,9 +52,22 @@ internal sealed class SyncPage : UserControl
         var pass = new PasswordBox { PlaceholderText = sync.HasPassphrase ? L("Задан — введите новый, чтобы сменить") : L("Не задан"), Width = 280 };
         var savePass = new Button { Content = L("Сохранить") };
         savePass.Click += (_, _) => { sync.SetPassphrase(pass.Password); pass.Password = ""; Build(); };
-        root.Children.Add(Card("Пароль шифрования ключей",
+        root.Children.Add(Card(L("Пароль шифрования ключей"),
             L("Нужен, чтобы передавать SSH-ключи. Одинаковый на всех устройствах. Хранится в диспетчере учётных данных Windows."),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pass, savePass } }));
+
+        // Одноимённые, но другие ключи с другой машины — сохранены рядом, не поверх (ядро, sync_take_renamed_keys).
+        shownRenamed = sync.RenamedKeys.Count;
+        foreach (var k in sync.RenamedKeys)
+        {
+            var bar = new InfoBar
+            {
+                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 8, 0, 0),
+                Message = L("Ключ %@ с другой машины отличается от вашего — сохранён как %@", k.name, k.savedAs),
+            };
+            bar.Closed += (_, _) => sync.DismissRenamed(k);
+            root.Children.Add(bar);
+        }
 
         root.Children.Add(new TextBlock { Text = L("Профили"), Style = Style("BodyStrongTextBlockStyle"), Margin = new Thickness(0, 16, 0, 4) });
         foreach (var p in sync.Profiles) root.Children.Add(ProfileCard(p));
