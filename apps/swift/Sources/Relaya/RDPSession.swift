@@ -154,7 +154,13 @@ final class RDPSession {
     func provide(user: String, password: String, save: Bool) {
         let parts = user.split(separator: "\\", maxSplits: 1).map(String.init)
         let (name, domain) = parts.count == 2 ? (parts[1], Optional(parts[0])) : (user, nil)
-        if save { try? keychain.setPassword(password, for: account) }
+        if save {
+            // Имя из формы входа становится пользователем подключения, пароль — под его записью.
+            var updated = desktop
+            updated.user = user
+            try? keychain.setPassword(password, for: updated.keychainAccount)
+            if desktop.user != user { persist { $0.user = user } }
+        }
         launch(user: name, domain: domain, password: password)
     }
 

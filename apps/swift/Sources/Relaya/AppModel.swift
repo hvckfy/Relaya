@@ -393,8 +393,14 @@ final class AppModel {
         try doc.upsert(host, originalAlias: originalAlias)
         try store.save(doc)
         // Пароль привязан к адресу — при смене адреса/пользователя/порта переносим его.
-        if let originalAlias, let old = hosts.first(where: { $0.alias == originalAlias }) {
-            try? keychain.movePassword(from: old.keychainAccount, to: host.keychainAccount)
+        // Запись Keychain общая для всех хостов с тем же user@адрес:порт: копируем, только если у нового адреса
+        // пароля нет, а старую удаляем, только если ею больше никто не пользуется.
+        if let originalAlias, let old = hosts.first(where: { $0.alias == originalAlias }),
+           old.keychainAccount != host.keychainAccount,
+           let pw = try? keychain.password(for: old.keychainAccount) {
+            if !keychain.hasPassword(for: host.keychainAccount) { try? keychain.setPassword(pw, for: host.keychainAccount) }
+            let stillUsed = hosts.contains { $0.alias != originalAlias && $0.keychainAccount == old.keychainAccount }
+            if !stillUsed { try? keychain.deletePassword(for: old.keychainAccount) }
         }
         reloadHosts()
         selectedHostID = host.alias

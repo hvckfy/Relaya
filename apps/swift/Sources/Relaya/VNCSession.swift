@@ -108,7 +108,14 @@ final class VNCSession: NSObject {
         }
         credentialError = nil
         credentialRequest = nil
-        if save { try? keychain.setPassword(password, for: account) }
+        if save {
+            var updated = desktop
+            if request.needsUsername { updated.user = username }
+            try? keychain.setPassword(password, for: updated.keychainAccount)
+            if updated.user != desktop.user, let i = model.desktops.firstIndex(where: { $0.id == desktop.id }) {
+                model.desktops[i].user = updated.user
+            }
+        }
         request.reply(request.needsUsername
             ? VNCUsernamePasswordCredential(username: username, password: password)
             : VNCPasswordCredential(password: password))
