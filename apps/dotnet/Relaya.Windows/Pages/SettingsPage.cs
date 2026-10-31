@@ -77,6 +77,12 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(preview);
         Preview();
 
+        var idle = new NumberBox { Minimum = 1, Maximum = 10080, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Value = double.TryParse(Platform.Settings.Get("tmux.idle", "60"), out var t) ? t : 60 };
+        idle.ValueChanged += (_, _) => Platform.Settings.Set("tmux.idle", ((int)idle.Value).ToString());
+        list.Children.Add(Ui.Row("\uE8A1", L("tmux: закрывать брошенные сессии через, мин"),
+            L("Для хостов с tmux: сессия без подключений живёт на сервере столько минут"), idle));
+
         list.Children.Add(Ui.Section(L("Клавиши")));
         foreach (var (k, d) in new[]
         {

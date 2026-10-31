@@ -13,6 +13,8 @@ internal sealed class SshSession : IDisposable
     private readonly string alias;
     private PseudoConsole? console;
     private volatile bool ended;
+    // Имя tmux-сессии постоянно на всю вкладку: переподключение возвращает в ту же сессию.
+    private readonly string tmuxName;
 
     /// Сессия завершилась или переподключилась — вкладка меняет иконку.
     public event Action<bool>? StateChanged;
@@ -21,6 +23,7 @@ internal sealed class SshSession : IDisposable
     {
         this.view = view;
         this.alias = alias;
+        tmuxName = uniffi.relaya_core.RelayaCoreMethods.TmuxSessionName(alias, Guid.NewGuid().ToString("N"));
         view.Input += OnInput;
         view.Resized += (cols, rows) => console?.Resize((short)cols, (short)rows);
     }
@@ -35,7 +38,15 @@ internal sealed class SshSession : IDisposable
         PseudoConsole pc;
         try
         {
-            pc = new PseudoConsole($"\"{ssh}\" \"{alias}\"", (short)size.cols, (short)size.rows);
+            // Хост с tmux (как на Mac): сессия живёт на сервере и переживает разрыв связи.
+            var command = $"\"{ssh}\" \"{alias}\"";
+            if (Relaya.Data.AppState.Host(alias)?.tmux == true)
+            {
+                var ttl = long.TryParse(Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
+                var attach = uniffi.relaya_core.RelayaCoreMethods.TmuxAttachCommand(tmuxName, ttl);
+                command = $"{Arg(ssh)} -t {Arg(alias)} {Arg(attach)}";
+            }
+            pc = new PseudoConsole(command, (short)size.cols, (short)size.rows);
         }
         catch (Exception e)
         {
@@ -78,6 +89,21 @@ internal sealed class SshSession : IDisposable
     {
         if (!ended) { console?.Write(data); return; }
         if (data.Length == 1 && data[0] == '\r') Start();
+    }
+
+    // Аргумент командной строки Windows (правила CommandLineToArgvW): кавычки и обратные слэши перед ними.
+    private static string Arg(string a)
+    {
+        var sb = new StringBuilder("\"");
+        var slashes = 0;
+        foreach (var c in a)
+        {
+            if (c == '\\') { slashes++; continue; }
+            if (c == '"') { sb.Append('\\', slashes * 2 + 1).Append('"'); }
+            else { sb.Append('\\', slashes).Append(c); }
+            slashes = 0;
+        }
+        return sb.Append('\\', slashes * 2).Append('"').ToString();
     }
 
     public void Dispose() => console?.Dispose();
