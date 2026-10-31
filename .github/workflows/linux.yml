@@ -57,7 +57,7 @@ jobs:
         run: |
           version=0.0.0
           if [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then version="${BASH_REMATCH[1]}"; fi
-          sudo apt-get install -y -qq imagemagick >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends imagemagick >/dev/null
           export APPIMAGE_EXTRACT_AND_RUN=1  # без FUSE на раннере
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
