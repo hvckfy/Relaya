@@ -6,6 +6,8 @@ pub enum TmuxEvent {
     WindowAdd { window: String },
     WindowClose { window: String },
     WindowRenamed { window: String, name: String },
+    /// В окне сменилась активная панель: вывод окна теперь идёт из `pane`.
+    WindowPaneChanged { window: String, pane: String },
     Reply { lines: Vec<String>, error: bool },
     Exit { reason: Option<String> },
 }
@@ -67,6 +69,7 @@ fn parse_line(bytes: &[u8], reply: &mut Option<(String, Vec<String>)>) -> Option
         }
         "%window-add" if parts.len() >= 2 => Some(TmuxEvent::WindowAdd { window: parts[1].into() }),
         "%window-close" | "%unlinked-window-close" if parts.len() >= 2 => Some(TmuxEvent::WindowClose { window: parts[1].into() }),
+        "%window-pane-changed" if parts.len() >= 3 => Some(TmuxEvent::WindowPaneChanged { window: parts[1].into(), pane: parts[2].trim().into() }),
         "%window-renamed" if parts.len() >= 3 => Some(TmuxEvent::WindowRenamed { window: parts[1].into(), name: parts[2].into() }),
         "%exit" => Some(TmuxEvent::Exit { reason: (parts.len() > 1).then(|| parts[1..].join(" ")) }),
         _ => None,
@@ -140,6 +143,7 @@ mod tests {
         let q = TmuxParser::new();
         assert_eq!(q.feed(b"%begin 5 7 1\n%end 5 8 1\nline\n%end 5 7 1\n%sessions-changed\n%pane-mode-changed %1\n".to_vec()),
                    vec![TmuxEvent::Reply { lines: vec!["%end 5 8 1".into(), "line".into()], error: false }]);
+        assert_eq!(q.feed(b"%window-pane-changed @2 %7\n".to_vec()), vec![TmuxEvent::WindowPaneChanged { window: "@2".into(), pane: "%7".into() }]);
         assert_eq!(q.feed(b"%begin 6 9 1\n%error 6 9 1\n".to_vec()), vec![TmuxEvent::Reply { lines: vec![], error: true }]);
         assert_eq!(tmux_cc_send_keys("%1".into(), vec![0x6c, 0x73, 0x0d]), "send-keys -t %1 -H 6c 73 0d");
         assert_eq!(tmux_cc_parse_windows(vec!["@1 %1 bash".into(), "junk".into(), "@2 %4 my editor".into()])[1].name, "my editor");

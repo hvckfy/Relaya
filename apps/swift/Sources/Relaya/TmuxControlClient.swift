@@ -180,6 +180,8 @@ final class TmuxControlClient {
                 }
             case .windowRenamed(let id, let name):
                 windows.first { $0.id == id }?.name = name
+            case .windowPaneChanged(let id, let pane):
+                windows.first { $0.id == id }?.pane = pane
             case .reply(let lines, let error):
                 if !replyHandlers.isEmpty { replyHandlers.removeFirst()(lines, error) }
             case .exit:
