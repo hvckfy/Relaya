@@ -71,7 +71,7 @@ public sealed partial class MainWindow : Window
     private void RestoreBounds()
     {
         var saved = Platform.Settings.Get("window.bounds", "").Split(',');
-        var rect = new Windows.Graphics.RectInt32(0, 0, 1280, 820);
+        var rect = new Windows.Graphics.RectInt32 { X = 0, Y = 0, Width = 1280, Height = 820 };
         var restored = saved.Length == 4 && int.TryParse(saved[0], out rect.X) && int.TryParse(saved[1], out rect.Y)
             && int.TryParse(saved[2], out rect.Width) && int.TryParse(saved[3], out rect.Height) && rect.Width >= 400 && rect.Height >= 300;
 #if !HAS_UNO
@@ -81,9 +81,11 @@ public sealed partial class MainWindow : Window
         else
         {
             var work = Microsoft.UI.Windowing.DisplayArea.Primary.WorkArea;
-            AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(
-                work.X + Math.Max(0, (work.Width - rect.Width) / 2), work.Y + Math.Max(0, (work.Height - rect.Height) / 2),
-                Math.Min(rect.Width, work.Width), Math.Min(rect.Height, work.Height)));
+            AppWindow.MoveAndResize(new Windows.Graphics.RectInt32
+            {
+                X = work.X + Math.Max(0, (work.Width - rect.Width) / 2), Y = work.Y + Math.Max(0, (work.Height - rect.Height) / 2),
+                Width = Math.Min(rect.Width, work.Width), Height = Math.Min(rect.Height, work.Height),
+            });
         }
         AppWindow.Changed += (w, e) =>
         {
