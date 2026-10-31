@@ -722,3 +722,5 @@
 "Упавших сервисов нет." = "No failed services.";
 "работает" = "running";
 "остановлен" = "stopped";
+"Открыть в Finder…" = "Open in Finder…";
+"Какую папку на %@ подключить как диск? / — весь сервер, ~ — домашняя папка." = "Which folder on %@ should be mounted as a volume? / is the whole server, ~ is the home folder.";

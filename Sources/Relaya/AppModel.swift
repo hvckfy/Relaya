@@ -705,10 +705,19 @@ final class AppModel {
     var finderMounting: Set<String> = []
 
     /// Открыть файлы хоста в Finder: мост поднимается сам, диск подключается и появляется в боковой панели Finder.
-    func openInFinder(_ host: SSHHost) async {
+    /// Хост, для которого спрашиваем папку для диска в Finder.
+    var finderMountRequest: SSHHost?
+    /// Последняя введённая папка для каждого хоста.
+    var finderLastPath: [String: String] = UserDefaults.standard.dictionary(forKey: "finderLastPath") as? [String: String] ?? [:] {
+        didSet { UserDefaults.standard.set(finderLastPath, forKey: "finderLastPath") }
+    }
+
+    func openInFinder(_ host: SSHHost, path: String) async {
         let h = current(host)
+        let path = path.trimmingCharacters(in: .whitespaces).isEmpty ? "/" : path.trimmingCharacters(in: .whitespaces)
+        finderLastPath[h.alias] = path
         // Не проверяем диск через FileManager из главного потока: он обслуживается нашим же мостом.
-        if let b = finderBridges[h.alias], b.mountPoint != nil {
+        if let b = finderBridges[h.alias], b.mountPoint != nil, b.remoteRoot == path {
             b.reveal()
             return
         }
@@ -720,7 +729,7 @@ final class AppModel {
         let sftp = SFTPClient(alias: h.alias,
                               password: usePassword ? .init(store: keychain, account: h.keychainAccount, kind: .password) : nil,
                               askpassExecutable: askpassExecutable)
-        let bridge = WebDAVBridge(host: h, sftp: sftp, ssh: ssh)
+        let bridge = WebDAVBridge(host: h, remoteRoot: path, sftp: sftp, ssh: ssh)
         bridge.onStopped = { [weak self] in self?.finderBridges[h.alias] = nil }
         do {
             try await bridge.start()

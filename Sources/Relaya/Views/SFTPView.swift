@@ -145,7 +145,7 @@ struct SFTPView: View {
                 Button(L("Отключить диск")) { model.ejectFinder(host) }.buttonStyle(.relaya)
                     .help(L("Отключить диск хоста в Finder"))
             } else {
-                Button(L("Открыть в Finder")) { Task { await model.openInFinder(host) } }.buttonStyle(.relaya)
+                Button(L("Открыть в Finder…")) { model.finderMountRequest = host }.buttonStyle(.relaya)
                     .help(L("Подключить файлы хоста как диск в Finder"))
             }
             Button(L("Загрузить…")) { chooseUpload() }.buttonStyle(.relaya)

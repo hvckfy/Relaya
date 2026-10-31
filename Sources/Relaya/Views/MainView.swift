@@ -113,6 +113,13 @@ struct MainView: View {
                  ? L("Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу %@.", "\(host.identityFile ?? "")")
                  : L("У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу."))
         }
+        .alert(L("Открыть в Finder"), isPresented: Binding(get: { model.finderMountRequest != nil },
+                                                          set: { if !$0 { model.finderMountRequest = nil } }),
+               presenting: model.finderMountRequest) { host in
+            FinderMountActions(host: host)
+        } message: { host in
+            Text(L("Какую папку на %@ подключить как диск? / — весь сервер, ~ — домашняя папка.", host.alias))
+        }
         .alert(L("Сохранить раскладку"), isPresented: $model.savingLayout) {
             SaveLayoutActions()
         } message: {
@@ -235,6 +242,19 @@ private struct SaveLayoutActions: View {
         TextField(L("Например: прод"), text: $name)
         Button(L("Сохранить")) { model.saveLayout(named: name.trimmingCharacters(in: .whitespaces)) }
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+        Button(L("Отмена"), role: .cancel) {}
+    }
+}
+
+private struct FinderMountActions: View {
+    @Environment(AppModel.self) private var model
+    let host: SSHHost
+    @State private var path = ""
+
+    var body: some View {
+        TextField("/", text: $path)
+            .onAppear { path = model.finderLastPath[host.alias] ?? "/" }
+        Button(L("Подключить")) { Task { await model.openInFinder(host, path: path) } }
         Button(L("Отмена"), role: .cancel) {}
     }
 }

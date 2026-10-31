@@ -18,9 +18,22 @@ final class WebDAVBridge {
     private let queue = DispatchQueue(label: "app.relaya.webdav")
     var onStopped: (() -> Void)?
 
-    init(host: SSHHost, sftp: SFTPClient, ssh: SSHInvocation) {
+    /// Папка на сервере, которая стала диском.
+    let remoteRoot: String
+
+    /// `remoteRoot` — папка на сервере (`/` — весь сервер, `~` — домашняя).
+    init(host: SSHHost, remoteRoot: String, sftp: SFTPClient, ssh: SSHInvocation) {
         self.host = host
-        server = DAVServer(volumeName: host.alias.replacingOccurrences(of: "/", with: "-"), sftp: sftp, ssh: ssh)
+        self.remoteRoot = remoteRoot
+        server = DAVServer(volumeName: Self.volumeName(alias: host.alias, path: remoteRoot), root: remoteRoot, sftp: sftp, ssh: ssh)
+    }
+
+    /// Имя диска в Finder: хост, а для вложенной папки — «хост · папка».
+    static func volumeName(alias: String, path: String) -> String {
+        let last = (path as NSString).lastPathComponent
+        let name = path == "/" || path.isEmpty || last.isEmpty || last == "/" ? alias
+            : path == "~" ? "\(alias) · ~" : "\(alias) · \(last)"
+        return name.replacingOccurrences(of: "/", with: "-")
     }
 
     /// Поднять сервер, подключить диск и открыть его в Finder.
@@ -99,15 +112,27 @@ actor DAVServer {
     private var junk: [String: Data] = [:]
     private var listings: [String: (files: [RemoteFile], at: Date)] = [:]
 
-    init(volumeName: String, sftp: SFTPClient, ssh: SSHInvocation) {
+    private let requestedRoot: String
+
+    init(volumeName: String, root: String, sftp: SFTPClient, ssh: SSHInvocation) {
         self.volumeName = volumeName
+        requestedRoot = root
         self.sftp = sftp
         self.ssh = ssh
         prefix = "/\(UUID().uuidString.lowercased())/\(volumeName)"
     }
 
+    /// Проверить папку: `~` и пустое — домашняя, `~/x` — внутри домашней; несуществующая — ошибка.
     func prepare() async throws {
-        root = try await sftp.home()
+        let r = requestedRoot.trimmingCharacters(in: .whitespaces)
+        if r.isEmpty || r == "~" {
+            root = try await sftp.home()
+        } else if r.hasPrefix("~/") {
+            root = SFTPClient.join(try await sftp.home(), String(r.dropFirst(2)))
+        } else {
+            root = r.hasPrefix("/") ? r : "/" + r
+        }
+        _ = try await sftp.list(root)
     }
 
     // MARK: - Запросы
