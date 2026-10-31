@@ -1,8 +1,5 @@
 using System;
 using System.Linq;
-using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.Text;
-using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -13,12 +10,13 @@ using uniffi.relaya_core;
 
 namespace Relaya.Terminal;
 
-/// Нативный терминал: состояние экрана — эмулятор из Rust-ядра, отрисовка — Win2D (DirectX/DirectWrite).
-internal sealed class TerminalView : UserControl, IDisposable
+/// Нативный терминал: состояние экрана — эмулятор из Rust-ядра. Здесь ввод, мышь, выделение и раскладка кадра;
+/// холст и рисование — в приложении: Win2D на Windows (TerminalView.Win2D.cs), SkiaSharp на Linux (TerminalView.Skia.cs).
+internal sealed partial class TerminalView : UserControl, IDisposable
 {
-    private readonly CanvasControl canvas = new();
-    private readonly CanvasTextFormat format = new() { WordWrapping = CanvasWordWrapping.NoWrap };
     private double cellW = 8, cellH = 17;
+    private string fontFamily = DefaultFont;
+    private float fontSize = 14;
     private bool measured;
 
     public TerminalEmulator Emulator { get; } = new(80, 24, 10_000);
@@ -38,10 +36,29 @@ internal sealed class TerminalView : UserControl, IDisposable
     public void Dispose()
     {
         Platform.Settings.Changed -= OnSettingsChanged;
-        canvas.RemoveFromVisualTree();
+        RemoveCanvas();
     }
 
-    // UI-очередь снимается в конструкторе (UI-поток): Feed приходит из фонового потока ConPTY.
+    // --- Холст: реализует приложение. ---
+    /// Создать холст, поставить его в Content и подписаться на его отрисовку (она зовёт Render).
+    private partial void CreateCanvas();
+    private partial void RemoveCanvas();
+    private partial void InvalidateCanvas();
+    /// Размер ячейки для fontFamily/fontSize: ширина «M» и высота строки.
+    private partial (double Width, double Height) MeasureCell();
+    /// Нажата ли клавиша-модификатор сейчас.
+    private static partial bool IsDown(VirtualKey key);
+
+    /// Примитивы кадра; координаты в DIP от левого верхнего угла холста.
+    internal interface IPainter
+    {
+        void Clear(Color color);
+        void Fill(double x, double y, double w, double h, Color color);
+        void Text(string text, double x, double y, Color color, bool bold, bool italic);
+        void Line(double x1, double y1, double x2, double y2, Color color);
+    }
+
+    // UI-очередь снимается в конструкторе (UI-поток): Feed приходит из фонового потока ConPTY/pty.
     private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
     private readonly object feedLock = new();
 
@@ -59,18 +76,17 @@ internal sealed class TerminalView : UserControl, IDisposable
     private void Redraw()
     {
         if (ui == null) { Trace("Feed: no UI DispatcherQueue"); return; }
-        if (!ui.TryEnqueue(canvas.Invalidate)) Trace("Feed: TryEnqueue returned false");
+        if (!ui.TryEnqueue(InvalidateCanvas)) Trace("Feed: TryEnqueue returned false");
     }
 
     public TerminalView()
     {
         ApplySettings();
         // Вкладку создают свёрнутой и потом показывают: перерисовать, как только она загружена и видима.
-        Loaded += (_, _) => { Trace($"Loaded {ActualWidth}x{ActualHeight}"); canvas.Invalidate(); };
-        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => canvas.Invalidate());
+        Loaded += (_, _) => { Trace($"Loaded {ActualWidth}x{ActualHeight}"); InvalidateCanvas(); };
+        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => InvalidateCanvas());
         Platform.Settings.Changed += OnSettingsChanged;
-        Content = canvas;
-        canvas.Draw += OnDraw;
+        CreateCanvas();
         SizeChanged += (_, _) => FitToSize();
         IsTabStop = true;
         UseSystemFocusVisuals = false;
@@ -86,15 +102,15 @@ internal sealed class TerminalView : UserControl, IDisposable
     {
         ApplySettings();
         measured = false;
-        canvas.Invalidate();
+        InvalidateCanvas();
     });
 
     // Тема и шрифт — общие настройки терминала (Параметры → Терминал), как на Mac.
     private void ApplySettings()
     {
         Theme = TerminalTheme.Default;
-        format.FontFamily = Platform.Settings.Get("terminal.font", "Cascadia Mono");
-        format.FontSize = float.TryParse(Platform.Settings.Get("terminal.size", "14"), out var size) ? size : 14;
+        fontFamily = Platform.Settings.Get("terminal.font", DefaultFont);
+        fontSize = float.TryParse(Platform.Settings.Get("terminal.size", "14"), out var size) ? size : 14;
     }
 
     /// Вставить текст (сниппет, команда ОС) как вставку из буфера — без Enter.
@@ -120,7 +136,7 @@ internal sealed class TerminalView : UserControl, IDisposable
             var row = (int)Emulator.RevealLine((uint)i);
             selStart = (row, col);
             selEnd = (row, col + query.Length - 1);
-            canvas.Invalidate();
+            InvalidateCanvas();
             return i;
         }
         return -1;
@@ -132,12 +148,12 @@ internal sealed class TerminalView : UserControl, IDisposable
     {
         Emulator.ScrollToBottom();
         ClearSelection();
-        canvas.Invalidate();
+        InvalidateCanvas();
     }
 
     public void ZoomFont(int delta)
     {
-        var size = Math.Clamp(format.FontSize + delta, 8, 32);
+        var size = Math.Clamp(fontSize + delta, 8, 32);
         Platform.Settings.Set("terminal.size", size.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
@@ -147,10 +163,6 @@ internal sealed class TerminalView : UserControl, IDisposable
         ClearSelection();
         Input?.Invoke(Encoding.UTF8.GetBytes(s));
     }
-
-    private static bool IsDown(VirtualKey key) =>
-        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     // Клавиши без символа: стрелки, F-клавиши, навигация, Alt+клавиша. Символы (и Ctrl+буква) — в CharacterReceived.
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
@@ -259,7 +271,7 @@ internal sealed class TerminalView : UserControl, IDisposable
         selStart = selEnd = at;
         selecting = true;
         CapturePointer(e.Pointer);
-        canvas.Invalidate();
+        InvalidateCanvas();
         e.Handled = true;
     }
 
@@ -272,7 +284,7 @@ internal sealed class TerminalView : UserControl, IDisposable
         }
         if (!selecting) return;
         selEnd = CellAt(e);
-        canvas.Invalidate();
+        InvalidateCanvas();
     }
 
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -302,7 +314,7 @@ internal sealed class TerminalView : UserControl, IDisposable
     {
         if (selStart is null) return;
         selStart = selEnd = null;
-        canvas.Invalidate();
+        InvalidateCanvas();
     }
 
     private ((int Row, int Col) From, (int Row, int Col) To) Ordered()
@@ -355,7 +367,7 @@ internal sealed class TerminalView : UserControl, IDisposable
         else
         {
             Emulator.Scroll(delta / 40);
-            canvas.Invalidate();
+            InvalidateCanvas();
         }
         e.Handled = true;
     }
@@ -370,11 +382,10 @@ internal sealed class TerminalView : UserControl, IDisposable
         Redraw();
     }
 
-    private void Measure(ICanvasResourceCreator device)
+    private void Measure()
     {
-        using var layout = new CanvasTextLayout(device, "MMMMMMMMMM", format, 1000, 100);
-        cellW = layout.LayoutBounds.Width / 10;
-        cellH = Math.Ceiling(layout.LayoutBounds.Height);
+        (cellW, cellH) = MeasureCell();
+        cellH = Math.Ceiling(cellH);
         measured = true;
         FitToSize();
     }
@@ -388,7 +399,7 @@ internal sealed class TerminalView : UserControl, IDisposable
         if (s.cols == cols && s.rows == rows) return;
         Emulator.Resize(cols, rows);
         Resized?.Invoke(cols, rows);
-        canvas.Invalidate();
+        InvalidateCanvas();
     }
 
     private const double Pad = 8;
@@ -429,15 +440,16 @@ internal sealed class TerminalView : UserControl, IDisposable
     internal string? DrawError => drawError;
 
     // Исключение в кадре с текстом не должно навсегда оставить первый пустой кадр: в лог и на экран.
-    private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
+    /// Вызывается из обработчика отрисовки холста.
+    private void Render(IPainter painter)
     {
         try
         {
-            lock (feedLock) DrawFrame(sender, args);
+            lock (feedLock) DrawFrame(painter);
             if (!drawnText && Emulator.ScreenText().FirstOrDefault(l => l.Trim().Length > 0) is { } first)
             {
                 drawnText = true;
-                Trace($"OnDraw: first text «{first.Trim()}» canvas {sender.ActualWidth}x{sender.ActualHeight}");
+                Trace($"OnDraw: first text «{first.Trim()}» canvas {ActualWidth}x{ActualHeight}");
             }
         }
         catch (Exception e)
@@ -446,17 +458,16 @@ internal sealed class TerminalView : UserControl, IDisposable
             drawError = e.Message;
             try
             {
-                args.DrawingSession.Clear(Microsoft.UI.Colors.Black);
-                args.DrawingSession.DrawText("Relaya: " + e.Message, 12, 12, Microsoft.UI.Colors.IndianRed);
+                painter.Clear(Microsoft.UI.Colors.Black);
+                painter.Text("Relaya: " + e.Message, 12, 12, Microsoft.UI.Colors.IndianRed, false, false);
             }
             catch (Exception) { }
         }
     }
 
-    private void DrawFrame(CanvasControl sender, CanvasDrawEventArgs args)
+    private void DrawFrame(IPainter ds)
     {
-        if (!measured) Measure(sender);
-        var ds = args.DrawingSession;
+        if (!measured) Measure();
         ds.Clear(Theme.Background);
         var s = Emulator.Snapshot();
         var highlight = !s.altScreen && Platform.Settings.Get("terminal.highlight", "1") == "1";
@@ -474,22 +485,20 @@ internal sealed class TerminalView : UserControl, IDisposable
                 var bg = Theme.Resolve(inverse ? cell.fg : cell.bg, inverse, false);
                 var x = Pad + c * cellW;
                 var width = (cell.flags & 64) != 0 ? cellW * 2 : cellW;
-                if (cell.bg != 0 || inverse) ds.FillRectangle((float)x, (float)y, (float)width, (float)cellH, bg);
-                if (Selected(r, c)) ds.FillRectangle((float)x, (float)y, (float)cellW, (float)cellH, Theme.Selection);
+                if (cell.bg != 0 || inverse) ds.Fill(x, y, width, cellH, bg);
+                if (Selected(r, c)) ds.Fill(x, y, cellW, cellH, Theme.Selection);
                 if (cell.ch.Length == 0 || cell.ch == " ") continue;
                 if ((cell.flags & 16) != 0) fg.A = 160;
-                format.FontWeight = (cell.flags & 1) != 0 ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
-                format.FontStyle = (cell.flags & 2) != 0 ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal;
-                ds.DrawText(cell.ch, (float)x, (float)y, fg, format);
-                if ((cell.flags & 4) != 0) ds.DrawLine((float)x, (float)(y + cellH - 1), (float)(x + width), (float)(y + cellH - 1), fg);
-                if ((cell.flags & 32) != 0) ds.DrawLine((float)x, (float)(y + cellH / 2), (float)(x + width), (float)(y + cellH / 2), fg);
+                ds.Text(cell.ch, x, y, fg, (cell.flags & 1) != 0, (cell.flags & 2) != 0);
+                if ((cell.flags & 4) != 0) ds.Line(x, y + cellH - 1, x + width, y + cellH - 1, fg);
+                if ((cell.flags & 32) != 0) ds.Line(x, y + cellH / 2, x + width, y + cellH / 2, fg);
             }
         }
         if (s.cursorVisible)
         {
             var cx = Pad + s.cursorCol * cellW;
             var cy = Pad + s.cursorRow * cellH;
-            ds.FillRectangle((float)cx, (float)cy, (float)cellW, (float)cellH, Theme.Cursor with { A = 170 });
+            ds.Fill(cx, cy, cellW, cellH, Theme.Cursor with { A = 170 });
         }
     }
 }
