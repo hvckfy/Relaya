@@ -120,7 +120,9 @@ internal static class HostEditor
             problem = null;
             if (Opt(alias.Text) is not { } name || name.Contains(' ')) { problem = L("Укажите название без пробелов."); return null; }
             if (name.Contains('@')) { problem = L("В названии не должно быть «@»: пользователя укажите в поле «Пользователь», адрес — в поле «Адрес»."); return null; }
-            if (!editing && AppState.Host(name) != null || editing && name != source!.alias && AppState.Host(name) != null)
+            // Все алиасы конфига, включая git-серверы, которых нет в списке хостов (К23).
+            var taken = RelayaCoreMethods.ConfigAllAliases(AppState.ConfigText()).Contains(name);
+            if (!editing && taken || editing && name != source!.alias && taken)
             { problem = L("Хост «%@» уже есть в ~/.ssh/config", name); return null; }
             long? portValue = null;
             if (Opt(port.Text) is { } p)
