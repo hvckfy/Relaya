@@ -104,7 +104,10 @@ public enum Sync {
         var p = Profile(name: "keys")
         p.items = [.keys]
         let before = Set((try? FileManager.default.contentsOfDirectory(atPath: ssh.path)) ?? [])
-        _ = try syncImport(profile: p.rust, paths: SyncPaths(ssh: ssh.path, support: ssh.path), passphrase: passphrase, dir: dir.path)
+        // Служебные файлы синхронизации (списки пропущенных и переименованных ключей) — в отдельной папке, не среди ключей.
+        let support = FileManager.default.temporaryDirectory.appending(path: "relaya-import-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: support) }
+        _ = try syncImport(profile: p.rust, paths: SyncPaths(ssh: ssh.path, support: support.path), passphrase: passphrase, dir: dir.path)
         let after = Set((try? FileManager.default.contentsOfDirectory(atPath: ssh.path)) ?? [])
         return after.subtracting(before).filter { !$0.hasSuffix(".pub") }.sorted()
     }
