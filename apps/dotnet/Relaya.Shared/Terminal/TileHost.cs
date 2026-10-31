@@ -45,6 +45,7 @@ internal sealed class TileHost : UserControl, IDisposable
     public event Action<bool>? AliveChanged;
 
     public TerminalView? Active => active?.View;
+    public IEnumerable<string> TmuxNames => panes.Select(p => p.Session.TmuxName);
     public bool Contains(TerminalView v) => panes.Any(p => p.View == v);
 
     public TileHost()

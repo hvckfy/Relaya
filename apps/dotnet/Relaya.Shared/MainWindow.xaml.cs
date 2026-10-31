@@ -287,6 +287,10 @@ public sealed partial class MainWindow : Window
 
     private sealed record Tab(UIElement Content, IDisposable? Owner);
 
+    /// tmux-сессии всех открытых вкладок: уборка старых сессий их не трогает (К10).
+    internal List<string> OpenTmuxNames => Tabs.TabItems.OfType<TabViewItem>()
+        .Select(t => (t.Tag as Tab)?.Content).OfType<Terminal.TileHost>().SelectMany(t => t.TmuxNames).ToList();
+
     /// Терминал активной вкладки — для сниппетов и действий ОС.
     internal Terminal.TerminalView? ActiveTerminal =>
         ((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.Active : null;

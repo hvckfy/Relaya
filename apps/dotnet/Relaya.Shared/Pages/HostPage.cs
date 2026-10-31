@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
@@ -181,7 +182,17 @@ internal sealed class HostPage : UserControl
     {
         Busy(tmux);
         var r = await AppState.RunOnHost(host.alias, RelayaCoreMethods.TmuxListCommand());
-        var list = RelayaCoreMethods.TmuxParse(r.Stdout);
+        // Как на Mac (К10): только сессии Relaya этого хоста; брошенные дольше настройки tmux.idle — убираем,
+        // кроме открытых во вкладках.
+        var list = RelayaCoreMethods.TmuxParse(r.Stdout).Where(s => RelayaCoreMethods.TmuxIsHostSession(host.alias, s.name)).ToList();
+        var ttl = long.TryParse(Platform.Settings.Get("tmux.idle", "60"), out var idle) ? idle : 60;
+        var stale = RelayaCoreMethods.TmuxStale(list, host.alias, MainWindow.Current?.OpenTmuxNames ?? new List<string>(), ttl,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0);
+        if (stale.Count > 0)
+        {
+            await AppState.RunOnHost(host.alias, RelayaCoreMethods.TmuxKillCommand(stale));
+            list = list.Where(s => !stale.Contains(s.name)).ToList();
+        }
         tmux.Children.Clear();
         if (list.Count == 0) { Note(tmux, r.Status == 255 ? Problem(r) : L("Сессий нет.")); return; }
         foreach (var s in list)

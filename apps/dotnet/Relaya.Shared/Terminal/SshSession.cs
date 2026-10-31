@@ -18,6 +18,9 @@ internal sealed class SshSession : IDisposable
     // Имя tmux-сессии постоянно на всю вкладку: переподключение возвращает в ту же сессию.
     private readonly string tmuxName;
 
+    /// Имя tmux-сессии вкладки — чтобы уборка старых сессий не трогала открытые.
+    public string TmuxName => tmuxName;
+
     /// Сессия завершилась или переподключилась — вкладка меняет иконку.
     public event Action<bool>? StateChanged;
 
