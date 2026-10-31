@@ -135,6 +135,16 @@ public struct SSHConfigDocument: Sendable {
         }
     }
 
+    /// Заменить блок хоста готовыми строками или добавить их в конец (для синхронизации).
+    public mutating func replaceOrAppend(alias: String, with block: [String]) {
+        if let b = self.block(for: alias) {
+            lines.replaceSubrange(b.range, with: block)
+        } else {
+            if let last = lines.last, !last.trimmingCharacters(in: .whitespaces).isEmpty { lines.append("") }
+            lines.append(contentsOf: block)
+        }
+    }
+
     public mutating func remove(alias: String) throws {
         guard let block = block(for: alias) else { throw EditError.notFound(alias) }
         guard !block.isShared else { throw EditError.sharedBlock(alias) }
