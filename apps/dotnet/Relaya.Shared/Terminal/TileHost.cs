@@ -5,23 +5,38 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Relaya.Data;
+using uniffi.relaya_core;
 using Windows.System;
 using static Relaya.Strings;
 
 namespace Relaya.Terminal;
 
-/// Вкладка с терминалами-плитками, как на Mac: несколько сессий рядом (2 — колонки, 3–4 — сетка 2×2 и т. д.).
-/// Сверху — тонкая панель: разделить с хостом, поиск по истории, размер шрифта.
+/// Вкладка с терминалами-плитками, как на Mac: раскладка — дерево Row/Column из ядра (tiles_*, JSON), между плитками
+/// разделители. Разделить (Ctrl+Shift+D — вправо, Ctrl+Shift+E — вниз) открывает тот же хост рядом; вкладку можно
+/// перетащить на край плитки или всего холста; Ctrl+Alt+стрелки — соседняя плитка.
 internal sealed class TileHost : UserControl, IDisposable
 {
     // UI-очередь снимается в конструкторе (UI-поток). События приходят из фоновых потоков (ConPTY, туннели,
     // синхронизация), а свойство DispatcherQueue XAML-объекта из чужого потока в C# падает InvalidCastException.
     private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
 
-    private sealed record Pane(TerminalView View, SshSession Session, string Alias, Border Frame, TextBlock Title);
+    // Owner меняется, когда плитка переезжает в другую вкладку (перетаскивание): обработчики идут через него.
+    private sealed record Pane(string Id, TerminalView View, SshSession Session, string Alias, Border Frame, TextBlock Title)
+    {
+        public TileHost Owner { get; set; } = null!;
+    }
 
     private readonly List<Pane> panes = new();
     private readonly Grid grid = new();
+    // Подсветка будущего места плитки при перетаскивании вкладки.
+    private readonly Border dropHint = new()
+    {
+        Background = Pages.Ui.Brush("AccentFillColorDefaultBrush"), Opacity = 0.25, CornerRadius = new CornerRadius(6),
+        Visibility = Visibility.Collapsed, IsHitTestVisible = false,
+        HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+    };
+    private string? layout; // TileLayout JSON ядра
+    private (Edge Edge, string? Target)? drop;
     private readonly AutoSuggestBox search = new() { Width = 260, QueryIcon = new SymbolIcon(Symbol.Find), Visibility = Visibility.Collapsed };
     private Pane? active;
     private int searchFrom = int.MaxValue;
@@ -34,20 +49,6 @@ internal sealed class TileHost : UserControl, IDisposable
 
     public TileHost()
     {
-        var split = new DropDownButton { Content = new FontIcon { Glyph = "", FontSize = 14 }, Padding = new Thickness(8, 4, 8, 4) };
-        ToolTipService.SetToolTip(split, L("Разделить: открыть рядом ещё один терминал"));
-        var menu = new MenuFlyout();
-        menu.Opening += (_, _) =>
-        {
-            menu.Items.Clear();
-            foreach (var h in AppState.Hosts)
-            {
-                var i = new MenuFlyoutItem { Text = h.alias };
-                i.Click += (_, _) => Add(h.alias);
-                menu.Items.Add(i);
-            }
-        };
-        split.Flyout = menu;
         search.PlaceholderText = L("Найти в выводе (Enter — дальше)");
         search.QuerySubmitted += (_, _) => FindNext();
         search.TextChanged += (_, args) => { if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput) { searchFrom = int.MaxValue; FindNext(); } };
@@ -61,16 +62,39 @@ internal sealed class TileHost : UserControl, IDisposable
                 Pages.Ui.IconButton("", L("Поиск (Ctrl+Shift+F)"), OpenSearch),
                 Pages.Ui.IconButton("", L("Мельче (Ctrl+−)"), () => active?.View.ZoomFont(-1)),
                 Pages.Ui.IconButton("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
-                split,
             },
         };
+        var stage = new Grid { Children = { grid, dropHint } };
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() } };
         root.Children.Add(bar);
-        Grid.SetRow(grid, 1);
-        root.Children.Add(grid);
+        Grid.SetRow(stage, 1);
+        root.Children.Add(stage);
         Content = root;
+        // Вкладку перетаскивают на этот холст (MainWindow.DraggedTiles): край плитки или всего холста.
+        AllowDrop = true;
+        DragOver += (_, e) =>
+        {
+            if (MainWindow.DraggedTiles is not { } src || src == this || panes.Count == 0) { e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None; HideHint(); return; }
+            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+            e.DragUIOverride.IsCaptionVisible = false;
+            drop = Zone(e.GetPosition(grid));
+            ShowHint(drop.Value);
+        };
+        DragLeave += (_, _) => HideHint();
+        Drop += (_, e) =>
+        {
+            HideHint();
+            if (MainWindow.DraggedTiles is { } src && src != this && drop is { } d) Adopt(src, d.Edge, d.Target);
+        };
         KeyboardAccelerators.Add(Accel(VirtualKey.F, () => OpenSearch()));
-        KeyboardAccelerators.Add(Accel(VirtualKey.D, () => { if (active != null) Add(active.Alias); }));
+        KeyboardAccelerators.Add(Accel(VirtualKey.D, () => Split(Edge.Right)));
+        KeyboardAccelerators.Add(Accel(VirtualKey.E, () => Split(Edge.Bottom)));
+        foreach (var (key, edge) in new[] { (VirtualKey.Left, Edge.Left), (VirtualKey.Right, Edge.Right), (VirtualKey.Up, Edge.Top), (VirtualKey.Down, Edge.Bottom) })
+        {
+            var a = new KeyboardAccelerator { Key = key, Modifiers = VirtualKeyModifiers.Control | VirtualKeyModifiers.Menu };
+            a.Invoked += (_, e) => { e.Handled = true; FocusNeighbor(edge); };
+            KeyboardAccelerators.Add(a);
+        }
         KeyboardAccelerators.Add(Accel(VirtualKey.W, () => { if (active != null && panes.Count > 1) Close(active); }));
     }
 
@@ -81,8 +105,15 @@ internal sealed class TileHost : UserControl, IDisposable
         return a;
     }
 
-    public void Add(string alias, string? initialInput = null)
+    /// Та же сессия (тот же хост) рядом с активной плиткой.
+    public void Split(Edge edge)
     {
+        if (active is { } a) Add(a.Alias, null, edge, a.Id);
+    }
+
+    public void Add(string alias, string? initialInput = null, Edge? edge = null, string? target = null)
+    {
+        var id = Guid.NewGuid().ToString("N");
         var view = new TerminalView();
         var session = new SshSession(view, alias);
         var title = new TextBlock { Text = alias, Style = Pages.Ui.Style("CaptionTextBlockStyle"), Margin = new Thickness(8, 2, 8, 2) };
@@ -125,10 +156,10 @@ internal sealed class TileHost : UserControl, IDisposable
         Grid.SetRow(view, 3);
         body.Children.Add(view);
         var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Margin = new Thickness(2) };
-        var pane = new Pane(view, session, alias, frame, title);
-        close.Click += (_, _) => Close(pane);
-        view.GotFocus += (_, _) => Activate(pane);
-        session.StateChanged += alive => AliveChanged?.Invoke(alive);
+        var pane = new Pane(id, view, session, alias, frame, title) { Owner = this };
+        close.Click += (_, _) => pane.Owner.Close(pane);
+        view.GotFocus += (_, _) => pane.Owner.Activate(pane);
+        session.StateChanged += alive => pane.Owner.AliveChanged?.Invoke(alive);
         var started = false;
         view.Loaded += (_, _) =>
         {
@@ -139,8 +170,36 @@ internal sealed class TileHost : UserControl, IDisposable
             view.Focus(FocusState.Programmatic);
         };
         panes.Add(pane);
+        layout = layout == null ? RelayaCoreMethods.TilesAutomatic(new List<string> { id })
+            : edge is { } e ? RelayaCoreMethods.TilesInserting(layout, id, e, target) : RelayaCoreMethods.TilesAppending(layout, id);
         Layout();
         Activate(pane);
+    }
+
+    // Плитки другой вкладки переезжают сюда (перетаскивание вкладки): первая — к краю цели, остальные — рядом с ней.
+    private void Adopt(TileHost source, Edge edge, string? target)
+    {
+        var moving = source.panes.ToList();
+        source.panes.Clear();
+        source.layout = null;
+        source.grid.Children.Clear();
+        foreach (var p in moving)
+        {
+            p.Owner = this;
+            panes.Add(p);
+            layout = RelayaCoreMethods.TilesInserting(layout!, p.Id, edge, target);
+            target = p.Id;
+        }
+        Layout();
+        if (moving.Count > 0) { Activate(moving[0]); moving[0].View.Focus(FocusState.Programmatic); }
+        MainWindow.Current?.CloseTabOf(source);
+    }
+
+    private void FocusNeighbor(Edge edge)
+    {
+        if (active == null || layout == null) return;
+        if (RelayaCoreMethods.TilesNeighbor(layout, active.Id, edge) is { } id && panes.FirstOrDefault(p => p.Id == id) is { } p)
+            p.View.Focus(FocusState.Programmatic);
     }
 
     // Команда для новой сессии (сниппет, логи Docker, tmux attach) — когда ядро говорит, что вход выполнен (C23).
@@ -173,35 +232,104 @@ internal sealed class TileHost : UserControl, IDisposable
         pane.Session.Dispose();
         pane.View.Dispose();
         panes.Remove(pane);
+        layout = layout == null ? null : RelayaCoreMethods.TilesRemoving(layout, pane.Id);
         Layout();
         if (panes.Count > 0) { Activate(panes[^1]); panes[^1].View.Focus(FocusState.Programmatic); }
     }
 
-    // Сетка: столбцов — ceil(sqrt(n)), строк — сколько нужно; заголовки плиток видны, только когда плиток больше одной.
+    // Раскладка — по дереву ядра: Row — колонки, Column — строки, между ними разделители; заголовки плиток видны,
+    // только когда плиток больше одной.
     private void Layout()
     {
+        foreach (var p in panes) (p.Frame.Parent as Panel)?.Children.Remove(p.Frame);
         grid.Children.Clear();
-        grid.RowDefinitions.Clear();
-        grid.ColumnDefinitions.Clear();
-        var n = panes.Count;
-        if (n == 0) return;
-        var cols = (int)Math.Ceiling(Math.Sqrt(n));
-        var rows = (int)Math.Ceiling(n / (double)cols);
-        for (var c = 0; c < cols; c++) grid.ColumnDefinitions.Add(new ColumnDefinition());
-        for (var r = 0; r < rows; r++) grid.RowDefinitions.Add(new RowDefinition());
-        for (var i = 0; i < n; i++)
+        if (panes.Count == 0 || layout == null) return;
+        layout = RelayaCoreMethods.TilesSynced(layout, panes.Select(p => p.Id).ToList()) ?? layout;
+        var many = panes.Count > 1;
+        foreach (var p in panes)
         {
-            var p = panes[i];
-            ((Grid)((Grid)p.Frame.Child).Children[0]).Visibility = n > 1 ? Visibility.Visible : Visibility.Collapsed;
-            p.Frame.BorderThickness = new Thickness(n > 1 ? 1 : 0);
-            p.Frame.Margin = new Thickness(n > 1 ? 2 : 0);
-            Grid.SetRow(p.Frame, i / cols);
-            Grid.SetColumn(p.Frame, i % cols);
-            // Последняя плитка неполного ряда растягивается на остаток.
-            Grid.SetColumnSpan(p.Frame, i == n - 1 ? cols - i % cols : 1);
-            grid.Children.Add(p.Frame);
+            ((Grid)((Grid)p.Frame.Child).Children[0]).Visibility = many ? Visibility.Visible : Visibility.Collapsed;
+            p.Frame.BorderThickness = new Thickness(many ? 1 : 0);
+            p.Frame.Margin = new Thickness(many ? 2 : 0);
         }
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(layout);
+            grid.Children.Add(Build(doc.RootElement));
+        }
+        catch (Exception e) { TerminalView.Trace("tiles: " + e.Message); }
     }
+
+    private UIElement Build(System.Text.Json.JsonElement node)
+    {
+        var prop = node.EnumerateObject().First();
+        if (prop.Name == "leaf")
+            return panes.First(p => p.Id == prop.Value.GetString()).Frame;
+        var row = prop.Name == "row";
+        var g = new Grid();
+        var children = prop.Value.EnumerateArray().ToList();
+        for (var i = 0; i < children.Count; i++)
+        {
+            if (i > 0)
+            {
+                // Разделитель: тянется мышью, меняет доли соседних колонок/строк.
+                if (row) g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                else g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var splitter = new TileSplitter(g, row, g.Children.Count == 0 ? 0 : (row ? g.ColumnDefinitions.Count : g.RowDefinitions.Count) - 1);
+                if (row) Grid.SetColumn(splitter, g.ColumnDefinitions.Count - 1); else Grid.SetRow(splitter, g.RowDefinitions.Count - 1);
+                g.Children.Add(splitter);
+            }
+            if (row) g.ColumnDefinitions.Add(new ColumnDefinition()); else g.RowDefinitions.Add(new RowDefinition());
+            var child = Build(children[i]);
+            if (row) Grid.SetColumn((FrameworkElement)child, g.ColumnDefinitions.Count - 1); else Grid.SetRow((FrameworkElement)child, g.RowDefinitions.Count - 1);
+            g.Children.Add(child);
+        }
+        return g;
+    }
+
+    // Куда ляжет перетаскиваемая вкладка: у края холста — на всю ширину/высоту, иначе — ближайший край плитки по третям.
+    private (Edge Edge, string? Target) Zone(Windows.Foundation.Point at)
+    {
+        double w = grid.ActualWidth, h = grid.ActualHeight, band = 24;
+        if (at.X < band) return (Edge.Left, null);
+        if (at.X > w - band) return (Edge.Right, null);
+        if (at.Y < band) return (Edge.Top, null);
+        if (at.Y > h - band) return (Edge.Bottom, null);
+        foreach (var p in panes)
+        {
+            var r = Bounds(p.Frame);
+            if (!r.Contains(at)) continue;
+            var dx = (at.X - r.X) / r.Width; var dy = (at.Y - r.Y) / r.Height;
+            var edges = new[] { (dx, Edge.Left), (1 - dx, Edge.Right), (dy, Edge.Top), (1 - dy, Edge.Bottom) };
+            return (edges.MinBy(t => t.Item1).Item2, p.Id);
+        }
+        return (Edge.Right, null);
+    }
+
+    private Windows.Foundation.Rect Bounds(FrameworkElement e)
+    {
+        var origin = e.TransformToVisual(grid).TransformPoint(new Windows.Foundation.Point(0, 0));
+        return new Windows.Foundation.Rect(origin.X, origin.Y, e.ActualWidth, e.ActualHeight);
+    }
+
+    private void ShowHint((Edge Edge, string? Target) zone)
+    {
+        var r = zone.Target is { } id && panes.FirstOrDefault(p => p.Id == id) is { } p
+            ? Bounds(p.Frame) : new Windows.Foundation.Rect(0, 0, grid.ActualWidth, grid.ActualHeight);
+        var (x, y, w, h) = zone.Edge switch
+        {
+            Edge.Left => (r.X, r.Y, r.Width / 2, r.Height),
+            Edge.Right => (r.X + r.Width / 2, r.Y, r.Width / 2, r.Height),
+            Edge.Top => (r.X, r.Y, r.Width, r.Height / 2),
+            _ => (r.X, r.Y + r.Height / 2, r.Width, r.Height / 2),
+        };
+        dropHint.Margin = new Thickness(x, y, 0, 0);
+        dropHint.Width = Math.Max(0, w);
+        dropHint.Height = Math.Max(0, h);
+        dropHint.Visibility = Visibility.Visible;
+    }
+
+    private void HideHint() { dropHint.Visibility = Visibility.Collapsed; drop = null; }
 
     private void OpenSearch()
     {

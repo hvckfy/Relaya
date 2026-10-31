@@ -27,6 +27,15 @@ public sealed partial class MainWindow : Window
         // Без переходной анимации: страница не «въезжает» справа (и не застревает за краем при двойном клике
         // по хосту, когда сразу открывается вкладка) — показывается сразу, как в Параметрах Windows.
         Page.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
+        // Вкладку можно перетащить на край терминала другой вкладки — режим плиток.
+        Tabs.CanDragTabs = true;
+        Tabs.TabDragStarting += (_, e) =>
+        {
+            DraggedTiles = (e.Tab.Tag as Tab)?.Content as Terminal.TileHost;
+            e.Data.SetText("relaya-tab");
+            e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        };
+        Tabs.TabDragCompleted += (_, _) => DraggedTiles = null;
         TabHost.ChildrenTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Nav.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Current = this;
@@ -172,6 +181,24 @@ public sealed partial class MainWindow : Window
         tiles.AliveChanged += alive => ui.TryEnqueue(() =>
             tab.IconSource = new FontIconSource { Glyph = alive ? "" : "" });
         tiles.Add(alias, initialInput);
+        // Контекстное меню вкладки: разделить — та же сессия рядом (как Ctrl+Shift+D/E).
+        var menu = new MenuFlyout();
+        var right = new MenuFlyoutItem { Text = L("Разделить вправо"), KeyboardAcceleratorTextOverride = "Ctrl+Shift+D" };
+        right.Click += (_, _) => tiles.Split(uniffi.relaya_core.Edge.Right);
+        var down = new MenuFlyoutItem { Text = L("Разделить вниз"), KeyboardAcceleratorTextOverride = "Ctrl+Shift+E" };
+        down.Click += (_, _) => tiles.Split(uniffi.relaya_core.Edge.Bottom);
+        menu.Items.Add(right);
+        menu.Items.Add(down);
+        tab.ContextFlyout = menu;
+    }
+
+    /// Вкладка с плитками, которую сейчас перетаскивают (TabView → холст другой вкладки).
+    internal static Terminal.TileHost? DraggedTiles;
+
+    /// Плитки вкладки переехали в другую — закрыть опустевшую вкладку.
+    internal void CloseTabOf(Terminal.TileHost tiles)
+    {
+        if (Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(t => (t.Tag as Tab)?.Content == tiles) is { } tab) CloseTab(tab);
     }
 
     public void OpenSftp(string alias)
