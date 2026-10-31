@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Relaya.Data;
 using uniffi.relaya_core;
 using static Relaya.Strings;
@@ -168,14 +169,14 @@ public sealed partial class MainWindow : Window
     private sealed record Tab(UIElement Content, IDisposable? Owner);
 
     /// Терминал активной вкладки — для сниппетов и действий ОС.
-    public Terminal.TerminalView? ActiveTerminal =>
+    internal Terminal.TerminalView? ActiveTerminal =>
         ((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.Active : null;
 
     /// Последняя открытая терминальная вкладка (страница сниппетов закрывает выбор вкладки).
-    public Terminal.TerminalView? LastTerminal => Tabs.TabItems.OfType<TabViewItem>().Reverse()
+    internal Terminal.TerminalView? LastTerminal => Tabs.TabItems.OfType<TabViewItem>().Reverse()
         .Select(t => (t.Tag as Tab)?.Content).OfType<Terminal.TileHost>().Select(t => t.Active).FirstOrDefault();
 
-    public void SelectTerminal(Terminal.TerminalView view)
+    internal void SelectTerminal(Terminal.TerminalView view)
     {
         foreach (var t in Tabs.TabItems.OfType<TabViewItem>())
             if ((t.Tag as Tab)?.Content is Terminal.TileHost host && host.Contains(view)) { Tabs.SelectedItem = t; return; }
