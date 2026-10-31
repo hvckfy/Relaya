@@ -59,6 +59,16 @@ public enum Tmux {
             + "else exec \"${SHELL:-sh}\" -l; fi"
     }
 
+    /// Подготовка сессии для control mode (обычным ssh, до `tmux -CC attach`): создать, если нет,
+    /// окна — каждое своего размера, и тот же хук-уборщик по таймеру, что у обычных сессий.
+    public static func prepareControlCommand(name: String, ttlMinutes: Int) -> String {
+        let ttl = max(ttlMinutes, 1) * 60
+        return "command -v tmux >/dev/null 2>&1 || { echo RELAYA_NO_TMUX; exit 0; }; "
+            + "tmux has-session -t \(name) 2>/dev/null || tmux new-session -d -s \(name); "
+            + "tmux set-option -t \(name) window-size manual; "
+            + "tmux set-hook -t \(name) client-detached \(quote(reaperHook(name, ttl: ttl)))"
+    }
+
     /// Перед «оставить на сервере»: пометить и продлить срок до суток.
     public static func keepCommand(name: String) -> String {
         "tmux set -t \(name) @relaya_keep 1 \\; set-hook -t \(name) client-detached \(quote(reaperHook(name, ttl: keepSeconds)))"
