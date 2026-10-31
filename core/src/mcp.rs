@@ -224,6 +224,19 @@ fn sed_script_ok(script: &str) -> bool {
         || (a.len() >= 2 && a.starts_with('/') && a.ends_with('/') && !a[1..a.len() - 1].contains('/')))
 }
 
+/// `-la`, `-rk3`, `-k2,2`: первая буква — известный флаг, дальше флаги или значение из цифр (`-n5`, `-k3`).
+fn short_flags_ok(flags: &str, allowed: &str) -> bool {
+    let mut chars = flags.chars();
+    let Some(first) = chars.next() else { return false };
+    if first == ' ' || !allowed.contains(first) { return false; }
+    let mut value = false;
+    for c in chars {
+        if c.is_ascii_digit() || (value && ",.".contains(c)) { value = true; continue; }
+        if value || c == ' ' || !allowed.contains(c) { return false; }
+    }
+    true
+}
+
 fn segment_ok(words: &[String]) -> bool {
     let Some(first) = words.first() else { return false };
     if first == "find" {
@@ -244,7 +257,7 @@ fn segment_ok(words: &[String]) -> bool {
         if let Some(long) = w.strip_prefix("--") {
             let name = format!("--{}", long.split('=').next().unwrap_or(""));
             if !tool.long.contains(&name.as_str()) { return false; }
-        } else if !w[1..].chars().all(|c| c.is_ascii_digit()) && !w[1..].chars().all(|c| tool.short.contains(c) && c != ' ') {
+        } else if !w[1..].chars().all(|c| c.is_ascii_digit()) && !short_flags_ok(&w[1..], tool.short) {
             return false;
         }
     }
@@ -579,7 +592,7 @@ mod tests {
     fn read_only_rules() {
         for ok in ["ls -la /var/log", "df -h", "journalctl -u nginx -n 50 | grep error", "docker ps", "tail -50 /var/log/syslog",
                    "grep -i 'a|b c' f", "sed -n '1,20p' f", "sed 's/a/b/g' f", "sed -n /err/p f", "find /var -name '*.log' -mtime -1",
-                   "sort -rn f | uniq -c | head -5", "git log --oneline -n 5", "systemctl status nginx --no-pager", "ps aux"] {
+                   "sort -rn f | uniq -c | head -5", "ps aux | sort -rk3 | head", "git log --oneline -n 5", "systemctl status nginx --no-pager", "ps aux"] {
             assert!(mcp_is_read_only(ok.into()), "{ok}");
         }
         for bad in ["rm -rf /", "sudo ls", "cat a > b", "ls; rm x", "sed -i s/a/b/ f", "sed --in-place s/a/b/ f", "sed 's/a/b/w out' f",

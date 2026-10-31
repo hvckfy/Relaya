@@ -5,7 +5,7 @@ import Testing
 struct TmuxTests {
     @Test func nameIsShellSafe() {
         let name = Tmux.sessionName(alias: "Web 1.prod", id: UUID(uuidString: "3F9A0000-0000-0000-0000-000000000000")!)
-        #expect(name == "relaya-web-1-prod-3f9a0000")
+        #expect(name == "relaya-web-1-prod--3f9a0000")
     }
 
     @Test func attachCommandCreatesOrAttachesAndArmsReaper() {
@@ -30,23 +30,23 @@ struct TmuxTests {
         let old = Date(timeIntervalSince1970: 10_000 - 7200)
         let fresh = Date(timeIntervalSince1970: 10_000 - 60)
         let s = [
-            TmuxSession(name: "relaya-a-old", attached: 0, created: old, activity: old, detachedAt: old),
-            TmuxSession(name: "relaya-a-fresh", attached: 0, created: old, activity: fresh, detachedAt: fresh),
-            TmuxSession(name: "relaya-a-on", attached: 1, created: old, activity: old, detachedAt: old),
-            TmuxSession(name: "relaya-a-tab", attached: 0, created: old, activity: old, detachedAt: old),
-            TmuxSession(name: "relaya-a-kept", attached: 0, created: old, activity: old, detachedAt: old, keep: true),
-            TmuxSession(name: "relaya-b-old", attached: 0, created: old, activity: old, detachedAt: old),
+            TmuxSession(name: "relaya-a--0000001d", attached: 0, created: old, activity: old, detachedAt: old),
+            TmuxSession(name: "relaya-a--0000f2e5", attached: 0, created: old, activity: fresh, detachedAt: fresh),
+            TmuxSession(name: "relaya-a--000000a0", attached: 1, created: old, activity: old, detachedAt: old),
+            TmuxSession(name: "relaya-a--000000ab", attached: 0, created: old, activity: old, detachedAt: old),
+            TmuxSession(name: "relaya-a--000000ee", attached: 0, created: old, activity: old, detachedAt: old, keep: true),
+            TmuxSession(name: "relaya-b--0000001d", attached: 0, created: old, activity: old, detachedAt: old),
         ]
-        #expect(Tmux.stale(s, alias: "a", open: ["relaya-a-tab"], ttlMinutes: 60, now: now) == ["relaya-a-old"])
+        #expect(Tmux.stale(s, alias: "a", open: ["relaya-a--000000ab"], ttlMinutes: 60, now: now) == ["relaya-a--0000001d"])
     }
 
     @Test func staleEnforcesCap() {
         let now = Date(timeIntervalSince1970: 10_000)
         let s = (0..<12).map { i in
-            TmuxSession(name: "relaya-a-\(i)", attached: 0, created: now,
+            TmuxSession(name: String(format: "relaya-a--%08x", i), attached: 0, created: now,
                         activity: Date(timeIntervalSince1970: 9_000 + Double(i)), detachedAt: now)
         }
-        #expect(Tmux.stale(s, alias: "a", open: [], ttlMinutes: 60, now: now) == ["relaya-a-0", "relaya-a-1"])
+        #expect(Tmux.stale(s, alias: "a", open: [], ttlMinutes: 60, now: now) == ["relaya-a--00000000", "relaya-a--00000001"])
     }
 }
 

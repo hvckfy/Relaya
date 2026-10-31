@@ -210,7 +210,26 @@ pub fn os_password_login_command(os: ServerOs, enabled: bool) -> String {
         _ => "(sudo systemctl reload ssh || sudo systemctl reload sshd)",
     };
     let v = if enabled { "yes" } else { "no" };
-    format!("if grep -qsE '^Include /etc/ssh/sshd_config.d' /etc/ssh/sshd_config; then echo 'PasswordAuthentication {v}' | {sudo}tee /etc/ssh/sshd_config.d/00-relaya.conf >/dev/null; else {sudo}sed -i.bak -E 's/^#?[[:space:]]*PasswordAuthentication[[:space:]].*/PasswordAuthentication {v}/' /etc/ssh/sshd_config; fi && {sudo}sshd -t && {reload}")
+    let script = password_script(enabled, "/etc/ssh/sshd_config", "/etc/ssh/sshd_config.d") + "; sshd -t";
+    // После перезапуска — проверка действующего значения: другой Include или Match могли его перебить.
+    let verify = format!("sshd -T 2>/dev/null | grep -qix 'passwordauthentication {v}' || {{ echo RELAYA_SSHD_MISMATCH >&2; exit 1; }}");
+    format!("{sudo}sh -c {} && {reload} && {sudo}sh -c {}", crate::shell_quote(&script), crate::shell_quote(&verify))
+}
+
+/// Правка sshd_config (от root): без строки директивы она дописывается в начало файла.
+fn password_script(enabled: bool, file: &str, dropin_dir: &str) -> String {
+    let v = if enabled { "yes" } else { "no" };
+    // Выключая пароль, выключаем и keyboard-interactive: иначе PAM продолжит спрашивать пароль.
+    let keys: &[&str] = if enabled { &["PasswordAuthentication"] } else { &["PasswordAuthentication", "KbdInteractiveAuthentication"] };
+    let dropin: String = keys.iter().map(|k| format!("{k} {v}\\n")).collect();
+    let edits: String = keys.iter().map(|k| format!(
+        "if grep -qsE '^#?[[:space:]]*{k}[[:space:]]' \"$f\"; then sed -i.relaya -E 's/^#?[[:space:]]*{k}[[:space:]].*/{k} {v}/' \"$f\" && rm -f \"$f.relaya\"; \
+         else {{ echo '{k} {v}'; cat \"$f\"; }} > \"$f.relaya\" && cat \"$f.relaya\" > \"$f\" && rm -f \"$f.relaya\"; fi; ")).collect();
+    // Своё правило — раньше всех в sshd_config.d (у sshd побеждает первое значение), строка без директивы дописывается
+    // в начало файла (в конце она попала бы в блок Match).
+    format!("set -e; f={file}; d={dropin_dir}; \
+        if grep -qsE \"^Include $d\" \"$f\"; then rm -f \"$d/00-relaya.conf\"; \
+        printf '{dropin}' > \"$d/00-00-relaya.conf\"; else cp \"$f\" \"$f.bak\"; {edits}fi")
 }
 
 #[cfg(test)]
@@ -230,8 +249,28 @@ mod tests {
     #[test]
     fn raw_roundtrip_and_commands() {
         for os in os_all() { assert_eq!(ServerOs::from_raw(os.raw()), Some(os)); }
-        assert!(os_password_login_command(ServerOs::Ubuntu, true).contains("PasswordAuthentication yes"));
+        let off = os_password_login_command(ServerOs::Ubuntu, false);
+        assert!(off.contains("PasswordAuthentication no") && off.contains("KbdInteractiveAuthentication no"), "{off}");
+        assert!(off.contains("sshd -T") && off.contains("RELAYA_SSHD_MISMATCH"));
+        let on = os_password_login_command(ServerOs::Ubuntu, true);
+        assert!(on.contains("PasswordAuthentication yes") && !on.contains("KbdInteractive"));
         assert!(os_password_login_command(ServerOs::Openwrt, false).contains("PasswordAuth='off'"));
+        // Скрипт реально работает: файл без строки PasswordAuthentication и с блоком Match, и вариант с Include.
+        if cfg!(unix) {
+            let dir = tempfile::tempdir().unwrap();
+            let (f, d) = (dir.path().join("sshd_config"), dir.path().join("conf.d"));
+            let run = |sc: String| assert!(std::process::Command::new("sh").arg("-c").arg(&sc).status().unwrap().success(), "{sc}");
+            std::fs::write(&f, "Port 22\nMatch User x\n  X11Forwarding no\n").unwrap();
+            run(password_script(false, &f.to_string_lossy(), &d.to_string_lossy()));
+            let out = std::fs::read_to_string(&f).unwrap();
+            assert!(out.starts_with("KbdInteractiveAuthentication no\nPasswordAuthentication no\nPort 22"), "{out}");
+            run(password_script(true, &f.to_string_lossy(), &d.to_string_lossy()));
+            assert!(std::fs::read_to_string(&f).unwrap().starts_with("KbdInteractiveAuthentication no\nPasswordAuthentication yes\n"));
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(&f, format!("Include {}/*.conf\n", d.to_string_lossy())).unwrap();
+            run(password_script(false, &f.to_string_lossy(), &d.to_string_lossy()));
+            assert_eq!(std::fs::read_to_string(d.join("00-00-relaya.conf")).unwrap(), "PasswordAuthentication no\nKbdInteractiveAuthentication no\n");
+        }
         assert_eq!(os_actions(ServerOs::Debian)[0].command, "sudo apt update && sudo apt upgrade");
     }
 }
