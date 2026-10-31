@@ -5,7 +5,8 @@
 use crate::ssh_config::split_key_value;
 use std::path::{Path, PathBuf};
 
-const MAX_DEPTH: u32 = 5;
+/// Как у ssh (READCONF_MAX_DEPTH = 16); глубже — не знаем, что там, и считаем рискованным.
+const MAX_DEPTH: u32 = 16;
 const RISKY: &[&str] = &["proxycommand", "localcommand", "knownhostscommand", "proxyusefdpass", "permitlocalcommand"];
 
 /// Домашняя `.ssh`: HOME, на Windows — USERPROFILE.
@@ -15,22 +16,33 @@ fn default_ssh_dir() -> PathBuf {
 }
 
 /// Строки конфига с раскрытыми Include (пути относительно `.ssh`, `~/` — от домашнего каталога, glob по алфавиту).
-fn expand(text: &str, ssh_dir: &Path, depth: u32, out: &mut Vec<String>) {
+/// `false` — что-то не раскрылось (слишком глубоко, `**`, ошибка glob, файл не читается): итог неизвестен.
+fn expand(text: &str, ssh_dir: &Path, depth: u32, out: &mut Vec<String>) -> bool {
+    let mut ok = true;
     for raw in text.split(['\n', '\r']) {
         let (key, value) = split_key_value(raw.trim());
         if key != "include" || raw.trim_start().starts_with('#') { out.push(raw.to_string()); continue; }
-        if depth >= MAX_DEPTH { continue; }
+        if depth >= MAX_DEPTH { return false; }
         for p in value.split_whitespace().map(|p| p.trim_matches('"')) {
+            if p.contains("**") { return false; }
             let full = if let Some(rest) = p.strip_prefix("~/") {
                 ssh_dir.parent().unwrap_or(ssh_dir).join(rest)
             } else if Path::new(p).is_absolute() { PathBuf::from(p) } else { ssh_dir.join(p) };
-            let mut files: Vec<PathBuf> = glob::glob(&full.to_string_lossy()).map(|g| g.flatten().collect()).unwrap_or_default();
+            // Нет подходящих файлов — как у ssh, ничего; ошибка шаблона или чтения — неизвестно.
+            let Ok(paths) = glob::glob(&full.to_string_lossy()) else { return false };
+            let mut files = Vec::new();
+            for f in paths { match f { Ok(f) => files.push(f), Err(_) => return false } }
             files.sort();
             for f in files {
-                if let Ok(t) = std::fs::read_to_string(&f) { expand(&t, ssh_dir, depth + 1, out); }
+                if f.is_dir() { continue; }
+                match std::fs::read_to_string(&f) {
+                    Ok(t) => if !expand(&t, ssh_dir, depth + 1, out) { ok = false; },
+                    Err(_) => return false,
+                }
             }
         }
     }
+    ok
 }
 
 /// `*` и `?` как в ssh_config, без учёта регистра.
@@ -54,7 +66,13 @@ fn host_matches(patterns: &str, alias: &str) -> bool {
 #[uniffi::export]
 pub fn config_runs_commands_in(text: String, alias: String, ssh_dir: String) -> bool {
     let mut lines = Vec::new();
-    expand(&text, Path::new(&ssh_dir), 0, &mut lines);
+    if !expand(&text, Path::new(&ssh_dir), 0, &mut lines) { return true; }
+    // CanonicalizeHostname: во втором проходе ssh сверяет каноническое имя (alias + CanonicalDomains), которого мы не
+    // знаем, — тогда рискованная директива в любом блоке Host считается действующей.
+    let canonical = lines.iter().any(|l| {
+        let (k, v) = split_key_value(l.trim());
+        k == "canonicalizehostname" && (v.eq_ignore_ascii_case("yes") || v.eq_ignore_ascii_case("always"))
+    });
     let mut applies = true;
     let mut in_match = false;
     let mut first: std::collections::HashMap<String, String> = Default::default();
@@ -69,7 +87,8 @@ pub fn config_runs_commands_in(text: String, alias: String, ssh_dir: String) -> 
                 if value.split_whitespace().any(|w| w.eq_ignore_ascii_case("exec")) { return true; }
             }
             k if RISKY.contains(&k) => {
-                if in_match { return true; }
+                let active = !value.eq_ignore_ascii_case("none") && !value.eq_ignore_ascii_case("no") && !value.trim().is_empty();
+                if in_match || (canonical && active && key != "permitlocalcommand") { return true; }
                 if applies { first.entry(key.clone()).or_insert(value); }
             }
             _ => {}
@@ -132,7 +151,31 @@ mod tests {
         assert!(config_runs_commands_in("Include config.d/*.conf\nHost web\n    User x\n".into(), "web".into(), s.clone()));
         assert!(config_runs_commands_in("Include ~/.ssh/config.d/*\n".into(), "web".into(), s.clone()));
         assert!(!config_runs_commands_in("Include missing/*\nHost web\n    User x\n".into(), "web".into(), s.clone()));
-        // Цикл Include обрывается на глубине 5.
-        assert!(!config_runs_commands_in("Include deep.conf\n".into(), "web".into(), s));
+        // Цикл Include глубже 16 — неизвестно, значит рискованно; `**` и нечитаемый файл — тоже.
+        assert!(config_runs_commands_in("Include deep.conf\n".into(), "web".into(), s.clone()));
+        assert!(config_runs_commands_in("Include config.d/**\n".into(), "web".into(), s.clone()));
+        std::fs::create_dir_all(ssh.join("ok")).unwrap();
+        std::fs::write(ssh.join("ok/a.conf"), "Include ok/b.conf\n").unwrap();
+        std::fs::write(ssh.join("ok/b.conf"), "Host web\n    User x\n").unwrap();
+        assert!(!config_runs_commands_in("Include ok/a.conf\n".into(), "web".into(), s.clone()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::write(ssh.join("locked.conf"), "Host web\n").unwrap();
+            std::fs::set_permissions(ssh.join("locked.conf"), std::fs::Permissions::from_mode(0o000)).unwrap();
+            // Под root файл всё равно читается — тогда проверка не имеет смысла.
+            if std::fs::read_to_string(ssh.join("locked.conf")).is_err() {
+                assert!(config_runs_commands_in("Include locked.conf\n".into(), "web".into(), s));
+            }
+        }
+    }
+
+    #[test]
+    fn canonicalize_hostname_checks_every_host_block() {
+        let cfg = "CanonicalizeHostname yes\nCanonicalDomains example.com\nHost web.example.com\n    ProxyCommand evil\n";
+        assert!(runs(cfg, "web"));
+        assert!(runs(&cfg.replace("yes", "always"), "web"));
+        assert!(!runs(&cfg.replace("CanonicalizeHostname yes", "CanonicalizeHostname no"), "web"));
+        assert!(!runs("CanonicalizeHostname yes\nHost other\n    ProxyCommand none\n", "web"));
     }
 }
