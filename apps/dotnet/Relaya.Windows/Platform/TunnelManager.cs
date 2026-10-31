@@ -14,6 +14,20 @@ internal sealed class TunnelManager
     public enum State { Stopped, Starting, Running, Failed }
 
     private readonly ConcurrentDictionary<string, (Process Process, State State, string? Error)> running = new();
+    // Туннели, которых нет в tunnels.json (удалённые столы, id `desktop:<id>`): видны в списке, пока живы.
+    private readonly ConcurrentDictionary<string, Tunnel> temporary = new();
+
+    public System.Collections.Generic.List<Tunnel> Temporary => temporary.Values.OrderBy(t => t.name).ToList();
+
+    /// Временный туннель: уже работающий с тем же id переиспользуется (тот же локальный порт).
+    public Tunnel StartTemporary(Tunnel t)
+    {
+        if (temporary.TryGetValue(t.id, out var existing) && StatusOf(existing).State is State.Running or State.Starting)
+            return existing;
+        temporary[t.id] = t;
+        Start(t);
+        return t;
+    }
 
     public event Action? Changed;
 
@@ -69,6 +83,7 @@ internal sealed class TunnelManager
     {
         if (running.TryRemove(id, out var r) && r.Process is { HasExited: false } p)
             try { p.Kill(true); } catch (InvalidOperationException) { }
+        temporary.TryRemove(id, out _);
         Changed?.Invoke();
     }
 

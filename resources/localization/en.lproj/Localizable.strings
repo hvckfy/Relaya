@@ -853,3 +853,4 @@
 "Подставить пароль хоста?" = "Enter the host’s saved password?";
 "Нет" = "No";
 "(показано %@ из %@ символов)" = "(showing %@ of %@ characters)";
+"%@ (удалённый стол)" = "%@ (remote desktop)";

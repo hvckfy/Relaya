@@ -27,7 +27,8 @@ internal sealed class TunnelsPage : UserControl
         var (page, body) = Ui.Scaffold(L("Туннели"), Ui.Button(L("Новый туннель"), async () => await Edit(null), accent: true, glyph: ""));
         Content = page;
         var list = AppState.Tunnels;
-        if (list.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Туннелей пока нет. Локальный (-L) открывает порт сервера у вас, удалённый (-R) — ваш порт на сервере, SOCKS (-D) — прокси через сервер."))));
+        var temporary = TunnelManager.Shared.Temporary;
+        if (list.Count == 0 && temporary.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Туннелей пока нет. Локальный (-L) открывает порт сервера у вас, удалённый (-R) — ваш порт на сервере, SOCKS (-D) — прокси через сервер."))));
         foreach (var t in list)
         {
             var (state, error) = TunnelManager.Shared.StatusOf(t);
@@ -51,6 +52,20 @@ internal sealed class TunnelsPage : UserControl
                 _ => L("остановлен"),
             };
             body.Children.Add(Ui.Row("", t.name, $"{t.hostAlias} {kind} {RelayaCoreMethods.TunnelSpec(t)} · {status}" + (t.autoStart ? " · " + L("автостарт") : ""), actions));
+        }
+        // Туннели удалённых столов: живут, пока открыт клиент; здесь их можно только остановить.
+        foreach (var t in temporary)
+        {
+            var (state, error) = TunnelManager.Shared.StatusOf(t);
+            var stop = Ui.IconButton("\ue71a", L("Остановить"), () => TunnelManager.Shared.Stop(t.id));
+            var status = state switch
+            {
+                TunnelManager.State.Running => L("работает"),
+                TunnelManager.State.Starting => L("запускается…"),
+                TunnelManager.State.Failed => L("ошибка: %@", error ?? ""),
+                _ => L("остановлен"),
+            };
+            body.Children.Add(Ui.Row("\ue7f4", t.name, $"{t.hostAlias} -L {RelayaCoreMethods.TunnelSpec(t)} · {status}", stop));
         }
     }
 

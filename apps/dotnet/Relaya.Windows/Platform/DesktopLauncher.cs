@@ -18,11 +18,14 @@ internal static class DesktopLauncher
     {
         var host = d.address;
         var port = d.port;
+        string? tunnelId = null;
         if (d.viaSshHost is { Length: > 0 } via)
         {
-            var local = FreePort();
-            var tunnel = new Tunnel(RelayaCoreMethods.CoreNewId(), $"{d.name} (desktop)", via, TunnelKind.Local, local, d.address, d.port, false);
-            TunnelManager.Shared.Start(tunnel);
+            // Один туннель на удалённый стол: повторное открытие берёт уже работающий, закрытие клиента его гасит.
+            tunnelId = "desktop:" + d.id;
+            var tunnel = TunnelManager.Shared.StartTemporary(
+                new Tunnel(tunnelId, L("%@ (удалённый стол)", d.name), via, TunnelKind.Local, FreePort(), d.address, d.port, false));
+            var local = tunnel.listenPort;
             for (var i = 0; i < 20 && TunnelManager.Shared.StatusOf(tunnel).State == TunnelManager.State.Starting; i++) await Task.Delay(250);
             if (TunnelManager.Shared.StatusOf(tunnel) is { State: TunnelManager.State.Failed } f)
             {
@@ -36,16 +39,24 @@ internal static class DesktopLauncher
         {
             var file = Path.Combine(Path.GetTempPath(), $"relaya-{d.id}.rdp");
             File.WriteAllText(file, RelayaCoreMethods.DesktopRdpFile(d, host, port));
-            Process.Start(new ProcessStartInfo("mstsc.exe", $"\"{file}\"") { UseShellExecute = true });
+            StopWithClient(Process.Start(new ProcessStartInfo("mstsc.exe", $"\"{file}\"") { UseShellExecute = true }), tunnelId);
             return;
         }
         var viewer = VncViewer();
         if (viewer == null)
         {
             await Message(root, L("Не найден VNC-клиент. Установите TightVNC, RealVNC, UltraVNC или TigerVNC."));
+            if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);
             return;
         }
-        Process.Start(new ProcessStartInfo(viewer, $"{host}::{port}") { UseShellExecute = false });
+        StopWithClient(Process.Start(new ProcessStartInfo(viewer, $"{host}::{port}") { UseShellExecute = false }), tunnelId);
+    }
+
+    private static void StopWithClient(Process? client, string? tunnelId)
+    {
+        if (client == null || tunnelId == null) return;
+        client.EnableRaisingEvents = true;
+        client.Exited += (_, _) => TunnelManager.Shared.Stop(tunnelId);
     }
 
     private static string? VncViewer()
