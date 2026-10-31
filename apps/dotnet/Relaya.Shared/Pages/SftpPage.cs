@@ -116,7 +116,7 @@ internal sealed class SftpPage : UserControl
         {
             var row = new Grid { ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = new GridLength(110) }, new() { Width = new GridLength(160) }, new() { Width = new GridLength(110) } }, ColumnSpacing = 12 };
             void Cell(UIElement e, int c) { Grid.SetColumn((FrameworkElement)e, c); row.Children.Add(e); }
-            Cell(new FontIcon { Glyph = f.isDirectory ? "" : f.isLink ? "" : "", FontSize = 16 }, 0);
+            Cell(new FontIcon { Glyph = f.isDirectory ? "" : f.isLink ? "" : "", FontSize = Ui.IconMedium }, 0);
             Cell(new TextBlock { Text = f.name, TextTrimming = TextTrimming.CharacterEllipsis }, 1);
             Cell(Ui.Secondary(f.isDirectory ? "" : Platform.Format.Bytes(f.size)), 2);
             Cell(Ui.Secondary(f.modified), 3);

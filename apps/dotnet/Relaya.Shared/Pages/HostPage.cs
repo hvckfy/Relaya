@@ -22,7 +22,7 @@ internal sealed class HostPage : UserControl
     public HostPage(SshHost h)
     {
         host = h;
-        var more = new Button { Content = new FontIcon { Glyph = "", FontSize = 14 }, Padding = new Thickness(10, 8, 10, 8) };
+        var more = new Button { Content = new FontIcon { Glyph = "", FontSize = Ui.IconMedium }, Padding = new Thickness(12, 8, 12, 8) };
         more.Flyout = HostActions.Menu(h, more);
         var (page, body) = Ui.Scaffold(h.alias,
             Ui.Button(L("Подключить"), () => MainWindow.Current?.OpenSession(h.alias), accent: true, glyph: ""),

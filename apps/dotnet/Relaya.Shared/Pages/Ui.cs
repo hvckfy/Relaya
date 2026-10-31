@@ -38,6 +38,9 @@ internal static class Ui
     public static TextBlock Secondary(string text) =>
         new() { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Style = Style("CaptionTextBlockStyle") };
 
+    /// Размеры глифов Segoe Fluent Icons (UI-W9): мелкий — в чипах, средний — в кнопках, крупный — в строках-карточках.
+    public const double IconSmall = 12, IconMedium = 16, IconLarge = 20;
+
     /// Карточка-строка: иконка, заголовок с описанием и элемент справа.
     public static Border Row(string? glyph, string title, string? description, UIElement? trailing = null, Action? onClick = null)
     {
@@ -46,7 +49,7 @@ internal static class Ui
             ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } },
             ColumnSpacing = 16, MinHeight = 44,
         };
-        if (glyph != null) grid.Children.Add(new FontIcon { Glyph = glyph, FontSize = 18, VerticalAlignment = VerticalAlignment.Center });
+        if (glyph != null) grid.Children.Add(new FontIcon { Glyph = glyph, FontSize = IconLarge, VerticalAlignment = VerticalAlignment.Center });
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis });
         if (!string.IsNullOrEmpty(description)) text.Children.Add(Secondary(description));
@@ -99,7 +102,7 @@ internal static class Ui
             content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 8,
-                Children = { new FontIcon { Glyph = glyph, FontSize = 14 }, new TextBlock { Text = text } },
+                Children = { new FontIcon { Glyph = glyph, FontSize = IconMedium }, new TextBlock { Text = text } },
             };
         var b = new Button { Content = content };
         if (accent) b.Style = Style("AccentButtonStyle");
@@ -109,7 +112,7 @@ internal static class Ui
 
     public static Button IconButton(string glyph, string tip, Action onClick)
     {
-        var b = new Button { Content = new FontIcon { Glyph = glyph, FontSize = 14 }, Padding = new Thickness(8), Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
+        var b = new Button { Content = new FontIcon { Glyph = glyph, FontSize = IconMedium }, Padding = new Thickness(8), Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
         ToolTipService.SetToolTip(b, tip);
         // Narrator читает подсказку как имя кнопки, а не просто «кнопка» (UI-аудит W1).
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip);

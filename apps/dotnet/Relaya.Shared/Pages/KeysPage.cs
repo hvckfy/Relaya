@@ -49,7 +49,7 @@ internal sealed class KeysPage : UserControl
                 {
                     var git = IsGit(alias, configHosts);
                     var chip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-                    chip.Children.Add(new FontIcon { Glyph = git ? GitGlyph : ServerGlyph, FontSize = 12 });
+                    chip.Children.Add(new FontIcon { Glyph = git ? GitGlyph : ServerGlyph, FontSize = Ui.IconSmall });
                     chip.Children.Add(Ui.Secondary(alias));
                     ToolTipService.SetToolTip(chip, git ? L("Git-сервер") : L("Сервер"));
                     chips.Children.Add(chip);

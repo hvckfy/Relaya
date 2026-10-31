@@ -209,7 +209,7 @@ internal sealed class SyncPage : UserControl
         rows[id] = (status, ring, conflict);
 
         var header = new Grid { ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } } };
-        var icon = new FontIcon { Glyph = "\uE895", FontSize = 18, Margin = new Thickness(0, 0, 16, 0) };
+        var icon = new FontIcon { Glyph = "\uE895", FontSize = Pages.Ui.IconLarge, Margin = new Thickness(0, 0, 16, 0) };
         var titles = new StackPanel { Children = { new TextBlock { Text = initial.name }, new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Children = { ring, status },
