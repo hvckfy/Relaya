@@ -834,3 +834,4 @@
 "Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента." = "The selected hosts and git servers use only this key (IdentitiesOnly), without trying the agent's other keys.";
 "ключ загружен" = "key loaded";
 "Хост, которого ещё нет в ~/.ssh/config, например git-сервер. Для него появится короткий блок с этим ключом." = "A host that isn't in ~/.ssh/config yet, such as a git server. A short block with this key is added for it.";
+"В названии не должно быть «@»: пользователя укажите в поле «Пользователь», адрес — в поле «Адрес»." = "The name can’t contain “@”: put the user in “User” and the address in “Address”.";
