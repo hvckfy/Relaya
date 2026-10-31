@@ -88,17 +88,9 @@ public sealed partial class MainWindow : Window
         Tabs.SelectedItem = tab;
     }
 
-    // Пока нет ConPTY — показываем, что эмулятор и отрисовка работают.
-    private static Terminal.TerminalView DemoTerminal(SshHost h)
+    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
     {
-        var view = new Terminal.TerminalView();
-        view.Feed(System.Text.Encoding.UTF8.GetBytes(
-            $"\x1b[1;32mRelaya\x1b[0m — {RelayaCoreMethods.HostSubtitle(h)}\r\n" +
-            "\x1b[31mred \x1b[33myellow \x1b[34mblue \x1b[7m inverse \x1b[0m \x1b[4munderline\x1b[0m 日本語\r\n" +
-            "\x1b[38;2;255;128;0mtruecolor\x1b[0m\r\n$ "));
-        return view;
-    }
-
-    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args) =>
+        (args.Tab.Tag as IDisposable)?.Dispose();
         sender.TabItems.Remove(args.Tab);
+    }
 }

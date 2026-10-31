@@ -4,6 +4,9 @@ using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Windows.System;
+using System.Text;
 using Windows.UI;
 using uniffi.relaya_core;
 
@@ -26,12 +29,77 @@ internal sealed class TerminalView : UserControl
     /// Терминал сменил размер в ячейках — сессия передаёт его в ssh (ConPTY).
     public event Action<uint, uint>? Resized;
 
+    /// Байты от клавиатуры и вставки — в ssh.
+    public event Action<byte[]>? Input;
+
     public TerminalView()
     {
         Content = canvas;
         canvas.Draw += OnDraw;
         SizeChanged += (_, _) => FitToSize();
         Unloaded += (_, _) => canvas.RemoveFromVisualTree();
+        IsTabStop = true;
+        UseSystemFocusVisuals = false;
+        PointerPressed += (_, _) => Focus(FocusState.Pointer);
+        KeyDown += OnKeyDown;
+        CharacterReceived += OnCharacterReceived;
+        PointerWheelChanged += OnWheel;
+    }
+
+    private void Send(string s)
+    {
+        Emulator.ScrollToBottom();
+        Input?.Invoke(Encoding.UTF8.GetBytes(s));
+    }
+
+    // Клавиши без символа: стрелки, F-клавиши, навигация. Символы (и Ctrl+буква) приходят в CharacterReceived.
+    private void OnKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (ctrl && shift && e.Key == VirtualKey.V) { e.Handled = true; _ = Paste(); return; }
+        var seq = e.Key switch
+        {
+            VirtualKey.Tab => shift ? "\x1b[Z" : "\t",
+            VirtualKey.Up => "\x1b[A", VirtualKey.Down => "\x1b[B",
+            VirtualKey.Right => "\x1b[C", VirtualKey.Left => "\x1b[D",
+            VirtualKey.Home => "\x1b[H", VirtualKey.End => "\x1b[F",
+            VirtualKey.Insert => "\x1b[2~", VirtualKey.Delete => "\x1b[3~",
+            VirtualKey.PageUp => "\x1b[5~", VirtualKey.PageDown => "\x1b[6~",
+            VirtualKey.F1 => "\x1bOP", VirtualKey.F2 => "\x1bOQ", VirtualKey.F3 => "\x1bOR", VirtualKey.F4 => "\x1bOS",
+            VirtualKey.F5 => "\x1b[15~", VirtualKey.F6 => "\x1b[17~", VirtualKey.F7 => "\x1b[18~", VirtualKey.F8 => "\x1b[19~",
+            VirtualKey.F9 => "\x1b[20~", VirtualKey.F10 => "\x1b[21~", VirtualKey.F11 => "\x1b[23~", VirtualKey.F12 => "\x1b[24~",
+            _ => null,
+        };
+        if (seq == null) return;
+        e.Handled = true;
+        Send(seq);
+    }
+
+    private void OnCharacterReceived(UIElement sender, CharacterReceivedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        var ch = e.Character;
+        if (ch == '\t') return; // уже отправлен в KeyDown
+        Send(ch == '\b' ? "\x7f" : ch.ToString());
+    }
+
+    private async System.Threading.Tasks.Task Paste()
+    {
+        var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+        if (!content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text)) return;
+        var text = (await content.GetTextAsync()).Replace("\r\n", "\r").Replace('\n', '\r');
+        Send(Emulator.Snapshot().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
+    }
+
+    private void OnWheel(object sender, PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
+        Emulator.Scroll(delta / 40);
+        canvas.Invalidate();
+        e.Handled = true;
     }
 
     public void Feed(byte[] data)
