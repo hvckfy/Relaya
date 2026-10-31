@@ -67,6 +67,23 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     internal static void Trace(string message) =>
         Platform.LogFiles.Append(System.IO.Path.Combine(Data.AppState.Support, "terminal.log"), $"{DateTime.Now:O} {message}\n");
 
+    protected override Microsoft.UI.Xaml.Automation.Peers.AutomationPeer OnCreateAutomationPeer() => new TerminalAutomationPeer(this);
+
+    // Narrator: раз в 500 мс объявляет, что вывод изменился (live region), а не на каждый кусок байт.
+    private long lastAnnounce;
+
+    private void Announce()
+    {
+        var now = System.Environment.TickCount64;
+        if (now - lastAnnounce < 500) return;
+        lastAnnounce = now;
+        ui.TryEnqueue(() =>
+        {
+            if (Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.FromElement(this) is { } peer)
+                peer.RaiseAutomationEvent(Microsoft.UI.Xaml.Automation.Peers.AutomationEvents.LiveRegionChanged);
+        });
+    }
+
     private void Redraw()
     {
         if (ui == null) { Trace("Feed: no UI DispatcherQueue"); return; }
@@ -83,7 +100,8 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         CreateCanvas();
         SizeChanged += (_, _) => FitToSize();
         IsTabStop = true;
-        UseSystemFocusVisuals = false;
+        // Фокус показывает системная рамка (UI-W2): своей у холста нет.
+        UseSystemFocusVisuals = true;
         KeyDown += OnKeyDown;
         CharacterReceived += OnCharacterReceived;
         PointerWheelChanged += OnWheel;
@@ -372,6 +390,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     public void Feed(byte[] data)
     {
         lock (feedLock) Emulator.Feed(data);
+        Announce();
         if (!fedOnce) { fedOnce = true; Trace($"Feed: first {data.Length} bytes"); }
         Redraw();
     }
