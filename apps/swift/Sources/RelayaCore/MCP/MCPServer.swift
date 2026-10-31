@@ -146,8 +146,14 @@ public final class MCPServer {
         context.localizedFallbackTitle = "Ввести пароль"
         var error: NSError?
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
-            let shown = command.count > 160 ? String(command.prefix(160)) + "…" : command
-            let reason = "\(client) хочет выполнить на \(host.alias): \(shown)"
+            // Окно Touch ID вмещает ~160 символов. Длинную команду сначала показываем целиком
+            // (диалог, «Запретить» по умолчанию), и только потом просим Touch ID — подтверждается то, что видно.
+            if command.count > 160 {
+                guard await askWithButtons(host: host, command: command, client: client) else { return false }
+                let reason = "Подтвердите команду \(client) на \(host.alias), показанную в предыдущем окне"
+                return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
+            }
+            let reason = "\(client) хочет выполнить на \(host.alias): \(command)"
             return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
         }
         return await askWithButtons(host: host, command: command, client: client)
@@ -156,7 +162,8 @@ public final class MCPServer {
     /// Запасной вариант: диалог osascript, «Запретить» по умолчанию, без ответа за 2 минуты — отказ.
     static func askWithButtons(host: SSHHost, command: String, client: String) async -> Bool {
         func esc(_ s: String) -> String { s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
-        let shown = command.count > 600 ? String(command.prefix(600)) + "…" : command
+        // Команда целиком: подтверждать можно только то, что видно (обрезаем лишь совсем огромные, с пометкой).
+        let shown = command.count > 4000 ? String(command.prefix(4000)) + "\n… (ещё \(command.count - 4000) символов — отклоните)" : command
         let tags = host.tags.isEmpty ? "" : " [\(host.tags.joined(separator: ", "))]"
         let script = """
         set answer to display dialog "\(esc(client)) хочет выполнить на \(esc(host.alias))\(esc(tags)):\n\n\(esc(shown))" ¬
