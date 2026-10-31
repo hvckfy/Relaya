@@ -163,8 +163,19 @@ pub fn config_merge(local: String, incoming: String) -> String {
 // MARK: - Выгрузка и загрузка
 
 /// Записать в `dir` то, что относится к профилю. Возвращает изменённые пути.
+/// Удалённое на этой машине с прошлой синхронизации уходит из общих файлов и попадает в `relaya/deleted.json`.
 #[uniffi::export]
 pub fn sync_export(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<String>, CoreError> {
+    let local = local_items(&profile, &paths)?;
+    let mut tombs = tombstones::prepare(&profile, &paths, Path::new(&dir), &local)?;
+    let mut changed = export_inner(profile.clone(), paths.clone(), passphrase, dir.clone())?;
+    tombstones::strip_shared(Path::new(&dir), &mut tombs, &mut changed)?;
+    // Похороненное остаётся в снимке до импорта: если слияние сорвётся, удаление не потеряется.
+    tombstones::save_snapshot(&profile, &paths, &local, &tombs)?;
+    Ok(changed)
+}
+
+fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<String>, CoreError> {
     let dir = Path::new(&dir);
     let items = profile.effective_items();
     let mut changed = Vec::new();
@@ -235,8 +246,16 @@ where T: for<'de> Deserialize<'de> + Clone {
 fn broken(name: &str, e: CoreError) -> CoreError { CoreError::Json(format!("{name} повреждён, синхронизация остановлена: {e}")) }
 
 /// Влить в локальные файлы содержимое `dir`. Возвращает изменившиеся пункты.
+/// Надгробия из `relaya/deleted.json` удаляют локальные элементы, которые не правились с прошлой синхронизации.
 #[uniffi::export]
 pub fn sync_import(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<SyncItem>, CoreError> {
+    let mut changed = import_inner(profile.clone(), paths.clone(), passphrase, dir.clone())?;
+    for item in tombstones::apply_locally(&profile, &paths, Path::new(&dir))? { if !changed.contains(&item) { changed.push(item); } }
+    tombstones::save_snapshot(&profile, &paths, &local_items(&profile, &paths)?, &[])?;
+    Ok(changed)
+}
+
+fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<SyncItem>, CoreError> {
     let dir = Path::new(&dir);
     let items = profile.effective_items();
     let mut changed = Vec::new();
@@ -576,9 +595,18 @@ pub fn git_sync(repo: String, remote: String, machine: String, profile: SyncProf
             merge = git.run(&["merge", "-q", "--no-edit", "--allow-unrelated-histories", &format!("origin/{BRANCH}")], true)?;
         }
         if !merge.status.success() {
-            let c = git.conflicts()?;
+            let mut c = git.conflicts()?;
+            let mut resolved = false;
+            // deleted.json сливается сам: надгробия двух машин объединяются, конфликт пользователю не нужен.
+            if let Some(i) = c.iter().position(|x| x.path == tombstones::FILE) {
+                let merged = tombstones::merge_text(&c[i].mine, &c[i].theirs);
+                fs::write(Path::new(&repo).join(tombstones::FILE), merged)?;
+                git.run(&["add", "--", tombstones::FILE], false)?;
+                c.remove(i);
+                if c.is_empty() { git.run(&["commit", "-q", "--no-edit"], false)?; resolved = true; }
+            }
             if !c.is_empty() { return Ok(SyncOutcome::Conflict { conflicts: c }); }
-            return Err(CoreError::Git(String::from_utf8_lossy(&merge.stderr).trim().to_string()));
+            if !resolved { return Err(CoreError::Git(String::from_utf8_lossy(&merge.stderr).trim().to_string())); }
         }
         pulled = git.stdout(&["rev-parse", "HEAD"]).unwrap_or_default() != head;
     }
@@ -678,6 +706,11 @@ pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Opt
     let _ = fs::remove_dir_all(&stage);
     fs::create_dir_all(&stage)?;
     put_tree(&stage, &base)?;
+    // Надгробия из папки видны выгрузке сразу: свежая правка воскрешает удалённое другой машиной.
+    if let Some(t) = theirs.get(tombstones::FILE) {
+        let b = base.get(tombstones::FILE).map(|d| String::from_utf8_lossy(d).into_owned()).unwrap_or_default();
+        write_atomic(&stage.join(tombstones::FILE), tombstones::merge_text(&b, &String::from_utf8_lossy(t)).as_bytes())?;
+    }
     sync_export(profile.clone(), paths.clone(), passphrase.clone(), stage.to_string_lossy().into_owned())?;
     let mine = tree(&stage);
     let _ = fs::remove_dir_all(&stage);
@@ -687,7 +720,13 @@ pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Opt
     let names: std::collections::BTreeSet<&String> = mine.keys().chain(theirs.keys()).collect();
     for name in names {
         let (m, t, b) = (mine.get(name), theirs.get(name), base.get(name));
-        let pick = if m == t || t == b { m } else if m == b { t } else {
+        let merged_tombs;
+        let pick = if m == t || t == b { m } else if m == b { t } else if name == tombstones::FILE {
+            let text = |d: Option<&Vec<u8>>| d.map(|d| String::from_utf8_lossy(d).into_owned()).unwrap_or_default();
+            let _ = b;
+            merged_tombs = tombstones::merge_text(&text(m), &text(t)).into_bytes();
+            Some(&merged_tombs)
+        } else {
             match keep_mine.get(name.as_str()) {
                 Some(true) => m,
                 Some(false) => t,
@@ -869,5 +908,306 @@ mod tests {
         sync_import(sync_new_profile("all".into()), paths(a.path()), None, dir.path().to_string_lossy().into()).unwrap();
         let cfg = fs::read_to_string(a.path().join("config")).unwrap();
         assert_eq!(cfg.starts_with("IgnoreUnknown UseKeychain\n"), !cfg!(target_os = "macos"), "{cfg}");
+    }
+
+    #[test]
+    fn deletions_travel_via_tombstones() {
+        let bare = tempfile::tempdir().unwrap();
+        assert!(std::process::Command::new("git").args(["init", "-q", "--bare", "-b", "main"]).arg(bare.path()).status().unwrap().success());
+        let (la, lb, ra, rb) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (ra, rb) = (ra.path().join("repo").to_string_lossy().to_string(), rb.path().join("repo").to_string_lossy().to_string());
+        let remote = bare.path().to_string_lossy().to_string();
+        let p = sync_new_profile("all".into());
+        fs::write(la.path().join("config"), "Host keep\n    HostName 1\n\nHost openwrt\n    HostName 192.168.1.1\n").unwrap();
+        fs::write(la.path().join("snippets.json"), r#"[{"command":"ls","id":"S1","name":"a"},{"command":"df","id":"S2","name":"b"}]"#).unwrap();
+        git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
+        git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
+        assert!(fs::read_to_string(lb.path().join("config")).unwrap().contains("openwrt"));
+
+        // B удаляет openwrt и сниппет S2 — после синхронизации их нет ни в общем, ни на A.
+        fs::write(lb.path().join("config"), "Host keep\n    HostName 1\n").unwrap();
+        fs::write(lb.path().join("snippets.json"), r#"[{"command":"ls","id":"S1","name":"a"}]"#).unwrap();
+        git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
+        assert!(!fs::read_to_string(Path::new(&rb).join("ssh/config")).unwrap().contains("openwrt"));
+        assert!(fs::read_to_string(Path::new(&rb).join(tombstones::FILE)).unwrap().contains("openwrt"));
+        git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
+        let cfg_a = fs::read_to_string(la.path().join("config")).unwrap();
+        assert!(!cfg_a.contains("openwrt") && cfg_a.contains("Host keep"), "{cfg_a}");
+        assert!(!fs::read_to_string(la.path().join("snippets.json")).unwrap().contains("S2"));
+        // Повторная синхронизация ничего не возвращает.
+        git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
+        git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
+        assert!(!fs::read_to_string(la.path().join("config")).unwrap().contains("openwrt"));
+        assert!(!fs::read_to_string(lb.path().join("config")).unwrap().contains("openwrt"));
+
+        // Пустая машина ничего не стирает.
+        let (lc, rc) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let rc = rc.path().join("repo").to_string_lossy().to_string();
+        git_sync(rc.clone(), remote.clone(), "C".into(), p.clone(), paths(lc.path()), None).unwrap();
+        fs::write(lc.path().join("config"), "").unwrap();
+        git_sync(rc, remote.clone(), "C".into(), p.clone(), paths(lc.path()), None).unwrap();
+        git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
+        assert!(fs::read_to_string(la.path().join("config")).unwrap().contains("Host keep"));
+    }
+
+    #[test]
+    fn edit_after_delete_wins_and_tombstones_merge() {
+        let (folder, a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let f = folder.path().to_string_lossy().to_string();
+        let p = sync_new_profile("all".into());
+        let none = std::collections::HashMap::new();
+        fs::write(a.path().join("config"), "Host x\n    HostName 1\n\nHost y\n    HostName 2\n").unwrap();
+        folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap();
+        folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap();
+        // A удаляет x, B тем временем правит x: на общем файле конфликт; «оставить своё» — правка побеждает и
+        // возвращается на A, надгробие воскрешено.
+        fs::write(a.path().join("config"), "Host y\n    HostName 2\n").unwrap();
+        folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap();
+        fs::write(b.path().join("config"), "Host x\n    HostName 9\n\nHost y\n    HostName 2\n").unwrap();
+        let SyncOutcome::Conflict { conflicts } = folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap()
+            else { panic!("ожидался конфликт") };
+        assert_eq!(conflicts.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(), ["ssh/config"], "deleted.json сливается сам");
+        let keep: std::collections::HashMap<String, bool> = [("ssh/config".to_string(), true)].into();
+        folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), keep).unwrap();
+        assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("HostName 9"));
+        folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap();
+        assert!(fs::read_to_string(a.path().join("config")).unwrap().contains("HostName 9"));
+        folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap();
+        assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("HostName 9"), "воскрешённое не удаляется снова");
+
+        let t = |k: &str, at: &str, rev: Option<&str>| Tombstone { kind: "host".into(), key: k.into(), deleted_at: at.into(),
+                                                                  machine: "m".into(), revived_at: rev.map(Into::into) };
+        let enc = |v: Vec<Tombstone>| encode_sorted(&v);
+        let merged = tombstones::merge_text(&enc(vec![t("a", "2026-01-01T00:00:00Z", None)]), &enc(vec![t("b", "2026-01-02T00:00:00Z", None)]));
+        assert!(merged.contains("\"a\"") && merged.contains("\"b\""));
+        // Позднее событие побеждает: воскрешение после удаления сохраняется при слиянии.
+        let m = tombstones::merge_text(&enc(vec![t("a", "2026-01-01T00:00:00Z", Some("2026-01-03T00:00:00Z"))]),
+                                       &enc(vec![t("a", "2026-01-01T00:00:00Z", None)]));
+        assert!(m.contains("revivedAt"));
+    }
+}
+
+// MARK: - Удаления (надгробия)
+
+/// Что лежит локально для профиля: (вид, ключ) → хеш содержимого. Хосты — по алиасу, остальное — по id.
+type Items = std::collections::BTreeMap<(String, String), String>;
+
+fn digest(s: &str) -> String {
+    use sha2::Digest;
+    sha2::Sha256::digest(s.as_bytes()).iter().take(8).map(|b| format!("{b:02x}")).collect()
+}
+
+fn local_items(profile: &SyncProfile, paths: &SyncPaths) -> Result<Items, CoreError> {
+    let items = profile.effective_items();
+    let mut out = Items::new();
+    let text = fs::read_to_string(paths.config()).unwrap_or_default();
+    let hosts: Vec<_> = parse_config(text.clone()).into_iter().filter(|h| profile.contains(h) && !h.is_git_service()).collect();
+    let aliases_set: HashSet<String> = hosts.iter().map(|h| h.alias.clone()).collect();
+    if items.contains(&SyncItem::SshConfig) {
+        let doc = Document::new(&text);
+        for h in &hosts { out.insert(("host".into(), h.alias.clone()), digest(&doc.current_lines(&h.alias).join("\n"))); }
+    }
+    let read_list = |name: &str| -> Result<Vec<serde_json::Value>, CoreError> {
+        match fs::read_to_string(paths.support(name)) { Ok(j) => try_decode_list(&j).map_err(|e| broken(name, e)), Err(_) => Ok(vec![]) }
+    };
+    let id = |v: &serde_json::Value| v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    if items.contains(&SyncItem::Snippets) {
+        for v in read_list("snippets.json")? { out.insert(("snippet".into(), id(&v)), digest(&encode_sorted(&v))); }
+    }
+    if items.contains(&SyncItem::Tunnels) {
+        for v in read_list("tunnels.json")? {
+            if v.get("hostAlias").and_then(|x| x.as_str()).map(|a| aliases_set.contains(a)).unwrap_or(false) {
+                out.insert(("tunnel".into(), id(&v)), digest(&encode_sorted(&v)));
+            }
+        }
+    }
+    if items.contains(&SyncItem::Desktops) {
+        for v in read_list("desktops.json")? {
+            let ok = profile.scope.all_hosts
+                || v.get("group").and_then(|x| x.as_str()).map(|g| profile.scope.groups.iter().any(|x| x == g)).unwrap_or(false)
+                || v.get("viaSSHHost").and_then(|x| x.as_str()).map(|a| aliases_set.contains(a)).unwrap_or(false);
+            if ok { out.insert(("desktop".into(), id(&v)), digest(&encode_sorted(&v))); }
+        }
+    }
+    Ok(out)
+}
+
+/// Запись в `relaya/deleted.json`: когда элемент удалили и, если правили потом, когда «воскресили».
+/// Действует более позднее из двух событий, поэтому записи двух машин сливаются без конфликтов.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Tombstone {
+    pub kind: String,
+    pub key: String,
+    pub deleted_at: String,
+    pub machine: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub revived_at: Option<String>,
+}
+
+impl Tombstone {
+    fn dead(&self) -> bool { self.revived_at.as_deref().map(|r| r < self.deleted_at.as_str()).unwrap_or(true) }
+    /// Последнее событие записи: удаление или воскрешение.
+    fn last(&self) -> &str { self.revived_at.as_deref().filter(|r| *r > self.deleted_at.as_str()).unwrap_or(&self.deleted_at) }
+}
+
+pub(crate) mod tombstones {
+    use super::*;
+
+    pub(crate) const FILE: &str = "relaya/deleted.json";
+    /// Записи старше этого срока уже разошлись по машинам и удаляются.
+    const KEEP_DAYS: i64 = 90;
+
+    /// Снимок после прошлой синхронизации: (вид, ключ) → (хеш, когда хеш последний раз менялся).
+    type Snapshot = std::collections::BTreeMap<(String, String), (String, String)>;
+
+    /// ISO 8601 в UTC с миллисекундами: строки сравниваются по времени.
+    fn now() -> String { chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string() }
+
+    fn machine() -> String {
+        std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "unknown".into())
+    }
+
+    fn snapshot_file(profile: &SyncProfile, paths: &SyncPaths) -> PathBuf {
+        Path::new(&paths.support).join("sync").join(&profile.id).join("known.json")
+    }
+
+    fn load_snapshot(profile: &SyncProfile, paths: &SyncPaths) -> Snapshot {
+        let list: Vec<(String, String, String, String)> = fs::read_to_string(snapshot_file(profile, paths)).ok()
+            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        list.into_iter().map(|(k, key, h, at)| ((k, key), (h, at))).collect()
+    }
+
+    /// Запомнить локальное состояние; `keep` — ключи, которые остаются в снимке до импорта (свежие удаления).
+    pub(crate) fn save_snapshot(profile: &SyncProfile, paths: &SyncPaths, local: &Items, keep: &[Tombstone]) -> Result<(), CoreError> {
+        let old = load_snapshot(profile, paths);
+        let t = now();
+        let mut snap: Snapshot = local.iter().map(|(k, h)| {
+            let at = old.get(k).filter(|(oh, _)| oh == h).map(|(_, at)| at.clone()).unwrap_or_else(|| t.clone());
+            (k.clone(), (h.clone(), at))
+        }).collect();
+        for (k, v) in old { if !snap.contains_key(&k) && keep.iter().any(|x| x.dead() && x.kind == k.0 && x.key == k.1) { snap.insert(k, v); } }
+        let f = snapshot_file(profile, paths);
+        if let Some(d) = f.parent() { fs::create_dir_all(d)?; }
+        let list: Vec<(&String, &String, &String, &String)> = snap.iter().map(|((k, key), (h, at))| (k, key, h, at)).collect();
+        fs::write(f, serde_json::to_string(&list)?)?;
+        Ok(())
+    }
+
+    pub(crate) fn load(dir: &Path) -> Result<Vec<Tombstone>, CoreError> {
+        match fs::read_to_string(dir.join(FILE)) { Ok(s) => try_decode_list(&s).map_err(|e| broken(FILE, e)), Err(_) => Ok(vec![]) }
+    }
+
+    /// Слить записи: по каждому ключу — с самым поздним событием.
+    pub(crate) fn union(a: Vec<Tombstone>, b: Vec<Tombstone>) -> Vec<Tombstone> {
+        let mut m: std::collections::BTreeMap<(String, String), Tombstone> = Default::default();
+        for t in a.into_iter().chain(b) {
+            let k = (t.kind.clone(), t.key.clone());
+            match m.get(&k) { Some(o) if o.last() >= t.last() => {}, _ => { m.insert(k, t); } }
+        }
+        m.into_values().collect()
+    }
+
+    /// Слияние текстов `deleted.json` (git-конфликт, папка): union, база не нужна.
+    pub(crate) fn merge_text(mine: &str, theirs: &str) -> String {
+        let p = |s: &str| serde_json::from_str::<Vec<Tombstone>>(s).unwrap_or_default();
+        encode_sorted(&union(p(mine), p(theirs)))
+    }
+
+    /// Записи для выгрузки: новые удаления (было в снимке, исчезло локально) и воскрешения (элемент здесь правили
+    /// после удаления на другой машине — правка побеждает). Пустая машина ничего не хоронит.
+    pub(crate) fn prepare(profile: &SyncProfile, paths: &SyncPaths, dir: &Path, local: &Items) -> Result<Vec<Tombstone>, CoreError> {
+        let known = load_snapshot(profile, paths);
+        let mut tombs = load(dir)?;
+        let t = now();
+        for ((kind, key), _) in known.iter().filter(|(k, _)| !local.contains_key(*k)) {
+            // Пропали разом все элементы вида — скорее пустой или сломанный файл, чем удаление.
+            if !local.keys().any(|(k, _)| k == kind) { continue; }
+            match tombs.iter_mut().find(|x| &x.kind == kind && &x.key == key) {
+                Some(x) if x.dead() => {}
+                Some(x) => { x.deleted_at = t.clone(); x.revived_at = None; x.machine = machine(); }
+                None => tombs.push(Tombstone { kind: kind.clone(), key: key.clone(), deleted_at: t.clone(), machine: machine(), revived_at: None }),
+            }
+        }
+        for x in tombs.iter_mut().filter(|x| x.dead()) {
+            let k = (x.kind.clone(), x.key.clone());
+            let Some(h) = local.get(&k) else { continue };
+            // Изменилось после удаления (или пришло позже) — воскрешаем.
+            let changed_at = match known.get(&k) { Some((kh, at)) if kh == h => at.clone(), _ => t.clone() };
+            // Правка в ту же миллисекунду, что и удаление, считается более поздней: правка побеждает.
+            if changed_at >= x.deleted_at { x.revived_at = Some(t.clone()); }
+        }
+        let cutoff = (chrono::Utc::now() - chrono::Duration::days(KEEP_DAYS)).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        tombs.retain(|x| x.last() >= cutoff.as_str());
+        Ok(tombs)
+    }
+
+    /// Убрать похороненное из общих файлов и записать `deleted.json`.
+    pub(crate) fn strip_shared(dir: &Path, tombs: &mut Vec<Tombstone>, changed: &mut Vec<String>) -> Result<(), CoreError> {
+        if tombs.is_empty() && !dir.join(FILE).exists() { return Ok(()); }
+        let gone = |kind: &str, key: &str| tombs.iter().any(|t| t.dead() && t.kind == kind && t.key == key);
+        if let Ok(text) = fs::read_to_string(dir.join("ssh/config")) {
+            let mut doc = Document::new(&text);
+            let mut cut = false;
+            for a in parse_config(text.clone()).into_iter().map(|h| h.alias).filter(|a| gone("host", a)) {
+                while take_alias(&mut doc, &a).is_some() { cut = true; }
+            }
+            if cut {
+                while doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) { doc.lines.pop(); }
+                write_if_changed(dir, "ssh/config", doc.text().as_bytes(), changed)?;
+            }
+        }
+        for (kind, rel) in [("snippet", "relaya/snippets.json"), ("tunnel", "relaya/tunnels.json"), ("desktop", "relaya/desktops.json")] {
+            let Ok(j) = fs::read_to_string(dir.join(rel)) else { continue };
+            let list: Vec<serde_json::Value> = try_decode_list(&j).map_err(|e| broken(rel, e))?;
+            let kept: Vec<serde_json::Value> = list.iter().filter(|v| !gone(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or(""))).cloned().collect();
+            if kept.len() != list.len() { write_if_changed(dir, rel, encode_sorted(&kept).as_bytes(), changed)?; }
+        }
+        tombs.sort_by(|a, b| (&a.kind, &a.key).cmp(&(&b.kind, &b.key)));
+        write_if_changed(dir, FILE, encode_sorted(&tombs).as_bytes(), changed)?;
+        Ok(())
+    }
+
+    /// Удалить локально то, что похоронено и не менялось здесь после удаления.
+    pub(crate) fn apply_locally(profile: &SyncProfile, paths: &SyncPaths, dir: &Path) -> Result<Vec<SyncItem>, CoreError> {
+        let tombs = load(dir)?;
+        if !tombs.iter().any(|t| t.dead()) { return Ok(vec![]); }
+        let known = load_snapshot(profile, paths);
+        let local = local_items(profile, paths)?;
+        let doomed = |kind: &str, key: &str| {
+            let k = (kind.to_string(), key.to_string());
+            let Some(t) = tombs.iter().find(|t| t.dead() && t.kind == kind && t.key == key) else { return false };
+            match (local.get(&k), known.get(&k)) {
+                (Some(h), Some((kh, at))) => h == kh && at.as_str() < t.deleted_at.as_str(),
+                _ => false,
+            }
+        };
+        let mut changed = Vec::new();
+        if let Ok(text) = fs::read_to_string(paths.config()) {
+            let mut doc = Document::new(&text);
+            let mut cut = false;
+            for h in parse_config(text.clone()) {
+                if doomed("host", &h.alias) { while take_alias(&mut doc, &h.alias).is_some() { cut = true; } }
+            }
+            if cut {
+                while doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) { doc.lines.pop(); }
+                let bak = Path::new(&paths.ssh).join("config.bak");
+                fs::copy(paths.config(), &bak).map_err(|e| CoreError::Io(format!("config.bak: {e}")))?;
+                set_private(&bak);
+                write_private_atomic(&paths.config(), doc.text().as_bytes())?;
+                changed.push(SyncItem::SshConfig);
+            }
+        }
+        for (kind, name, item) in [("snippet", "snippets.json", SyncItem::Snippets), ("tunnel", "tunnels.json", SyncItem::Tunnels),
+                                   ("desktop", "desktops.json", SyncItem::Desktops)] {
+            let Ok(j) = fs::read_to_string(paths.support(name)) else { continue };
+            let list: Vec<serde_json::Value> = try_decode_list(&j).map_err(|e| broken(name, e))?;
+            let kept: Vec<serde_json::Value> = list.iter().filter(|v| !doomed(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or(""))).cloned().collect();
+            if kept.len() != list.len() {
+                write_atomic(&paths.support(name), encode_sorted(&kept).as_bytes())?;
+                changed.push(item);
+            }
+        }
+        Ok(changed)
     }
 }
