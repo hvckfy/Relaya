@@ -99,13 +99,9 @@ internal static class AskpassBroker
         {
             if (++g.Uses > 3) { grants.TryRemove(token, out _); return null; }
         }
-        // Настройка «Подтверждать каждое использование пароля»: системный диалог, «Нет» по умолчанию.
-        if (Settings.GetFresh("security.confirmPassword", "0") == "1")
-        {
-            var text = Strings.L("ssh просит пароль %@:", g.Account) + "\n\n" + prompt;
-            const uint flags = 0x4 /* YESNO */ | 0x20 /* ICONQUESTION */ | 0x100 /* DEFBUTTON2 */ | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */;
-            if (MessageBoxW(IntPtr.Zero, text, "Relaya", flags) != 6) return null;
-        }
+        // Настройка «Подтверждать каждое использование пароля»: Windows Hello, без него — диалог с «Нет» по умолчанию.
+        if (Settings.GetFresh("security.confirmPassword", "0") == "1"
+            && !Consent.Ask(Strings.L("ssh просит пароль %@:", g.Account) + "\n\n" + prompt)) return null;
         return CredentialStore.Read(g.Account);
     }
 
@@ -177,7 +173,4 @@ internal static class AskpassBroker
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetNamedPipeClientProcessId(IntPtr pipe, out uint clientProcessId);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 }
