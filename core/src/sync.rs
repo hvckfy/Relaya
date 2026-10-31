@@ -250,7 +250,8 @@ pub fn sync_import(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
                 config_extract(incoming, wanted)
             };
             let local = fs::read_to_string(paths.config()).unwrap_or_default();
-            let merged = config_merge(local.clone(), incoming);
+            // UseKeychain с Mac ломает ssh на Windows и Linux — там конфиг получает IgnoreUnknown.
+            let merged = crate::ssh_config::config_for_platform(config_merge(local.clone(), incoming), crate::ssh_config::ConfigPlatform::current());
             if merged != local {
                 fs::create_dir_all(&paths.ssh)?;
                 // Без копии конфиг не меняем: ошибка бэкапа прерывает импорт.
@@ -858,5 +859,15 @@ mod tests {
         assert!(a.path().join("tunnels.json.bak").exists());
         assert!(matches!(sync_export(p, paths(a.path()), None, d), Err(CoreError::Json(_))));
         assert_eq!(fs::read_to_string(dir.path().join("relaya/tunnels.json")).unwrap(), "[]");
+    }
+
+    #[test]
+    fn imported_mac_config_is_readable_by_local_ssh() {
+        let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        fs::create_dir_all(dir.path().join("ssh")).unwrap();
+        fs::write(dir.path().join("ssh/config"), "Host m\n    IdentityFile ~/.ssh/k\n    UseKeychain yes\n").unwrap();
+        sync_import(sync_new_profile("all".into()), paths(a.path()), None, dir.path().to_string_lossy().into()).unwrap();
+        let cfg = fs::read_to_string(a.path().join("config")).unwrap();
+        assert_eq!(cfg.starts_with("IgnoreUnknown UseKeychain\n"), !cfg!(target_os = "macos"), "{cfg}");
     }
 }

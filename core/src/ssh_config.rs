@@ -36,6 +36,13 @@ pub struct SshHost {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ConfigPlatform { Macos, Windows, Linux }
 
+impl ConfigPlatform {
+    /// Система, на которой работает ядро (Linux — и для прочих Unix, кроме macOS).
+    pub fn current() -> Self {
+        if cfg!(target_os = "macos") { ConfigPlatform::Macos } else if cfg!(windows) { ConfigPlatform::Windows } else { ConfigPlatform::Linux }
+    }
+}
+
 impl SshHost {
     pub fn new(alias: &str) -> Self {
         SshHost { alias: alias.to_string(), ..Default::default() }
