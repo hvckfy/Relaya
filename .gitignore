@@ -10,3 +10,8 @@ core/build/
 Sources/RelayaRust/*.swift
 # Глобальный .gitignore может игнорировать bin/ — генератор UniFFI нужен в репозитории.
 !core/src/bin/
+
+# Windows-клиент
+windows/**/bin/
+windows/**/obj/
+windows/Relaya.Windows/Core/*.cs
