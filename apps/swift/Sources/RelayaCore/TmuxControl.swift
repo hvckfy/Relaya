@@ -10,6 +10,8 @@ public enum TmuxControl {
         case windowAdd(window: String)
         case windowClose(window: String)
         case windowRenamed(window: String, name: String)
+        /// В окне сменилась активная панель — вывод окна теперь идёт из неё.
+        case windowPaneChanged(window: String, pane: String)
         /// Ответ на команду клиента: строки между `%begin` и `%end`/`%error`.
         case reply(lines: [String], error: Bool)
         case exit(reason: String?)
@@ -28,6 +30,7 @@ public enum TmuxControl {
                 case .windowAdd(let w): .windowAdd(window: w)
                 case .windowClose(let w): .windowClose(window: w)
                 case .windowRenamed(let w, let n): .windowRenamed(window: w, name: n)
+                case .windowPaneChanged(let w, let p): .windowPaneChanged(window: w, pane: p)
                 case .reply(let lines, let error): .reply(lines: lines, error: error)
                 case .exit(let reason): .exit(reason: reason)
                 }
