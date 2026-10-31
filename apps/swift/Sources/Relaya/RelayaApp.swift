@@ -15,6 +15,10 @@ struct RelayaApp: App {
                 .id(model.settings.themeRevision)
                 .frame(minWidth: 900, minHeight: 560)
                 .task {
+                    // Запуск приложения — один раз, а не на каждое новое окно (⌘N или повторное открытие).
+                    appDelegate.model = model
+                    guard !model.started else { return }
+                    model.started = true
                     model.settings.applyAppearance()
                     model.reloadHosts()
                     model.tunnels.startAutoStart(hosts: model.hosts)
@@ -139,12 +143,18 @@ struct RelayaApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    weak var model: AppModel?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// Работающие туннели живут в строке меню — закрытие последнего окна их не убивает.
+    @MainActor
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !(model?.tunnels.anyRunning ?? false)
+    }
 }
 
 /// Меню значка в строке меню: туннели с переключением и быстрый переход в Relaya.

@@ -38,6 +38,8 @@ final class TunnelManager {
 
     func status(of tunnel: Tunnel) -> Status { status[tunnel.id] ?? .stopped }
 
+    var anyRunning: Bool { status.values.contains { $0 == .running || $0 == .starting } }
+
     // MARK: - Список
 
     /// Перечитать список с диска (после синхронизации).

@@ -15,17 +15,28 @@ public struct SSHConfigStore: Sendable {
         return SSHConfigDocument(text: try String(contentsOf: url, encoding: .utf8))
     }
 
-    public func save(_ document: SSHConfigDocument) throws {
+    /// Записать конфиг: копия в config.bak (если `backup`), затем временный файл с правами 600 и атомарная замена —
+    /// окна, когда конфиг доступен другим (0644), нет.
+    /// Фоновые правки одних метаданных (`backup: false`) не затирают копию, сделанную перед правкой пользователя.
+    public func save(_ document: SSHConfigDocument, backup: Bool = true) throws {
         let fm = FileManager.default
         let dir = url.deletingLastPathComponent()
         if !fm.fileExists(atPath: dir.path) {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         }
-        if fm.fileExists(atPath: url.path) {
+        if backup, fm.fileExists(atPath: url.path) {
             if fm.fileExists(atPath: backupURL.path) { try fm.removeItem(at: backupURL) }
             try fm.copyItem(at: url, to: backupURL)
         }
-        try Data(document.text.utf8).write(to: url, options: .atomic)
+        let tmp = dir.appending(path: ".config.relaya-\(UUID().uuidString.prefix(8))")
+        guard fm.createFile(atPath: tmp.path, contents: Data(document.text.utf8), attributes: [.posixPermissions: 0o600]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        if fm.fileExists(atPath: url.path) {
+            _ = try fm.replaceItemAt(url, withItemAt: tmp)
+        } else {
+            try fm.moveItem(at: tmp, to: url)
+        }
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 }

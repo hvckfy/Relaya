@@ -252,6 +252,8 @@ final class AppModel {
     var editor: EditorRequest?
     var pendingDelete: SSHHost?
     var alertMessage: String?
+    /// Запуск (хосты, автостарт туннелей, синхронизация) уже выполнен — второе окно его не повторяет.
+    @ObservationIgnored var started = false
     /// Хост, для которого запрошено имя новой группы.
     var newGroupFor: SSHHost?
     /// Ждёт подтверждения: запретить вход по паролю на хосте.
@@ -421,10 +423,10 @@ final class AppModel {
     }
 
     /// Только строка `# relaya:` хоста — директивы блока не трогаются (смена группы, ОС).
-    private func saveMeta(_ host: SSHHost) throws {
+    private func saveMeta(_ host: SSHHost, backup: Bool = true) throws {
         var doc = try store.loadDocument()
         try doc.setMeta(of: host)
-        try store.save(doc)
+        try store.save(doc, backup: backup)
         reloadHosts()
     }
 
@@ -999,7 +1001,8 @@ final class AppModel {
         guard var host = hosts.first(where: { $0.alias == alias }), host.os != os else { return }
         if onlyIfUnknown, host.os != nil { return }
         host.os = os
-        try? saveMeta(host)
+        // Фоновое определение ОС не трогает config.bak — там остаётся копия до последней правки пользователя.
+        try? saveMeta(host, backup: false)
     }
 
     func finishOnboarding() {
