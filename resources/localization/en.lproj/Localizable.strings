@@ -954,3 +954,9 @@
 "На этом адресе и порту VNC не принимает соединения: проверьте порт (обычно 5900, дисплей :1 — 5901) и что общий экран включён." = "VNC does not accept connections at this address and port: check the port (usually 5900, display :1 is 5901) and that screen sharing is on.";
 "Сервер VNC не отвечает" = "The VNC server does not respond";
 "Проверьте адрес, сеть, VPN и файрвол (порт 5900); сервер может быть выключен." = "Check the address, network, VPN and firewall (port 5900); the server may be off.";
+"Ввести пароль" = "Enter Password";
+"Подтвердите команду %@ на %@, показанную в предыдущем окне" = "Confirm the %@ command on %@ shown in the previous window";
+"%@ хочет выполнить на %@: %@" = "%@ wants to run on %@: %@";
+"%@ хочет выполнить на %@" = "%@ wants to run on %@";
+"… (ещё %@ символов — отклоните)" = "… (%@ more characters — deny it)";
+"Relaya — запрос агента" = "Relaya — agent request";

@@ -142,18 +142,18 @@ public final class MCPServer {
     /// «Запретить» — отказ. Без Touch ID и пароля на Mac — обычный диалог с кнопками.
     static func askWithDialog(host: SSHHost, command: String, client: String) async -> Bool {
         let context = LAContext()
-        context.localizedCancelTitle = "Запретить"
-        context.localizedFallbackTitle = "Ввести пароль"
+        context.localizedCancelTitle = L("Запретить")
+        context.localizedFallbackTitle = L("Ввести пароль")
         var error: NSError?
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
             // Окно Touch ID вмещает ~160 символов. Длинную команду сначала показываем целиком
             // (диалог, «Запретить» по умолчанию), и только потом просим Touch ID — подтверждается то, что видно.
             if command.count > 160 {
                 guard await askWithButtons(host: host, command: command, client: client) else { return false }
-                let reason = "Подтвердите команду \(client) на \(host.alias), показанную в предыдущем окне"
+                let reason = L("Подтвердите команду %@ на %@, показанную в предыдущем окне", client, host.alias)
                 return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
             }
-            let reason = "\(client) хочет выполнить на \(host.alias): \(command)"
+            let reason = L("%@ хочет выполнить на %@: %@", client, host.alias, command)
             return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
         }
         return await askWithButtons(host: host, command: command, client: client)
@@ -163,14 +163,17 @@ public final class MCPServer {
     static func askWithButtons(host: SSHHost, command: String, client: String) async -> Bool {
         func esc(_ s: String) -> String { s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
         // Команда целиком: подтверждать можно только то, что видно (обрезаем лишь совсем огромные, с пометкой).
-        let shown = command.count > 4000 ? String(command.prefix(4000)) + "\n… (ещё \(command.count - 4000) символов — отклоните)" : command
+        let shown = command.count > 4000
+            ? String(command.prefix(4000)) + "\n" + L("… (ещё %@ символов — отклоните)", "\(command.count - 4000)") : command
         let tags = host.tags.isEmpty ? "" : " [\(host.tags.joined(separator: ", "))]"
+        let (deny, allow) = (esc(L("Запретить")), esc(L("Разрешить")))
+        let question = esc(L("%@ хочет выполнить на %@", client, host.alias)) + esc(tags)
         let script = """
-        set answer to display dialog "\(esc(client)) хочет выполнить на \(esc(host.alias))\(esc(tags)):\n\n\(esc(shown))" ¬
-            with title "Relaya — запрос агента" buttons {"Запретить", "Разрешить"} default button "Запретить" ¬
-            cancel button "Запретить" with icon caution giving up after 120
+        set answer to display dialog "\(question):\n\n\(esc(shown))" ¬
+            with title "\(esc(L("Relaya — запрос агента")))" buttons {"\(deny)", "\(allow)"} default button "\(deny)" ¬
+            cancel button "\(deny)" with icon caution giving up after 120
         if gave up of answer then error number -128
-        if button returned of answer is "Разрешить" then return "RELAYA_ALLOW"
+        if button returned of answer is "\(allow)" then return "RELAYA_ALLOW"
         return "RELAYA_DENY"
         """
         // Ответ — ASCII: у процесса MCP бывает локаль без UTF-8, и osascript печатает кириллицу как «?»,
