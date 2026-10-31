@@ -26,6 +26,7 @@ public struct SSHInvocation: Sendable {
 public enum StreamTransfer {
     public struct Failure: Error, LocalizedError {
         public var message: String
+        public init(message: String) { self.message = message }
         public var errorDescription: String? { message }
     }
 
@@ -156,7 +157,7 @@ public enum StreamTransfer {
         func add(_ n: Int) -> Int64 { lock.withLock { value += Int64(n); return value } }
     }
 
-    static func quote(_ s: String) -> String {
+    public static func quote(_ s: String) -> String {
         "'" + s.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
     }
 
