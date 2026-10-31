@@ -382,10 +382,21 @@ impl McpDecision {
     }
 }
 
+/// Имя агента из `clientInfo.name` (M-MCP-3): без управляющих символов и переводов строк, не длиннее 60 символов;
+/// пустое — ключ «агент».
+pub(crate) fn mcp_client_name(raw: &str) -> String {
+    let clean: String = raw.chars().filter(|c| !c.is_control()).collect::<String>().trim().chars().take(60).collect();
+    if clean.is_empty() { crate::localize::MCP_UNKNOWN_CLIENT.into() } else { clean }
+}
+
 /// Пароли и токены не попадают в журнал: `password=…`, `--token x`, `Authorization: Bearer …` → `***`.
 #[uniffi::export]
 pub fn mcp_mask_secrets(text: String) -> String {
     use std::sync::OnceLock;
+    static KEYS: OnceLock<regex::Regex> = OnceLock::new();
+    // M-MCP-1: закрытый ключ целиком (PEM/OpenSSH) — до остальных правил.
+    let keys = KEYS.get_or_init(|| regex::Regex::new(r"(?s)-----BEGIN [A-Z0-9 ]*KEY-----.*?(-----END [A-Z0-9 ]*KEY-----|$)").unwrap());
+    let text = keys.replace_all(&text, "[private key]").into_owned();
     static RULES: OnceLock<[regex::Regex; 3]> = OnceLock::new();
     let r = RULES.get_or_init(|| [
         regex::Regex::new(r"(?i)(authorization\s*:\s*(?:bearer|basic|token)?\s*)[^\s'\x22]+").unwrap(),
@@ -495,7 +506,7 @@ impl McpServer {
         let params = msg.get("params").cloned().unwrap_or(json!({}));
         let result = match method {
             "initialize" => {
-                if let Some(n) = params.pointer("/clientInfo/name").and_then(Value::as_str) { *self.client.lock().unwrap() = n.into(); }
+                if let Some(n) = params.pointer("/clientInfo/name").and_then(Value::as_str) { *self.client.lock().unwrap() = mcp_client_name(n); }
                 json!({
                     "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or("2025-06-18"),
                     "capabilities": {"tools": {}},
@@ -588,7 +599,9 @@ impl McpServer {
                 };
                 let r = self.backend.execute(host, command.clone(), timeout);
                 let tail: String = { let o = format!("{}{}", r.stdout, if r.stderr.is_empty() { String::new() } else { format!("\n{}", r.stderr) }); let c: Vec<char> = o.chars().collect(); c[c.len().saturating_sub(2000)..].iter().collect() };
-                self.record(name, alias, &command, decision, Some(r.status), !is_read, Some(tail));
+                // M-MCP-1: содержимое read_file в журнал не пишем — только путь и размер.
+                let logged = if name == "read_file" { format!("[{} bytes]", r.stdout.len()) } else { tail };
+                self.record(name, alias, &command, decision, Some(r.status), !is_read, Some(logged));
                 let mut text = r.stdout.clone();
                 if !r.stderr.is_empty() { if !text.is_empty() { text.push('\n'); } text += "[stderr]\n"; text += &r.stderr; }
                 if text.chars().count() > 50_000 { text = text.chars().take(50_000).collect::<String>() + "\n…[вывод обрезан]"; }
@@ -620,6 +633,17 @@ mod tests {
     fn call(s: &McpServer, tool: &str, args: Value) -> Value {
         let line = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": args}}).to_string();
         serde_json::from_str::<Value>(&s.handle(line).unwrap()).unwrap()["result"].clone()
+    }
+
+    #[test]
+    fn masks_private_keys_and_cleans_client_name() {
+        let key = "before\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk\nAAAA\n-----END OPENSSH PRIVATE KEY-----\nafter";
+        let m = mcp_mask_secrets(key.into());
+        assert_eq!(m, "before\n[private key]\nafter");
+        assert_eq!(mcp_mask_secrets("-----BEGIN RSA PRIVATE KEY-----\nMIIE truncated".into()), "[private key]");
+        assert_eq!(mcp_client_name("Claude\u{1b}[31m\nDesktop\r"), "Claude[31mDesktop");
+        assert_eq!(mcp_client_name(&"x".repeat(100)).chars().count(), 60);
+        assert_eq!(mcp_client_name(" \n\t "), "агент");
     }
 
     #[test]
