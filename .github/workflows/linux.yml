@@ -1,0 +1,31 @@
+name: Linux
+
+# Ветка main — проверка ядра и pty; пакеты (AppImage, .deb) добавятся вместе с приложением на Uno.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build Rust core + C# bindings
+        run: scripts/build-core-linux.sh
+      # pty: вывод, управляющий терминал, размер окна, ввод, ssh из PATH.
+      - name: pty smoke test
+        run: dotnet run --project apps/dotnet/Relaya.Linux.Smoke -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: relaya-core-linux-x64
+          path: |
+            core/target/release/librelaya_core.so
+            apps/dotnet/Relaya.Linux/Core/
