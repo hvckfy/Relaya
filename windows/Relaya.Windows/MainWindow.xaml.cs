@@ -78,14 +78,19 @@ public sealed partial class MainWindow : Window
     private void OnItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
         if (args.InvokedItemContainer?.Tag is not SshHost h) return;
+        var view = new Terminal.TerminalView();
+        var session = new Terminal.SshSession(view);
         var tab = new TabViewItem
         {
             Header = h.alias,
-            IconSource = new FontIconSource { Glyph = "" },
-            Content = DemoTerminal(h),
+            IconSource = new FontIconSource { Glyph = "\uE756" },
+            Content = view,
+            Tag = session,
         };
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
+        // Размер в ячейках известен после первой раскладки — тогда и запускаем ssh.
+        view.Loaded += (_, _) => { session.Start(h.alias); view.Focus(FocusState.Programmatic); };
     }
 
     private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
