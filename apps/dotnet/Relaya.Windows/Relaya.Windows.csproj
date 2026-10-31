@@ -13,6 +13,7 @@
     <!-- .NET внутри сборки: пользователю не нужно ставить runtime. -->
     <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
+    <ApplicationIcon>Assets\Relaya.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Сгенерированные UniFFI-привязки не проходят наши предупреждения. -->
     <!-- Свой Main (Program.cs): askpass- и MCP-режимы без окна. -->
@@ -23,6 +24,9 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250108002" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\Relaya.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Переводы общие с Mac: ключи — русские строки, en.lproj — английский. -->
   <ItemGroup>

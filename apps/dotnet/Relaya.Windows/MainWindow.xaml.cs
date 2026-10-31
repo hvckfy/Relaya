@@ -21,6 +21,7 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
         Title = "Relaya";
+        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Relaya.ico"));
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 820));
         ConfigPath.Text = AppState.ConfigPath;
         Search.PlaceholderText = L("Поиск хостов");
