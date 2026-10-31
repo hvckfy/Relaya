@@ -117,8 +117,24 @@ pub fn is_pattern(alias: String) -> bool {
     alias.chars().any(|c| "*?!".contains(c))
 }
 
-/// `Key value`, `Key=value`, `Key = "value"` → (ключ в нижнем регистре, значение).
+/// Хвост `# …` после значения — комментарий: `#` вне кавычек, перед которым пробел.
+pub(crate) fn strip_comment(line: &str) -> &str {
+    let mut quoted = false;
+    let mut prev_space = false;
+    for (i, c) in line.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            '#' if !quoted && prev_space => return line[..i].trim_end(),
+            _ => {}
+        }
+        prev_space = c.is_whitespace();
+    }
+    line
+}
+
+/// `Key value`, `Key=value`, `Key = "value"`, `Key value # заметка` → (ключ в нижнем регистре, значение).
 pub(crate) fn split_key_value(line: &str) -> (String, String) {
+    let line = if line.trim_start().starts_with('#') { line } else { strip_comment(line) };
     let is_sep = |c: char| c.is_whitespace() || c == '=';
     match line.find(is_sep) {
         None => (line.to_lowercase(), String::new()),
@@ -597,6 +613,17 @@ mod tests {
         assert_eq!(parse_destination("ssh://u@h:22/".into()), d(Some("u"), "h", Some(22)));
         assert_eq!(parse_destination("@h:99999".into()), d(None, "h:99999", None));
         assert_eq!(parse_destination("".into()), d(None, "", None));
+    }
+
+    #[test]
+    fn trailing_comments_are_not_values() {
+        let h = parse_config("Host web # production\n    HostName x.example # note\n    IdentityFile \"~/.ssh/a #1\"\n    User a#b\n".into());
+        assert_eq!(h.len(), 1);
+        assert_eq!(h[0].alias, "web");
+        assert_eq!(h[0].host_name.as_deref(), Some("x.example"));
+        assert_eq!(h[0].identity_file.as_deref(), Some("~/.ssh/a #1"));
+        assert_eq!(h[0].user.as_deref(), Some("a#b"));
+        assert!(!Document::new("Host web # production\n").block("web").unwrap().is_shared);
     }
 
     #[test]

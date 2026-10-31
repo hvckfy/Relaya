@@ -882,3 +882,5 @@
 "Сертификат сервера" = "Server Certificate";
 "Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:" = "First connection to %@. Check the certificate fingerprint (SHA-256) against the server:";
 "вкладка Relaya" = "Relaya tab";
+"Ключи с другой машины сохранены отдельно" = "Keys from another machine were saved separately";
+"У этих ключей на другой машине другое содержимое. Ваши файлы не тронуты, пришедшие лежат рядом:" = "These keys have different contents on the other machine. Your files are untouched; the incoming ones are saved next to them:";

@@ -6,6 +6,7 @@ use crate::ssh_config::{is_pattern, parse_destination, Document};
 
 fn key_of(line: &str) -> (String, String) {
     let t = line.trim();
+    let t = if t.starts_with('#') { t } else { crate::ssh_config::strip_comment(t) };
     let mut it = t.splitn(2, |c: char| c.is_whitespace() || c == '=');
     let k = it.next().unwrap_or("").to_lowercase();
     let v = it.next().unwrap_or("").trim().trim_start_matches('=').trim().trim_matches('"').to_string();

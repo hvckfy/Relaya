@@ -47,6 +47,13 @@ struct SyncSettings: View {
         }
         .formStyle(.grouped)
         .frame(height: 520)
+        .alert(L("Ключи с другой машины сохранены отдельно"),
+               isPresented: Binding(get: { !sync.renamedKeys.isEmpty }, set: { if !$0 { sync.renamedKeys = [] } })) {
+            Button("OK") { sync.renamedKeys = [] }
+        } message: {
+            Text(L("У этих ключей на другой машине другое содержимое. Ваши файлы не тронуты, пришедшие лежат рядом:")
+                 + "\n\n" + sync.renamedKeys.map { "\($0.name) → \($0.savedAs)" }.joined(separator: "\n"))
+        }
         .sheet(item: Binding(get: { editing.map(Edited.init) }, set: { editing = $0?.id })) { e in
             if let i = sync.profiles.firstIndex(where: { $0.id == e.id }) {
                 VStack(spacing: 0) {

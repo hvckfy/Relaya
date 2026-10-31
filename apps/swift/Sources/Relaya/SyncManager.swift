@@ -164,9 +164,13 @@ final class SyncManager {
 
     func lastSync(_ p: Sync.Profile) -> Date? { lastSync[p.id.uuidString] }
 
+    /// Ключи с другой машины, не совпавшие с местными одноимёнными (сохранены рядом как `.from-sync`).
+    var renamedKeys: [(name: String, savedAs: String)] = []
+
     private func finish(_ id: Sync.Profile.ID, _ imported: [Sync.Item]) {
         lastSync[id.uuidString] = Date()
         states[id] = .idle
+        renamedKeys += Sync.takeRenamedKeys()
         if !imported.isEmpty { onImported?(imported) }
     }
 }

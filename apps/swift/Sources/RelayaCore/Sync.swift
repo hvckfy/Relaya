@@ -268,3 +268,11 @@ extension CoreError {
         return Mirror(reflecting: value).children.first?.value as? String ?? "\(self)"
     }
 }
+
+extension Sync {
+    /// Ключи, пришедшие при импорте с тем же именем, но другим содержимым: сохранены как `<имя>.from-sync`.
+    /// Ядро отдаёт список один раз — показать пользователю после синхронизации.
+    public static func takeRenamedKeys(paths: Paths = Paths()) -> [(name: String, savedAs: String)] {
+        syncTakeRenamedKeys(paths: paths.rust).map { ($0.name, $0.savedAs) }
+    }
+}
