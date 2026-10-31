@@ -30,12 +30,17 @@ public enum StreamTransfer {
         public var errorDescription: String? { message }
     }
 
-    /// Скачать `remotePath` в `localURL`. При ошибке или отмене частичный файл удаляется.
+    /// Скачать `remotePath` в `localURL`: сначала в `.имя.part` рядом, каждая запись проверяется,
+    /// и только после успеха файл переименовывается. Существующий `localURL` до этого не трогается.
     public static func download(_ ssh: SSHInvocation, remotePath: String, to localURL: URL,
                                 progress: @escaping @Sendable (Int64) -> Void) async throws {
-        FileManager.default.createFile(atPath: localURL.path, contents: nil)
-        let out = try FileHandle(forWritingTo: localURL)
+        let part = localURL.deletingLastPathComponent().appending(path: ".\(localURL.lastPathComponent).\(UUID().uuidString.prefix(8)).part")
+        guard FileManager.default.createFile(atPath: part.path, contents: nil) else {
+            throw Failure(message: L("Не удалось создать файл %@", part.path))
+        }
+        let out = try FileHandle(forWritingTo: part)
         let box = ProcessBox()
+        let writeError = ErrorBox()
         do {
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
@@ -48,50 +53,71 @@ public enum StreamTransfer {
                     let reader = stdout.fileHandleForReading
                     let errReader = stderr.fileHandleForReading
                     let counter = Counter()
+                    // Диск полон или файл недоступен — останавливаем ssh, а не теряем данные молча.
+                    let write: (Data) -> Void = { data in
+                        guard writeError.error == nil else { return }
+                        do {
+                            try out.write(contentsOf: data)
+                            progress(counter.add(data.count))
+                        } catch {
+                            writeError.error = error
+                            box.terminate()
+                        }
+                    }
                     reader.readabilityHandler = { h in
                         let data = h.availableData
                         guard !data.isEmpty else { h.readabilityHandler = nil; return }
-                        try? out.write(contentsOf: data)
-                        progress(counter.add(data.count))
+                        write(data)
                     }
                     process.terminationHandler = { p in
                         reader.readabilityHandler = nil
                         let rest = reader.readDataToEndOfFile()
-                        if !rest.isEmpty {
-                            try? out.write(contentsOf: rest)
-                            progress(counter.add(rest.count))
-                        }
-                        try? out.close()
+                        if !rest.isEmpty { write(rest) }
                         let err = String(decoding: errReader.readDataToEndOfFile(), as: UTF8.self)
-                        if p.terminationStatus == 0 {
+                        if let e = writeError.error {
+                            cont.resume(throwing: Failure(message: L("Ошибка записи на диск: %@", e.localizedDescription)))
+                        } else if p.terminationStatus == 0 {
                             cont.resume()
                         } else {
-                            cont.resume(throwing: Failure(message: lastLine(err) ?? "ssh: \(p.terminationStatus)"))
+                            cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)")))
                         }
                     }
+                    if box.cancelled { cont.resume(throwing: CancellationError()); return }
                     box.process = process
                     do { try process.run() } catch { cont.resume(throwing: error) }
                 }
             } onCancel: {
                 box.terminate()
             }
+            try out.synchronize()
+            try out.close()
+            if Task.isCancelled { throw CancellationError() }
+            if FileManager.default.fileExists(atPath: localURL.path) {
+                _ = try FileManager.default.replaceItemAt(localURL, withItemAt: part)
+            } else {
+                try FileManager.default.moveItem(at: part, to: localURL)
+            }
         } catch {
             try? out.close()
-            try? FileManager.default.removeItem(at: localURL)
+            try? FileManager.default.removeItem(at: part)
             throw error
-        }
-        if Task.isCancelled {
-            try? FileManager.default.removeItem(at: localURL)
-            throw CancellationError()
         }
     }
 
-    /// Загрузить файл в `remoteDirectory/name`: сначала во временный файл, затем атомарно переименовать.
+    /// Загрузить файл в `remoteDirectory/name`: во временный файл с уникальным именем, проверить размер,
+    /// перенести права существующего файла и только потом атомарно заменить. Обрыв, отмена или ошибка чтения
+    /// оставляют оригинал на месте.
     public static func upload(_ ssh: SSHInvocation, localURL: URL, remoteDirectory: String, name: String,
                               progress: @escaping @Sendable (Int64) -> Void) async throws {
+        if Task.isCancelled { throw CancellationError() }
         let target = join(remoteDirectory, name)
-        let temp = join(remoteDirectory, ".\(name).relaya-part")
-        let command = "cat > \(quote(temp)) && mv -f -- \(quote(temp)) \(quote(target)) || { rm -f -- \(quote(temp)); exit 1; }"
+        let temp = join(remoteDirectory, ".\(name).\(UUID().uuidString.prefix(8).lowercased()).relaya-part")
+        let size = (try FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? NSNumber)?.int64Value ?? -1
+        let (t, g) = (quote(temp), quote(target))
+        let command = "cat > \(t) || { rm -f -- \(t); exit 1; }; "
+            + "if [ \"$(wc -c < \(t) | tr -d ' ')\" != \"\(size)\" ]; then rm -f -- \(t); echo 'relaya: size mismatch, upload incomplete' >&2; exit 1; fi; "
+            + "if [ -e \(g) ]; then chmod --reference=\(g) \(t) 2>/dev/null || chmod \"$(stat -f %Lp \(g) 2>/dev/null || stat -c %a \(g))\" \(t) 2>/dev/null; fi; "
+            + "mv -f -- \(t) \(g) || { rm -f -- \(t); exit 1; }"
         let input = try FileHandle(forReadingFrom: localURL)
         let box = ProcessBox()
         try await withTaskCancellationHandler {
@@ -104,22 +130,35 @@ public enum StreamTransfer {
                 process.standardError = stderr
                 let writer = stdin.fileHandleForWriting
                 let errReader = stderr.fileHandleForReading
+                let readError = ErrorBox()
                 process.terminationHandler = { p in
                     let err = String(decoding: errReader.readDataToEndOfFile(), as: UTF8.self)
-                    if p.terminationStatus == 0 {
+                    if let e = readError.error {
+                        cont.resume(throwing: Failure(message: L("Не удалось прочитать файл: %@", e.localizedDescription)))
+                    } else if p.terminationStatus == 0 {
                         cont.resume()
                     } else {
-                        cont.resume(throwing: Failure(message: lastLine(err) ?? "ssh: \(p.terminationStatus)"))
+                        cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)")))
                     }
                 }
+                if box.cancelled { try? input.close(); cont.resume(throwing: CancellationError()); return }
                 box.process = process
-                do { try process.run() } catch { cont.resume(throwing: error); return }
+                do { try process.run() } catch { try? input.close(); cont.resume(throwing: error); return }
                 // Запись в pipe блокирует — отдельный поток. SIGPIPE игнорируется приложением.
+                // Ошибка чтения не превращается в «конец файла»: размер не сойдётся, и сервер оставит оригинал.
                 let counter = Counter()
                 Thread.detachNewThread {
                     defer { try? writer.close(); try? input.close() }
                     while !box.cancelled {
-                        guard let chunk = try? input.read(upToCount: 256 * 1024), !chunk.isEmpty else { break }
+                        let chunk: Data
+                        do {
+                            guard let c = try input.read(upToCount: 256 * 1024), !c.isEmpty else { break }
+                            chunk = c
+                        } catch {
+                            readError.error = error
+                            box.terminate()
+                            break
+                        }
                         do { try writer.write(contentsOf: chunk) } catch { break }
                         progress(counter.add(chunk.count))
                     }
@@ -148,6 +187,15 @@ public enum StreamTransfer {
                 _cancelled = true
                 if _process?.isRunning == true { _process?.terminate() }
             }
+        }
+    }
+
+    final class ErrorBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _error: Error?
+        var error: Error? {
+            get { lock.withLock { _error } }
+            set { lock.withLock { _error = newValue } }
         }
     }
 

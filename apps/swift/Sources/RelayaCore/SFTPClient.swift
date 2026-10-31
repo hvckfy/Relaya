@@ -43,14 +43,17 @@ public struct SFTPClient: Sendable {
     /// Выполняет команды sftp; ошибка любой из них прерывает пакет.
     @discardableResult
     public func run(_ commands: [String]) async throws -> String {
-        var args = ["-q", "-b", "-", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"]
+        // `sftp -b` сам ставит ssh `-oBatchMode yes`, а в ssh побеждает первое значение: для входа по паролю
+        // BatchMode=no должен стоять раньше `-b`, иначе askpass не вызывается.
+        var args = ["-q"]
         var env: [String: String] = [:]
         if let password {
             env = KeyInstaller(askpassExecutable: askpassExecutable).askpassEnvironment(password)
-            args += KeyInstaller.passwordOnlyOptions
+            args += ["-o", "BatchMode=no"] + KeyInstaller.passwordOnlyOptions
         } else {
             args += ["-o", "BatchMode=yes"]
         }
+        args += ["-b", "-", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"]
         let r = try await ProcessRunner.run("/usr/bin/sftp", args + [alias],
                                             environment: env, input: commands.joined(separator: "\n") + "\n")
         guard r.succeeded else {
