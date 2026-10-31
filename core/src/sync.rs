@@ -86,29 +86,78 @@ pub fn config_extract(text: String, aliases_in: Vec<String>) -> String {
     let doc = Document::new(&text);
     let mut sorted = aliases_in.clone();
     sorted.sort();
-    let mut taken: Vec<(u32, u32)> = Vec::new();
+    let mut taken: Vec<(u32, u32, u32)> = Vec::new();
     for a in sorted {
-        if let Some(b) = doc.block(&a) { if !taken.contains(&(b.start, b.end)) { taken.push((b.start, b.end)); } }
+        if let Some(b) = doc.block(&a) { if !taken.iter().any(|t| t.0 == b.start) { taken.push((b.start, b.host_line, b.end)); } }
     }
     taken.sort();
-    let blocks: Vec<String> = taken.iter().map(|(s, e)| doc.lines[*s as usize..*e as usize].join("\n")).collect();
+    // Из общего блока `Host a b` уходят только выбранные имена: невыбранное не должно попасть в общий файл.
+    let blocks: Vec<String> = taken.iter().map(|&(s, h, e)| {
+        let mut lines = doc.lines[s as usize..e as usize].to_vec();
+        let (_, v) = split_key_value(doc.lines[h as usize].trim());
+        let names = aliases(&v);
+        let chosen: Vec<&String> = names.iter().filter(|n| aliases_in.contains(n)).collect();
+        if chosen.len() < names.len() {
+            let indent: String = doc.lines[h as usize].chars().take_while(|c| c.is_whitespace()).collect();
+            lines[(h - s) as usize] = format!("{indent}Host {}", chosen.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(" "));
+        }
+        lines.join("\n")
+    }).collect();
     if blocks.is_empty() { String::new() } else { blocks.join("\n\n") + "\n" }
 }
 
+/// Убрать `alias` из локального конфига: из общего блока — только имя, свой блок — целиком.
+/// Возвращает место, куда встаёт пришедший блок, и вырезанный диапазон (start, len), если строки удалены.
+fn take_alias(doc: &mut Document, alias: &str) -> Option<(usize, Option<(usize, usize)>)> {
+    let b = doc.block(alias)?;
+    let (s, h, e) = (b.start as usize, b.host_line as usize, b.end as usize);
+    if b.is_shared {
+        let (_, v) = split_key_value(doc.lines[h].trim());
+        let rest: Vec<String> = aliases(&v).into_iter().filter(|n| n != alias).collect();
+        let indent: String = doc.lines[h].chars().take_while(|c| c.is_whitespace()).collect();
+        doc.lines[h] = format!("{indent}Host {}", rest.join(" "));
+        Some((e, None))
+    } else {
+        doc.lines.drain(s..e);
+        Some((s, Some((s, e - s))))
+    }
+}
+
 /// Пришедшие блоки заменяют одноимённые, новые — в конец; остальной файл не меняется.
+/// Общие блоки не теряют чужих имён: `Host a` из папки вырезает `a` из локального `Host a b`, а не весь блок.
 #[uniffi::export]
 pub fn config_merge(local: String, incoming: String) -> String {
     let mut doc = Document::new(&local);
     let source = Document::new(&incoming);
     let mut seen = HashSet::new();
+    let mut cut_any = false;
     for h in parse_config(incoming.clone()) {
         if seen.contains(&h.alias) { continue; }
         let Some(b) = source.block(&h.alias) else { continue };
         let block = source.lines[b.start as usize..b.end as usize].to_vec();
         let (_, v) = split_key_value(source.lines[b.host_line as usize].trim());
-        for a in aliases(&v) { seen.insert(a); }
-        doc.replace_or_append(&h.alias, block);
+        let names = aliases(&v);
+        let mut pos: Option<usize> = None;
+        for a in &names {
+            seen.insert(a.clone());
+            while let Some((p, cut)) = take_alias(&mut doc, a) {
+                if cut.is_some() { cut_any = true; }
+                if let (Some(cur), Some((start, len))) = (pos.as_mut(), cut) { if start < *cur { *cur -= len.min(*cur - start); } }
+                pos.get_or_insert(p);
+            }
+        }
+        match pos {
+            Some(p) => {
+                let mut ins = block;
+                if p > 0 && !doc.lines[p - 1].trim().is_empty() { ins.insert(0, String::new()); }
+                if p < doc.lines.len() && !doc.lines[p].trim().is_empty() { ins.push(String::new()); }
+                doc.lines.splice(p..p, ins);
+            }
+            None => doc.replace_or_append(&h.alias, block),
+        }
     }
+    // Вырезанный последним блок оставляет пустую строку-разделитель в конце.
+    while cut_any && doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) { doc.lines.pop(); }
     doc.text()
 }
 
@@ -485,6 +534,20 @@ mod tests {
         assert!(work.contains("Host web") && work.contains("# relaya: group=work") && !work.contains("nas"));
         let merged = config_merge("Host nas\n    HostName old\n\nHost web\n    HostName 1.1.1.1\n".into(), work);
         assert!(merged.contains("10.0.0.1") && !merged.contains("1.1.1.1") && merged.contains("HostName old"));
+    }
+
+    #[test]
+    fn shared_blocks_split_on_export_and_import() {
+        let shared = "# relaya: group=work\nHost a b\n    User x\n\nHost c\n    User y\n";
+        assert_eq!(config_extract(shared.into(), vec!["a".into(), "c".into()]), "# relaya: group=work\nHost a\n    User x\n\nHost c\n    User y\n");
+        assert_eq!(config_extract(shared.into(), vec!["a".into(), "b".into()]), "# relaya: group=work\nHost a b\n    User x\n");
+        // Пришёл `Host a` — локальный `b` остаётся со своими настройками.
+        assert_eq!(config_merge(shared.into(), "Host a\n    User new\n".into()),
+                   "# relaya: group=work\nHost b\n    User x\n\nHost a\n    User new\n\nHost c\n    User y\n");
+        // Пришёл общий `Host a b` — заменяет и общий, и отдельные локальные блоки, без дублей.
+        assert_eq!(config_merge(shared.into(), "Host a b\n    User z\n".into()), "Host a b\n    User z\n\nHost c\n    User y\n");
+        assert_eq!(config_merge("Host a\n    User 1\n\nHost m\n    User m\n\nHost b\n    User 2\n".into(), "Host a b\n    User z\n".into()),
+                   "Host a b\n    User z\n\nHost m\n    User m\n");
     }
 
     #[test]
