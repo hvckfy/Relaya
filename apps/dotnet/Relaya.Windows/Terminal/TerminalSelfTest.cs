@@ -23,13 +23,16 @@ internal static class TerminalSelfTest
         {
             log.AppendLine($"loaded {view.ActualWidth}x{view.ActualHeight}");
             // Из фонового потока — как PseudoConsole.ReadLoop.
+            TerminalView.Trace("selftest: feeding from background thread");
             await Task.Run(() => view.Feed(Encoding.UTF8.GetBytes("\x1b[2J\x1b[Hrelaya-selftest-line\r\nsecond line\r\n")));
+            TerminalView.Trace("selftest: back on UI thread");
             var ok = false;
             for (var i = 0; i < 100 && !ok; i++)
             {
                 await Task.Delay(100);
                 ok = view.DrawnText;
             }
+            TerminalView.Trace($"selftest: wait done, drawn={ok}");
             var screen = view.Emulator.ScreenText().FirstOrDefault(l => l.Trim().Length > 0)?.Trim() ?? "";
             log.AppendLine($"emulator first line: {screen}");
             log.AppendLine($"drawn text: {view.DrawnText}, draw error: {view.DrawError ?? "none"}");
