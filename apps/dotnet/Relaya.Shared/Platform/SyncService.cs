@@ -55,6 +55,11 @@ internal sealed class SyncService
     /// Синхронизация хочет удалить элементы — нужен ответ человека (из фонового потока; UI переносит сам).
     public event Action<List<PendingDeletion>>? DeletionsPending;
 
+    /// Синхронизация хочет расширить права агентов — нужен ответ человека (из фонового потока).
+    public event Action<List<AgentEscalation>>? AgentEscalationsPending;
+
+    public void ApplyAgentEscalations(bool accept) => RelayaCoreMethods.SyncApplyAgentEscalations(Paths, accept);
+
     /// Применить подтверждённые удаления (пустой список — оставить все); перед удалением ядро делает бэкап.
     public void ApplyDeletions(List<DeletionKey> confirmed)
     {
@@ -168,6 +173,8 @@ internal sealed class SyncService
             SkippedKeys = RelayaCoreMethods.SyncTakeSkippedKeys(Paths);
             // Массовые удаления с другой машины ядро откладывает до подтверждения человеком.
             if (RelayaCoreMethods.SyncTakePendingDeletions(Paths) is { Count: > 0 } pending) DeletionsPending?.Invoke(pending);
+            // S3: расширения прав агентов с другой машины — тоже только с согласия.
+            if (RelayaCoreMethods.SyncTakeAgentEscalations(Paths) is { Count: > 0 } escalations) AgentEscalationsPending?.Invoke(escalations);
             Set(p, State.Idle, L("Синхронизировано %@", DateTime.Now.ToString("HH:mm")));
             if (imported.Count > 0) Imported?.Invoke();
         }
