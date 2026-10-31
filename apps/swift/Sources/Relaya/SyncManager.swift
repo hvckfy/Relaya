@@ -116,7 +116,9 @@ final class SyncManager {
             switch p.backend {
             case .iCloud:
                 guard FolderSync.iCloudAvailable else { throw GitSync.Failure(message: L("iCloud Drive не включён на этом Mac.")) }
-                imported = try FolderSync.sync(p, passphrase: pass, folder: FolderSync.folder(for: p))
+                // iCloud Drive может отвечать долго — не в главном потоке.
+                let folder = FolderSync.folder(for: p)
+                imported = try await Task.detached { try FolderSync.sync(p, passphrase: pass, folder: folder) }.value
             case .git:
                 guard !p.remote.trimmingCharacters(in: .whitespaces).isEmpty else {
                     throw GitSync.Failure(message: L("Укажите репозиторий."))

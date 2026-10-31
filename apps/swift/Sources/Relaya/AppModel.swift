@@ -481,7 +481,10 @@ final class AppModel {
     /// Только по явному действию пользователя. Под root `sudo` убирается.
     func run(_ command: String, on host: SSHHost) {
         connect(host)
-        let cmd = host.user == "root" ? command.replacingOccurrences(of: "sudo ", with: "") : command
+        // Только `sudo` в начале команды и после ; && || |, а не внутри аргументов и строк.
+        let cmd = host.user == "root"
+            ? command.replacingOccurrences(of: #"(^|[;&|]\s*)sudo\s+"#, with: "$1", options: .regularExpression)
+            : command
         sessions.last?.controller?.pendingCommand = cmd
     }
 

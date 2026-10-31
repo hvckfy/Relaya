@@ -227,7 +227,9 @@ final class SessionController {
 
     // MARK: - Завершение и переподключение
 
-    func processEnded(code: Int32?, autoReconnect: Bool) {
+    func processEnded(code raw: Int32?, autoReconnect: Bool) {
+        // SwiftTerm отдаёт сырой статус waitpid: 255 << 8 = 65280. Нужен настоящий код выхода (или −сигнал).
+        let code = raw.map { ($0 & 0x7f) == 0 ? ($0 >> 8) & 0xff : -($0 & 0x7f) }
         if retryPasswordOnly {
             retryPasswordOnly = false
             reconnect()
@@ -316,9 +318,10 @@ final class SessionController {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH-mm-ss"
-        let url = dir.appending(path: "\(host.alias) \(f.string(from: Date())).log")
-        FileManager.default.createFile(atPath: url.path, contents: nil)
-        logHandle = try? FileHandle(forWritingTo: url)
+        // Своё имя у каждой сессии и O_EXCL: две вкладки одного хоста не пишут в один файл.
+        let url = dir.appending(path: "\(host.alias) \(f.string(from: Date())) \(UUID().uuidString.prefix(6)).log")
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        logHandle = fd >= 0 ? FileHandle(fileDescriptor: fd, closeOnDealloc: true) : nil
         logURL = logHandle == nil ? nil : url
     }
 
