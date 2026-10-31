@@ -26,7 +26,8 @@ struct SyncTests {
 
     @Test func keyVaultRoundTripAndWrongPassword() throws {
         let data = Data("-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n".utf8)
-        let blob = try KeyVault.encrypt(data, passphrase: "correct horse", rounds: 1000)
+        // C14: ядро принимает от 10 000 итераций PBKDF2.
+        let blob = try KeyVault.encrypt(data, passphrase: "correct horse", rounds: 10_000)
         #expect(try KeyVault.decrypt(blob, passphrase: "correct horse") == data)
         #expect(throws: KeyVault.Failure.self) { try KeyVault.decrypt(blob, passphrase: "wrong") }
     }

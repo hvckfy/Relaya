@@ -44,9 +44,12 @@ import Testing
 @Suite struct PasswordLoginCommandTests {
     @Test func linuxUsesDropInAndFallback() {
         let off = ServerOS.ubuntu.passwordLoginCommand(enabled: false)
-        #expect(off.contains("sshd_config.d/00-relaya.conf"))
+        // C6: drop-in раньше системных файлов, KbdInteractive тоже выключается, проверка sshd -t и sshd -T.
+        #expect(off.contains("sshd_config.d/00-00-relaya.conf"))
         #expect(off.contains("PasswordAuthentication no"))
-        #expect(off.contains("sudo sshd -t"))
+        #expect(off.contains("KbdInteractiveAuthentication no"))
+        #expect(off.contains("sshd -t"))
+        #expect(off.contains("RELAYA_SSHD_MISMATCH"))
         #expect(ServerOS.ubuntu.passwordLoginCommand(enabled: true).contains("PasswordAuthentication yes"))
     }
 

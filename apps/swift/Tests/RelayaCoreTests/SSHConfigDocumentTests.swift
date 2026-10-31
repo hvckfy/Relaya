@@ -66,7 +66,12 @@ import Testing
                            proxyJump: "bastion", forwardAgent: true, serverAliveInterval: 30,
                            compression: true, group: "g", tags: ["staging", "web"], color: "orange")
         try doc.upsert(host, originalAlias: nil)
-        #expect(SSHConfigParser.parse(doc.text) == [host])
+        // Разбор дополнительно отдаёт значения как в конфиге (C1): все IdentityFile и явные yes/no.
+        var parsed = host
+        parsed.identityFiles = ["~/.ssh/k"]
+        parsed.forwardAgentValue = "yes"
+        parsed.compressionValue = "yes"
+        #expect(SSHConfigParser.parse(doc.text) == [parsed])
     }
 
     @Test func groupWithSpacesRoundTrips() throws {
