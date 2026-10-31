@@ -207,6 +207,9 @@ internal static class HostEditor
             PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = root,
         };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary && box.Password.Length > 0)
-            Platform.CredentialStore.Write(alias, box.Password);
+        {
+            try { Platform.CredentialStore.Write(alias, box.Password); }
+            catch (Exception e) { await Ui.ShowError(root, L("Не удалось сохранить пароль"), e.Message); }
+        }
     }
 }

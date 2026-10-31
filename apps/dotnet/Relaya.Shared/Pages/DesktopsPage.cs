@@ -86,8 +86,12 @@ internal sealed class DesktopsPage : UserControl
             gatewayHost: gwHost.Text.Trim() is { Length: > 0 } gh ? gh : null,
             gatewayUser: gwUser.Text.Trim() is { Length: > 0 } gu ? gu : null,
             gatewayDomain: gwDomain.Text.Trim() is { Length: > 0 } gd ? gd : null);
-        if (gwPass.Password.Length > 0) Platform.CredentialStore.Write("desktop-gateway:" + item.id, gwPass.Password);
-        else if (item.gatewayHost == null) Platform.CredentialStore.Delete("desktop-gateway:" + item.id);
+        try
+        {
+            if (gwPass.Password.Length > 0) Platform.CredentialStore.Write("desktop-gateway:" + item.id, gwPass.Password);
+            else if (item.gatewayHost == null) Platform.CredentialStore.Delete("desktop-gateway:" + item.id);
+        }
+        catch (Exception e) { await Ui.ShowError(XamlRoot, L("Не удалось сохранить пароль"), e.Message); }
         AppState.Desktops = AppState.Desktops.Where(x => x.id != item.id).Append(item).ToList();
         AppState.LoadHosts();
         Build();

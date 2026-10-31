@@ -81,6 +81,10 @@ internal static class Ui
         body.Children.Insert(0, bar);
     }
 
+    /// Ошибка, которую пользователь должен увидеть (например, хранилище паролей недоступно на Linux, Н12).
+    public static async System.Threading.Tasks.Task ShowError(XamlRoot root, string title, string text) =>
+        await new ContentDialog { Title = title, Content = text, CloseButtonText = Strings.L("Закрыть"), XamlRoot = root }.ShowAsync();
+
     public static Border Card(UIElement child) => new()
     {
         Child = child, Padding = new Thickness(16, 10, 16, 10), CornerRadius = new CornerRadius(4),

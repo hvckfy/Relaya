@@ -81,7 +81,13 @@ internal sealed class SyncPage : UserControl
 
         var pass = new PasswordBox { PlaceholderText = sync.HasPassphrase ? L("Задан — введите новый, чтобы сменить") : L("Не задан"), Width = 280 };
         var savePass = new Button { Content = L("Сохранить") };
-        savePass.Click += (_, _) => { sync.SetPassphrase(pass.Password); pass.Password = ""; Build(); };
+        savePass.Click += async (_, _) =>
+        {
+            try { sync.SetPassphrase(pass.Password); }
+            catch (Exception e) { await Pages.Ui.ShowError(XamlRoot, L("Не удалось сохранить пароль"), e.Message); return; }
+            pass.Password = "";
+            Build();
+        };
         root.Children.Add(Card(L("Пароль шифрования ключей"),
             L("Нужен, чтобы передавать SSH-ключи. Одинаковый на всех устройствах. Хранится в диспетчере учётных данных Windows."),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pass, savePass } }));

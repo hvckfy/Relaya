@@ -1114,3 +1114,4 @@
 "Отклонить" = "Decline";
 "Команда остановлена: превышен таймаут %@ с" = "Command stopped: timed out after %@ s";
 "SSH-туннель не поднялся за %@ с" = "The SSH tunnel didn't come up within %@ s";
+"Не удалось сохранить пароль" = "Couldn’t save the password";
