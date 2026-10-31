@@ -212,7 +212,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// Открыть сохранённую раскладку одной вкладкой с плитками.
-    public void OpenLayout(SavedLayouts.Saved saved)
+    internal void OpenLayout(SavedLayouts.Saved saved)
     {
         var tiles = new Terminal.TileHost();
         var tab = AddTab(saved.Name, "\ue8a9", tiles, tiles);
