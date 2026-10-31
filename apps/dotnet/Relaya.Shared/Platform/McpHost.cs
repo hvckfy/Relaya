@@ -72,14 +72,13 @@ internal static class McpHost
         // Подтверждение каждой команды — системное окно поверх всех (Touch ID на Mac).
         public bool Confirm(SshHost host, string command, string client)
         {
-            // Процесс --mcp без XAML: системное окно. «Нет» по умолчанию (MB_DEFBUTTON2) — Enter/пробел не одобряют команду.
+            // Процесс --mcp без XAML: системное окно (Dialogs). «Нет» по умолчанию — Enter/пробел не одобряют команду.
             const int limit = 1500;
             var shown = command.Length > limit
                 ? command[..limit] + "\n…\n" + Strings.L("(показано %@ из %@ символов)", limit, command.Length)
                 : command;
             var text = Strings.L("%@ хочет выполнить на %@:", client, host.alias) + "\n\n" + shown;
-            const uint flags = 0x4 /* YESNO */ | 0x30 /* ICONWARNING */ | 0x100 /* DEFBUTTON2 */ | 0x40000 /* TOPMOST */ | 0x10000 /* SETFOREGROUND */;
-            return MessageBoxW(IntPtr.Zero, text, "Relaya", flags) == 6;
+            return Dialogs.YesNo(text, warning: true);
         }
 
         public void Log(McpLogEntry entry)
@@ -88,7 +87,4 @@ internal static class McpHost
             File.AppendAllText(LogFile, RelayaCoreMethods.McpLogLine(entry) + "\n");
         }
     }
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 }

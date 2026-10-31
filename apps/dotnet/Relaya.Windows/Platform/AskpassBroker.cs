@@ -41,6 +41,14 @@ internal static class AskpassBroker
         }
     }
 
+    /// Клиентская сторона (askpass-режим): сервер pipe — процесс того же пользователя.
+    public static Stream Connect(string pipe)
+    {
+        var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut, PipeOptions.CurrentUserOnly);
+        client.Connect(5000);
+        return client;
+    }
+
     /// Связать токен с процессом, который мы только что запустили (без привязки токен не работает).
     public static void Bind(string token, int pid)
     {

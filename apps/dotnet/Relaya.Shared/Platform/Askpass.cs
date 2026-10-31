@@ -5,17 +5,16 @@ using System.Linq;
 
 namespace Relaya.Platform;
 
-/// Askpass: так фоновые ssh (туннели, SFTP, панели) входят по паролю. Сам Credential Manager askpass не читает:
-/// он шлёт одноразовый токен и текст запроса в pipe процесса Relaya, запустившего ssh (AskpassBroker), и печатает ответ.
+/// Askpass: так фоновые ssh (туннели, SFTP, панели) входят по паролю. Хранилище паролей askpass сам не читает:
+/// он шлёт одноразовый токен и текст запроса процессу Relaya, запустившему ssh (AskpassBroker: named pipe на Windows,
+/// UNIX-сокет на Linux), и печатает ответ.
 internal static class Askpass
 {
     public static int Run(string pipe, string token, string prompt)
     {
         try
         {
-            using var client = new System.IO.Pipes.NamedPipeClientStream(".", pipe, System.IO.Pipes.PipeDirection.InOut,
-                System.IO.Pipes.PipeOptions.CurrentUserOnly); // сервер pipe — процесс того же пользователя
-            client.Connect(5000);
+            using var client = AskpassBroker.Connect(pipe);
             var request = System.Text.Encoding.UTF8.GetBytes(token + "\n" + prompt.Replace("\n", " ") + "\n");
             client.Write(request);
             client.Flush();
@@ -35,11 +34,12 @@ internal static class Askpass
 
     public static void SetEnvironment(ProcessStartInfo info, string alias)
     {
-        info.Environment["SSH_ASKPASS"] = Environment.ProcessPath ?? "Relaya.exe";
+        info.Environment["SSH_ASKPASS"] = Environment.ProcessPath ?? (OperatingSystem.IsWindows() ? "Relaya.exe" : "relaya");
         info.Environment["SSH_ASKPASS_REQUIRE"] = "force";
         info.Environment["RELAYA_ASKPASS_PIPE"] = AskpassBroker.PipeName;
         info.Environment["RELAYA_ASKPASS_TOKEN"] = AskpassBroker.Issue(alias);
-        info.Environment["DISPLAY"] = "relaya";
+        // Windows OpenSSH зовёт askpass только при заданном DISPLAY; на Linux DISPLAY настоящий (X11-проброс), не трогаем.
+        if (OperatingSystem.IsWindows()) info.Environment["DISPLAY"] = "relaya";
     }
 
     /// После Process.Start: токен askpass работает только для этого процесса (ssh или sftp).
