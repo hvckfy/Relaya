@@ -42,26 +42,34 @@ Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansib
 - Groups and free-form tags, stored as a comment above the host (`# relaya: group=work tags=prod,db`) — ssh ignores it.
 - A Finder-style sidebar: Hosts, Remote Desktops and Tools sections with collapsible groups, search and a tag filter. Git-hosting entries (GitHub, GitLab, `User git`…) are kept out of the host list.
 - A **Host** menu in the menu bar with every action for the selected host.
+- **Command palette (⌘K)**: fuzzy search over hosts, remote desktops, layouts, snippets, tunnels and actions.
 
 **Passwords & keys**
 - Passwords live in Keychain and are typed in automatically when the server asks — after **Touch ID** (or your Mac password). They never appear in process arguments or environment variables.
+- **sudo** prompts get a one-click "Fill in" from Keychain, again behind Touch ID.
 - **"Set up key login" wizard**: generates an ed25519 key, installs it on the server (OpenWrt/Dropbear too), verifies a passwordless login and only then updates your config.
 - **Keys screen**: every key pair in `~/.ssh` with fingerprints, agent status and the hosts using it.
 
 **Terminal**
 - Tabs, host-key fingerprint check on first connect, a loud warning when a server's key changes, auto-reconnect, find (⌘F), output highlighting.
 - **Tiles**: drag a tab onto the edge of another terminal and it docks there; drag it to the edge of the window to span the full width or height. Splits are resizable and never overlap. SFTP tabs tile too. Each tile shows where it's connected.
+- **Keyboard splits** like iTerm2: ⌘D splits right, ⇧⌘D splits down, ⌥⌘arrows move between tiles. Save a set of tiles as a **layout** and reopen it in one go.
+- **Session recording** (⌥⌘L) to a plain-text log in `~/Documents/Relaya Logs`.
+- **Links**: ⌘-click opens URLs; `localhost:PORT` links (and ports detected in output) open the *server's* port in your browser through a temporary tunnel.
 - **Broadcast input**: type into several terminals at once (passwords and snippets are never broadcast).
 - **tmux sessions**: reconnect straight back into the same session. Closing a tab ends it; after a dropped connection the server closes it by itself after an idle timeout (1 hour by default), so sessions never pile up. Turn tmux on or off in an open tab, keep a session running on purpose for 24 hours, see and clean up sessions in the host card.
+- **tmux control mode**: show every window of a tmux session on the server as a Relaya tab.
 
 **Files**
 - SFTP browser with a transfer queue: progress, speed, cancel and retry. Uploads go to a temporary file first, so a broken transfer never corrupts the original.
 - **Open in Editor**: edit a remote file in your default editor — every save is uploaded back.
 - Drag & drop from Finder, rename, new folder, delete, keyboard shortcuts.
+- **Open in Finder**: mount any server folder (`/` by default) as a volume in Finder through a local WebDAV bridge — no kernel extensions, nothing to install.
 
 **Host card**
 - Live status: load, memory, disk, uptime — in one of four styles (tiles, compact, pixel, console).
 - **Docker**: containers with status and ports; logs, a shell inside, start/stop/restart.
+- **Services, ports, journal, updates**: systemd services (failed first, filter, logs, restart/stop/start with confirmation), listening ports, recent journal errors and pending package updates — over plain ssh, no agent on the server.
 - Port forwarding presets and OS-specific actions.
 - Server OS detection with distro logos (Ubuntu, Debian, Proxmox VE, OpenWrt, Fedora, Arch, Alpine, Mint, Kali and more).
 
@@ -75,6 +83,12 @@ Everything you set up in Relaya keeps working from Terminal, VS Code, git, Ansib
 **AI agents (MCP)**
 - `Relaya --mcp` is a local MCP server for Claude, Cursor and other clients: `list_hosts`, `run_command`, `read_file`.
 - Per-host access: off, read-only, confirm each command, or trusted. Confirmation is a **Touch ID** prompt showing the exact command. Agents never see your keys.
+- **Rules**: command patterns that run without confirmation and patterns that are always forbidden (even for trusted agents); **temporary access** ("trusted for 30 minutes"); a **"what agents changed"** summary per agent session and command output in the log.
+
+**Sync (free, no cloud of ours)**
+- Sync profiles: each has its own git repository (your own server over SSH, Gitea, GitLab, GitHub) or an iCloud Drive folder, and its own hosts — all of them, chosen groups or individual hosts.
+- Hosts, their tunnels, remote desktops, snippets and agent permissions merge without deleting anything; `~/.ssh/config` is backed up before every change.
+- Conflicts show both versions side by side. SSH keys sync only if you ask, only for the profile's hosts, encrypted with your password. Server passwords are never synced.
 
 **Looks**
 - Relaya themes or the native macOS style, **Liquid Glass** on macOS 26, light/dark/system.
@@ -108,6 +122,10 @@ Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary
 | Find in terminal | ⌘F |
 | Edit / duplicate host | ⌘E / ⌘D |
 | Open files (SFTP) | ⇧⌘O |
+| Command palette | ⌘K |
+| Split right / down | ⌘D / ⇧⌘D |
+| Move between tiles | ⌥⌘ ← → ↑ ↓ |
+| Record session | ⌥⌘L |
 | Snippets | ⇧⌘P |
 | Reload `~/.ssh/config` | ⇧⌘R |
 | Settings | ⌘, |
