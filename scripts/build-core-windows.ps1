@@ -2,7 +2,8 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location "$root/core"
-cargo build --release
+# remote-desktop: встроенный RDP (IronRDP) — только для Windows/Linux, на Mac его нет.
+cargo build --release --features remote-desktop
 if (-not (Get-Command uniffi-bindgen-cs -ErrorAction SilentlyContinue)) {
     cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
 }
