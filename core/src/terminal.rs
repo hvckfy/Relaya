@@ -94,9 +94,7 @@ impl TerminalEmulator {
     pub fn feed(&self, data: Vec<u8>) {
         let mut g = self.inner.lock().unwrap();
         let Inner { term, parser } = &mut *g;
-        for b in data {
-            parser.advance(term, b);
-        }
+        parser.advance(term, &data);
     }
 
     /// Байты, которые терминал должен отправить в ssh (ответы на запросы).
