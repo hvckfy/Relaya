@@ -173,6 +173,21 @@ pub(crate) fn meta_value(s: &str) -> String {
     if clean.chars().any(char::is_whitespace) { format!("\"{clean}\"") } else { clean }
 }
 
+/// Строка `# relaya: …` или `None`, если метаданных нет; `extra` — незнакомые пары старой строки, как были.
+fn meta_line(group: Option<&str>, tags: &[String], color: Option<&str>, os: Option<ServerOs>, tmux: bool, extra: &[String]) -> Option<String> {
+    let mut meta = Vec::new();
+    if let Some(g) = group.filter(|g| !g.is_empty()) { meta.push(format!("group={}", meta_value(g))); }
+    let tags = split_tags(tags.join(","));
+    if !tags.is_empty() { meta.push(format!("tags={}", meta_value(&tags.join(",")))); }
+    if let Some(c) = color.filter(|c| !c.is_empty()) { meta.push(format!("color={}", meta_value(c))); }
+    if let Some(os) = os { meta.push(format!("os={}", os.raw())); }
+    if tmux { meta.push("tmux=on".into()); }
+    meta.extend(extra.iter().cloned());
+    (!meta.is_empty()).then(|| format!("# relaya: {}", meta.join(" ")))
+}
+
+const META_KEYS: &[&str] = &["group", "tags", "env", "color", "os", "tmux"];
+
 fn apply(key: &str, value: &str, host: &mut SshHost) {
     // В ssh_config побеждает первое значение.
     match key {
@@ -295,14 +310,7 @@ impl Document {
     /// Строки блока после сохранения `host`; незнакомые директивы старого блока сохраняются.
     pub fn rendered_lines(&self, host: &SshHost, original_alias: Option<&str>) -> Vec<String> {
         let mut out = Vec::new();
-        let mut meta = Vec::new();
-        if let Some(g) = host.group.as_deref().filter(|g| !g.is_empty()) { meta.push(format!("group={}", meta_value(g))); }
-        let tags = split_tags(host.tags.join(","));
-        if !tags.is_empty() { meta.push(format!("tags={}", meta_value(&tags.join(",")))); }
-        if let Some(c) = host.color.as_deref().filter(|c| !c.is_empty()) { meta.push(format!("color={c}")); }
-        if let Some(os) = host.os { meta.push(format!("os={}", os.raw())); }
-        if host.tmux { meta.push("tmux=on".into()); }
-        if !meta.is_empty() { out.push(format!("# relaya: {}", meta.join(" "))); }
+        out.extend(meta_line(host.group.as_deref(), &host.tags, host.color.as_deref(), host.os, host.tmux, &[]));
 
         out.push(format!("Host {}", host.alias));
         let mut add = |k: &str, v: Option<String>| {
@@ -375,6 +383,29 @@ impl Document {
 }
 
 // MARK: - API для клиентов (функции над текстом)
+
+/// Поменять только строку `# relaya:` над блоком `alias`; сам блок и незнакомые ключи метаданных не трогаются.
+/// Нет метаданных — строка убирается. Общий блок `Host a b` разрешён: метаданные у блока одни.
+#[uniffi::export]
+pub fn config_set_meta(text: String, alias: String, group: Option<String>, tags: Vec<String>, color: Option<String>,
+                       os: Option<ServerOs>, tmux: bool) -> Result<String, CoreError> {
+    for v in group.iter().chain(color.iter()).chain(tags.iter()) {
+        if v.contains(['\n', '\r']) { return Err(CoreError::InvalidValue(v.clone())); }
+    }
+    let mut d = Document::new(&text);
+    let b = d.block(&alias).ok_or_else(|| CoreError::NotFound(alias.clone()))?;
+    let (start, host_line) = (b.start as usize, b.host_line as usize);
+    let extra: Vec<String> = if start < host_line {
+        let body = d.lines[start].trim().trim_start_matches('#').trim();
+        meta_tokens(&body["relaya:".len()..]).into_iter()
+            .filter(|p| p.split_once('=').map(|(k, _)| !META_KEYS.contains(&k.to_lowercase().as_str())).unwrap_or(true))
+            .map(|p| match p.split_once('=') { Some((k, v)) => format!("{k}={}", meta_value(v)), None => p })
+            .collect()
+    } else { Vec::new() };
+    let line = meta_line(group.as_deref(), &tags, color.as_deref(), os, tmux, &extra);
+    d.lines.splice(start..host_line, line);
+    Ok(d.text())
+}
 
 #[uniffi::export]
 pub fn config_block(text: String, alias: String) -> Option<Block> { Document::new(&text).block(&alias) }
@@ -476,5 +507,19 @@ mod tests {
         assert_eq!(parse_destination("ssh://u@h:22/".into()), d(Some("u"), "h", Some(22)));
         assert_eq!(parse_destination("@h:99999".into()), d(None, "h:99999", None));
         assert_eq!(parse_destination("".into()), d(None, "", None));
+    }
+
+    #[test]
+    fn set_meta_touches_only_the_meta_line() {
+        let cfg = "Host a\n    User x\n\n# relaya: group=old future=\"k v\" tmux=on\nHost b c\n    HostName b.example\n";
+        let out = config_set_meta(cfg.into(), "c".into(), Some("мои сервера".into()), vec!["prod".into(), "db".into()],
+                                  Some("orange".into()), None, false).unwrap();
+        assert_eq!(out, "Host a\n    User x\n\n# relaya: group=\"мои сервера\" tags=prod,db color=orange future=\"k v\"\nHost b c\n    HostName b.example\n");
+        let added = config_set_meta(cfg.into(), "a".into(), None, vec![], None, None, true).unwrap();
+        assert!(added.starts_with("# relaya: tmux=on\nHost a\n    User x\n\n# relaya: group=old"), "{added}");
+        let cleared = config_set_meta("# relaya: tags=x\nHost a\n    User x\n".into(), "a".into(), None, vec![], None, None, false).unwrap();
+        assert_eq!(cleared, "Host a\n    User x\n");
+        assert_eq!(config_set_meta(cfg.into(), "zz".into(), None, vec![], None, None, false), Err(CoreError::NotFound("zz".into())));
+        assert!(matches!(config_set_meta(cfg.into(), "a".into(), Some("x\nHost evil".into()), vec![], None, None, false), Err(CoreError::InvalidValue(_))));
     }
 }

@@ -10,6 +10,8 @@ pub enum CoreError {
     NotFound(String),
     #[error("Не удалось расшифровать ключ: неверный пароль синхронизации или файл повреждён.")]
     Decrypt,
+    #[error("Недопустимое значение «{0}»: перевод строки в ~/.ssh/config запрещён")]
+    InvalidValue(String),
     #[error("{0}")]
     Io(String),
     #[error("{0}")]
