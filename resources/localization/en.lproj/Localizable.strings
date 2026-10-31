@@ -892,3 +892,4 @@
 "Сессия не дошла до приглашения shell." = "The session didn’t reach a shell prompt.";
 "Как в конфиге" = "As in config";
 "Да" = "Yes";
+"Не удалось прочитать файлы данных — они не перезаписаны, а отложены рядом:" = "Some data files could not be read; they were set aside instead of being overwritten:";

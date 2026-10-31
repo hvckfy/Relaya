@@ -42,8 +42,7 @@ public struct SnippetStore: Sendable {
 
     /// При первом запуске — несколько примеров.
     public func load() -> [Snippet] {
-        guard let data = try? Data(contentsOf: url) else { return Snippet.examples }
-        return (try? JSONDecoder().decode([Snippet].self, from: data)) ?? []
+        StoreRecovery.load([Snippet].self, from: url, missing: Snippet.examples)
     }
 
     public func save(_ snippets: [Snippet]) throws {

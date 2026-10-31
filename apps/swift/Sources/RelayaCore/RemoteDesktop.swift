@@ -140,8 +140,7 @@ public struct RemoteDesktopStore: Sendable {
     }
 
     public func load() -> [RemoteDesktop] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([RemoteDesktop].self, from: data)) ?? []
+        StoreRecovery.load([RemoteDesktop].self, from: url, missing: [])
     }
 
     public func save(_ items: [RemoteDesktop]) throws {

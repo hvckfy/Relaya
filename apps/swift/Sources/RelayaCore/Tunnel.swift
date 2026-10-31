@@ -98,8 +98,7 @@ public struct TunnelStore: Sendable {
     }
 
     public func load() -> [Tunnel] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([Tunnel].self, from: data)) ?? []
+        StoreRecovery.load([Tunnel].self, from: url, missing: [])
     }
 
     public func save(_ tunnels: [Tunnel]) throws {

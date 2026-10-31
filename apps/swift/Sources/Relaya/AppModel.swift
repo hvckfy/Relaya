@@ -378,6 +378,10 @@ final class AppModel {
     }
 
     func reloadHosts() {
+        let moved = StoreRecovery.takeMoved()
+        if !moved.isEmpty {
+            alertMessage = L("Не удалось прочитать файлы данных — они не перезаписаны, а отложены рядом:") + "\n" + moved.joined(separator: "\n")
+        }
         do {
             hosts = SSHConfigParser.parse(try store.loadDocument().text)
             loadError = nil
