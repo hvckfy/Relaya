@@ -23,7 +23,8 @@ pub struct SshHost {
     /// Все IdentityFile блока по порядку; `identity_file` — первый из них. Пусто при рендере — берётся `identity_file`.
     #[uniffi(default = [])]
     pub identity_files: Vec<String>,
-    /// ForwardAgent как в конфиге: None — директивы нет (наследуется), иначе значение (`yes`/`no`). При рендере важнее `forward_agent`.
+    /// ForwardAgent как в конфиге: None — директивы нет (наследуется), иначе значение (`yes`/`no`).
+    /// При рендере важнее `forward_agent`: Some(bool) — явный выбор, None — оставить как в конфиге.
     #[uniffi(default = None)]
     pub forward_agent_value: Option<String>,
     /// Compression как в конфиге, по тем же правилам.
@@ -390,7 +391,8 @@ impl Document {
             if !has("addkeystoagent") { add("AddKeysToAgent", Some("yes".into())); }
         }
         add("ProxyJump", host.proxy_jump.clone());
-        let tri = |raw: &Option<String>, flag: Option<bool>| raw.clone().or_else(|| (flag == Some(true)).then(|| "yes".to_string()));
+        // Явный выбор в редакторе (bool) важнее сырого значения из конфига; без выбора остаётся как в конфиге.
+        let tri = |raw: &Option<String>, flag: Option<bool>| flag.map(|b| if b { "yes" } else { "no" }.to_string()).or_else(|| raw.clone());
         add("ForwardAgent", tri(&host.forward_agent_value, host.forward_agent));
         add("ServerAliveInterval", host.server_alive_interval.map(|p| p.to_string()));
         add("Compression", tri(&host.compression_value, host.compression));
@@ -662,6 +664,20 @@ mod tests {
                    "Host n\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\id\"\n    UseKeychain yes\n    AddKeysToAgent yes\n    ForwardAgent yes\n");
         assert_eq!(config_upsert_for("".into(), n, None, ConfigPlatform::Windows).unwrap(),
                    "Host n\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\id\"\n    AddKeysToAgent yes\n    ForwardAgent yes\n");
+    }
+
+    #[test]
+    fn explicit_flag_beats_raw_value() {
+        let text = "Host a\n    ForwardAgent no\n    Compression yes\n";
+        let mut h = parse_config(text.into()).remove(0);
+        h.forward_agent = Some(true);
+        h.compression = None;
+        let out = config_upsert(text.into(), h, Some("a".into())).unwrap();
+        assert!(out.contains("ForwardAgent yes") && out.contains("Compression yes"), "{out}");
+        let mut off = parse_config(text.into()).remove(0);
+        off.forward_agent = None;
+        off.forward_agent_value = None;
+        assert!(!config_upsert(text.into(), off, Some("a".into())).unwrap().contains("ForwardAgent"));
     }
 
     #[test]
