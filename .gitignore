@@ -5,3 +5,8 @@ build/
 *.xcuserstate
 xcuserdata/
 DerivedData/
+core/target/
+core/build/
+Sources/RelayaRust/*.swift
+# Глобальный .gitignore может игнорировать bin/ — генератор UniFFI нужен в репозитории.
+!core/src/bin/

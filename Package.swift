@@ -18,8 +18,17 @@ let package = Package(
         .package(url: "https://github.com/royalapplications/royalvnc", revision: "8e9d3bb9cd041266df0659651f646fef251b4c71"),
     ],
     targets: [
-        // UI-независимая логика: ~/.ssh/config, ключи, хосты.
-        .target(name: "RelayaCore"),
+        // Rust-ядро (core/), общее с Windows-клиентом: собирается scripts/build-core.sh в xcframework.
+        .binaryTarget(name: "RelayaCoreFFI", path: "core/build/RelayaCoreFFI.xcframework"),
+        // Сгенерированный UniFFI Swift API этого ядра.
+        .target(
+            name: "RelayaRust",
+            dependencies: ["RelayaCoreFFI"],
+            exclude: ["README.md"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // UI-независимая логика: ~/.ssh/config, ключи, хосты. Логика — в Rust-ядре, здесь — Swift-фасад и платформа.
+        .target(name: "RelayaCore", dependencies: ["RelayaRust"]),
         .executableTarget(
             name: "Relaya",
             dependencies: [
