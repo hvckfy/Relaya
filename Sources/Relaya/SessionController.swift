@@ -16,6 +16,8 @@ final class SessionController {
     @ObservationIgnored var liveView: (view: RelayaTerminalView, generation: Int)?
     /// Вызывается, когда ОС удалось угадать по приветствию сервера.
     @ObservationIgnored var onOSGuessed: ((ServerOS) -> Void)?
+    /// ⌘-клик по ссылке на порт сервера.
+    @ObservationIgnored var onOpenServerPort: ((Int) -> Void)?
     /// Пользователь что-то набрал в этом терминале.
     @ObservationIgnored var onUserInput: ((ArraySlice<UInt8>) -> Void)?
     @ObservationIgnored private var osGuessed = false
@@ -41,6 +43,10 @@ final class SessionController {
     var savedPasswordRejected = false
     /// Вошли по паролю — предложить ключ.
     var offerKeySetup = false
+    /// Порты `localhost:N` из вывода — последние сверху; можно открыть у себя через туннель.
+    private(set) var detectedPorts: [Int] = []
+    /// sudo ждёт пароль, а в Keychain есть пароль хоста — предложить подставить (после Touch ID).
+    var sudoPrompt = false
 
     private(set) var exitCode: Int32?
     private(set) var ended = false
@@ -63,6 +69,10 @@ final class SessionController {
 
     func handleOutput(_ text: String) {
         log(text)
+        let ports = LocalPorts.find(in: Self.plainText(text))
+        if !ports.isEmpty {
+            detectedPorts = Array((ports.reversed() + detectedPorts.filter { !ports.contains($0) }).prefix(4))
+        }
         tail = String((tail + text).suffix(2000))
 
         if !osGuessed, host.os == nil, let os = ServerOS.guess(fromBanner: tail) {
@@ -83,6 +93,12 @@ final class SessionController {
             hostKeyPrompt = Self.fingerprint(in: tail) ?? L("неизвестен")
             return
         }
+
+        if PasswordPrompt.isSudo(tail) {
+            sudoPrompt = keychain.hasPassword(for: host.keychainAccount)
+            return
+        }
+        if sudoPrompt, text.contains(where: { $0.isLetter || $0.isNewline }) { sudoPrompt = false }
 
         if PasswordPrompt.matches(tail) {
             handlePasswordPrompt()
@@ -147,6 +163,17 @@ final class SessionController {
         hostKeyPrompt = nil
         tail = ""
         terminal?.sendQuiet(trust ? "yes\r" : "no\r")
+    }
+
+    /// Подставить пароль хоста из Keychain в запрос sudo — только по кнопке и после Touch ID.
+    func fillSudoPassword() {
+        sudoPrompt = false
+        Task { @MainActor in
+            guard await SecretGate.shared.authorize(L("Подставить пароль sudo для %@", host.alias)),
+                  let pw = try? keychain.password(for: host.keychainAccount) else { return }
+            tail = ""
+            terminal?.sendQuiet(pw + "\r")
+        }
     }
 
     /// Пользователь ввёл пароль в наше поле: сохраняем (по желанию) и отправляем в ssh.
@@ -307,6 +334,17 @@ final class RelayaTerminalView: LocalProcessTerminalView {
         if !quiet { onUserInput?(data) }
     }
 
+    /// ⌘-клик по ссылке на `localhost:PORT` — это порт на сервере: открываем через туннель, а не у себя.
+    var onOpenServerPort: ((Int) -> Void)?
+
+    override func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {
+        if let port = LocalPorts.find(in: link).first, let open = onOpenServerPort {
+            open(port)
+        } else {
+            super.requestOpenLink(source: source, link: link, params: params)
+        }
+    }
+
     /// Ввод, разосланный из другой вкладки: прямо в процесс, без повторной рассылки.
     func receiveBroadcast(_ data: ArraySlice<UInt8>) {
         process?.send(data: data)
@@ -335,6 +373,7 @@ struct TerminalView: NSViewRepresentable {
         apply(to: view)
         controller.terminal = view
         view.onOutput = { [weak controller] text in controller?.handleOutput(text) }
+        view.onOpenServerPort = { [weak controller] port in controller?.onOpenServerPort?(port) }
         let autoReconnect = settings.autoReconnect
         view.onExit = { [weak controller] code in controller?.processEnded(code: code, autoReconnect: autoReconnect) }
         let options = controller.passwordOnly ? KeyInstaller.passwordOnlyOptions : []

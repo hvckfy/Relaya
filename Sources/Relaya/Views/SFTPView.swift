@@ -139,6 +139,15 @@ struct SFTPView: View {
                 .onSubmit { open(pathField) }
             IconButton(systemImage: "arrow.clockwise", label: L("Обновить")) { open(path) }
                 .keyboardShortcut("r", modifiers: .command)
+            if model.finderMounting.contains(host.alias) {
+                ProgressView().controlSize(.small)
+            } else if model.finderBridges[host.alias] != nil {
+                Button(L("Отключить диск")) { model.ejectFinder(host) }.buttonStyle(.relaya)
+                    .help(L("Отключить диск хоста в Finder"))
+            } else {
+                Button(L("Открыть в Finder")) { Task { await model.openInFinder(host) } }.buttonStyle(.relaya)
+                    .help(L("Подключить файлы хоста как диск в Finder"))
+            }
             Button(L("Загрузить…")) { chooseUpload() }.buttonStyle(.relaya)
             Button(L("Скачать…")) { download() }.buttonStyle(.relaya).disabled(selection.isEmpty)
             IconButton(systemImage: "folder.badge.plus", label: L("Новая папка")) { newFolderName = ""; newFolder = true }

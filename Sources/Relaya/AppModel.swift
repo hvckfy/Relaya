@@ -105,6 +105,14 @@ final class AppModel {
     var desktopEditor: RemoteDesktop?
     var sftpHost: SSHHost?
     var snippetPalette = false
+    /// Сниппет, выбранный в палитре ⌘K, — открывается в окне сниппетов сразу.
+    var paletteSnippet: Snippet?
+    /// Палитра команд ⌘K.
+    var commandPalette = false
+    /// Недавние пункты палитры (id), сверху при пустом запросе.
+    var paletteRecents: [String] = UserDefaults.standard.stringArray(forKey: "paletteRecents") ?? [] {
+        didSet { UserDefaults.standard.set(paletteRecents, forKey: "paletteRecents") }
+    }
     var desktops: [RemoteDesktop] = RemoteDesktopStore().load() {
         didSet { try? RemoteDesktopStore().save(desktops) }
     }
@@ -424,6 +432,7 @@ final class AppModel {
         let controller = SessionController(host: host, tmuxName: name, tmuxIdleMinutes: settings.tmuxIdleMinutes)
         if useTmux { Task { await cleanTmux(host) } }
         controller.onOSGuessed = { [weak self] os in self?.setOS(os, for: host.alias, onlyIfUnknown: true) }
+        controller.onOpenServerPort = { [weak self] port in Task { await self?.openRemotePort(port, on: host) } }
         controller.onUserInput = { [weak self, weak controller] data in
             guard let self, let controller else { return }
             self.broadcast(data, from: controller)
@@ -689,6 +698,75 @@ final class AppModel {
         await refreshTmux(host, interactive: false)
     }
 
+    // MARK: - SFTP как диск в Finder
+
+    /// Подключённые диски: алиас хоста → мост WebDAV.
+    private(set) var finderBridges: [String: WebDAVBridge] = [:]
+    var finderMounting: Set<String> = []
+
+    /// Открыть файлы хоста в Finder: мост поднимается сам, диск подключается и появляется в боковой панели Finder.
+    func openInFinder(_ host: SSHHost) async {
+        let h = current(host)
+        if let b = finderBridges[h.alias], let mp = b.mountPoint, FileManager.default.fileExists(atPath: mp.path) {
+            NSWorkspace.shared.open(mp)
+            return
+        }
+        finderBridges[h.alias]?.stop()
+        finderMounting.insert(h.alias)
+        defer { finderMounting.remove(h.alias) }
+        let ssh = await invocation(for: h, interactive: true, reason: L("Открыть файлы на %@", h.alias))
+        let usePassword = !ssh.environment.isEmpty
+        let sftp = SFTPClient(alias: h.alias,
+                              password: usePassword ? .init(store: keychain, account: h.keychainAccount, kind: .password) : nil,
+                              askpassExecutable: askpassExecutable)
+        let bridge = WebDAVBridge(host: h, sftp: sftp, ssh: ssh)
+        bridge.onStopped = { [weak self] in self?.finderBridges[h.alias] = nil }
+        do {
+            try await bridge.start()
+            finderBridges[h.alias] = bridge
+            if !unmountOnQuitInstalled {
+                unmountOnQuitInstalled = true
+                NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil,
+                                                       queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.finderBridges.values.forEach { $0.stop() } }
+                }
+            }
+        } catch {
+            bridge.stop()
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    func ejectFinder(_ host: SSHHost) {
+        finderBridges[host.alias]?.stop()
+    }
+
+    @ObservationIgnored private var unmountOnQuitInstalled = false
+
+    // MARK: - Порт сервера в браузере
+
+    /// Временные туннели «порт с сервера → браузер», по хосту и порту.
+    @ObservationIgnored private var portTunnels: [String: Tunnel] = [:]
+
+    /// Открыть `localhost:PORT` сервера у себя: временный туннель `-L` (если ещё нет) и браузер.
+    func openRemotePort(_ port: Int, on host: SSHHost) async {
+        let h = current(host)
+        let key = "\(h.alias):\(port)"
+        let tunnel = portTunnels[key] ?? Tunnel(name: "localhost:\(port)", hostAlias: h.alias,
+                                                 listenPort: RemoteDesktop.preferredLocalPort(for: port),
+                                                 targetHost: "localhost", targetPort: port)
+        portTunnels[key] = tunnel
+        if tunnels.status(of: tunnel) != .running {
+            tunnels.start(tunnel, hosts: hosts)
+            for _ in 0..<40 {
+                try? await Task.sleep(for: .milliseconds(250))
+                if case .failed(let m) = tunnels.status(of: tunnel) { alertMessage = m; return }
+                if tunnels.status(of: tunnel) == .running { break }
+            }
+        }
+        if let url = URL(string: "http://localhost:\(tunnel.listenPort)") { NSWorkspace.shared.open(url) }
+    }
+
     // MARK: - tmux control mode
 
     @ObservationIgnored private var tmuxClients: [TmuxControlClient] = []
@@ -723,6 +801,7 @@ final class AppModel {
             else { return }
             self.removeTab(s)
         }
+        client.onOpenServerPort = { [weak self] port in Task { await self?.openRemotePort(port, on: h) } }
         client.onExit = { [weak self, weak client] in
             guard let self, let client else { return }
             for s in self.sessions { if case .tmux(let w) = s.kind, w.client === client { self.removeTab(s) } }

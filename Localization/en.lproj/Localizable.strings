@@ -667,3 +667,52 @@
 "Новое окно" = "New Window";
 "Отключиться" = "Detach";
 "Сессия останется на сервере; её закроет таймер, если не вернуться" = "The session stays on the server; the idle timer closes it if you don't come back";
+
+/* Command palette */
+"Палитра команд…" = "Command Palette…";
+"Хост, действие, сниппет…" = "Host, action, snippet…";
+"выбрать" = "select";
+"открыть" = "open";
+"файлы" = "files";
+"закрыть" = "close";
+"Недавние" = "Recent";
+"Остановить туннель" = "Stop Tunnel";
+"Запустить туннель" = "Start Tunnel";
+
+/* sudo from Keychain */
+"Подставить пароль sudo для %@" = "Fill in the sudo password for %@";
+"sudo просит пароль. Подставить пароль хоста из Keychain?" = "sudo is asking for a password. Fill in the host's password from Keychain?";
+"Подставить" = "Fill In";
+"Не надо" = "Dismiss";
+"Открыть localhost:%@ сервера в браузере через туннель" = "Open the server's localhost:%@ in your browser through a tunnel";
+
+/* SFTP in Finder */
+"Не удалось подключить диск (код %@)." = "Couldn't mount the volume (code %@).";
+"Открыть в Finder" = "Open in Finder";
+"Подключить файлы хоста как диск в Finder" = "Mount the host's files as a volume in Finder";
+"Отключить диск" = "Eject";
+"Отключить диск хоста в Finder" = "Eject the host's volume in Finder";
+
+/* MCP rules, temporary access, changes */
+"%@ до %@" = "%@ until %@";
+"Отозвать" = "Revoke";
+"Правила (%@)" = "Rules (%@)";
+"Правила" = "Rules";
+"на 30 минут" = "for 30 minutes";
+"на 2 часа" = "for 2 hours";
+"на 8 часов" = "for 8 hours";
+"Доверенный %@" = "Trusted %@";
+"Временный доступ: потом вернётся обычный режим" = "Temporary access: the regular mode comes back afterwards";
+"Правила для всех хостов" = "Rules for All Hosts";
+"Что изменили агенты" = "What Agents Changed";
+"%@ изменений на %@" = "%@ changes on %@";
+"Все хосты" = "All Hosts";
+"Вывод" = "Output";
+"Правила для %@" = "Rules for %@";
+"По одному шаблону на строку, как в shell: * — любые символы. Пример: systemctl restart *" = "One pattern per line, shell-style: * matches anything. Example: systemctl restart *";
+"Без подтверждения" = "Without Confirmation";
+"Запрещено всегда" = "Always Forbidden";
+"Запрет сильнее всего, даже доверенного режима. Цепочки (;, &&, |, подстановки) правилом «без подтверждения» не разрешаются." = "A forbidden pattern beats everything, even trusted mode. Chains (;, &&, |, substitutions) are never allowed by a without-confirmation rule.";
+"разрешено: правило" = "allowed: rule";
+"запрещено: правило" = "denied: rule";
+"разрешено: временный доступ" = "allowed: temporary access";

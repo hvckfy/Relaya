@@ -35,6 +35,10 @@ struct RelayaApp: App {
                 Button(L("Перечитать ~/.ssh/config")) { model.reloadHosts() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
+            CommandGroup(after: .toolbar) {
+                Button(L("Палитра команд…")) { model.commandPalette.toggle() }
+                    .keyboardShortcut("k", modifiers: .command)
+            }
             CommandGroup(after: .textEditing) {
                 Button(L("Найти в терминале…")) { model.activeSession?.controller?.showFind() }
                     .keyboardShortcut("f", modifiers: .command)

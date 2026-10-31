@@ -72,6 +72,15 @@ struct SessionView: View {
                 Text(L("пароль")).foregroundStyle(Theme.org)
             }
             Spacer()
+            ForEach(c.detectedPorts, id: \.self) { port in
+                Button {
+                    Task { await model.openRemotePort(port, on: controller.host) }
+                } label: {
+                    Label(":\(port)", systemImage: "arrow.up.forward.app")
+                }
+                .buttonStyle(.borderless)
+                .help(L("Открыть localhost:%@ сервера в браузере через туннель", "\(port)"))
+            }
             if c.ended { Text(L("отключён")).foregroundStyle(Theme.red) }
             Text("UTF-8")
             Text("xterm-256color")
@@ -120,6 +129,19 @@ private struct SessionBanners: View {
                     Button(L("Доверять")) { controller.answerHostKey(trust: true) }
                         .buttonStyle(.relaya(.primary, height: 24))
                     Button(L("Отмена")) { controller.answerHostKey(trust: false) }
+                        .buttonStyle(.relaya(.normal, height: 24))
+                }
+            }
+            if controller.sudoPrompt {
+                BannerRow(tint: Theme.accTint, border: Theme.line) {
+                    Image(systemName: "lock.shield").foregroundStyle(Theme.acc)
+                    Text(L("sudo просит пароль. Подставить пароль хоста из Keychain?"))
+                    Spacer()
+                    Button(L("Подставить")) { controller.fillSudoPassword() }
+                        .buttonStyle(.relaya(.primary, height: 24))
+                        .keyboardShortcut("p", modifiers: [.command, .option])
+                        .help("⌥⌘P")
+                    Button(L("Не надо")) { controller.sudoPrompt = false }
                         .buttonStyle(.relaya(.normal, height: 24))
                 }
             }

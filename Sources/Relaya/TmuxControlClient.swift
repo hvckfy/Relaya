@@ -57,6 +57,16 @@ final class TmuxPaneView: SwiftTerm.TerminalView, @preconcurrency TerminalViewDe
         }
     }
 
+    func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {
+        MainActor.assumeIsolated {
+            if let port = LocalPorts.find(in: link).first, let w = window_ {
+                w.client.onOpenServerPort?(port)
+            } else if let url = URL(string: link) {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
     func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {}
     func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {}
     func scrolled(source: SwiftTerm.TerminalView, position: Double) {}
@@ -81,6 +91,7 @@ final class TmuxControlClient {
     @ObservationIgnored var onWindowAdded: ((TmuxWindow) -> Void)?
     @ObservationIgnored var onWindowClosed: ((TmuxWindow) -> Void)?
     @ObservationIgnored var onExit: (() -> Void)?
+    @ObservationIgnored var onOpenServerPort: ((Int) -> Void)?
 
     @ObservationIgnored private var process: Process?
     @ObservationIgnored private var input: FileHandle?

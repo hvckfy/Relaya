@@ -65,9 +65,17 @@ struct MainView: View {
         .sheet(item: $model.desktopEditor) { d in
             DesktopEditor(desktop: d).environment(model)
         }
-        .sheet(isPresented: $model.snippetPalette) {
-            SnippetPalette().environment(model)
+        .sheet(isPresented: $model.snippetPalette, onDismiss: { model.paletteSnippet = nil }) {
+            SnippetPalette(preselected: model.paletteSnippet).environment(model)
         }
+        .overlay(alignment: .top) {
+            if model.commandPalette {
+                CommandPalette()
+                    .padding(.top, 70)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: model.commandPalette)
         .sheet(item: $model.sftpHost) { host in
             SFTPView(host: host).environment(model)
         }
