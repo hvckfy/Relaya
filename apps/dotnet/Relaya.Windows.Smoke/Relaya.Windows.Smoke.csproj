@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Smoke-тест ConPTY в CI: тот же PseudoConsole.cs, что в приложении, без WinUI. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Relaya.Windows\Terminal\PseudoConsole.cs" Link="PseudoConsole.cs" />
+  </ItemGroup>
+</Project>

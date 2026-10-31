@@ -74,7 +74,13 @@ internal sealed class PseudoConsole : IDisposable
         try
         {
             int n;
-            while ((n = await output.ReadAsync(buf)) > 0) Output?.Invoke(buf[..n]);
+            while ((n = await output.ReadAsync(buf)) > 0)
+            {
+                // Исключение подписчика не должно останавливать чтение: иначе ConPTY встаёт,
+                // вкладка чёрная, а ssh через время выходит с кодом 255.
+                try { Output?.Invoke(buf[..n]); }
+                catch (Exception e) { System.Diagnostics.Debug.WriteLine($"ConPTY output handler: {e}"); }
+            }
         }
         catch (IOException) { }
         catch (ObjectDisposedException) { }

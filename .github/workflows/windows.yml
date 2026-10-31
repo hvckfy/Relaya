@@ -21,6 +21,10 @@ jobs:
       - name: Build Rust core + C# bindings
         shell: pwsh
         run: scripts/build-core-windows.ps1
+      # ConPTY: вывод процесса доходит до подписчика (регрессия «чёрная вкладка, код 255»).
+      - name: ConPTY smoke test
+        shell: pwsh
+        run: dotnet run --project apps/dotnet/Relaya.Windows.Smoke -c Release
       # PRI-задачи WinAppSDK есть только в MSBuild из Visual Studio, не в dotnet CLI.
       - uses: microsoft/setup-msbuild@v2
       - name: Build WinUI app
