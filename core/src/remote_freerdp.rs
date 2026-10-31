@@ -180,9 +180,9 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
         return;
     }
     *session.native.lock().unwrap() = Some(Native(raw));
-    let ctx_addr = ctx as usize;
+    let (ctx_addr, raw_addr) = (ctx as usize, raw as usize);
     std::thread::Builder::new().name("relaya-freerdp".into()).spawn(move || {
-        unsafe { relaya_rdp_run(raw) };
+        unsafe { relaya_rdp_run(raw_addr as *mut RawRdp) };
         let ctx = unsafe { Box::from_raw(ctx_addr as *mut Ctx) };
         let close = ctx.closed.lock().unwrap().take()
             .unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
