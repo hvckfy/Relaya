@@ -170,8 +170,8 @@ extension TileLayout where ID == String {
         guard let d = obj as? [String: Any], let (k, v) = d.first else { return nil }
         switch k {
         case "leaf": guard let a = v as? String else { return nil }; self = .leaf(a)
-        case "row": guard let a = v as? [Any] else { return nil }; self = .row(a.compactMap(TileLayout(jsonObject:)))
-        case "column": guard let a = v as? [Any] else { return nil }; self = .column(a.compactMap(TileLayout(jsonObject:)))
+        case "row": guard let a = v as? [Any] else { return nil }; self = .row(a.compactMap { TileLayout<String>(jsonObject: $0) })
+        case "column": guard let a = v as? [Any] else { return nil }; self = .column(a.compactMap { TileLayout<String>(jsonObject: $0) })
         default: return nil
         }
     }
