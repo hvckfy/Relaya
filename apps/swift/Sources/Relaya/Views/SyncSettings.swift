@@ -12,6 +12,11 @@ struct SyncSettings: View {
     var body: some View {
         let sync = model.sync
         Form {
+            if let notice = sync.skippedKeysNotice {
+                Section {
+                    Label(notice, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+            }
             Section {
                 if sync.profiles.isEmpty {
                     Text(L("Профиль — это ваш git-репозиторий (или папка в iCloud Drive) и набор хостов: все, группы или отдельные хосты. Пароли не синхронизируются никогда."))

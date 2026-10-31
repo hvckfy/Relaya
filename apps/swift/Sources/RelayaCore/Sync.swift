@@ -295,4 +295,11 @@ extension Sync {
     public static func takeRenamedKeys(paths: Paths = Paths()) -> [(name: String, savedAs: String)] {
         syncTakeRenamedKeys(paths: paths.rust).map { ($0.name, $0.savedAs) }
     }
+
+    /// Ключи из синхронизации, которые не загружены: нет пароля шифрования ключей или он неверный.
+    /// Ядро отдаёт результат последнего импорта один раз.
+    public static func takeSkippedKeys(paths: Paths = Paths()) -> (noPassphrase: [String], wrongPassphrase: [String]) {
+        let list = syncTakeSkippedKeys(paths: paths.rust)
+        return (list.filter { $0.reason == .noPassphrase }.map(\.name), list.filter { $0.reason == .wrongPassphrase }.map(\.name))
+    }
 }

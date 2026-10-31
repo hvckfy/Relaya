@@ -178,11 +178,19 @@ final class SyncManager {
 
     /// Ключи с другой машины, не совпавшие с местными одноимёнными (сохранены рядом как `.from-sync`).
     var renamedKeys: [(name: String, savedAs: String)] = []
+    /// Пришедшие ключи не загружены (нет или неверный пароль шифрования) — показывается в настройках синхронизации.
+    var skippedKeysNotice: String?
 
     private func finish(_ id: Sync.Profile.ID, _ imported: [Sync.Item]) {
         lastSync[id.uuidString] = Date()
         states[id] = .idle
         renamedKeys += Sync.takeRenamedKeys()
+        let skipped = Sync.takeSkippedKeys()
+        skippedKeysNotice = skipped.wrongPassphrase.isEmpty && skipped.noPassphrase.isEmpty ? nil
+            : !skipped.wrongPassphrase.isEmpty
+                ? L("Ключи не загружены — пароль шифрования ключей не подошёл: %@", skipped.wrongPassphrase.joined(separator: ", "))
+                : L("Ключи не загружены — задайте пароль шифрования ключей (тот же, что на другой машине): %@",
+                    skipped.noPassphrase.joined(separator: ", "))
         if !imported.isEmpty { onImported?(imported) }
     }
 }

@@ -916,3 +916,5 @@
 "С другой машины" = "From the other machine";
 "Мой: %@\nС другой машины: %@" = "Mine: %@\nFrom the other machine: %@";
 "У хоста есть ProxyCommand/LocalCommand — сохранённый пароль не подставляется автоматически" = "This host has ProxyCommand/LocalCommand — the saved password isn’t filled in automatically";
+"Ключи не загружены — пароль шифрования ключей не подошёл: %@" = "Keys not loaded: the key encryption password didn't match: %@";
+"Ключи не загружены — задайте пароль шифрования ключей (тот же, что на другой машине): %@" = "Keys not loaded: set the key encryption password (the same as on your other machine): %@";
