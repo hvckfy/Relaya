@@ -178,7 +178,11 @@ internal sealed class SftpPage : UserControl
         // sftp не удаляет непустые папки рекурсивно — для них ssh rm -r.
         var dirs = sel.Where(f => f.isDirectory).ToList();
         if (sel.Except(dirs).Any()) await Batch(sel.Except(dirs).Select(f => $"rm {Q(Join(f.name))}").ToArray());
-        foreach (var d in dirs) await AppState.RunOnHost(alias, "rm -r -- " + RelayaCoreMethods.CoreShellQuote(Join(d.name)));
+        foreach (var d in dirs)
+        {
+            var r = await AppState.RunOnHost(alias, "rm -r -- " + RelayaCoreMethods.CoreShellQuote(Join(d.name)));
+            if (r.Status != 0) { await Open(path); status.Text = Platform.SshErrors.Describe(r.Stderr, L("Ошибка sftp")); return; }
+        }
         await Open(path);
     }
 

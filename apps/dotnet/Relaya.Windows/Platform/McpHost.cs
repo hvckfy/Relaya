@@ -14,18 +14,19 @@ internal static class McpHost
 {
     public static int Run()
     {
-        Console.InputEncoding = Encoding.UTF8;
-        Console.OutputEncoding = new UTF8Encoding(false);
+        // WinExe без консоли: Console.InputEncoding бросает IOException (SetConsoleCP), поэтому UTF-8 — прямо на потоках.
+        using var input = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false));
+        using var output = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { NewLine = "\n" };
         Data.AppState.LoadHosts();
         var server = new McpServer(new Backend());
         string? line;
-        while ((line = Console.In.ReadLine()) != null)
+        while ((line = input.ReadLine()) != null)
         {
             if (line.Trim().Length == 0) continue;
             if (server.Handle(line) is { } reply)
             {
-                Console.Out.Write(reply + "\n");
-                Console.Out.Flush();
+                output.Write(reply + "\n");
+                output.Flush();
             }
         }
         return 0;

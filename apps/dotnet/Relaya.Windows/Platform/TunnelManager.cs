@@ -30,7 +30,7 @@ internal sealed class TunnelManager
         if (running.TryGetValue(t.id, out var r) && r.State is State.Running or State.Starting) return;
         var info = new ProcessStartInfo(Data.AppState.SshExe)
         {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true,
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true,
         };
         var passwordOnly = CredentialStore.Has(t.hostAlias);
         foreach (var a in RelayaCoreMethods.TunnelSshArguments(t, passwordOnly)) info.ArgumentList.Add(a);
@@ -45,6 +45,7 @@ internal sealed class TunnelManager
         running[t.id] = (p, State.Starting, null);
         p.Exited += (_, _) =>
         {
+            p.WaitForExit(); // дочитать stderr: Exited приходит раньше последних ErrorDataReceived
             string message;
             lock (error) message = error.ToString();
             if (running.TryGetValue(t.id, out var cur) && cur.Process == p)
