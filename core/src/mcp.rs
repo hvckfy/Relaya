@@ -261,22 +261,40 @@ fn segment_ok(words: &[String]) -> bool {
     };
     let mut positional = Vec::new();
     let mut scripts: Vec<String> = Vec::new();
+    // sed: был ли `-e`/`--expression` и ждёт ли он скрипт следующим словом.
+    let (mut has_e, mut script_next) = (false, false);
     let mut flags_done = false;
     for w in rest {
+        if script_next { scripts.push(w.clone()); script_next = false; continue; }
         if flags_done || !w.starts_with('-') || w == "-" { positional.push(w.as_str()); continue; }
         if w == "--" { flags_done = true; continue; }
         if let Some(long) = w.strip_prefix("--") {
-            let name = format!("--{}", long.split('=').next().unwrap_or(""));
-            if !tool.long.contains(&name.as_str()) { return false; }
+            let (name, value) = match long.split_once('=') { Some((n, v)) => (n, Some(v)), None => (long, None) };
+            if !tool.long.contains(&format!("--{name}").as_str()) { return false; }
+            if tool.name == "sed" && name == "expression" {
+                has_e = true;
+                match value { Some(v) => scripts.push(v.to_string()), None => script_next = true }
+            }
         } else if !w[1..].chars().all(|c| c.is_ascii_digit()) {
-            match short_flags_ok(tool.name, &w[1..], tool.short) { None => return false, Some(s) => scripts.extend(s) }
+            match short_flags_ok(tool.name, &w[1..], tool.short) {
+                None => return false,
+                Some(attached) => {
+                    if tool.name == "sed" && w[1..].contains('e') {
+                        has_e = true;
+                        if attached.is_none() { script_next = true; }
+                    }
+                    scripts.extend(attached);
+                }
+            }
         }
     }
+    // `-e` в конце без скрипта.
+    if script_next { return false; }
     match tool.name {
         "uniq" => positional.len() <= 1,
-        // Скрипт приклеен к `-e` или идёт первым словом (после `-e` или без него).
-        "sed" => if scripts.is_empty() { positional.first().map(|s| sed_script_ok(s)).unwrap_or(false) }
-                 else { scripts.iter().all(|s| sed_script_ok(s)) },
+        // С `-e` скрипты — только значения `-e` (все проверяются), остальные слова — файлы; без `-e` скрипт — первое слово.
+        "sed" => if has_e { !scripts.is_empty() && scripts.iter().all(|s| sed_script_ok(s)) }
+                 else { positional.first().map(|s| sed_script_ok(s)).unwrap_or(false) },
         // `|` в программе awk — запуск команды (`print "x" | "sh"`), как и system/getline.
         "awk" => !rest.iter().any(|w| w.contains("system") || w.contains("getline") || w.contains('|') || w.contains('>')),
         _ => true,
@@ -607,7 +625,7 @@ mod tests {
         for ok in ["ls -la /var/log", "df -h", "journalctl -u nginx -n 50 | grep error", "docker ps", "tail -50 /var/log/syslog",
                    "grep -i 'a|b c' f", "sed -n '1,20p' f", "sed 's/a/b/g' f", "sed -n /err/p f", "find /var -name '*.log' -mtime -1",
                    "sort -rn f | uniq -c | head -5", "ps aux | sort -rk3 | head", "cut -d: -f1 /etc/passwd",
-                   "sed -e 's/a/b/' f", "sed -es/a/b/ f", "awk -F: '{print NF}' f", "git log --oneline -n 5", "systemctl status nginx --no-pager", "ps aux"] {
+                   "sed -e 's/a/b/' f", "sed -es/a/b/ f", "sed -n -e 1p -e 2p f", "sed --expression=1p f", "awk -F: '{print NF}' f", "git log --oneline -n 5", "systemctl status nginx --no-pager", "ps aux"] {
             assert!(mcp_is_read_only(ok.into()), "{ok}");
         }
         for bad in ["rm -rf /", "sudo ls", "cat a > b", "ls; rm x", "sed -i s/a/b/ f", "sed --in-place s/a/b/ f", "sed 's/a/b/w out' f",
@@ -615,7 +633,8 @@ mod tests {
                     "echo $HOME", "sort -o out f", "sort --output=out f", "uniq in out", "journalctl --vacuum-size=1M", "journalctl --rotate",
                     "env", "printenv", "ip link set eth0 down", "ubus call system reboot", "date -s 2020-01-01", "hostname evil", "dmesg -C",
                     "ss -K", "ls --unknown", "grep -P x", "git diff --output=x", "git log --ext-diff", "awk 'BEGIN{system(\"id\")}'",
-                    "cat 'unclosed", "less f", "awk 'BEGIN{print \"x\" | \"sh\"}'", "sed -es/a/b/w f",
+                    "cat 'unclosed", "less f", "awk 'BEGIN{print \"x\" | \"sh\"}'", "sed -es/a/b/w f", "sed -e 's/a/b/' -e 'w /tmp/x' f", "sed --expression='1w /tmp/x' f",
+                    "sed -n -e '1p' --expression 'w x' f", "sed -e",
                     "sed -e 's/a/b/e' f", "cut -x f"] {
             assert!(!mcp_is_read_only(bad.into()), "{bad}");
         }
