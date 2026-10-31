@@ -201,6 +201,7 @@ internal sealed class HostPage : UserControl
             }));
             var created = DateTimeOffset.FromUnixTimeSeconds((long)s.created).LocalDateTime;
             tmux.Children.Add(Ui.Row("", s.name,
+                (RelayaCoreMethods.TmuxIsHostSession(host.alias, s.name) ? L("вкладка Relaya") + " · " : "") +
                 (s.attached > 0 ? L("подключено: %@", s.attached) : L("отключена")) + " · " + created.ToString("g"), actions));
         }
     }

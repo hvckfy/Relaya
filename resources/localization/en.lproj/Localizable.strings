@@ -881,3 +881,4 @@
 "Не удалось прочитать файл: %@" = "Could not read the file: %@";
 "Сертификат сервера" = "Server Certificate";
 "Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:" = "First connection to %@. Check the certificate fingerprint (SHA-256) against the server:";
+"вкладка Relaya" = "Relaya tab";

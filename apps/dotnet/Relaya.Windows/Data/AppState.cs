@@ -41,6 +41,13 @@ internal static class AppState
         LoadHosts();
     }
 
+    /// Группа, метки, цвет, ОС, tmux — меняется только строка `# relaya:` блока.
+    public static void SetMeta(SshHost h)
+    {
+        SaveConfig(RelayaCoreMethods.ConfigSetMeta(ConfigText(), h.alias, h.group, h.tags, h.color, h.os, h.tmux));
+        LoadHosts();
+    }
+
     /// Готовый текст конфига (правка ключей) — с копией и перечитыванием хостов.
     public static void WriteConfig(string text)
     {

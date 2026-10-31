@@ -44,7 +44,8 @@ internal static class HostActions
     private static MenuFlyoutItem GroupItem(SshHost h, string? group, string title)
     {
         var i = new ToggleMenuFlyoutItem { Text = title, IsChecked = h.group == group };
-        i.Click += (_, _) => AppState.Upsert(h with { group = group }, h.alias);
+        // Только строка `# relaya:` — остальной блок хоста (комментарии, Match, порядок) не переписывается.
+        i.Click += (_, _) => AppState.SetMeta(h with { group = group });
         return i;
     }
 }
