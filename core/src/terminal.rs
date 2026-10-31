@@ -34,6 +34,12 @@ pub struct TermSnapshot {
     /// Программа просит отчёты мыши (tmux, mc).
     pub mouse_reporting: bool,
     pub bracketed_paste: bool,
+    /// Стрелки как ESC O A (vim, less) вместо ESC [ A.
+    pub app_cursor: bool,
+    /// Отчёты мыши в формате SGR (ESC [ < b ; x ; y M).
+    pub mouse_sgr: bool,
+    /// Программа хочет и движение мыши с зажатой кнопкой.
+    pub mouse_drag: bool,
     pub title: Option<String>,
     /// rows × cols ячеек построчно.
     pub cells: Vec<TermCell>,
@@ -160,6 +166,9 @@ impl TerminalEmulator {
             alt_screen: mode.contains(TermMode::ALT_SCREEN),
             mouse_reporting: mode.intersects(TermMode::MOUSE_MODE),
             bracketed_paste: mode.contains(TermMode::BRACKETED_PASTE),
+            app_cursor: mode.contains(TermMode::APP_CURSOR),
+            mouse_sgr: mode.contains(TermMode::SGR_MOUSE),
+            mouse_drag: mode.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION),
             title: self.listener.title.lock().unwrap().clone(),
             cells,
         }
@@ -225,6 +234,14 @@ mod tests {
         t.scroll_to_bottom();
         t.resize(5, 4);
         assert_eq!(t.snapshot().cells.len(), 20);
+    }
+
+    #[test]
+    fn modes() {
+        let t = TerminalEmulator::new(10, 2, 0);
+        t.feed(b"\x1b[?1h\x1b[?1000h\x1b[?1006h\x1b[?2004h".to_vec());
+        let s = t.snapshot();
+        assert!(s.app_cursor && s.mouse_reporting && s.mouse_sgr && s.bracketed_paste && !s.mouse_drag);
     }
 
     #[test]

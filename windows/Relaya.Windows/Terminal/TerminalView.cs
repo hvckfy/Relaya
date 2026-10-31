@@ -32,6 +32,10 @@ internal sealed class TerminalView : UserControl
     /// Байты от клавиатуры и вставки — в ssh.
     public event Action<byte[]>? Input;
 
+    // Выделение в координатах экрана (строка, столбец); конец включительно.
+    private (int Row, int Col)? selStart, selEnd;
+    private bool selecting;
+
     public TerminalView()
     {
         Content = canvas;
@@ -40,32 +44,47 @@ internal sealed class TerminalView : UserControl
         Unloaded += (_, _) => canvas.RemoveFromVisualTree();
         IsTabStop = true;
         UseSystemFocusVisuals = false;
-        PointerPressed += (_, _) => Focus(FocusState.Pointer);
         KeyDown += OnKeyDown;
         CharacterReceived += OnCharacterReceived;
         PointerWheelChanged += OnWheel;
+        PointerPressed += OnPointerPressed;
+        PointerMoved += OnPointerMoved;
+        PointerReleased += OnPointerReleased;
     }
 
     private void Send(string s)
     {
         Emulator.ScrollToBottom();
+        ClearSelection();
         Input?.Invoke(Encoding.UTF8.GetBytes(s));
     }
 
-    // Клавиши без символа: стрелки, F-клавиши, навигация. Символы (и Ctrl+буква) приходят в CharacterReceived.
+    private static bool IsDown(VirtualKey key) =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    // Клавиши без символа: стрелки, F-клавиши, навигация, Alt+клавиша. Символы (и Ctrl+буква) — в CharacterReceived.
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        var ctrl = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-        var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        bool ctrl = IsDown(VirtualKey.Control), shift = IsDown(VirtualKey.Shift), alt = IsDown(VirtualKey.Menu);
         if (ctrl && shift && e.Key == VirtualKey.V) { e.Handled = true; _ = Paste(); return; }
+        if (ctrl && shift && e.Key == VirtualKey.C) { e.Handled = true; CopySelection(); return; }
+        // Alt+буква/цифра — Meta: ESC и символ (bash: Alt+B/F по словам).
+        if (alt && !ctrl && e.Key is >= VirtualKey.A and <= VirtualKey.Z or >= VirtualKey.Number0 and <= VirtualKey.Number9)
+        {
+            var ch = (char)e.Key;
+            e.Handled = true;
+            Send("\x1b" + (shift ? ch : char.ToLowerInvariant(ch)));
+            return;
+        }
+        var app = Emulator.Snapshot().appCursor;
+        string Arrow(char c) => app ? $"\x1bO{c}" : $"\x1b[{c}";
         var seq = e.Key switch
         {
             VirtualKey.Tab => shift ? "\x1b[Z" : "\t",
-            VirtualKey.Up => "\x1b[A", VirtualKey.Down => "\x1b[B",
-            VirtualKey.Right => "\x1b[C", VirtualKey.Left => "\x1b[D",
-            VirtualKey.Home => "\x1b[H", VirtualKey.End => "\x1b[F",
+            VirtualKey.Up => Arrow('A'), VirtualKey.Down => Arrow('B'),
+            VirtualKey.Right => Arrow('C'), VirtualKey.Left => Arrow('D'),
+            VirtualKey.Home => Arrow('H'), VirtualKey.End => Arrow('F'),
             VirtualKey.Insert => "\x1b[2~", VirtualKey.Delete => "\x1b[3~",
             VirtualKey.PageUp => "\x1b[5~", VirtualKey.PageDown => "\x1b[6~",
             VirtualKey.F1 => "\x1bOP", VirtualKey.F2 => "\x1bOQ", VirtualKey.F3 => "\x1bOR", VirtualKey.F4 => "\x1bOS",
@@ -94,11 +113,135 @@ internal sealed class TerminalView : UserControl
         Send(Emulator.Snapshot().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
     }
 
+    // --- Мышь: выделение (или отчёты программе, если она их просит; Shift — всегда выделение). ---
+
+    private (int Row, int Col) CellAt(PointerRoutedEventArgs e)
+    {
+        var p = e.GetCurrentPoint(this).Position;
+        var s = Emulator.Snapshot();
+        var col = (int)Math.Clamp(Math.Floor((p.X - Pad) / cellW), 0, s.cols - 1);
+        var row = (int)Math.Clamp(Math.Floor((p.Y - Pad) / cellH), 0, s.rows - 1);
+        return (row, col);
+    }
+
+    private bool ReportsMouse(out TermSnapshot s)
+    {
+        s = Emulator.Snapshot();
+        return s.mouseReporting && s.mouseSgr && !IsDown(VirtualKey.Shift);
+    }
+
+    private void Report(int button, (int Row, int Col) at, bool release) =>
+        Input?.Invoke(Encoding.ASCII.GetBytes($"\x1b[<{button};{at.Col + 1};{at.Row + 1}{(release ? 'm' : 'M')}"));
+
+    private static int ButtonCode(Microsoft.UI.Input.PointerPointProperties p) =>
+        p.IsRightButtonPressed ? 2 : p.IsMiddleButtonPressed ? 1 : 0;
+
+    private int lastButton;
+
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        Focus(FocusState.Pointer);
+        var props = e.GetCurrentPoint(this).Properties;
+        var at = CellAt(e);
+        if (ReportsMouse(out _))
+        {
+            lastButton = ButtonCode(props);
+            Report(lastButton, at, false);
+            CapturePointer(e.Pointer);
+            e.Handled = true;
+            return;
+        }
+        // Правая кнопка — как в Windows Terminal: есть выделение — копировать, нет — вставить.
+        if (props.IsRightButtonPressed)
+        {
+            if (HasSelection) CopySelection(); else _ = Paste();
+            e.Handled = true;
+            return;
+        }
+        selStart = selEnd = at;
+        selecting = true;
+        CapturePointer(e.Pointer);
+        canvas.Invalidate();
+        e.Handled = true;
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (ReportsMouse(out var s))
+        {
+            if (s.mouseDrag && e.GetCurrentPoint(this).IsInContact) Report(lastButton + 32, CellAt(e), false);
+            return;
+        }
+        if (!selecting) return;
+        selEnd = CellAt(e);
+        canvas.Invalidate();
+    }
+
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        ReleasePointerCapture(e.Pointer);
+        if (ReportsMouse(out _)) { Report(lastButton, CellAt(e), true); return; }
+        selecting = false;
+        if (selStart == selEnd) ClearSelection();
+    }
+
+    private bool HasSelection => selStart is not null && selEnd is not null && selStart != selEnd;
+
+    private void ClearSelection()
+    {
+        if (selStart is null) return;
+        selStart = selEnd = null;
+        canvas.Invalidate();
+    }
+
+    private ((int Row, int Col) From, (int Row, int Col) To) Ordered()
+    {
+        var (a, b) = (selStart!.Value, selEnd!.Value);
+        return a.Row < b.Row || a.Row == b.Row && a.Col <= b.Col ? (a, b) : (b, a);
+    }
+
+    private bool Selected(int row, int col)
+    {
+        if (!HasSelection) return false;
+        var (from, to) = Ordered();
+        if (row < from.Row || row > to.Row) return false;
+        if (row == from.Row && col < from.Col) return false;
+        if (row == to.Row && col > to.Col) return false;
+        return true;
+    }
+
+    private void CopySelection()
+    {
+        if (!HasSelection) return;
+        var s = Emulator.Snapshot();
+        var (from, to) = Ordered();
+        var lines = new System.Collections.Generic.List<string>();
+        for (var r = from.Row; r <= to.Row; r++)
+        {
+            var sb = new StringBuilder();
+            var c0 = r == from.Row ? from.Col : 0;
+            var c1 = r == to.Row ? to.Col : (int)s.cols - 1;
+            for (var c = c0; c <= c1; c++) sb.Append(s.cells[r * (int)s.cols + c].ch);
+            lines.Add(sb.ToString().TrimEnd());
+        }
+        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        package.SetText(string.Join("\r\n", lines));
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+        ClearSelection();
+    }
+
     private void OnWheel(object sender, PointerRoutedEventArgs e)
     {
         var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
-        Emulator.Scroll(delta / 40);
-        canvas.Invalidate();
+        if (ReportsMouse(out _))
+        {
+            Report(delta > 0 ? 64 : 65, CellAt(e), false);
+        }
+        else
+        {
+            Emulator.Scroll(delta / 40);
+            canvas.Invalidate();
+        }
         e.Handled = true;
     }
 
@@ -149,6 +292,7 @@ internal sealed class TerminalView : UserControl
                 var x = Pad + c * cellW;
                 var width = (cell.flags & 64) != 0 ? cellW * 2 : cellW;
                 if (cell.bg != 0 || inverse) ds.FillRectangle((float)x, (float)y, (float)width, (float)cellH, bg);
+                if (Selected(r, c)) ds.FillRectangle((float)x, (float)y, (float)cellW, (float)cellH, Theme.Selection);
                 if (cell.ch.Length == 0 || cell.ch == " ") continue;
                 if ((cell.flags & 16) != 0) fg.A = 160;
                 format.FontWeight = (cell.flags & 1) != 0 ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;

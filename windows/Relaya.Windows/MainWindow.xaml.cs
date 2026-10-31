@@ -78,7 +78,7 @@ public sealed partial class MainWindow : Window
     {
         if (args.InvokedItemContainer?.Tag is not SshHost h) return;
         var view = new Terminal.TerminalView();
-        var session = new Terminal.SshSession(view);
+        var session = new Terminal.SshSession(view, h.alias);
         var tab = new TabViewItem
         {
             Header = h.alias,
@@ -89,7 +89,14 @@ public sealed partial class MainWindow : Window
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
         // Размер в ячейках известен после первой раскладки — тогда и запускаем ssh.
-        view.Loaded += (_, _) => { session.Start(h.alias); view.Focus(FocusState.Programmatic); };
+        session.StateChanged += alive => DispatcherQueue.TryEnqueue(() =>
+            tab.IconSource = new FontIconSource { Glyph = alive ? "\uE756" : "\uE783" });
+        var started = false;
+        view.Loaded += (_, _) =>
+        {
+            if (!started) { started = true; session.Start(); }
+            view.Focus(FocusState.Programmatic);
+        };
     }
 
     private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
