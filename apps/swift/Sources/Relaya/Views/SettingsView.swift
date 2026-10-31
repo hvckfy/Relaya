@@ -123,6 +123,7 @@ private struct AppearanceSettings: View {
 private struct BehaviorSettings: View {
     @Environment(AppSettings.self) private var settings
     @AppStorage(AskpassBroker.confirmEachUseKey) private var confirmEachUse = false
+    @AppStorage(MCPLog.maxSizeKey) private var logMaxKB = 256
 
     var body: some View {
         @Bindable var settings = settings
@@ -133,6 +134,15 @@ private struct BehaviorSettings: View {
             if Bundle.main.localizations.filter({ $0 != "Base" }).count > 1 {
                 Picker(L("Язык"), selection: $settings.language) {
                     ForEach(AppSettings.Language.allCases) { Text($0.title).tag($0) }
+                }
+            }
+            LabeledContent(L("Максимальный размер журналов")) {
+                HStack {
+                    TextField("", value: $logMaxKB, format: .number.grouping(.never))
+                        .labelsHidden().frame(width: 70).multilineTextAlignment(.trailing)
+                    Stepper("", value: $logMaxKB, in: 64...10240, step: 64).labelsHidden()
+                    Text(L("КБ")).foregroundStyle(.secondary)
+                    Button(L("Показать в Finder")) { NSWorkspace.shared.activateFileViewerSelecting([MCPLog().url]) }
                 }
             }
             Toggle(isOn: $confirmEachUse) {

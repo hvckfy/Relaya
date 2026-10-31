@@ -1076,3 +1076,5 @@
 "пусто — как для сервера" = "empty — same as the server";
 "Домен шлюза" = "Gateway domain";
 "Пароль шлюза" = "Gateway password";
+"Максимальный размер журналов" = "Maximum log size";
+"КБ" = "KB";

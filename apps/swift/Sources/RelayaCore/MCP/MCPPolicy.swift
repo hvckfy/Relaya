@@ -166,7 +166,15 @@ public struct MCPLog: Sendable {
         self.url = url
     }
 
+    /// Предел размера журналов Relaya (настройка «Максимальный размер журналов», КБ). Превышение — файл → .old.
+    public static let maxSizeKey = "logMaxKB"
+    public static var maxBytes: Int {
+        let kb = UserDefaults.standard.integer(forKey: maxSizeKey)
+        return (kb > 0 ? kb : 256) * 1024
+    }
+
     public func append(_ entry: MCPLogEntry) {
+        rotateIfNeeded()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard var line = try? encoder.encode(entry) else { return }
@@ -179,6 +187,14 @@ public struct MCPLog: Sendable {
         } else {
             try? line.write(to: url)
         }
+    }
+
+    private func rotateIfNeeded() {
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue,
+              size > Self.maxBytes else { return }
+        let old = url.appendingPathExtension("old")
+        try? FileManager.default.removeItem(at: old)
+        try? FileManager.default.moveItem(at: url, to: old)
     }
 
     public func recent(_ limit: Int = 200) -> [MCPLogEntry] {
