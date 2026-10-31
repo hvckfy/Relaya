@@ -81,6 +81,8 @@ struct SyncTests {
         #expect(!FileManager.default.fileExists(atPath: repo.appending(path: "keys/id_other.relaya-key").path))
         let blob = try Data(contentsOf: repo.appending(path: "keys/id_web.relaya-key"))
         #expect(!String(decoding: blob, as: UTF8.self).contains("PRIVATE"))
+        // C11: на другой машине импортируются только ключи хостов профиля — сначала должен прийти сам хост.
+        try FileManager.default.copyItem(at: ssh.appending(path: "config"), to: other.appending(path: "config"))
         #expect(try Sync.importKeys(ssh: other, passphrase: "pw", from: repo) == ["id_web"])
     }
 
