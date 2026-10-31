@@ -1,0 +1,29 @@
+name: OpenH264 pin
+
+# Вручную: скачать бинари OpenH264 от Cisco для закреплённой версии, сверить MD5 с подписанным списком Cisco
+# и вывести sha256 архива и библиотеки — их ядро закрепляет в openh264_info (core/src/openh264.rs).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: OpenH264 version
+        default: "2.6.0"
+
+permissions:
+  contents: read
+
+jobs:
+  hashes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and hash
+        run: |
+          v="${{ inputs.version }}"
+          for f in libopenh264-$v-linux64.8.so libopenh264-$v-linux-arm64.8.so libopenh264-$v-mac-arm64.dylib libopenh264-$v-mac-x64.dylib openh264-$v-win64.dll openh264-$v-win-arm64.dll; do
+            curl -fsSL -o "$f.bz2" "http://ciscobinary.openh264.org/$f.bz2"
+            curl -fsSL -o "$f.md5" "http://ciscobinary.openh264.org/$f.signed.md5.txt"
+            bunzip2 -kf "$f.bz2"
+            md5=$(md5sum "$f" | cut -d' ' -f1)
+            grep -qi "$md5" "$f.md5" && signed=ok || signed=MISMATCH
+            echo "PIN $f bz2=$(sha256sum "$f.bz2" | cut -d' ' -f1) lib=$(sha256sum "$f" | cut -d' ' -f1) md5=$md5 signed=$signed"
+          done
