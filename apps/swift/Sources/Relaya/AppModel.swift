@@ -576,6 +576,8 @@ final class AppModel {
         guard broadcastInput,
               let sourceSession = sessions.first(where: { $0.controller === source }),
               !broadcastExcluded.contains(sourceSession.id) else { return }
+        // Пароль, набранный в ответ на запрос (ssh, sudo, su), в другие терминалы не уходит.
+        if source.secretPromptActive { return }
         for s in sessions where s.id != sourceSession.id && !broadcastExcluded.contains(s.id) {
             if let c = s.controller, !c.ended { c.terminal?.receiveBroadcast(data) }
         }

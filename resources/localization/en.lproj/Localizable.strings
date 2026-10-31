@@ -846,3 +846,6 @@
 "Хранится в диспетчере учётных данных Windows" = "Stored in Windows Credential Manager";
 "Пароль…" = "Password…";
 "Забыть пароль" = "Forget Password";
+"Подставить пароль хоста %@ в запрос после входа" = "Fill the host password for %@ into a prompt after login";
+"Программа на сервере просит пароль. Подставить пароль хоста из Keychain?" = "A program on the server asks for a password. Fill in the host password from Keychain?";
+"Рассылка ввода приостановлена: здесь вводится пароль." = "Broadcast paused: a password is being typed here.";

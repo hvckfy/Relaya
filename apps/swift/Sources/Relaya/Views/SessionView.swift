@@ -145,6 +145,24 @@ private struct SessionBanners: View {
                         .buttonStyle(.relaya(.normal, height: 24))
                 }
             }
+            if controller.secretPromptActive, model.broadcastInput {
+                BannerRow(tint: Theme.accTint, border: Theme.line) {
+                    Image(systemName: "pause.circle").foregroundStyle(Theme.acc)
+                    Text(L("Рассылка ввода приостановлена: здесь вводится пароль."))
+                    Spacer()
+                }
+            }
+            if controller.passwordPromptAfterLogin {
+                BannerRow(tint: Theme.accTint, border: Theme.line) {
+                    Image(systemName: "key").foregroundStyle(Theme.acc)
+                    Text(L("Программа на сервере просит пароль. Подставить пароль хоста из Keychain?"))
+                    Spacer()
+                    Button(L("Подставить")) { controller.fillPasswordAfterLogin() }
+                        .buttonStyle(.relaya(.primary, height: 24))
+                    Button(L("Не надо")) { controller.passwordPromptAfterLogin = false }
+                        .buttonStyle(.relaya(.normal, height: 24))
+                }
+            }
             if controller.savedPasswordRejected {
                 BannerRow(tint: Theme.redTint, border: Theme.line) {
                     Text(L("Сохранённый в Keychain пароль не подошёл."))

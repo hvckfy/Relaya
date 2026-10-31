@@ -47,6 +47,10 @@ final class SessionController {
     private(set) var detectedPorts: [Int] = []
     /// sudo ждёт пароль, а в Keychain есть пароль хоста — предложить подставить (после Touch ID).
     var sudoPrompt = false
+    /// После входа что-то спросило пароль (su, mysql, ssh дальше): подставлять только по кнопке.
+    var passwordPromptAfterLogin = false
+    /// Терминал ждёт пароль (ssh, sudo, su…): набранное здесь не рассылается в другие вкладки.
+    private(set) var secretPromptActive = false
 
     private(set) var exitCode: Int32?
     private(set) var ended = false
@@ -94,6 +98,19 @@ final class SessionController {
             return
         }
 
+        if PasswordPrompt.matches(tail) || PasswordPrompt.isSudo(tail) {
+            secretPromptActive = true
+        } else if secretPromptActive, text.contains(where: \.isNewline) {
+            secretPromptActive = false
+        }
+
+        // Первое приглашение shell — вход выполнен (по ключу или паролю).
+        if !loggedIn, !PasswordPrompt.matches(tail), Self.looksLikeShellPrompt(tail) {
+            loggedIn = true
+            passwordPromptWithoutSaved = false
+            if sawPasswordPrompt, !host.usesKey { offerKeySetup = true }
+        }
+
         if PasswordPrompt.isSudo(tail) {
             sudoPrompt = keychain.hasPassword(for: host.keychainAccount)
             return
@@ -101,9 +118,17 @@ final class SessionController {
         if sudoPrompt, text.contains(where: { $0.isLetter || $0.isNewline }) { sudoPrompt = false }
 
         if PasswordPrompt.matches(tail) {
-            handlePasswordPrompt()
+            // Пароль хоста — только для входа самого ssh. Запрос после входа (su, mysql, другой сервер)
+            // не получает его сам: баннер с кнопкой и Touch ID.
+            if loggedIn {
+                tail = ""
+                passwordPromptAfterLogin = keychain.hasPassword(for: host.keychainAccount)
+            } else {
+                handlePasswordPrompt()
+            }
             return
         }
+        if passwordPromptAfterLogin, text.contains(where: { $0.isLetter || $0.isNewline }) { passwordPromptAfterLogin = false }
 
         if let cmd = pendingCommand, Self.looksLikeShellPrompt(tail) {
             pendingCommand = nil
@@ -132,6 +157,7 @@ final class SessionController {
             return
         }
         autofilled = true
+        let asked = generation
         Task { @MainActor in
             // Touch ID перед подстановкой сохранённого пароля.
             guard await SecretGate.shared.authorize(L("Подставить сохранённый пароль для %@", host.alias)),
@@ -140,6 +166,8 @@ final class SessionController {
                 passwordPromptWithoutSaved = true
                 return
             }
+            // Пока ждали Touch ID, сессию могли переподключить — пароль не должен уйти в новую.
+            guard asked == generation, !loggedIn else { return }
             terminal?.sendQuiet(pw + "\r")
         }
     }
@@ -168,9 +196,21 @@ final class SessionController {
     /// Подставить пароль хоста из Keychain в запрос sudo — только по кнопке и после Touch ID.
     func fillSudoPassword() {
         sudoPrompt = false
+        fillHostPassword(reason: L("Подставить пароль sudo для %@", host.alias))
+    }
+
+    /// Запрос пароля после входа (su, mysql…) — пароль хоста только по кнопке и после Touch ID / пароля Mac.
+    func fillPasswordAfterLogin() {
+        passwordPromptAfterLogin = false
+        fillHostPassword(reason: L("Подставить пароль хоста %@ в запрос после входа", host.alias))
+    }
+
+    private func fillHostPassword(reason: String) {
+        let asked = generation
         Task { @MainActor in
-            guard await SecretGate.shared.authorize(L("Подставить пароль sudo для %@", host.alias)),
-                  let pw = try? keychain.password(for: host.keychainAccount) else { return }
+            guard await SecretGate.shared.authorize(reason),
+                  let pw = try? keychain.password(for: host.keychainAccount),
+                  asked == generation else { return }
             tail = ""
             terminal?.sendQuiet(pw + "\r")
         }
@@ -228,6 +268,9 @@ final class SessionController {
         autofilled = false
         sawPasswordPrompt = false
         loggedIn = false
+        passwordPromptAfterLogin = false
+        sudoPrompt = false
+        secretPromptActive = false
         hostKeyPrompt = nil
         hostKeyChanged = false
         passwordPromptWithoutSaved = false
