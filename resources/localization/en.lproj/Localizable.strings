@@ -1107,3 +1107,4 @@
 "Сервер ещё не знаком" = "The server is not known yet";
 "Подключитесь к нему один раз в терминале Relaya и подтвердите ключ сервера — после этого синхронизация и туннели заработают." = "Connect to it once in the Relaya terminal and confirm the server key — after that sync and tunnels will work.";
 "Пароли от серверов не синхронизируются никогда. Удаления передаются на другие машины; если удаляется сразу много, Relaya спросит." = "Server passwords are never synced. Deletions are passed on to your other machines; if a lot is deleted at once, Relaya asks first.";
+"Хранилище паролей (Secret Service) недоступно — установите libsecret и gnome-keyring или KWallet." = "The password store (Secret Service) is unavailable. Install libsecret and gnome-keyring or KWallet.";

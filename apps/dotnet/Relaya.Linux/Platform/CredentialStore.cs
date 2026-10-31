@@ -31,17 +31,25 @@ internal static class CredentialStore
 
     public static bool Has(string account) => Read(account) != null;
 
+    /// Без libsecret или без службы секретов — одно понятное сообщение (Н12), а не исключение загрузчика.
     public static void Write(string account, string secret)
     {
-        var attrs = Attributes(account);
+        IntPtr attrs;
+        try { attrs = Attributes(account); }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { throw Unavailable(null); }
         try
         {
             // Коллекция по умолчанию ("default") — связка ключей входа, открывается вместе с сеансом.
             if (!secret_password_storev_sync(schema.Value, attrs, "default", "Relaya/" + account, secret, IntPtr.Zero, out var error))
-                throw new InvalidOperationException(Message(error) ?? "Secret Service недоступен");
+                throw Unavailable(Message(error));
         }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { throw Unavailable(null); }
         finally { g_hash_table_unref(attrs); }
     }
+
+    private static InvalidOperationException Unavailable(string? detail) =>
+        new(Strings.L("Хранилище паролей (Secret Service) недоступно — установите libsecret и gnome-keyring или KWallet.")
+            + (detail is { Length: > 0 } ? "\n" + detail : ""));
 
     public static void Delete(string account)
     {
