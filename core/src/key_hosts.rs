@@ -13,10 +13,18 @@ fn key_of(line: &str) -> (String, String) {
     (k, v)
 }
 
-/// `~/.ssh/id_ed25519`, `/Users/me/.ssh/id_ed25519`, `C:\Users\me\.ssh\id_ed25519` → `id_ed25519` (имя внутри .ssh).
+/// Ключ для сравнения. Внутри домашней `.ssh` (`~/.ssh/k`, `/Users/me/.ssh/k`, `/home/me/.ssh/k`, `C:\Users\me\.ssh\k`)
+/// — по имени файла; любой другой путь (`/mnt/team/.ssh/k`) — целиком, чтобы одноимённые чужие ключи не совпадали.
 fn norm(path: &str) -> String {
+    use std::sync::OnceLock;
+    static HOME_SSH: OnceLock<regex::Regex> = OnceLock::new();
+    let re = HOME_SSH.get_or_init(|| regex::Regex::new(r"(?i)^(?:~|%userprofile%|\$home|/users/[^/]+|/home/[^/]+|/root|[a-z]:/users/[^/]+)/\.ssh/(.+)$").unwrap());
     let p = path.trim().trim_matches('"').replace('\\', "/");
-    match p.rfind("/.ssh/") { Some(i) => p[i + 6..].to_string(), None => p.trim_start_matches("~/").to_string() }
+    match re.captures(&p) {
+        Some(c) => format!("~/.ssh/{}", &c[1]),
+        None if !p.contains('/') => format!("~/.ssh/{p}"),
+        None => p,
+    }
 }
 
 /// Путь с пробелами (`C:\Users\My Name\.ssh\id`) ssh читает только в кавычках.
@@ -112,9 +120,18 @@ fn set_key(doc: &mut Document, alias: &str, new: Option<&str>, key: &str) {
     if new.is_none() && !had_this { return; }
     let indent = doc.lines[start..end].iter().find(|l| !l.trim().is_empty() && !l.trim().starts_with('#'))
         .map(|l| l.chars().take_while(|c| c.is_whitespace()).collect::<String>()).unwrap_or_else(|| "    ".into());
+    // Уходят только строки этого ключа; чужие IdentityFile остаются. IdentitiesOnly снимается, когда ключей не осталось.
     let mut body: Vec<String> = doc.lines[start..end].iter()
-        .filter(|l| { let (k, _) = key_of(l); k != "identityfile" && k != "identitiesonly" }).cloned().collect();
-    if let Some(k) = new { body.splice(0..0, [format!("{indent}IdentityFile {}", quoted(k)), format!("{indent}IdentitiesOnly yes")]); }
+        .filter(|l| { let (k, v) = key_of(l); !(k == "identityfile" && norm(&v) == norm(key)) && (new.is_some() || k != "identitiesonly") })
+        .cloned().collect();
+    if let Some(k) = new {
+        body.retain(|l| key_of(l).0 != "identitiesonly");
+        body.splice(0..0, [format!("{indent}IdentityFile {}", quoted(k)), format!("{indent}IdentitiesOnly yes")]);
+    } else if body.iter().any(|l| key_of(l).0 == "identityfile") {
+        // Остались другие ключи — «только эти ключи» по-прежнему в силе.
+        let only = doc.lines[start..end].iter().find(|l| key_of(l).0 == "identitiesonly").cloned();
+        if let Some(o) = only { let at = body.iter().rposition(|l| key_of(l).0 == "identityfile").map(|i| i + 1).unwrap_or(0); body.insert(at, o); }
+    }
     let empty = body.iter().all(|l| l.trim().is_empty() || l.trim().starts_with('#'));
     if empty && new.is_none() {
         // Блок держался только на ключе — убрать целиком (с `# relaya:` и пустой строкой после).
@@ -214,5 +231,17 @@ mod tests {
         assert_eq!(again, out);
         let legacy = "Host git@x\n    IdentityFile ~/.ssh/k\n";
         assert_eq!(config_bind_key(legacy.into(), "~/.ssh/k".into(), vec!["git@x".into()]), "Host git@x\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n");
+    }
+
+    #[test]
+    fn foreign_keys_stay_and_same_names_elsewhere_differ() {
+        let cfg = "Host a\n    IdentityFile ~/.ssh/other\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n";
+        assert_eq!(config_bind_key(cfg.into(), "~/.ssh/k".into(), vec![]), "Host a\n    IdentityFile ~/.ssh/other\n    IdentitiesOnly yes\n");
+        let bound = config_bind_key("Host a\n    IdentityFile ~/.ssh/other\n".into(), "~/.ssh/k".into(), vec!["a".into()]);
+        assert_eq!(bound, "Host a\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    IdentityFile ~/.ssh/other\n");
+        let team = "Host t\n    IdentityFile /mnt/team/.ssh/id\n";
+        assert!(config_key_hosts(team.into(), "/Users/me/.ssh/id".into()).is_empty());
+        assert_eq!(config_key_hosts(team.into(), "/mnt/team/.ssh/id".into()), vec!["t"]);
+        assert_eq!(config_key_hosts("Host h\n    IdentityFile /home/me/.ssh/id\n".into(), "C:\\Users\\me\\.ssh\\id".into()), vec!["h"]);
     }
 }
