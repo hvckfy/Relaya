@@ -14,7 +14,14 @@ namespace Relaya.Platform;
 /// Через SSH-хост — локальный туннель, как на Windows.
 internal static class DesktopLauncher
 {
+    // Вызывается из обработчиков кнопок без await: async void, но исключение не должно валить процесс (Н13).
     public static async void Open(RemoteDesktop d, XamlRoot root)
+    {
+        try { await OpenAsync(d, root); }
+        catch (Exception e) { Trace.WriteLine($"DesktopLauncher: {e}"); }
+    }
+
+    private static async Task OpenAsync(RemoteDesktop d, XamlRoot root)
     {
         var host = d.address;
         var port = d.port;
