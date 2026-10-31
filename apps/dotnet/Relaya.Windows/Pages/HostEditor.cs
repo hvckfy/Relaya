@@ -103,12 +103,11 @@ internal static class HostEditor
             }
             return new SshHost(name, Opt(address.Text), Opt(user.Text), portValue, Opt(key.Text), Opt(jump.Text),
                 agent.IsOn ? true : null, source?.serverAliveInterval, source?.compression, Opt(group.Text),
-                RelayaCoreMethods.SplitTags(tags.Text), source?.color, os.SelectedIndex > 0 ? all[os.SelectedIndex - 1] : null, tmux.IsOn);
+                RelayaCoreMethods.SplitTags(tags.Text), source?.color, os.SelectedIndex > 0 ? all[os.SelectedIndex - 1] : null, tmux.IsOn,
+                identityFiles: source?.identityFiles ?? new List<string>(), forwardAgentValue: source?.forwardAgentValue, compressionValue: source?.compressionValue);
         }
         void Update()
         {
-            Split(alias);
-            Split(address);
             var h = Build(out var problem);
             error.Text = problem ?? "";
             preview.Text = h == null ? "" : string.Join("\n",
@@ -144,6 +143,8 @@ internal static class HostEditor
         };
         dialog.PrimaryButtonClick += (_, args) =>
         {
+            Split(alias);
+            Split(address);
             var h = Build(out var problem);
             if (h == null) { error.Text = problem ?? ""; args.Cancel = true; return; }
             try

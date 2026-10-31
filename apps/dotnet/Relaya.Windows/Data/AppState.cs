@@ -37,7 +37,7 @@ internal static class AppState
     /// Новый или изменённый хост; originalAlias — при переименовании.
     public static void Upsert(SshHost host, string? originalAlias)
     {
-        SaveConfig(RelayaCoreMethods.ConfigUpsert(ConfigText(), host, originalAlias));
+        SaveConfig(RelayaCoreMethods.ConfigUpsertFor(ConfigText(), host, originalAlias, ConfigPlatform.Windows));
         LoadHosts();
     }
 
@@ -68,7 +68,8 @@ internal static class AppState
     {
         Directory.CreateDirectory(SshDir);
         var tmp = ConfigPath + ".relaya.tmp";
-        File.WriteAllText(tmp, text);
+        // Конфиг с Mac (UseKeychain): ядро ставит `IgnoreUnknown UseKeychain` в начало, иначе ssh.exe падает с 255.
+        File.WriteAllText(tmp, RelayaCoreMethods.ConfigForPlatform(text, ConfigPlatform.Windows));
         if (File.Exists(ConfigPath)) File.Replace(tmp, ConfigPath, ConfigPath + ".relaya.bak", ignoreMetadataErrors: true);
         else File.Move(tmp, ConfigPath);
     }
