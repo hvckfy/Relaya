@@ -11,6 +11,6 @@
   <ItemGroup>
     <Compile Include="..\Relaya.Windows\Terminal\PseudoConsole.cs" Link="PseudoConsole.cs" />
     <Compile Include="..\Relaya.Shared\Core\*.cs" Link="Core\%(Filename)%(Extension)" />
-    <None Include="..\..\..\core\target\release\relaya_core.dll" Link="relaya_core.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\core\target\release\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

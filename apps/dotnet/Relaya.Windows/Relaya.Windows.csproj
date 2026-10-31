@@ -44,7 +44,7 @@
   </ItemGroup>
   <!-- Rust-ядро: scripts/build-core-windows.ps1 кладёт relaya_core.dll и Relaya.Shared/Core/relaya_core.cs. -->
   <ItemGroup>
-    <None Include="..\..\..\core\target\release\relaya_core.dll" Link="relaya_core.dll"
-          CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\relaya_core.dll')" />
+    <!-- relaya_core.dll и, при сборке с FreeRDP, его DLL (freerdp3, winpr3, OpenSSL, legacy для NTLM…) — рядом с Relaya.exe. -->
+    <None Include="..\..\..\core\target\release\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

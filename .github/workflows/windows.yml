@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: read # артефакт FreeRDP из freerdp.yml
 
 jobs:
   build:
@@ -23,6 +24,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # Встроенный RDP на FreeRDP: артефакт последнего удачного freerdp.yml на main; скрипт ядра соберёт с rdp-freerdp
+      # и положит DLL FreeRDP рядом с relaya_core.dll.
+      - name: Fetch FreeRDP
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $run = gh run list -R ${{ github.repository }} --workflow freerdp.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId'
+          gh run download $run -R ${{ github.repository }} -n freerdp-x64-windows -D "$env:RUNNER_TEMP/freerdp"
+          "FREERDP_DIR=$env:RUNNER_TEMP/freerdp".Replace('\','/') | Out-File -Append $env:GITHUB_ENV
       - name: Build Rust core + C# bindings
         shell: pwsh
         run: scripts/build-core-windows.ps1
