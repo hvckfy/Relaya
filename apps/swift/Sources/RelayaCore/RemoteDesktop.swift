@@ -151,3 +151,14 @@ public struct RemoteDesktopStore: Sendable {
         try encoder.encode(items).write(to: url, options: .atomic)
     }
 }
+
+extension RemoteDesktop {
+    /// Запись Keychain: пользователь, адрес, порт и шлюз — у столов за разными SSH-хостами
+    /// с одинаковым внутренним адресом (192.168.1.10:3389) пароли не смешиваются.
+    public var keychainAccount: String {
+        legacyKeychainAccount + (viaSSHHost.flatMap { $0.isEmpty ? nil : " via \($0)" } ?? "")
+    }
+
+    /// Прежний формат без шлюза — для однократного переноса сохранённого пароля.
+    public var legacyKeychainAccount: String { "\(user)@\(address):\(port)" }
+}

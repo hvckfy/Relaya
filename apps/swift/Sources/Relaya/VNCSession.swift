@@ -53,7 +53,16 @@ final class VNCSession: NSObject {
         await connect()
     }
 
-    var account: String { "\(desktop.user)@\(desktop.address):\(desktop.port)" }
+    var account: String { desktop.keychainAccount }
+
+    /// Сохранённый пароль; запись старого формата (без шлюза) переносится в новую один раз.
+    private func savedPassword() -> String? {
+        if let p = try? keychain.password(for: account) { return p }
+        guard account != desktop.legacyKeychainAccount,
+              let old = try? keychain.password(for: desktop.legacyKeychainAccount) else { return nil }
+        try? keychain.setPassword(old, for: account)
+        return old
+    }
 
     func connect() async {
         var host = desktop.address
@@ -137,7 +146,7 @@ final class VNCSession: NSObject {
     fileprivate func needCredential(_ type: VNCAuthenticationType, reply: @escaping (VNCCredential?) -> Void) {
         let needsUser = type.requiresUsername
         // Сначала пробуем сохранённый пароль; если сервер его отверг — спросим.
-        if !triedSaved, let saved = try? keychain.password(for: account), !(needsUser && desktop.user.isEmpty),
+        if !triedSaved, let saved = savedPassword(), !(needsUser && desktop.user.isEmpty),
            needsUser || Self.vncPasswordProblem(saved) == nil {
             triedSaved = true
             reply(needsUser ? VNCUsernamePasswordCredential(username: desktop.user, password: saved)

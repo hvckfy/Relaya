@@ -56,7 +56,10 @@ final class RDPSession {
     private func displayRequest(points: CGSize, scale: CGFloat) -> RDPDisplayRequest {
         let scaleFactors = RDPDisplayScaleFactors(backingScaleFactor: retina ? scale : 1)
         if let fixedSize {
-            return RDPDisplayRequest(width: UInt32(fixedSize.width), height: UInt32(fixedSize.height), scaleFactors: scaleFactors)
+            // Своё разрешение из формы может быть любым числом — зажимаем в допустимое для RDP (иначе UInt32 падает).
+            let w = UInt32(min(8192, max(640, fixedSize.width)))
+            let h = UInt32(min(8192, max(480, fixedSize.height)))
+            return RDPDisplayRequest(width: w, height: h, scaleFactors: scaleFactors)
         }
         let w = UInt32(min(8192, max(640, (points.width * scale).rounded())))
         let h = UInt32(min(8192, max(480, (points.height * scale).rounded())))
@@ -107,8 +110,19 @@ final class RDPSession {
         scheduleResize(delay: .milliseconds(200))
     }
 
-    var account: String { "\(desktop.user)@\(desktop.address):\(desktop.port)" }
-    private var certificateKey: String { "rdp.certificate.\(desktop.address):\(desktop.port)" }
+    var account: String { desktop.keychainAccount }
+
+    /// Сохранённый пароль; запись старого формата (без шлюза) переносится в новую один раз.
+    private func savedPassword() -> String? {
+        if let p = try? keychain.password(for: account) { return p }
+        guard account != desktop.legacyKeychainAccount,
+              let old = try? keychain.password(for: desktop.legacyKeychainAccount) else { return nil }
+        try? keychain.setPassword(old, for: account)
+        return old
+    }
+    private var certificateKey: String {
+        "rdp.certificate.\(desktop.address):\(desktop.port)" + (desktop.viaSSHHost.flatMap { $0.isEmpty ? nil : " via \($0)" } ?? "")
+    }
 
     /// Пользователь `DOMAIN\user` → домен и имя.
     private var splitUser: (user: String, domain: String?) {
@@ -129,7 +143,7 @@ final class RDPSession {
             tunnel = t
             target = ("localhost", t.listenPort)
         }
-        if let saved = try? keychain.password(for: account), !desktop.user.isEmpty {
+        if let saved = savedPassword(), !desktop.user.isEmpty {
             launch(user: splitUser.user, domain: splitUser.domain, password: saved)
         } else {
             phase = .needsCredentials

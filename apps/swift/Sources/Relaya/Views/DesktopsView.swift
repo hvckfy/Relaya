@@ -133,6 +133,10 @@ struct DesktopEditor: View {
                         TextField("1080", value: $desktop.rdpHeight, format: .number.grouping(.never))
                             .frame(width: 70).textFieldStyle(.roundedBorder)
                     }
+                    if let w = desktop.rdpWidth, let h = desktop.rdpHeight, !(640...8192).contains(w) || !(480...8192).contains(h) {
+                        Text(L("Ширина 640–8192, высота 480–8192 — иначе будет взято ближайшее допустимое."))
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                     Picker(L("Масштаб интерфейса"), selection: Binding(get: { desktop.rdpRetina ?? true }, set: { desktop.rdpRetina = $0 })) {
                         Text(L("Retina — крупный, как на Mac")).tag(true)
                         Text(L("100% — мельче, больше места")).tag(false)
