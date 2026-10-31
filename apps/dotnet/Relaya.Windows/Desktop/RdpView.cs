@@ -254,7 +254,7 @@ internal sealed class RdpView : UserControl, IDisposable
         var map = LoadTrust();
         map[TrustKey] = sha256;
         Directory.CreateDirectory(AppState.Support);
-        File.WriteAllText(TrustFile, JsonSerializer.Serialize(map));
+        AtomicFile.Write(TrustFile, JsonSerializer.Serialize(map));
     }
 
     private bool certOpen;

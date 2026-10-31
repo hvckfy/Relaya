@@ -268,6 +268,6 @@ internal sealed class SyncService
         Directory.CreateDirectory(Support);
         var dtos = Profiles.Select(p => new Dto(p.id, p.name, (int)p.backend, p.remote, p.scope.allHosts,
             p.scope.groups, p.scope.hosts, p.items.Select(i => (int)i).ToList(), p.auto, p.enabled));
-        File.WriteAllText(Store, JsonSerializer.Serialize(dtos, new JsonSerializerOptions { WriteIndented = true }));
+        AtomicFile.Write(Store, JsonSerializer.Serialize(dtos, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

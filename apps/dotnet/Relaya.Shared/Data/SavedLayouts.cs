@@ -34,10 +34,7 @@ internal static class SavedLayouts
         var array = new JsonArray();
         foreach (var s in list)
             array.Add(new JsonObject { ["id"] = s.Id, ["name"] = s.Name, ["layout"] = JsonNode.Parse(s.Layout) });
-        Directory.CreateDirectory(AppState.Support);
-        var tmp = File_ + ".tmp";
-        File.WriteAllText(tmp, array.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(tmp, File_, overwrite: true);
+        Platform.AtomicFile.Write(File_, array.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public static void Add(string name, string layout) =>

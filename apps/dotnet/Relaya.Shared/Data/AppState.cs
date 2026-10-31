@@ -123,7 +123,7 @@ internal static class AppState
     private static void Write(string name, string json)
     {
         Directory.CreateDirectory(Support);
-        File.WriteAllText(Path.Combine(Support, name), json);
+        Platform.AtomicFile.Write(Path.Combine(Support, name), json);
     }
 
     // --- Запуск ssh без терминала (панели, SFTP, ключи) ---

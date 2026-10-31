@@ -105,7 +105,7 @@ internal sealed class AgentsPage : UserControl
             servers["relaya"] = new JsonObject { ["command"] = exe, ["args"] = new JsonArray("--mcp") };
             root["mcpServers"] = servers;
             Directory.CreateDirectory(dir);
-            File.WriteAllText(file, root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            Platform.AtomicFile.Write(file, root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
             return L("Готово. Перезапустите Claude Desktop — Relaya появится в списке инструментов.");
         }
         catch (Exception e)

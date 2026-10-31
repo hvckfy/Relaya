@@ -33,7 +33,7 @@ internal static class Settings
         if (Values.TryGetValue(key, out var old) && old == value) return;
         Values[key] = value;
         Directory.CreateDirectory(Data.AppState.Support);
-        File.WriteAllText(File_, JsonSerializer.Serialize(Values));
+        AtomicFile.Write(File_, JsonSerializer.Serialize(Values));
         Changed?.Invoke();
     }
 }
