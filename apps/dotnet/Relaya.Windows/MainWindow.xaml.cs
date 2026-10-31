@@ -31,6 +31,9 @@ public sealed partial class MainWindow : Window
         Platform.SyncService.Shared.ScheduleAuto();
         Platform.TunnelManager.Shared.StartAuto();
         Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
+        // Свёрнутые группы запоминаются, как на Mac.
+        Nav.Expanding += (_, a) => { if (a.ExpandingItemContainer?.Tag is string t && t.StartsWith("group:")) Platform.Settings.Set(t.Replace("group:", "group."), "1"); };
+        Nav.Collapsed += (_, a) => { if (a.CollapsedItemContainer?.Tag is string t && t.StartsWith("group:")) Platform.Settings.Set(t.Replace("group:", "group."), "0"); };
     }
 
     /// Группы из ~/.ssh/config — настройки синхронизации отличают по ним группы от хостов.
@@ -59,8 +62,7 @@ public sealed partial class MainWindow : Window
                 Content = group.Key, Icon = new FontIcon { Glyph = "" }, SelectsOnInvoked = false,
                 IsExpanded = Platform.Settings.Get("group." + group.Key, "1") == "1",
             };
-            folder.Expanding += (_, _) => Platform.Settings.Set("group." + group.Key, "1");
-            folder.Collapsed += (_, _) => Platform.Settings.Set("group." + group.Key, "0");
+            folder.Tag = "group:" + group.Key;
             items.ForEach(folder.MenuItems.Add);
             Nav.MenuItems.Add(folder);
         }
