@@ -26,7 +26,7 @@ internal sealed class UnixPty : IPty
 
     public int ProcessId => pid;
 
-    public UnixPty(string[] argv, short cols, short rows, IDictionary<string, string>? extraEnv = null)
+    public UnixPty(string[] argv, short cols, short rows)
     {
         master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC);
         if (master < 0 || grantpt(master) != 0 || unlockpt(master) != 0) throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -37,7 +37,6 @@ internal sealed class UnixPty : IPty
         var env = new Dictionary<string, string>();
         foreach (DictionaryEntry e in Environment.GetEnvironmentVariables()) env[(string)e.Key] = (string?)e.Value ?? "";
         env["TERM"] = "xterm-256color";
-        if (extraEnv != null) foreach (var (k, v) in extraEnv) env[k] = v;
 
         var actions = Marshal.AllocHGlobal(1024);
         var attr = Marshal.AllocHGlobal(1024);
