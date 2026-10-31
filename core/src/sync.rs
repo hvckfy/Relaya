@@ -679,7 +679,12 @@ struct Git { repo: PathBuf }
 impl Git {
     fn run(&self, args: &[&str], allow_failure: bool) -> Result<std::process::Output, CoreError> {
         let out = crate::command("git")
-            .args(["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "-C"]).arg(&self.repo).args(args)
+            // S-GIT-1/3: транспорты ext:: и fd:: запускают команды, file — только по явному адресу пользователя;
+            // защита от путей .git под HFS/NTFS и без символических ссылок из чужого репозитория.
+            .args(["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+                   "-c", "protocol.ext.allow=never", "-c", "protocol.fd.allow=never", "-c", "protocol.file.allow=user",
+                   "-c", "core.protectHFS=true", "-c", "core.protectNTFS=true", "-c", "core.symlinks=false", "-C"])
+            .arg(&self.repo).args(args)
             .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=15").env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_AUTHOR_NAME", "Relaya").env("GIT_AUTHOR_EMAIL", "relaya@localhost")
             .env("GIT_COMMITTER_NAME", "Relaya").env("GIT_COMMITTER_EMAIL", "relaya@localhost")
@@ -697,14 +702,14 @@ impl Git {
 
     fn set_up(&self, remote: &str) -> Result<(), CoreError> {
         if self.repo.join(".git").exists() {
-            self.run(&["remote", "set-url", "origin", remote], false)?;
+            self.run(&["remote", "set-url", "--", "origin", remote], false)?;
             return Ok(());
         }
         let _ = fs::remove_dir_all(&self.repo);
         fs::create_dir_all(&self.repo)?;
         let r = (|| {
             self.run(&["init", "-q", "-b", BRANCH], false)?;
-            self.run(&["remote", "add", "origin", remote], false)?;
+            self.run(&["remote", "add", "--", "origin", remote], false)?;
             self.run(&["fetch", "-q", "origin"], false)?;
             if self.remote_has_branch() { self.run(&["reset", "-q", "--hard", &format!("origin/{BRANCH}")], false)?; }
             Ok(())
@@ -739,12 +744,50 @@ impl Git {
     }
 }
 
+/// Можно ли синхронизироваться с этим адресом (S-GIT-1, S-GIT-2). Разрешены `https://`, `ssh://`, `git://`,
+/// scp-форма `user@host:path`, `file://` и абсолютный путь к локальному репозиторию. Отклоняются транспорты-команды
+/// (`ext::`, `fd::` и любые `<имя>::`), всё, что начинается с «-», `http://` и https-адрес с паролем или токеном.
+/// Клиенты вызывают при сохранении профиля; `git_sync` проверяет сам.
+#[uniffi::export]
+pub fn sync_validate_remote(remote: String) -> Result<(), CoreError> {
+    let r = remote.trim();
+    let bad = || CoreError::Git(format!("Адрес репозитория не поддерживается: {r}"));
+    if r.is_empty() || r.starts_with('-') || r.chars().any(|c| c.is_control()) { return Err(bad()); }
+    let lower = r.to_lowercase();
+    // `ext::sh -c …`, `fd::…` — git запускает команду; схема с `::` — всегда транспорт-помощник.
+    if let Some(i) = lower.find("::") { if !lower[..i].contains('/') && !lower[..i].contains(':') { return Err(bad()); } }
+    if let Some(rest) = lower.strip_prefix("https://") {
+        let authority = rest.split('/').next().unwrap_or("");
+        if let Some((userinfo, _)) = authority.rsplit_once('@') {
+            if userinfo.contains(':') {
+                return Err(CoreError::Git("В адресе репозитория пароль или токен — используйте ssh или credential helper".into()));
+            }
+        }
+        return if authority.is_empty() { Err(bad()) } else { Ok(()) };
+    }
+    for scheme in ["ssh://", "git://"] {
+        if let Some(rest) = lower.strip_prefix(scheme) { return if rest.split('/').next().unwrap_or("").is_empty() { Err(bad()) } else { Ok(()) }; }
+    }
+    if let Some(rest) = r.strip_prefix("file://") { return if rest.starts_with('/') { Ok(()) } else { Err(bad()) }; }
+    if lower.contains("://") { return Err(bad()); }
+    // Абсолютный локальный путь: /…, C:\… или C:/…
+    let b = r.as_bytes();
+    if r.starts_with('/') || (b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')) { return Ok(()); }
+    // scp-форма [user@]host:path
+    if let Some((host, path)) = r.split_once(':') {
+        let host = host.rsplit_once('@').map(|(_, h)| h).unwrap_or(host);
+        if !host.is_empty() && !host.contains('/') && !path.is_empty() && !path.starts_with('-') { return Ok(()); }
+    }
+    Err(bad())
+}
+
 /// Один цикл для профиля: выгрузка → коммит → забрать с сервера (слияние) → разнести пришедшее → отправить.
 /// Работает синхронно (запускает git) — клиенты вызывают его не из главного потока.
 #[uniffi::export]
 pub fn git_sync(repo: String, remote: String, machine: String, profile: SyncProfile, paths: SyncPaths,
                 passphrase: Option<String>) -> Result<SyncOutcome, CoreError> {
     let git = Git { repo: PathBuf::from(&repo) };
+    sync_validate_remote(remote.clone())?;
     git.set_up(remote.trim())?;
     if git.in_merge() { return Ok(SyncOutcome::Conflict { conflicts: git.conflicts()? }); }
     sync_export(profile.clone(), paths.clone(), passphrase.clone(), repo.clone())?;
@@ -984,6 +1027,23 @@ mod tests {
         let merged = fs::read_to_string(b.path().join("config")).unwrap();
         assert!(merged.contains("Host mine") && merged.contains("Host web") && b.path().join("config.bak").exists());
         assert!(sync_import(p, paths(b.path()), None, repo.path().to_string_lossy().into()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn remote_validation() {
+        for ok in ["https://github.com/me/cfg.git", "https://git@github.com/me/cfg.git", "ssh://git@host:2222/srv/cfg.git",
+                   "git://host/cfg", "git@github.com:me/cfg.git", "host:cfg.git", "file:///srv/cfg.git", "/srv/cfg.git",
+                   "C:\\repos\\cfg", "C:/repos/cfg"] {
+            assert!(sync_validate_remote(ok.into()).is_ok(), "{ok}");
+        }
+        for bad in ["ext::sh -c touch% /tmp/pwned", "fd::17", "EXT::sh", "-uhelp", "--upload-pack=touch x", "http://host/cfg",
+                    "file://relative/path", "ftp://host/x", "", "relative/path", "host:-oProxyCommand=x", "\u{7}git@h:x"] {
+            assert!(sync_validate_remote(bad.into()).is_err(), "{bad}");
+        }
+        let token = sync_validate_remote("https://me:ghp_secret@github.com/me/cfg.git".into()).unwrap_err().to_string();
+        assert!(token.contains("пароль или токен"), "{token}");
+        let msg = sync_validate_remote("ext::sh".into()).unwrap_err().to_string();
+        assert_eq!(crate::localize::core_error_localized(msg).key, "Адрес репозитория не поддерживается: %@");
     }
 
     #[test]
