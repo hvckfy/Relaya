@@ -62,6 +62,7 @@ final class SessionController {
     // MARK: - Вывод терминала
 
     func handleOutput(_ text: String) {
+        log(text)
         tail = String((tail + text).suffix(2000))
 
         if !osGuessed, host.os == nil, let os = ServerOS.guess(fromBanner: tail) {
@@ -218,6 +219,50 @@ final class SessionController {
     func insert(_ command: String) {
         terminal?.sendQuiet(command)
         terminal?.window?.makeFirstResponder(terminal)
+    }
+
+    func focus() {
+        terminal?.window?.makeFirstResponder(terminal)
+    }
+
+    // MARK: - Запись сессии
+
+    /// Файл, куда пишется вывод (без управляющих последовательностей). nil — запись выключена.
+    private(set) var logURL: URL?
+    @ObservationIgnored private var logHandle: FileHandle?
+
+    static var logDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appending(path: "Relaya Logs")
+    }
+
+    func toggleLogging() {
+        if let h = logHandle {
+            try? h.close()
+            logHandle = nil
+            logURL = nil
+            return
+        }
+        let dir = Self.logDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH-mm-ss"
+        let url = dir.appending(path: "\(host.alias) \(f.string(from: Date())).log")
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        logHandle = try? FileHandle(forWritingTo: url)
+        logURL = logHandle == nil ? nil : url
+    }
+
+    private func log(_ text: String) {
+        guard let logHandle else { return }
+        try? logHandle.write(contentsOf: Data(Self.plainText(text).utf8))
+    }
+
+    /// Вывод терминала без ANSI-последовательностей и возвратов каретки — для читаемого лога.
+    static func plainText(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\x1B\[[0-9;?]*[ -/]*[@-~]|\x1B\][^\x07\x1B]*(\x07|\x1B\\)|\x1B[()][A-Z0-9]|\x1B[=>]"#,
+                                  with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "")
     }
 
     func showFind() {

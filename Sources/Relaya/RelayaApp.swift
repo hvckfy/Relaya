@@ -59,6 +59,41 @@ struct RelayaApp: App {
                 Button(L("Переподключить")) { model.activeSession?.controller?.reconnect() }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(model.activeSession == nil)
+                Button(model.activeSession?.controller?.logURL == nil ? L("Записывать сессию в файл") : L("Остановить запись сессии")) {
+                    model.activeSession?.controller?.toggleLogging()
+                }
+                .keyboardShortcut("l", modifiers: [.command, .option])
+                .disabled(model.activeSession?.controller == nil)
+                Divider()
+                Button(L("Разделить вправо")) { model.splitActive(.right) }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .disabled(model.activeSession?.host == nil)
+                Button(L("Разделить вниз")) { model.splitActive(.bottom) }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                    .disabled(model.activeSession?.host == nil)
+                Menu(L("Перейти к плитке")) {
+                    Button(L("Слева")) { model.focusTile(.left) }.keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                    Button(L("Справа")) { model.focusTile(.right) }.keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                    Button(L("Сверху")) { model.focusTile(.top) }.keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    Button(L("Снизу")) { model.focusTile(.bottom) }.keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                }
+                .disabled(!model.gridMode)
+                Divider()
+                Menu(L("Раскладки")) {
+                    ForEach(model.savedLayouts) { saved in
+                        Button(saved.name) { model.openLayout(saved) }
+                    }
+                    if !model.savedLayouts.isEmpty { Divider() }
+                    Button(L("Сохранить текущие плитки…")) { model.savingLayout = true }
+                        .disabled(!model.gridMode || (model.layoutToSave?.ids.count ?? 0) < 2)
+                    if !model.savedLayouts.isEmpty {
+                        Menu(L("Удалить")) {
+                            ForEach(model.savedLayouts) { saved in
+                                Button(saved.name) { model.savedLayouts.removeAll { $0.id == saved.id } }
+                            }
+                        }
+                    }
+                }
             }
         }
 

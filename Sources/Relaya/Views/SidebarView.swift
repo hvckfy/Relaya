@@ -22,6 +22,7 @@ struct SidebarView: View {
                 switch s.kind {
                 case .terminal(let c): return .host(c.host.id)
                 case .files(let h): return .host(h.id)
+                case .tmux(let w): return .host(w.client.host.id)
                 case .vnc(let v): return .desktop(v.desktop.id)
                 case .rdp(let r): return .desktop(r.desktop.id)
                 }
@@ -145,6 +146,8 @@ struct HostMenuItems: View {
     var body: some View {
         Button(L("Подключить")) { model.connect(host) }
         Button(L("Открыть файлы (SFTP)")) { model.openFiles(host) }
+        Button(L("Окна tmux как вкладки")) { Task { await model.openTmuxControl(host) } }
+            .help(L("tmux control mode: каждое окно tmux на сервере — отдельная вкладка Relaya"))
             .keyboardShortcut(shortcuts ? KeyboardShortcut("o", modifiers: [.command, .shift]) : nil)
         Divider()
         Button(L("Изменить…")) { model.editor = EditorRequest(original: host) }
@@ -154,7 +157,6 @@ struct HostMenuItems: View {
             copy.alias += "-copy"
             model.editor = EditorRequest(original: nil, draft: copy)
         }
-        .keyboardShortcut(shortcuts ? KeyboardShortcut("d") : nil)
         Menu(L("Переместить в группу")) {
             ForEach(model.groups.filter { $0 != host.group }, id: \.self) { g in
                 Button(g) { model.move(host, toGroup: g) }

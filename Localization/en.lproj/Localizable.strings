@@ -619,3 +619,51 @@
 "Вкладка переподключится: при включении — внутри tmux, при выключении сессия на сервере закроется." = "The tab reconnects: when turned on, inside tmux; when turned off, the session on the server is closed.";
 "Стеклянные вкладки, плитки и панели, как в macOS 26" = "Glass tabs, tiles and panels, as in macOS 26";
 "Нужна macOS 26 или новее" = "Requires macOS 26 or later";
+
+/* Keyboard tiles, layouts, session log */
+"Записывать сессию в файл" = "Record Session to File";
+"Остановить запись сессии" = "Stop Recording Session";
+"Показать файл записи" = "Show Recording File";
+"Сессия записывается в файл" = "Session is being recorded to a file";
+"Разделить вправо" = "Split Right";
+"Разделить вниз" = "Split Down";
+"Перейти к плитке" = "Go to Tile";
+"Слева" = "Left";
+"Справа" = "Right";
+"Сверху" = "Above";
+"Снизу" = "Below";
+"Раскладки" = "Layouts";
+"Сохранить текущие плитки…" = "Save Current Tiles…";
+"Сохранить раскладку" = "Save Layout";
+"Хосты плиток и их расположение. Открыть раскладку: Вкладки → Раскладки." = "The tiles' hosts and their arrangement. Open it from Tabs → Layouts.";
+"Например: прод" = "For example: prod";
+
+/* Host mini panel */
+"Показать сервисы на %@" = "Show services on %@";
+"Управлять сервисами на %@" = "Manage services on %@";
+"%@ сервис «%@»?" = "%@ service “%@”?";
+"Найти сервис" = "Find a service";
+"Свернуть" = "Show Less";
+"Показать все (%@)" = "Show All (%@)";
+"Сервисы" = "Services";
+"%@ с ошибкой" = "%@ failed";
+"ошибка" = "failed";
+"Перезапустить…" = "Restart…";
+"Запустить…" = "Start…";
+"Слушающие порты" = "Listening Ports";
+"Последние ошибки: %@" = "Recent errors: %@";
+"Открыть журнал" = "Open Journal";
+"Журнал" = "Journal";
+"Система обновлена." = "The system is up to date.";
+"Доступно обновлений: %@" = "Updates available: %@";
+"Обновить в терминале…" = "Update in Terminal…";
+"Обновления" = "Updates";
+
+/* tmux control mode */
+"Открыть tmux на %@" = "Open tmux on %@";
+"На %@ не установлен tmux." = "tmux is not installed on %@.";
+"Окна tmux как вкладки" = "tmux Windows as Tabs";
+"tmux control mode: каждое окно tmux на сервере — отдельная вкладка Relaya" = "tmux control mode: each tmux window on the server is a Relaya tab";
+"Новое окно" = "New Window";
+"Отключиться" = "Detach";
+"Сессия останется на сервере; её закроет таймер, если не вернуться" = "The session stays on the server; the idle timer closes it if you don't come back";

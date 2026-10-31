@@ -105,6 +105,11 @@ struct MainView: View {
                  ? L("Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу %@.", "\(host.identityFile ?? "")")
                  : L("У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу."))
         }
+        .alert(L("Сохранить раскладку"), isPresented: $model.savingLayout) {
+            SaveLayoutActions()
+        } message: {
+            Text(L("Хосты плиток и их расположение. Открыть раскладку: Вкладки → Раскладки."))
+        }
         .alert(
             L("Новая группа"),
             isPresented: Binding(get: { model.newGroupFor != nil }, set: { if !$0 { model.newGroupFor = nil } }),
@@ -145,6 +150,7 @@ struct MainView: View {
                 case .files(let h): SFTPView(host: h, embedded: true).modifier(DockTarget())
                 case .vnc(let s): VNCContent(session: s).background(Color.black)
                 case .rdp(let s): RDPContent(session: s).background(Color.black)
+                case .tmux(let w): TmuxPaneContent(window: w).modifier(DockTarget())
                 }
             }
             .id(session.id)
@@ -210,5 +216,17 @@ private struct WorkspaceBackground: View {
             }
         }
         .ignoresSafeArea()
+    }
+}
+
+private struct SaveLayoutActions: View {
+    @Environment(AppModel.self) private var model
+    @State private var name = ""
+
+    var body: some View {
+        TextField(L("Например: прод"), text: $name)
+        Button(L("Сохранить")) { model.saveLayout(named: name.trimmingCharacters(in: .whitespaces)) }
+            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+        Button(L("Отмена"), role: .cancel) {}
     }
 }

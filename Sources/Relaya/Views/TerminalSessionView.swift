@@ -24,6 +24,7 @@ struct SessionTabBar: View {
                            label: L("Ввод во все терминалы"), tint: Theme.red) { model.broadcastInput.toggle() }
             }
             IconButton(systemImage: "plus", label: L("Новая вкладка"), size: 34) {
+                if case .tmux(let w)? = model.activeSession?.kind { w.client.newWindow(); return }
                 if let host = model.activeSession?.host ?? model.selectedHost { model.connect(host) }
                 else if let d = model.selectedDesktop { model.openDesktop(d) }
             }
@@ -58,6 +59,12 @@ private struct SessionTab: View {
             Text(session.title)
                 .fontWeight(active ? .semibold : .regular)
                 .lineLimit(1)
+            if session.controller?.logURL != nil {
+                Image(systemName: "record.circle")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.red)
+                    .help(L("Сессия записывается в файл"))
+            }
             Spacer(minLength: 4)
             IconButton(systemImage: "xmark", label: L("Закрыть вкладку %@", "\(session.title)"), size: 20) {
                 model.close(session)
@@ -94,6 +101,12 @@ private struct SessionTab: View {
                 Toggle(L("Сессия tmux"), isOn: Binding(get: { c.tmuxName != nil },
                                                       set: { model.setTmux($0, for: session) }))
                     .help(L("Вкладка переподключится: при включении — внутри tmux, при выключении сессия на сервере закроется."))
+            }
+            if let c = session.controller {
+                Button(c.logURL == nil ? L("Записывать сессию в файл") : L("Остановить запись сессии")) { c.toggleLogging() }
+                if let url = c.logURL {
+                    Button(L("Показать файл записи")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                }
             }
             if session.controller?.tmuxName != nil {
                 Button(L("Отсоединить и оставить на сервере")) { Task { await model.detachKeeping(session) } }

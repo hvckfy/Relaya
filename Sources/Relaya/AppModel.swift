@@ -10,6 +10,8 @@ struct Session: Identifiable, Hashable {
         case files(SSHHost)
         case vnc(VNCSession)
         case rdp(RDPSession)
+        /// Окно tmux в control mode (`tmux -CC`).
+        case tmux(TmuxWindow)
     }
 
     let id = UUID()
@@ -20,6 +22,7 @@ struct Session: Identifiable, Hashable {
         switch kind {
         case .terminal(let c): c.host
         case .files(let h): h
+        case .tmux(let w): w.client.host
         case .vnc, .rdp: nil
         }
     }
@@ -29,12 +32,13 @@ struct Session: Identifiable, Hashable {
         return nil
     }
 
-    var title: String {
+    @MainActor var title: String {
         switch kind {
         case .terminal(let c): c.host.alias
         case .files(let h): h.alias
         case .vnc(let s): s.desktop.name.isEmpty ? s.desktop.address : s.desktop.name
         case .rdp(let s): s.desktop.name.isEmpty ? s.desktop.address : s.desktop.name
+        case .tmux(let w): w.name.isEmpty ? w.client.host.alias : "\(w.client.host.alias) · \(w.name)"
         }
     }
 
@@ -44,6 +48,7 @@ struct Session: Identifiable, Hashable {
         case .files: "folder"
         case .vnc: "display"
         case .rdp: "pc"
+        case .tmux: "rectangle.stack"
         }
     }
 
@@ -148,10 +153,80 @@ final class AppModel {
     func swapTiles(_ a: Session.ID, _ b: Session.ID) {
         tileLayout = currentLayout?.swapping(a, b)
     }
+
+    /// ⌘D / ⇧⌘D (как в iTerm2): ещё одна вкладка того же хоста — справа или снизу от активной плитки.
+    func splitActive(_ edge: TileLayout<Session.ID>.Edge) {
+        guard let active = activeSession, let host = active.host else { return }
+        let before = active.id
+        if case .files = active.kind { openFiles(host, newTab: true) } else { connect(host) }
+        guard let new = activeSessionID, new != before else { return }
+        if !gridMode { tileLayout = .leaf(before) }
+        dock(new, at: edge, of: before)
+    }
+
+    /// ⌥⌘стрелки: перейти в соседнюю плитку.
+    func focusTile(_ edge: TileLayout<Session.ID>.Edge) {
+        guard gridMode, let id = activeSessionID, let next = currentLayout?.neighbor(of: id, toward: edge) else { return }
+        activeSessionID = next
+        sessions.first { $0.id == next }?.controller?.focus()
+    }
+
+    // MARK: - Сохранённые раскладки
+
+    /// Раскладка из хостов: «мои 4 сервера плитками» одной командой.
+    struct SavedLayout: Codable, Identifiable, Equatable {
+        var id = UUID()
+        var name: String
+        var layout: TileLayout<String>
+    }
+
+    var savedLayouts: [SavedLayout] = {
+        guard let data = UserDefaults.standard.data(forKey: "savedLayouts") else { return [] }
+        return (try? JSONDecoder().decode([SavedLayout].self, from: data)) ?? []
+    }() {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(savedLayouts), forKey: "savedLayouts") }
+    }
+    var savingLayout = false
+
+    /// Плитки терминалов → раскладка по алиасам хостов (файлы и рабочие столы не сохраняются).
+    var layoutToSave: TileLayout<String>? {
+        currentLayout?.map { id in sessions.first { $0.id == id }?.controller?.host.alias }
+    }
+
+    func saveLayout(named name: String) {
+        guard let layout = layoutToSave else { return }
+        savedLayouts.append(SavedLayout(name: name, layout: layout))
+    }
+
+    /// Открыть по вкладке на каждый хост раскладки и сразу расставить их плитками.
+    func openLayout(_ saved: SavedLayout) {
+        var opened: [String: [Session.ID]] = [:]
+        for alias in saved.layout.ids {
+            guard let host = hosts.first(where: { $0.alias == alias }) else { continue }
+            connect(host)
+            if let id = activeSessionID { opened[alias, default: []].append(id) }
+        }
+        var used: [String: Int] = [:]
+        let mapped = saved.layout.map { alias -> Session.ID? in
+            let n = used[alias, default: 0]
+            used[alias] = n + 1
+            return opened[alias].flatMap { $0.indices.contains(n) ? $0[n] : nil }
+        }
+        guard let mapped else { return }
+        // Вкладки, открытые раньше, — ниже, отдельными рядами.
+        let others = tileableSessions.map(\.id).filter { !mapped.ids.contains($0) }
+        tileLayout = others.reduce(mapped) { $0.appending($1) }
+        gridMode = (tileLayout?.ids.count ?? 0) >= 2
+    }
     var terminalSessions: [Session] { sessions.filter { $0.controller != nil } }
     /// Вкладки, которые можно ставить плитками: терминалы и файлы SFTP.
     var tileableSessions: [Session] {
-        sessions.filter { if case .files = $0.kind { true } else { $0.controller != nil } }
+        sessions.filter {
+            switch $0.kind {
+            case .files, .tmux, .terminal: true
+            case .vnc, .rdp: false
+            }
+        }
     }
     var activeSessionID: Session.ID?
 
@@ -373,6 +448,7 @@ final class AppModel {
         case .vnc(let s): s.disconnect()
         case .rdp(let s): s.disconnect()
         case .files: break
+        case .tmux(let w): if !w.client.ended { w.client.close(w) }
         }
         sessions.remove(at: index)
         broadcastExcluded.remove(session.id)
@@ -440,9 +516,9 @@ final class AppModel {
     }
 
     /// Файлы хоста во вкладке (уже открытая вкладка того же хоста — активируется).
-    func openFiles(_ host: SSHHost) {
+    func openFiles(_ host: SSHHost, newTab: Bool = false) {
         screen = .hosts
-        if let existing = sessions.first(where: { if case .files(let h) = $0.kind { return h.alias == host.alias }; return false }) {
+        if !newTab, let existing = sessions.first(where: { if case .files(let h) = $0.kind { return h.alias == host.alias }; return false }) {
             activeSessionID = existing.id
             return
         }
@@ -611,6 +687,96 @@ final class AppModel {
             alertMessage = error.localizedDescription
         }
         await refreshTmux(host, interactive: false)
+    }
+
+    // MARK: - tmux control mode
+
+    @ObservationIgnored private var tmuxClients: [TmuxControlClient] = []
+
+    /// Открыть tmux-сессию хоста так, что каждое её окно — отдельная вкладка Relaya (как `tmux -CC` в iTerm2).
+    func openTmuxControl(_ host: SSHHost) async {
+        let h = current(host)
+        let name = Tmux.hostPrefix(h.alias) + "cc"
+        if let existing = tmuxClients.first(where: { $0.sessionName == name && !$0.ended }) {
+            existing.newWindow()
+            return
+        }
+        do {
+            let r = try await exec(Tmux.prepareControlCommand(name: name, ttlMinutes: settings.tmuxIdleMinutes), on: h,
+                                   interactive: true, reason: L("Открыть tmux на %@", h.alias))
+            if r.stdout.contains("RELAYA_NO_TMUX") { alertMessage = L("На %@ не установлен tmux.", h.alias); return }
+            guard r.succeeded else { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message; return }
+        } catch {
+            alertMessage = error.localizedDescription
+            return
+        }
+        let client = TmuxControlClient(host: h, sessionName: name)
+        client.onWindowAdded = { [weak self] w in
+            guard let self else { return }
+            let s = Session(kind: .tmux(w))
+            self.sessions.append(s)
+            self.activeSessionID = s.id
+            self.screen = .hosts
+        }
+        client.onWindowClosed = { [weak self] w in
+            guard let self, let s = self.sessions.first(where: { if case .tmux(let x) = $0.kind { x === w } else { false } })
+            else { return }
+            self.removeTab(s)
+        }
+        client.onExit = { [weak self, weak client] in
+            guard let self, let client else { return }
+            for s in self.sessions { if case .tmux(let w) = s.kind, w.client === client { self.removeTab(s) } }
+            self.tmuxClients.removeAll { $0 === client }
+            if let e = client.error { self.alertMessage = e }
+        }
+        tmuxClients.append(client)
+        client.start(await invocation(for: h, interactive: true, reason: L("Открыть tmux на %@", h.alias)))
+    }
+
+    /// Убрать вкладку без побочных действий (окно tmux уже закрыто на сервере).
+    private func removeTab(_ session: Session) {
+        guard let index = sessions.firstIndex(of: session) else { return }
+        sessions.remove(at: index)
+        if tileableSessions.count < 2 { gridMode = false }
+        if activeSessionID == session.id {
+            activeSessionID = sessions.indices.contains(index) ? sessions[index].id : sessions.last?.id
+        }
+    }
+
+    // MARK: - Мини-панель хоста
+
+    var hostPanel: [String: HostPanel] = [:]
+    var hostPanelLoading: Set<String> = []
+    var hostPanelBusy: Set<String> = []
+
+    func refreshPanel(_ host: SSHHost, interactive: Bool) async {
+        let h = current(host)
+        if RelayaPaths.isDemo { hostPanel[h.alias] = DemoData.panel(for: h); return }
+        guard !hostPanelLoading.contains(h.alias) else { return }
+        hostPanelLoading.insert(h.alias)
+        defer { hostPanelLoading.remove(h.alias) }
+        guard let r = try? await exec(HostPanel.probeCommand(for: h.os), on: h, interactive: interactive,
+                                      reason: L("Показать сервисы на %@", h.alias), timeout: .seconds(30)),
+              r.status != 255 else { return }
+        hostPanel[h.alias] = HostPanel.parse(r.stdout)
+    }
+
+    /// Действие над сервисом: под root — сразу (после подтверждения в UI), иначе — во вкладке, где sudo спросит пароль.
+    func serviceAction(_ action: String, _ unit: ServiceUnit, on host: SSHHost) async {
+        let h = current(host)
+        let root = h.user == "root"
+        let command = HostPanel.serviceCommand(action, unit, root: root)
+        guard root else { run(command, on: h); return }
+        hostPanelBusy.insert(unit.id)
+        defer { hostPanelBusy.remove(unit.id) }
+        do {
+            let r = try await exec(command, on: h, interactive: true, reason: L("Управлять сервисами на %@", h.alias),
+                                   timeout: .seconds(60))
+            if !r.succeeded { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+        await refreshPanel(h, interactive: false)
     }
 
     // MARK: - Docker
