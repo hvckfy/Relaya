@@ -74,7 +74,6 @@ public sealed partial class MainWindow : Window
     private void OnSearchChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) =>
         Render(sender.Text.Trim());
 
-    // Пока без терминала: вкладка-заглушка. Дальше — ConPTY + ssh.exe.
     private void OnItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
         if (args.InvokedItemContainer?.Tag is not SshHost h) return;
