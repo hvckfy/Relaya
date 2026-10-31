@@ -47,6 +47,8 @@ struct HostDetailView: View {
             if hasDocker { panel { DockerPanel(host: host) } }
             if host.tmux { panel { TmuxPanel(host: host) } }
 
+            HostPanelView(host: host)
+
             Section(L("Порты")) {
                 PortsPanel(host: host)
             }
@@ -68,7 +70,10 @@ struct HostDetailView: View {
         .formStyle(.grouped)
         .scrollContentBackground(ThemeStore.native ? .automatic : .hidden)
         .background(Theme.content)
-        .task(id: host.alias) { await model.refreshDocker(host, interactive: false) }
+        .task(id: host.alias) {
+            await model.refreshDocker(host, interactive: false)
+            await model.refreshPanel(host, interactive: false)
+        }
     }
 
     /// Блок Docker — только если на хосте он есть (или есть что сказать: нет прав, ошибка).

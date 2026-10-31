@@ -144,4 +144,25 @@ enum DemoData {
                             status: "Exited (0) 3 days ago", ports: ""),
         ])
     }
+
+    static func panel(for host: SSHHost) -> HostPanel {
+        HostPanel.parse("""
+        ##SERVICES
+        containerd.service loaded active running containerd container runtime
+        cron.service loaded active running Regular background program processing daemon
+        docker.service loaded active running Docker Application Container Engine
+        node-exporter.service loaded failed failed Prometheus exporter for machine metrics
+        ssh.service loaded active running OpenBSD Secure Shell server
+        systemd-journald.service loaded active running Journal Service
+        ##PORTS
+        tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=612,fd=3))
+        tcp LISTEN 0 511 0.0.0.0:443 0.0.0.0:* users:(("docker-proxy",pid=900,fd=4))
+        tcp LISTEN 0 511 0.0.0.0:8080 0.0.0.0:* users:(("docker-proxy",pid=901,fd=4))
+        ##ERRORS
+        2026-10-31T03:12:44+0000 \(host.alias) node-exporter[1201]: listen tcp :9100: bind: address already in use
+        ##UPDATES
+        openssl/noble-updates 3.0.13-0ubuntu3.5 amd64 [upgradable from: 3.0.13-0ubuntu3.4]
+        curl/noble-updates 8.5.0-2ubuntu10.6 amd64 [upgradable from: 8.5.0-2ubuntu10.5]
+        """)
+    }
 }
