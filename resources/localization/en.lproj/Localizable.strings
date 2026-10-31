@@ -1102,3 +1102,5 @@
 "Нет в конфиге: %@" = "Not in config: %@";
 "Мои серверы" = "My servers";
 "Раскладка будет удалена, хосты и сессии не затрагиваются." = "The layout will be deleted; hosts and sessions are not affected.";
+"Не найден RDP-клиент. Установите FreeRDP (xfreerdp) или Remmina." = "No RDP client found. Install FreeRDP (xfreerdp) or Remmina.";
+"Не найден VNC-клиент. Установите TigerVNC (vncviewer) или Remmina." = "No VNC client found. Install TigerVNC (vncviewer) or Remmina.";

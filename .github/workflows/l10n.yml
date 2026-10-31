@@ -1,0 +1,14 @@
+name: Localization
+
+# Каждая строка интерфейса (L("…") в Swift и C#) должна быть в en.lproj, без дублей и с тем же числом %@.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -I scripts/check-l10n.py
