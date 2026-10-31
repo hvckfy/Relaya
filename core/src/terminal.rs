@@ -161,6 +161,12 @@ impl TerminalEmulator {
             .collect()
     }
 
+    /// Вход выполнен и shell ждёт команду (C23): см. `terminal_login_ready`.
+    pub fn login_ready(&self) -> bool {
+        let snap = self.snapshot();
+        terminal_login_ready(self.screen_text(), snap.cursor_row, snap.cursor_col, snap.alt_screen)
+    }
+
     pub fn snapshot(&self) -> TermSnapshot {
         let g = self.inner.lock().unwrap();
         let term = &g.term;
@@ -304,5 +310,47 @@ mod tests {
         assert_eq!(s.cells[0].ch, "日");
         assert_eq!(s.cells[1].flags & 128, 128);
         assert_eq!(s.cells[2].ch, "x");
+    }
+}
+
+/// Похоже ли, что вход выполнен и shell ждёт команду: последняя непустая строка — приглашение (`$`, `#`, `>`, `%`, `❯`, `»`
+/// в конце), курсор стоит на ней сразу после приглашения, и на экране нет активного запроса пароля, passphrase, кода
+/// или подтверждения ключа сервера. Клиенты начальную команду сами не вводят: по `true` предлагают кнопку «Вставить».
+#[uniffi::export]
+pub fn terminal_login_ready(lines: Vec<String>, cursor_row: u32, cursor_col: u32, alt_screen: bool) -> bool {
+    if alt_screen { return false; }
+    let Some((row, line)) = lines.iter().enumerate().rev().find(|(_, l)| !l.trim().is_empty()) else { return false };
+    if row as u32 != cursor_row { return false; }
+    let text = line.trim_end();
+    if (cursor_col as usize) < text.chars().count() { return false; }
+    let lower = text.to_lowercase();
+    const ASKING: &[&str] = &["password", "passphrase", "пароль", "verification code", "one-time", "otp", "(yes/no",
+                              "[y/n]", "fingerprint", "token", "login:", "username:"];
+    if ASKING.iter().any(|a| lower.contains(a)) { return false; }
+    text.ends_with(['$', '#', '>', '%', '❯', '»', '➜']) || text.ends_with("$ ") || text.ends_with("# ")
+}
+
+#[cfg(test)]
+mod login_tests {
+    use super::*;
+    fn screen(l: &[&str]) -> Vec<String> { l.iter().map(|s| s.to_string()).collect() }
+
+    #[test]
+    fn detects_prompt_after_login() {
+        assert!(terminal_login_ready(screen(&["Welcome to Ubuntu", "root@web:~#", ""]), 1, 12, false));
+        assert!(terminal_login_ready(screen(&["me@mac ~ %"]), 0, 11, false));
+        assert!(!terminal_login_ready(screen(&["root@web's password:"]), 0, 20, false));
+        assert!(!terminal_login_ready(screen(&["Are you sure you want to continue connecting (yes/no/[fingerprint])?"]), 0, 70, false));
+        assert!(!terminal_login_ready(screen(&["Enter passphrase for key '/x':"]), 0, 30, false));
+        assert!(!terminal_login_ready(screen(&["root@web:~#", "loading..."]), 1, 10, false));
+        assert!(!terminal_login_ready(screen(&["root@web:~#"]), 0, 3, false));
+        assert!(!terminal_login_ready(screen(&["root@web:~#"]), 0, 12, true));
+        assert!(!terminal_login_ready(screen(&[""]), 0, 0, false));
+        // Настоящий эмулятор: курсор после приглашения.
+        let t = TerminalEmulator::new(40, 5, 100);
+        t.feed(b"Last login: today\r\nroot@web:~# ".to_vec());
+        assert!(t.login_ready());
+        t.feed(b"\r\nPassword: ".to_vec());
+        assert!(!t.login_ready());
     }
 }
