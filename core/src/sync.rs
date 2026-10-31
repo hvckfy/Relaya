@@ -1,5 +1,8 @@
 //! Личная синхронизация по профилям: git-репозиторий пользователя или папка iCloud Drive.
-//! Слияние без удалений; пароли не синхронизируются; ключи — по выбору, только хостов профиля и зашифрованные.
+//! Слияние с удалениями через надгробия (`relaya/deleted.json`): массовые удаления ждут подтверждения пользователя,
+//! перед удалением — бэкап с датой. Пароли не синхронизируются; ключи — по выбору, только хостов профиля и зашифрованные.
+//! Модель доверия: кто может писать в репозиторий или папку синхронизации, тот управляет синхронизируемыми данными
+//! (хосты, сниппеты, туннели, рабочие столы) на всех машинах. Ключи ~/.ssh и локально отредактированное не удаляются.
 //! Ключи шифруются так же, как в Swift-версии (PBKDF2-SHA256 → ChaCha20-Poly1305, формат RLYK1) — файлы взаимозаменяемы.
 
 use crate::error::CoreError;
@@ -1012,6 +1015,35 @@ mod tests {
     }
 
     #[test]
+    fn mass_and_future_deletions_wait_for_confirmation() {
+        let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let p = sync_new_profile("all".into());
+        let hosts: String = (0..6).map(|i| format!("Host h{i}\n    HostName 10.0.0.{i}\n\n")).collect();
+        fs::write(a.path().join("config"), &hosts).unwrap();
+        let d = dir.path().to_string_lossy().to_string();
+        sync_export(p.clone(), paths(a.path()), None, d.clone()).unwrap();
+        sync_import(p.clone(), paths(a.path()), None, d.clone()).unwrap();
+        // Подделка: удалить 5 хостов «из будущего».
+        let fake: Vec<Tombstone> = (0..5).map(|i| Tombstone { kind: "host".into(), key: format!("h{i}"),
+            deleted_at: "2099-01-01T00:00:00.000Z".into(), machine: "evil".into(), revived_at: None, raw_deleted_at: String::new() }).collect();
+        fs::create_dir_all(dir.path().join("relaya")).unwrap();
+        fs::write(dir.path().join(tombstones::FILE), encode_sorted(&fake)).unwrap();
+        assert!(tombstones::load(dir.path()).unwrap().iter().all(|t| t.deleted_at.as_str() < "2099"));
+        sync_import(p.clone(), paths(a.path()), None, d.clone()).unwrap();
+        assert_eq!(fs::read_to_string(a.path().join("config")).unwrap(), hosts, "ничего не удалено без подтверждения");
+        let pending = sync_take_pending_deletions(paths(a.path()));
+        assert_eq!(pending.len(), 5);
+        // Пользователь подтвердил одно удаление: удаляется только оно, с бэкапом; остальные больше не спрашиваются.
+        sync_apply_deletions(paths(a.path()), vec![DeletionKey { kind: "host".into(), key: "h0".into() }]).unwrap();
+        let cfg = fs::read_to_string(a.path().join("config")).unwrap();
+        assert!(!cfg.contains("Host h0\n") && cfg.contains("Host h1\n"), "{cfg}");
+        assert!(fs::read_dir(a.path()).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("config.") && e.file_name().to_string_lossy().ends_with(".bak")));
+        sync_import(p, paths(a.path()), None, d).unwrap();
+        assert!(sync_take_pending_deletions(paths(a.path())).is_empty());
+        assert!(fs::read_to_string(a.path().join("config")).unwrap().contains("Host h1\n"));
+    }
+
+    #[test]
     fn edit_after_delete_wins_and_tombstones_merge() {
         let (folder, a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let f = folder.path().to_string_lossy().to_string();
@@ -1037,7 +1069,7 @@ mod tests {
         assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("HostName 9"), "воскрешённое не удаляется снова");
 
         let t = |k: &str, at: &str, rev: Option<&str>| Tombstone { kind: "host".into(), key: k.into(), deleted_at: at.into(),
-                                                                  machine: "m".into(), revived_at: rev.map(Into::into) };
+                                                                  machine: "m".into(), revived_at: rev.map(Into::into), raw_deleted_at: at.into() };
         let enc = |v: Vec<Tombstone>| encode_sorted(&v);
         let merged = tombstones::merge_text(&enc(vec![t("a", "2026-01-01T00:00:00Z", None)]), &enc(vec![t("b", "2026-01-02T00:00:00Z", None)]));
         assert!(merged.contains("\"a\"") && merged.contains("\"b\""));
@@ -1093,6 +1125,35 @@ fn local_items(profile: &SyncProfile, paths: &SyncPaths) -> Result<Items, CoreEr
     Ok(out)
 }
 
+/// Удаление, пришедшее с другой машины и ждущее подтверждения (слишком много за раз).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingDeletion {
+    /// host, snippet, tunnel или desktop.
+    pub kind: String,
+    /// Алиас хоста или id элемента.
+    pub key: String,
+    /// Что показать пользователю: алиас или имя.
+    pub name: String,
+    pub deleted_at: String,
+    pub machine: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DeletionKey { pub kind: String, pub key: String }
+
+/// Удаления, отложенные до подтверждения (последний импорт хотел удалить слишком много сразу).
+/// Список остаётся, пока клиент не вызовет `sync_apply_deletions`.
+#[uniffi::export]
+pub fn sync_take_pending_deletions(paths: SyncPaths) -> Vec<PendingDeletion> { tombstones::take_pending(&paths) }
+
+/// Применить подтверждённые пользователем удаления (пустой список — отклонить все). Отклонённые не спрашиваются
+/// снова, пока другая машина не удалит элемент заново. Перед удалением — бэкап файлов с датой.
+#[uniffi::export]
+pub fn sync_apply_deletions(paths: SyncPaths, confirmed: Vec<DeletionKey>) -> Result<Vec<SyncItem>, CoreError> {
+    tombstones::apply_confirmed(&paths, &confirmed)
+}
+
 /// Запись в `relaya/deleted.json`: когда элемент удалили и, если правили потом, когда «воскресили».
 /// Действует более позднее из двух событий, поэтому записи двух машин сливаются без конфликтов.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1104,6 +1165,9 @@ pub(crate) struct Tombstone {
     pub machine: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub revived_at: Option<String>,
+    /// deletedAt как в файле, до поправки на время из будущего: по нему запоминается отказ пользователя.
+    #[serde(skip, default)]
+    pub raw_deleted_at: String,
 }
 
 impl Tombstone {
@@ -1155,8 +1219,20 @@ pub(crate) mod tombstones {
         Ok(())
     }
 
+    /// Время из будущего (чужие часы или подделка) не даёт приоритета: позже «сейчас + 5 минут» — считается «сейчас».
     pub(crate) fn load(dir: &Path) -> Result<Vec<Tombstone>, CoreError> {
-        match fs::read_to_string(dir.join(FILE)) { Ok(s) => try_decode_list(&s).map_err(|e| broken(FILE, e)), Err(_) => Ok(vec![]) }
+        let mut tombs: Vec<Tombstone> = match fs::read_to_string(dir.join(FILE)) {
+            Ok(s) => try_decode_list(&s).map_err(|e| broken_shared(FILE, e))?,
+            Err(_) => vec![],
+        };
+        let limit = (chrono::Utc::now() + chrono::Duration::minutes(5)).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        let t = now();
+        for x in &mut tombs {
+            x.raw_deleted_at = x.deleted_at.clone();
+            if x.deleted_at > limit { x.deleted_at = t.clone(); }
+            if x.revived_at.as_deref().map(|r| r > limit.as_str()).unwrap_or(false) { x.revived_at = Some(t.clone()); }
+        }
+        Ok(tombs)
     }
 
     /// Слить записи: по каждому ключу — с самым поздним событием.
@@ -1187,7 +1263,8 @@ pub(crate) mod tombstones {
             match tombs.iter_mut().find(|x| &x.kind == kind && &x.key == key) {
                 Some(x) if x.dead() => {}
                 Some(x) => { x.deleted_at = t.clone(); x.revived_at = None; x.machine = machine(); }
-                None => tombs.push(Tombstone { kind: kind.clone(), key: key.clone(), deleted_at: t.clone(), machine: machine(), revived_at: None }),
+                None => tombs.push(Tombstone { kind: kind.clone(), key: key.clone(), deleted_at: t.clone(), machine: machine(), revived_at: None,
+                                               raw_deleted_at: t.clone() }),
             }
         }
         for x in tombs.iter_mut().filter(|x| x.dead()) {
@@ -1229,32 +1306,101 @@ pub(crate) mod tombstones {
         Ok(())
     }
 
-    /// Удалить локально то, что похоронено и не менялось здесь после удаления.
+    /// Порог: больше стольких удалений одного вида за раз (или больше этой доли) — только с подтверждения пользователя.
+    const MAX_SILENT: usize = 3;
+    const MAX_SILENT_SHARE: f64 = 0.2;
+
+    fn pending_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-pending-deletions.json") }
+    fn dismissed_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-dismissed-deletions.json") }
+
+    /// Удалить локально то, что похоронено и не менялось здесь после удаления. Массовое удаление не применяется,
+    /// а ждёт подтверждения: `sync_take_pending_deletions` / `sync_apply_deletions`.
     pub(crate) fn apply_locally(profile: &SyncProfile, paths: &SyncPaths, dir: &Path) -> Result<Vec<SyncItem>, CoreError> {
         let tombs = load(dir)?;
         if !tombs.iter().any(|t| t.dead()) { return Ok(vec![]); }
         let known = load_snapshot(profile, paths);
         let local = local_items(profile, paths)?;
-        let doomed = |kind: &str, key: &str| {
-            let k = (kind.to_string(), key.to_string());
-            let Some(t) = tombs.iter().find(|t| t.dead() && t.kind == kind && t.key == key) else { return false };
-            match (local.get(&k), known.get(&k)) {
+        let dismissed: Vec<(String, String, String)> = fs::read_to_string(dismissed_file(paths)).ok()
+            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let mut doomed: Vec<&Tombstone> = Vec::new();
+        for t in tombs.iter().filter(|t| t.dead()) {
+            let k = (t.kind.clone(), t.key.clone());
+            let unchanged = match (local.get(&k), known.get(&k)) {
                 (Some(h), Some((kh, at))) => h == kh && at.as_str() < t.deleted_at.as_str(),
                 _ => false,
+            };
+            // Пользователь уже отказался от этого удаления — не спрашивать снова, пока его не повторят.
+            let refused = dismissed.iter().any(|(kind, key, at)| kind == &t.kind && key == &t.key && at == &t.raw_deleted_at);
+            if unchanged && !refused { doomed.push(t); }
+        }
+        if doomed.is_empty() { return Ok(vec![]); }
+        let mass = ["host", "snippet", "tunnel", "desktop"].iter().any(|kind| {
+            let n = doomed.iter().filter(|t| t.kind == *kind).count();
+            let total = local.keys().filter(|(k, _)| k == kind).count().max(1);
+            n > MAX_SILENT || (n > 1 && n as f64 / total as f64 > MAX_SILENT_SHARE)
+        });
+        if mass {
+            let names = display_names(paths);
+            let pending: Vec<PendingDeletion> = doomed.iter().map(|t| PendingDeletion {
+                kind: t.kind.clone(), key: t.key.clone(), deleted_at: t.raw_deleted_at.clone(), machine: t.machine.clone(),
+                name: names.get(&(t.kind.clone(), t.key.clone())).cloned().unwrap_or_else(|| t.key.clone()),
+            }).collect();
+            fs::create_dir_all(&paths.support)?;
+            fs::write(pending_file(paths), encode_sorted(&pending))?;
+            return Ok(vec![]);
+        }
+        let set: HashSet<(String, String)> = doomed.iter().map(|t| (t.kind.clone(), t.key.clone())).collect();
+        remove_items(paths, &set)
+    }
+
+    /// Имена для диалога подтверждения: алиас хоста или поле `name` элемента.
+    fn display_names(paths: &SyncPaths) -> std::collections::HashMap<(String, String), String> {
+        let mut out = std::collections::HashMap::new();
+        for (kind, name) in [("snippet", "snippets.json"), ("tunnel", "tunnels.json"), ("desktop", "desktops.json")] {
+            let Ok(j) = fs::read_to_string(paths.support(name)) else { continue };
+            for v in try_decode_list::<serde_json::Value>(&j).unwrap_or_default() {
+                if let (Some(id), Some(n)) = (v.get("id").and_then(|x| x.as_str()), v.get("name").and_then(|x| x.as_str())) {
+                    out.insert((kind.to_string(), id.to_string()), n.to_string());
+                }
             }
-        };
+        }
+        out
+    }
+
+    /// Копия файла с датой перед удалением из него; хранится 10 последних.
+    fn dated_backup(path: &Path) -> Result<(), CoreError> {
+        if !path.exists() { return Ok(()); }
+        let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let bak = path.with_file_name(format!("{name}.{stamp}.bak"));
+        fs::copy(path, &bak).map_err(|e| CoreError::Io(format!("{}: {e}", bak.display())))?;
+        set_private(&bak);
+        if let Some(dir) = path.parent() {
+            let mut old: Vec<PathBuf> = fs::read_dir(dir).map(|r| r.flatten().map(|e| e.path())
+                .filter(|p| p.file_name().map(|n| { let n = n.to_string_lossy(); n.starts_with(&format!("{name}.")) && n.ends_with(".bak") }).unwrap_or(false))
+                .collect()).unwrap_or_default();
+            old.sort();
+            while old.len() > 10 { let _ = fs::remove_file(old.remove(0)); }
+        }
+        Ok(())
+    }
+
+    /// Удалить элементы из локальных файлов: перед этим бэкап с датой (и config.bak для ~/.ssh/config).
+    pub(crate) fn remove_items(paths: &SyncPaths, set: &HashSet<(String, String)>) -> Result<Vec<SyncItem>, CoreError> {
+        let gone = |kind: &str, key: &str| set.contains(&(kind.to_string(), key.to_string()));
         let mut changed = Vec::new();
         if let Ok(text) = fs::read_to_string(paths.config()) {
             let mut doc = Document::new(&text);
             let mut cut = false;
             for h in parse_config(text.clone()) {
-                if doomed("host", &h.alias) { while take_alias(&mut doc, &h.alias).is_some() { cut = true; } }
+                if gone("host", &h.alias) { while take_alias(&mut doc, &h.alias).is_some() { cut = true; } }
             }
             if cut {
                 while doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) { doc.lines.pop(); }
                 let bak = Path::new(&paths.ssh).join("config.bak");
                 fs::copy(paths.config(), &bak).map_err(|e| CoreError::Io(format!("config.bak: {e}")))?;
                 set_private(&bak);
+                dated_backup(&paths.config())?;
                 write_private_atomic(&paths.config(), doc.text().as_bytes())?;
                 changed.push(SyncItem::SshConfig);
             }
@@ -1263,12 +1409,31 @@ pub(crate) mod tombstones {
                                    ("desktop", "desktops.json", SyncItem::Desktops)] {
             let Ok(j) = fs::read_to_string(paths.support(name)) else { continue };
             let list: Vec<serde_json::Value> = try_decode_list(&j).map_err(|e| broken(name, e))?;
-            let kept: Vec<serde_json::Value> = list.iter().filter(|v| !doomed(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or(""))).cloned().collect();
+            let kept: Vec<serde_json::Value> = list.iter().filter(|v| !gone(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or(""))).cloned().collect();
             if kept.len() != list.len() {
+                dated_backup(&paths.support(name))?;
                 write_atomic(&paths.support(name), encode_sorted(&kept).as_bytes())?;
                 changed.push(item);
             }
         }
         Ok(changed)
+    }
+
+    pub(crate) fn take_pending(paths: &SyncPaths) -> Vec<PendingDeletion> {
+        fs::read_to_string(pending_file(paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    }
+
+    /// Применить подтверждённые; остальные из ожидающих — запомнить как отклонённые.
+    pub(crate) fn apply_confirmed(paths: &SyncPaths, confirmed: &[DeletionKey]) -> Result<Vec<SyncItem>, CoreError> {
+        let pending = take_pending(paths);
+        let ok = |p: &PendingDeletion| confirmed.iter().any(|c| c.kind == p.kind && c.key == p.key);
+        let set: HashSet<(String, String)> = pending.iter().filter(|p| ok(p)).map(|p| (p.kind.clone(), p.key.clone())).collect();
+        let mut dismissed: Vec<(String, String, String)> = fs::read_to_string(dismissed_file(paths)).ok()
+            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        dismissed.extend(pending.iter().filter(|p| !ok(p)).map(|p| (p.kind.clone(), p.key.clone(), p.deleted_at.clone())));
+        fs::create_dir_all(&paths.support)?;
+        fs::write(dismissed_file(paths), serde_json::to_string(&dismissed)?)?;
+        let _ = fs::remove_file(pending_file(paths));
+        remove_items(paths, &set)
     }
 }
