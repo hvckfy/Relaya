@@ -86,9 +86,23 @@ internal sealed class TileHost : UserControl, IDisposable
         var header = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } }, Children = { title } };
         Grid.SetColumn(close, 1);
         header.Children.Add(close);
-        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() } };
+        // Запрос пароля после входа: InfoBar над терминалом, ввод не блокируется.
+        var ask = new InfoBar
+        {
+            Title = L("Запрос пароля"), Message = L("Подставить пароль хоста?"), Severity = InfoBarSeverity.Informational,
+            IsClosable = false, Margin = new Thickness(4, 0, 4, 4),
+        };
+        var put = new Button { Content = L("Подставить"), Style = Pages.Ui.Style("AccentButtonStyle") };
+        var no = new Button { Content = L("Нет") };
+        ask.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8), Children = { put, no } };
+        put.Click += (_, _) => { ask.IsOpen = false; session.SendPassword(); view.Focus(FocusState.Programmatic); };
+        no.Click += (_, _) => { ask.IsOpen = false; view.Focus(FocusState.Programmatic); };
+        session.PasswordRequested += () => DispatcherQueue.TryEnqueue(() => ask.IsOpen = true);
+        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         body.Children.Add(header);
-        Grid.SetRow(view, 1);
+        Grid.SetRow(ask, 1);
+        body.Children.Add(ask);
+        Grid.SetRow(view, 2);
         body.Children.Add(view);
         var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Margin = new Thickness(2) };
         var pane = new Pane(view, session, alias, frame, title);

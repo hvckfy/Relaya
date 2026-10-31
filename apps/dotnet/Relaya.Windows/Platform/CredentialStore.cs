@@ -82,6 +82,20 @@ internal static class CredentialStore
 /// Приглашение ssh ввести пароль сервера в конце вывода — как PasswordPrompt на Mac.
 internal static class PasswordPrompt
 {
+    /// Приглашение shell в последней строке: `user@host:~$`, `#`, `>`, `%`.
+    public static bool IsShellPrompt(string tail)
+    {
+        var t = tail.Split('\n')[^1].TrimEnd();
+        return t.Length > 1 && (t.EndsWith('$') || t.EndsWith('#') || t.EndsWith('>') || t.EndsWith('%'));
+    }
+
+    /// Любой запрос пароля (su, sudo, mysql -p…), а не только ssh: «Password:», «[sudo] password for x:», «Пароль:».
+    public static bool IsAnyPasswordPrompt(string tail)
+    {
+        var t = tail.Split('\n')[^1].Trim().ToLowerInvariant();
+        return t.EndsWith(':') && (t.Contains("password") || t.Contains("пароль")) && !t.Contains("passphrase") && !t.Contains("new");
+    }
+
     public static bool Matches(string tail)
     {
         var lines = tail.Split('\n');

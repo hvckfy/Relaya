@@ -20,6 +20,19 @@ internal sealed class SshSession : IDisposable
     /// Сессия завершилась или переподключилась — вкладка меняет иконку.
     public event Action<bool>? StateChanged;
 
+    /// После входа удалённая программа (su, sudo, mysql…) спросила пароль — вкладка предлагает подставить пароль хоста.
+    public event Action? PasswordRequested;
+
+    private PseudoConsole? asked;
+
+    /// Подставить сохранённый пароль — только в ту же сессию, где был запрос (не в переподключённую).
+    public void SendPassword()
+    {
+        if (asked is { } pc && pc == console && !ended && Relaya.Platform.CredentialStore.Read(alias) is { } password)
+            pc.Write(Encoding.UTF8.GetBytes(password + "\r"));
+        asked = null;
+    }
+
     public SshSession(TerminalView view, string alias)
     {
         this.view = view;
@@ -62,21 +75,29 @@ internal sealed class SshSession : IDisposable
         }
         console = pc;
         var passwordSent = false;
+        var loggedIn = false;
         var tail = new StringBuilder();
         pc.Output += data =>
         {
             view.Feed(data);
-            // Пароль из Credential Manager вводится один раз за подключение, как на Mac.
-            if (!passwordSent)
+            tail.Append(Encoding.UTF8.GetString(data));
+            if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
+            var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
+            // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
+            // Вход выполнен — первое приглашение shell в последней строке (до признака от ядра, C23).
+            if (!loggedIn && PasswordPrompt.IsShellPrompt(text)) loggedIn = true;
+            if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
-                tail.Append(Encoding.UTF8.GetString(data));
-                if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
-                var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
-                if (PasswordPrompt.Matches(text) && Relaya.Platform.CredentialStore.Read(alias) is { } password)
-                {
-                    passwordSent = true;
-                    pc.Write(Encoding.UTF8.GetBytes(password + "\r"));
-                }
+                passwordSent = true;
+                tail.Clear();
+                pc.Write(Encoding.UTF8.GetBytes(password + "\r"));
+            }
+            else if (loggedIn && PasswordPrompt.IsAnyPasswordPrompt(text) && Relaya.Platform.CredentialStore.Has(alias))
+            {
+                // После входа — только по согласию человека (баннер «Подставить» / «Нет»).
+                tail.Clear();
+                asked = pc;
+                PasswordRequested?.Invoke();
             }
             var reply = view.Emulator.TakeOutput();
             if (reply.Length > 0) pc.Write(reply);
