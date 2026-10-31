@@ -3,7 +3,7 @@
 //! Ключи шифруются так же, как в Swift-версии (PBKDF2-SHA256 → ChaCha20-Poly1305, формат RLYK1) — файлы взаимозаменяемы.
 
 use crate::error::CoreError;
-use crate::models::{decode_list, encode_sorted, RemoteDesktop, Snippet, Tunnel};
+use crate::models::{encode_sorted, try_decode_list, RemoteDesktop, Snippet, Tunnel};
 use crate::ssh_config::{parse_config, split_key_value, aliases, Document};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
@@ -182,26 +182,26 @@ pub fn sync_export(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
     }
     if items.contains(&SyncItem::Snippets) {
         if let Ok(j) = fs::read_to_string(paths.support("snippets.json")) {
-            let mut list = merged_with_existing(dir, "relaya/snippets.json", decode_list::<Snippet>(&j), |x| x.id.clone());
+            let mut list = merged_with_existing(dir, "relaya/snippets.json", try_decode_list::<Snippet>(&j).map_err(|e| broken("snippets.json", e))?, |x| x.id.clone())?;
             list.sort_by(|a, b| a.id.cmp(&b.id));
             write_if_changed(dir, "relaya/snippets.json", encode_sorted(&list).as_bytes(), &mut changed)?;
         }
     }
     if items.contains(&SyncItem::Tunnels) {
         if let Ok(j) = fs::read_to_string(paths.support("tunnels.json")) {
-            let mine: Vec<Tunnel> = decode_list::<Tunnel>(&j).into_iter().filter(|t| aliases_set.contains(&t.host_alias)).collect();
-            let mut list = merged_with_existing(dir, "relaya/tunnels.json", mine, |x| x.id.clone());
+            let mine: Vec<Tunnel> = try_decode_list::<Tunnel>(&j).map_err(|e| broken("tunnels.json", e))?.into_iter().filter(|t| aliases_set.contains(&t.host_alias)).collect();
+            let mut list = merged_with_existing(dir, "relaya/tunnels.json", mine, |x| x.id.clone())?;
             list.sort_by(|a, b| a.id.cmp(&b.id));
             write_if_changed(dir, "relaya/tunnels.json", encode_sorted(&list).as_bytes(), &mut changed)?;
         }
     }
     if items.contains(&SyncItem::Desktops) {
         if let Ok(j) = fs::read_to_string(paths.support("desktops.json")) {
-            let mine: Vec<RemoteDesktop> = decode_list::<RemoteDesktop>(&j).into_iter().filter(|d| {
+            let mine: Vec<RemoteDesktop> = try_decode_list::<RemoteDesktop>(&j).map_err(|e| broken("desktops.json", e))?.into_iter().filter(|d| {
                 profile.scope.all_hosts || d.group.as_ref().map(|g| profile.scope.groups.contains(g)).unwrap_or(false)
                     || d.via_ssh_host.as_ref().map(|v| aliases_set.contains(v)).unwrap_or(false)
             }).collect();
-            let mut list = merged_with_existing(dir, "relaya/desktops.json", mine, |x| x.id.clone());
+            let mut list = merged_with_existing(dir, "relaya/desktops.json", mine, |x| x.id.clone())?;
             list.sort_by(|a, b| a.id.cmp(&b.id));
             write_if_changed(dir, "relaya/desktops.json", encode_sorted(&list).as_bytes(), &mut changed)?;
         }
@@ -219,14 +219,20 @@ pub fn sync_export(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
 }
 
 /// Список в папке + свои элементы (свои заменяют одноимённые по id): выгрузка ничего не удаляет из общего.
-fn merged_with_existing<T>(dir: &Path, rel: &str, mine: Vec<T>, id: impl Fn(&T) -> String) -> Vec<T>
+fn merged_with_existing<T>(dir: &Path, rel: &str, mine: Vec<T>, id: impl Fn(&T) -> String) -> Result<Vec<T>, CoreError>
 where T: for<'de> Deserialize<'de> + Clone {
-    let mut out: Vec<T> = fs::read_to_string(dir.join(rel)).map(|s| decode_list(&s)).unwrap_or_default();
+    let mut out: Vec<T> = match fs::read_to_string(dir.join(rel)) {
+        Ok(s) => try_decode_list(&s).map_err(|e| broken(rel, e))?,
+        Err(_) => Vec::new(),
+    };
     for item in mine {
         match out.iter().position(|o| id(o) == id(&item)) { Some(i) => out[i] = item, None => out.push(item) }
     }
-    out
+    Ok(out)
 }
+
+/// Файл не читается: синхронизация останавливается и ничего не перезаписывает.
+fn broken(name: &str, e: CoreError) -> CoreError { CoreError::Json(format!("{name} повреждён, синхронизация остановлена: {e}")) }
 
 /// Влить в локальные файлы содержимое `dir`. Возвращает изменившиеся пункты.
 #[uniffi::export]
@@ -280,8 +286,19 @@ pub fn sync_import(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
 fn merge_list<T>(incoming: &Path, local: &Path, id: impl Fn(&T) -> String) -> Result<bool, CoreError>
 where T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone {
     let Ok(j) = fs::read_to_string(incoming) else { return Ok(false) };
-    let theirs: Vec<T> = decode_list(&j);
-    let mut mine: Vec<T> = fs::read_to_string(local).map(|s| decode_list(&s)).unwrap_or_default();
+    let name = incoming.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let theirs: Vec<T> = try_decode_list(&j).map_err(|e| broken(&format!("{name} в папке синхронизации"), e))?;
+    let mut mine: Vec<T> = match fs::read_to_string(local) {
+        Ok(s) => match try_decode_list(&s) {
+            Ok(v) => v,
+            Err(e) => {
+                // Свой файл не читается — копия рядом, сам файл не трогаем.
+                let _ = fs::copy(local, local.with_extension("json.bak"));
+                return Err(broken(&name, e));
+            }
+        },
+        Err(_) => Vec::new(),
+    };
     let mut changed = false;
     for item in theirs {
         match mine.iter().position(|m| id(m) == id(&item)) {
@@ -733,5 +750,20 @@ mod tests {
         let keep: std::collections::HashMap<String, bool> = [("ssh/config".to_string(), false)].into();
         assert!(matches!(folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), keep).unwrap(), SyncOutcome::Synced { .. }));
         assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("9.9.9.9"));
+    }
+
+    #[test]
+    fn broken_json_stops_sync_without_overwriting() {
+        let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        fs::create_dir_all(dir.path().join("relaya")).unwrap();
+        fs::write(dir.path().join("relaya/tunnels.json"), "[]").unwrap();
+        fs::write(a.path().join("tunnels.json"), "[{broken").unwrap();
+        let p = sync_new_profile("all".into());
+        let d = dir.path().to_string_lossy().to_string();
+        assert!(matches!(sync_import(p.clone(), paths(a.path()), None, d.clone()), Err(CoreError::Json(_))));
+        assert_eq!(fs::read_to_string(a.path().join("tunnels.json")).unwrap(), "[{broken");
+        assert!(a.path().join("tunnels.json.bak").exists());
+        assert!(matches!(sync_export(p, paths(a.path()), None, d), Err(CoreError::Json(_))));
+        assert_eq!(fs::read_to_string(dir.path().join("relaya/tunnels.json")).unwrap(), "[]");
     }
 }

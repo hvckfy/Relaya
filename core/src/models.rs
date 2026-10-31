@@ -130,10 +130,35 @@ pub fn desktop_rdp_file(d: RemoteDesktop, host: String, port: i64) -> String {
 
 pub fn decode_list<T: for<'de> Deserialize<'de>>(json: &str) -> Vec<T> { serde_json::from_str(json).unwrap_or_default() }
 
+/// Пустой текст — пустой список; нечитаемый — ошибка, а не `[]`: иначе следующая запись затёрла бы файл пользователя.
+pub fn try_decode_list<T: for<'de> Deserialize<'de>>(json: &str) -> Result<Vec<T>, crate::error::CoreError> {
+    if json.trim().is_empty() { return Ok(Vec::new()); }
+    Ok(serde_json::from_str(json)?)
+}
+
 /// Как Swift `JSONEncoder` с `.prettyPrinted, .sortedKeys` (порядок ключей важен для синхронизации — меньше диффов).
 pub fn encode_sorted<T: Serialize>(value: &T) -> String {
     let v = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
-    serde_json::to_string_pretty(&sort_keys(v)).unwrap_or_default()
+    let mut out = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut out, SwiftPretty::default());
+    if sort_keys(v).serialize(&mut ser).is_err() { return String::new(); }
+    String::from_utf8(out).unwrap_or_default()
+}
+
+/// Отступ в 2 пробела и `"key" : value`, как у `JSONEncoder.prettyPrinted` (у serde — `"key": value`).
+#[derive(Default)]
+struct SwiftPretty<'a>(serde_json::ser::PrettyFormatter<'a>);
+
+impl serde_json::ser::Formatter for SwiftPretty<'_> {
+    fn begin_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.begin_array(w) }
+    fn end_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_array(w) }
+    fn begin_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W, first: bool) -> std::io::Result<()> { self.0.begin_array_value(w, first) }
+    fn end_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_array_value(w) }
+    fn begin_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.begin_object(w) }
+    fn end_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_object(w) }
+    fn begin_object_key<W: ?Sized + std::io::Write>(&mut self, w: &mut W, first: bool) -> std::io::Result<()> { self.0.begin_object_key(w, first) }
+    fn begin_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { w.write_all(b" : ") }
+    fn end_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_object_value(w) }
 }
 
 fn sort_keys(v: serde_json::Value) -> serde_json::Value {
@@ -159,6 +184,12 @@ pub fn tunnels_encode(list: Vec<Tunnel>) -> String { encode_sorted(&list) }
 #[uniffi::export]
 pub fn desktops_decode(json: String) -> Vec<RemoteDesktop> { decode_list(&json) }
 #[uniffi::export]
+pub fn snippets_decode_checked(json: String) -> Result<Vec<Snippet>, crate::error::CoreError> { try_decode_list(&json) }
+#[uniffi::export]
+pub fn tunnels_decode_checked(json: String) -> Result<Vec<Tunnel>, crate::error::CoreError> { try_decode_list(&json) }
+#[uniffi::export]
+pub fn desktops_decode_checked(json: String) -> Result<Vec<RemoteDesktop>, crate::error::CoreError> { try_decode_list(&json) }
+#[uniffi::export]
 pub fn desktops_encode(list: Vec<RemoteDesktop>) -> String { encode_sorted(&list) }
 
 #[cfg(test)]
@@ -182,7 +213,10 @@ mod tests {
         let t = tunnels_decode(swift.into());
         assert_eq!(t[0].host_alias, "db");
         assert_eq!(tunnel_spec(t[0].clone()), "15432:localhost:5432");
-        assert!(tunnels_encode(t).contains("\"autoStart\" : true") || true);
+        let enc = tunnels_encode(t);
+        assert!(enc.contains("\"autoStart\" : true") && enc.starts_with("[\n  {\n    \""), "{enc}");
+        assert!(tunnels_decode_checked("[{oops".into()).is_err());
+        assert_eq!(tunnels_decode_checked(" ".into()).unwrap(), vec![]);
         let d = r#"[{"address":"10.0.0.5","fullScreen":false,"id":"A","kind":"rdp","name":"win","port":3389,"user":"u","viaSSHHost":"bastion"}]"#;
         let list = desktops_decode(d.into());
         assert_eq!(list[0].via_ssh_host.as_deref(), Some("bastion"));
