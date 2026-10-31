@@ -10,7 +10,6 @@
 " (копия)" = " (copy)";
 "По теме системы" = "Follow system";
 "SSH-туннель: %@" = "SSH tunnel: %@";
-"Укажите имя пользователя и пароль." = "Enter a username and password.";
 "Учётные данные: %@" = "Credentials: %@";
 "Сертификат сервера изменился с прошлого подключения. Если это ожидаемо (сервер переустановили), сбросьте доверие и подключитесь снова." = "The server certificate has changed since the last connection. If this is expected (the server was reinstalled), reset trust and connect again.";
 "Неверное имя пользователя или пароль." = "Wrong username or password.";
@@ -32,7 +31,6 @@
 "подключён" = "connected";
 "не подключён" = "not connected";
 "ssh завершился с кодом %@" = "ssh exited with code %@";
-"Нужен вход без пароля: настройте ключ или сохраните пароль в Keychain. (%@)" = "Needs passwordless login: set up a key or save the password in Keychain. (%@)";
 "Фон" = "Background";
 "Карточки" = "Cards";
 "Боковая панель" = "Sidebar";
@@ -56,7 +54,6 @@
 "Права по хостам" = "Per-host access";
 "Для новых хостов" = "For new hosts";
 "«Только чтение» — безопасные команды (ls, cat, df, journalctl, docker ps…) без перенаправлений и sudo. «С подтверждением» — каждую команду вы одобряете в системном окне; без ответа за 2 минуты — отказ." = "“Read-only” — safe commands (ls, cat, df, journalctl, docker ps…) without redirects or sudo. “Confirm” — you approve every command in a system dialog; no answer within 2 minutes means no.";
-"Журнал" = "Log";
 "Обновить" = "Refresh";
 "Очистить" = "Clear";
 "Пока пусто." = "Nothing yet.";
@@ -107,7 +104,6 @@
 "Хост объявлен вместе с другими алиасами (Host a b). Чтобы не разорвать блок, отредактируйте ~/.ssh/config вручную." = "This host is declared together with other aliases (Host a b). To keep the block intact, edit ~/.ssh/config by hand.";
 "Новый хост" = "New Host";
 "Изменить хост" = "Edit Host";
-"VNC и RDP появятся в v0.3–v0.4" = "VNC and RDP are coming in v0.3–v0.4";
 "Основное" = "General";
 "Алиас (Host)" = "Alias (Host)";
 "Адрес (HostName)" = "Address (HostName)";
@@ -206,9 +202,6 @@
 "Тип" = "Type";
 "В агенте ⓘ" = "In agent ⓘ";
 "Хосты" = "Hosts";
-"создан %@" = "created %@";
-"с passphrase" = "with passphrase";
-"без passphrase" = "no passphrase";
 "Публичный ключ" = "Public key";
 "Копировать" = "Copy";
 "Используется хостами · %@" = "Used by hosts · %@";
@@ -241,7 +234,6 @@
 "Хост «%@» будет перенесён в неё." = "Host “%@” will be moved into it.";
 "Не получилось" = "Something went wrong";
 "Например: личные, работа" = "For example: personal, work";
-"Хосты, действия, сниппеты…" = "Hosts, actions, snippets…";
 "ОС ещё не определена" = "OS not detected yet";
 "Действия" = "Actions";
 "Команда вставится в терминал — проверьте её и нажмите Enter" = "The command is inserted into the terminal — check it and press Enter";
@@ -276,7 +268,7 @@
 "Сертификат сервера SHA-256: %@" = "Server certificate SHA-256: %@";
 "Отключить" = "Disconnect";
 "Вход на %@" = "Sign in to %@";
-"Пользователь (или DOMAIN\\user)" = "User (or DOMAIN\\\\user)";
+"Пользователь (или DOMAIN\\user)" = "User (or DOMAIN\\user)";
 "Войти" = "Sign In";
 "Имя" = "Name";
 "Размер" = "Size";
@@ -294,9 +286,7 @@
 "Загрузить…" = "Upload…";
 "%@ объектов · перетащите файлы из Finder, чтобы загрузить сюда" = "%@ items · drag files from Finder to upload them here";
 "Скачать сюда" = "Download Here";
-"Скачиваю %@ объект(ов)…" = "Downloading %@ item(s)…";
 "Загрузить" = "Upload";
-"Загружаю %@ объект(ов)…" = "Uploading %@ item(s)…";
 "Сниппеты" = "Snippets";
 "Вставить сохранённую команду (⇧⌘P)" = "Insert a saved command (⇧⌘P)";
 "Файлы на сервере" = "Files on the server";
@@ -304,7 +294,6 @@
 "Поиск в терминале (⌘F)" = "Find in terminal (⌘F)";
 "Вход по ключу…" = "Key Login…";
 "пароль · Keychain" = "password · Keychain";
-"пароль" = "password";
 "отключён" = "disconnected";
 "Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts." = "The server key has changed! This could be a man-in-the-middle attack. ssh won't connect until you verify the server and remove the old entry from ~/.ssh/known_hosts.";
 "Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было." = "The server dropped the login after ssh tried keys from ssh-agent — reconnected with password only. Set up key login to avoid this.";
@@ -362,21 +351,14 @@
 "Ярко-пурпурный" = "Bright magenta";
 "Ярко-голубой" = "Bright cyan";
 "Ярко-белый" = "Bright white";
-"%@, %@ хостов, %@" = "%@, %@ hosts, %@";
-"свёрнута" = "collapsed";
-"развёрнута" = "expanded";
 "Ничего не найдено" = "Nothing found";
-"Нет хостов" = "No hosts";
 "Туннели" = "Tunnels";
-"%@ акт." = "%@ active";
 "метка %@" = "tag %@";
 "Ключ не указан — вероятно, вход по паролю" = "No key set — probably password login";
-"Файлы (SFTP)…" = "Files (SFTP)…";
 "Настроить вход по ключу…" = "Set Up Key Login…";
 "Определить ОС" = "Detect OS";
 "Разрешить" = "Allow";
 "Запретить…" = "Disable…";
-"Дублировать…" = "Duplicate…";
 "Переместить в группу" = "Move to Group";
 "Новая группа…" = "New Group…";
 "Копировать ssh-команду" = "Copy ssh Command";
@@ -394,7 +376,6 @@
 "Выполнить" = "Run";
 "Найти сниппет" = "Find a snippet";
 "«%@» на хостах" = "“%@” on hosts";
-"Откроется вкладка для каждого хоста; команда выполнится после входа." = "A tab opens for each host; the command runs after login.";
 "Выполнить на %@" = "Run on %@";
 "Новая вкладка" = "New Tab";
 "Закрыть вкладку %@" = "Close tab %@";
@@ -448,8 +429,6 @@
 "Wi-Fi клиенты" = "Wi-Fi clients";
 "Перезапустить сеть" = "Restart network";
 "Место на диске" = "Disk space";
-"Нагрузка" = "Load";
-"Сервисы" = "Services";
 "Процессы" = "Processes";
 "Память" = "Memory";
 "Упавшие сервисы" = "Failed services";
@@ -484,13 +463,10 @@
 "Перезапустить сейчас" = "Restart Now";
 "Открыть Relaya" = "Open Relaya";
 "Выйти из Relaya" = "Quit Relaya";
-"Нет подключений" = "No connections";
 "Добавить" = "Add";
 "Открыть в отдельном окне" = "Open in Separate Window";
 "Добавьте первое подключение" = "Add your first connection";
 "Выберите подключение" = "Select a connection";
-"VNC открывается во вкладке Relaya. Пароль хранится в Keychain, можно подключаться через SSH-туннель." = "VNC opens in a Relaya tab. The password is kept in Keychain; you can connect through an SSH tunnel.";
-"RDP открывается во вкладке Relaya: вход с NLA, пароль в Keychain, можно через SSH-туннель." = "RDP opens in a Relaya tab: NLA sign-in, password in Keychain, optionally through an SSH tunnel.";
 "Добавить VNC" = "Add VNC";
 "Добавить RDP" = "Add RDP";
 "Порты" = "Ports";
@@ -818,13 +794,10 @@
 "Не найден git. Установите Git for Windows (git-scm.com) и перезапустите Relaya." = "git not found. Install Git for Windows (git-scm.com) and restart Relaya.";
 "Хосты…" = "Hosts…";
 "git-сервер" = "git server";
-"git-сервер или служебная запись" = "git server or service entry";
 "Хосты, которые ходят с %@" = "Hosts that use %@";
 "Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.bak." = "For the selected hosts ~/.ssh/config gets IdentityFile for this key and IdentitiesOnly yes, so ssh stops trying the agent's other keys. config.bak is saved first.";
 "Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.relaya.bak." = "For the selected hosts ~/.ssh/config gets IdentityFile for this key and IdentitiesOnly yes, so ssh stops trying the agent's other keys. config.relaya.bak is saved first.";
 "Добавить сервер" = "Add a server";
-"например, gitlab.com или git.example.com" = "e.g. gitlab.com or git.example.com";
-"Ни один хост не указывает этот ключ в IdentityFile. «Изменить…» — выбрать хосты и git-серверы (gitlab.com, свой Forgejo), которые ходят только с этим ключом." = "No host uses this key as IdentityFile. Edit… to choose the hosts and git servers (gitlab.com, your own Forgejo) that use only this key.";
 "tmux: закрывать брошенные сессии через, мин" = "tmux: close abandoned sessions after, min";
 "Для хостов с tmux: сессия без подключений живёт на сервере столько минут" = "For tmux hosts: a session with no clients stays on the server this many minutes";
 "Подсветка вывода" = "Output highlighting";
@@ -835,7 +808,6 @@
 "Изменить хосты…" = "Edit Hosts…";
 "Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента." = "The selected hosts and git servers use only this key (IdentitiesOnly), without trying the agent's other keys.";
 "ключ загружен" = "key loaded";
-"Хост, которого ещё нет в ~/.ssh/config, например git-сервер. Для него появится короткий блок с этим ключом." = "A host that isn't in ~/.ssh/config yet, such as a git server. A short block with this key is added for it.";
 "В названии не должно быть «@»: пользователя укажите в поле «Пользователь», адрес — в поле «Адрес»." = "The name can’t contain “@”: put the user in “User” and the address in “Address”.";
 "Серверы" = "Servers";
 "Git-серверы" = "Git servers";
@@ -1074,3 +1046,6 @@
 "Relaya: ошибка вывода терминала: %@" = "Relaya: terminal output error: %@";
 "[сессия завершена, код %@]" = "[session ended, code %@]";
 "Enter — переподключиться" = "Enter — reconnect";
+"Liquid Glass" = "Liquid Glass";
+"Passphrase" = "Passphrase";
+"ssh-agent" = "ssh-agent";
