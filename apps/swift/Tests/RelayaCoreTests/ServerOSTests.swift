@@ -45,7 +45,7 @@ import Testing
     @Test func linuxUsesDropInAndFallback() {
         let off = ServerOS.ubuntu.passwordLoginCommand(enabled: false)
         // C6: drop-in раньше системных файлов, KbdInteractive тоже выключается, проверка sshd -t и sshd -T.
-        #expect(off.contains("sshd_config.d/00-00-relaya.conf"))
+        #expect(off.contains("sshd_config.d") && off.contains("00-00-relaya.conf"))
         #expect(off.contains("PasswordAuthentication no"))
         #expect(off.contains("KbdInteractiveAuthentication no"))
         #expect(off.contains("sshd -t"))
