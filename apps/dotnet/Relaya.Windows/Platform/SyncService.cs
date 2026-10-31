@@ -138,7 +138,18 @@ internal sealed class SyncService
             }
             else
             {
-                imported = await Task.Run(() => RelayaCoreMethods.FolderSync(p, Paths, pass, p.remote));
+                // Папка «как в git» (C8): конфликты не перетираются, а уходят на выбор человека.
+                var outcome = await Task.Run(() =>
+                    RelayaCoreMethods.FolderSyncMerge(p, Paths, pass, p.remote, new Dictionary<string, bool>()));
+                switch (outcome)
+                {
+                    case SyncOutcome.Conflict c:
+                        conflicts[p.id] = c.conflicts.ToList();
+                        Set(p, State.Conflict, L("Конфликт в %@ файл(ах)", c.conflicts.Count));
+                        return;
+                    case SyncOutcome.Synced s: imported = s.imported; break;
+                    default: imported = new(); break;
+                }
             }
             foreach (var k in RelayaCoreMethods.SyncTakeRenamedKeys(Paths)) renamed[k.savedAs] = k;
             Set(p, State.Idle, L("Синхронизировано %@", DateTime.Now.ToString("HH:mm")));
@@ -151,23 +162,43 @@ internal sealed class SyncService
     }
 
     /// Разрешить конфликт целиком: оставить свои файлы или взять с сервера.
-    public async Task Resolve(string id, bool keepMine)
+    public Task Resolve(string id, bool keepMine) =>
+        conflicts.TryGetValue(id, out var list) ? Resolve(id, list.ToDictionary(c => c.path, _ => keepMine)) : Task.CompletedTask;
+
+    /// По файлам: путь → true (оставить мой) / false (взять с другой машины).
+    public async Task Resolve(string id, Dictionary<string, bool> choices)
     {
         var p = Profiles.FirstOrDefault(x => x.id == id);
-        if (p is null || !conflicts.TryGetValue(id, out var list)) return;
-        var choices = list.ToDictionary(c => c.path, _ => keepMine);
+        if (p is null || !conflicts.ContainsKey(id)) return;
         var gate = Gate(id);
         if (!gate.Wait(0)) return;
         var resolved = false;
         Set(p, State.Syncing, null);
         try
         {
-            var imported = await Task.Run(() =>
-                RelayaCoreMethods.GitResolve(RepoDir(p), choices, p, Paths, CredentialStore.Read(PassphraseAccount)));
+            List<SyncItem> imported;
+            if (p.backend == SyncBackend.Git)
+            {
+                imported = await Task.Run(() =>
+                    RelayaCoreMethods.GitResolve(RepoDir(p), choices, p, Paths, CredentialStore.Read(PassphraseAccount)));
+                resolved = true; // git — потом обычная синхронизация (push)
+            }
+            else
+            {
+                // Папка: повторный merge с выбором и есть синхронизация.
+                var outcome = await Task.Run(() =>
+                    RelayaCoreMethods.FolderSyncMerge(p, Paths, CredentialStore.Read(PassphraseAccount), p.remote, choices));
+                if (outcome is SyncOutcome.Conflict c)
+                {
+                    conflicts[id] = c.conflicts.ToList();
+                    Set(p, State.Conflict, L("Конфликт в %@ файл(ах)", c.conflicts.Count));
+                    return;
+                }
+                imported = outcome is SyncOutcome.Synced s ? s.imported : new();
+            }
             conflicts.TryRemove(id, out _);
             Set(p, State.Idle, L("Конфликт разрешён"));
             if (imported.Count > 0) Imported?.Invoke();
-            resolved = true;
         }
         catch (Exception e)
         {

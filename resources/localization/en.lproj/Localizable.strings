@@ -911,3 +911,7 @@
 "Сжатие (Compression)" = "Compression";
 "Ключи (IdentityFile), по одному в строке" = "Keys (IdentityFile), one per line";
 "Добавить ключ из ~/.ssh" = "Add Key from ~/.ssh";
+"Разобрать по файлам…" = "Resolve by File…";
+"Мой" = "Mine";
+"С другой машины" = "From the other machine";
+"Мой: %@\nС другой машины: %@" = "Mine: %@\nFrom the other machine: %@";

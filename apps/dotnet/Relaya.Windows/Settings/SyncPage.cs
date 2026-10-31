@@ -38,6 +38,32 @@ internal sealed class SyncPage : UserControl
 
     private int shownRenamed;
 
+    private static string Short(string s) => s.Length > 300 ? s[..300] + "…" : s;
+
+    // Конфликт по файлам (C8, и для git тоже): ContentDialog, у каждого файла выбор «мой / с другой машины».
+    private async System.Threading.Tasks.Task PickConflicts(string id)
+    {
+        if (sync.Profiles.FirstOrDefault(x => x.id == id) is not { } p) return;
+        var list = sync.ConflictsOf(p);
+        if (list.Count == 0) return;
+        var panel = new StackPanel { Spacing = 12 };
+        var choices = new List<(string Path, RadioButtons Box)>();
+        foreach (var c in list)
+        {
+            var box = new RadioButtons { Header = c.path, Items = { L("Мой"), L("С другой машины") }, SelectedIndex = 0, MaxColumns = 2 };
+            ToolTipService.SetToolTip(box, L("Мой: %@\nС другой машины: %@", Short(c.mine), Short(c.theirs)));
+            choices.Add((c.path, box));
+            panel.Children.Add(box);
+        }
+        var dialog = new ContentDialog
+        {
+            Title = L("Конфликт синхронизации"), Content = new ScrollViewer { Content = panel, MaxHeight = 480 },
+            PrimaryButtonText = L("Применить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        await sync.Resolve(id, choices.ToDictionary(c => c.Path, c => c.Box.SelectedIndex == 0));
+    }
+
     private void Build()
     {
         root.Children.Clear();
@@ -147,8 +173,10 @@ internal sealed class SyncPage : UserControl
         keepMine.Click += async (_, _) => await sync.Resolve(id, keepMine: true);
         var takeTheirs = new Button { Content = L("Взять с сервера") };
         takeTheirs.Click += async (_, _) => await sync.Resolve(id, keepMine: false);
+        var pick = new Button { Content = L("Разобрать по файлам…") };
+        pick.Click += async (_, _) => await PickConflicts(id);
         var conflict = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = Visibility.Collapsed,
-            Children = { keepMine, takeTheirs } };
+            Children = { keepMine, takeTheirs, pick } };
 
         rows[id] = (status, ring, conflict);
 
