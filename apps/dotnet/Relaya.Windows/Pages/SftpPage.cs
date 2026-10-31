@@ -90,7 +90,7 @@ internal sealed class SftpPage : UserControl
             string.Join("\n", commands) + "\n", 600);
         busy.Visibility = Visibility.Collapsed;
         if (r.Status != 0)
-            status.Text = (r.Stderr.Trim().Split('\n').LastOrDefault(l => !l.StartsWith("sftp>")) ?? L("Ошибка sftp")).Trim();
+            status.Text = Platform.SshErrors.Describe(string.Join("\n", r.Stderr.Split('\n').Where(l => !l.StartsWith("sftp>"))), L("Ошибка sftp"));
         return r;
     }
 

@@ -46,9 +46,9 @@ internal sealed class TunnelManager
         p.Exited += (_, _) =>
         {
             string message;
-            lock (error) message = error.ToString().Trim().Split('\n').LastOrDefault()?.Trim() ?? "";
+            lock (error) message = error.ToString();
             if (running.TryGetValue(t.id, out var cur) && cur.Process == p)
-                running[t.id] = (p, State.Failed, message.Length > 0 ? message : Strings.L("ssh завершился, код %@", p.ExitCode));
+                running[t.id] = (p, State.Failed, SshErrors.Describe(message, Strings.L("ssh завершился, код %@", p.ExitCode)));
             Changed?.Invoke();
         };
         // ExitOnForwardFailure: если через 3 секунды ssh жив — туннель поднят.

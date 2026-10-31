@@ -893,7 +893,7 @@ final class AppModel {
                                    reason: L("Показать контейнеры на %@", host.alias))
             // Без доступа (нужен пароль, а Touch ID не подтверждён) — тихо, блок просто не показываем.
             if !r.succeeded, r.stderr.contains("Permission denied") || r.status == 255 {
-                if interactive { docker[host.alias] = .failed(L("Нет доступа к хосту без пароля.")) }
+                if interactive { docker[host.alias] = .failed(SSHErrorText.describe(r.stderr, fallback: L("Нет доступа к хосту без пароля."))) }
                 return
             }
             docker[host.alias] = Docker.parse(stdout: r.stdout, stderr: r.stderr, status: r.status)

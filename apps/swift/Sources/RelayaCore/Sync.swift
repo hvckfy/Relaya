@@ -206,7 +206,7 @@ public struct GitSync: Sendable {
 
     /// Ядро запускает git синхронно — не в главном потоке.
     private func offMain<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
-        try await Task.detached { do { return try body() } catch let e as CoreError { throw Failure(message: e.message) } }.value
+        try await Task.detached { do { return try body() } catch let e as CoreError { throw Failure(message: SSHErrorText.describe(e.message)) } }.value
     }
 
     /// Один цикл: выгрузка → коммит → слияние с сервером → разнос пришедшего → отправка.

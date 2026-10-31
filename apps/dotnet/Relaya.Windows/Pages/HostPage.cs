@@ -136,13 +136,7 @@ internal sealed class HostPage : UserControl
         stats.Children.Add(Ui.Row("", L("Работает"), up.Days > 0 ? L("%@ дн. %@ ч", up.Days, up.Hours) : L("%@ ч %@ мин", up.Hours, up.Minutes)));
     }
 
-    private static string Problem(AppState.Result r)
-    {
-        var line = (r.Stderr.Trim().Split('\n').LastOrDefault() ?? "").Trim();
-        if (line.Contains("Permission denied") || line.Contains("password"))
-            return L("Нет доступа без пароля: сохраните пароль хоста или ключ.");
-        return line.Length > 0 ? line : L("Не удалось подключиться");
-    }
+    private static string Problem(AppState.Result r) => Platform.SshErrors.Describe(r.Stderr, L("Не удалось подключиться"));
 
     private async Task LoadDocker()
     {

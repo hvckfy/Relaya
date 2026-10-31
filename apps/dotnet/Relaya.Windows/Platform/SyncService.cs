@@ -141,10 +141,10 @@ internal sealed class SyncService
     }
 
     private static string GitHint(string message) =>
-        message.Contains("git:") && message.Contains("program not found", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase)
-            ? "Не найден git. Установите Git for Windows (git-scm.com) и перезапустите Relaya."
-            : message;
+        message.Contains("git:") && (message.Contains("program not found", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase))
+            ? Strings.L("Не найден git. Установите Git for Windows (git-scm.com) и перезапустите Relaya.")
+            : SshErrors.Describe(message);
 
     private static string RepoDir(SyncProfile p) => Path.Combine(Support, "sync", p.id);
 

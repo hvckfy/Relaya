@@ -342,17 +342,11 @@ pub enum SyncOutcome {
 
 const BRANCH: &str = "main";
 
-/// Причина ошибки git, понятная человеку: строка ssh о входе важнее хвоста «make sure … the repository exists».
+/// Ошибка git: весь значимый вывод (ssh пишет причину не в последней строке) — клиенты объясняют его через ssh_explain
+/// на языке интерфейса.
 fn git_error(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-    const SSH: &[&str] = &["Too many authentication failures", "Permission denied", "Could not resolve hostname",
-                           "Connection refused", "Connection timed out", "Host key verification failed", "No route to host"];
-    if let Some(l) = lines.iter().find(|l| SSH.iter().any(|k| l.contains(k))) {
-        return if l.contains("Too many authentication failures") {
-            format!("{l}: ssh-agent предлагает слишком много ключей — укажите для сервера IdentityFile и IdentitiesOnly yes в ~/.ssh/config")
-        } else { l.to_string() };
-    }
-    lines.iter().find(|l| l.starts_with("fatal:") || l.starts_with("error:")).or(lines.last()).map(|l| l.to_string()).unwrap_or_else(|| "git".into())
+    let t = text.trim();
+    if t.is_empty() { "git".into() } else { t.to_string() }
 }
 
 struct Git { repo: PathBuf }
@@ -467,8 +461,7 @@ mod git_error_tests {
     #[test]
     fn picks_meaningful_line() {
         let t = "Received disconnect from 1.2.3.4 port 22:2: Too many authentication failures\nDisconnected\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.";
-        assert!(super::git_error(t).starts_with("Received disconnect from 1.2.3.4 port 22:2: Too many authentication failures"));
-        assert_eq!(super::git_error("x\nfatal: bad\nand the repository exists."), "fatal: bad");
+        assert!(crate::ssh_errors::ssh_explain(super::git_error(t)).is_some());
     }
 }
 

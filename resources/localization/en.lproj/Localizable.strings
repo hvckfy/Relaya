@@ -782,3 +782,35 @@
 "Выключен" = "Off";
 "Укажите имя пользователя." = "Enter a user name.";
 "Пароль (если есть)" = "Password (if any)";
+
+/* Объяснения ошибок ssh/git (core/src/ssh_errors.rs) */
+"Сервер отклонил вход: ssh-agent предложил слишком много ключей" = "The server refused login: ssh-agent offered too many keys";
+"Укажите для этого сервера один ключ: в ~/.ssh/config добавьте IdentityFile с нужным ключом и IdentitiesOnly yes." = "Give this server a single key: in ~/.ssh/config add IdentityFile with the right key and IdentitiesOnly yes.";
+"Ключ сервера не совпадает с сохранённым" = "The server's host key doesn't match the saved one";
+"Если сервер переустанавливали или сменили адрес — удалите старую запись: ssh-keygen -R <адрес>. Иначе это может быть подмена сервера." = "If the server was reinstalled or its address changed, remove the old entry: ssh-keygen -R <address>. Otherwise this may be an impostor server.";
+"Сервер не принял ни один ключ" = "The server accepted none of your keys";
+"Установите свой публичный ключ на сервер (Ключи → Установить на хост) или укажите в хосте нужный ключ." = "Install your public key on the server (Keys → Install on host) or set the right key for the host.";
+"Неверный пароль или пользователь" = "Wrong password or user name";
+"Проверьте имя пользователя и пароль; сохранённый пароль можно изменить в карточке хоста." = "Check the user name and password; a saved password can be changed in the host card.";
+"Сервер отказал во входе. Проверьте пользователя, ключ или пароль." = "The server refused login. Check the user, key or password.";
+"Адрес сервера не найден" = "Server address not found";
+"Проверьте HostName на опечатки и подключение к сети или VPN." = "Check HostName for typos and your network or VPN connection.";
+"Сервер отказал в подключении" = "The server refused the connection";
+"На этом адресе и порту SSH не принимает соединения: проверьте порт и что sshd запущен." = "SSH isn't accepting connections at this address and port: check the port and that sshd is running.";
+"Сервер не отвечает" = "The server doesn't respond";
+"Проверьте адрес, сеть, VPN и файрвол; сервер может быть выключен." = "Check the address, network, VPN and firewall; the server may be off.";
+"Сервер оборвал соединение до входа" = "The server dropped the connection before login";
+"Часто это защита от перебора (fail2ban, MaxStartups) после неудачных попыток — подождите минуту и попробуйте снова." = "This is often brute-force protection (fail2ban, MaxStartups) after failed attempts — wait a minute and try again.";
+"Сервер слишком старый: нет общего алгоритма шифрования" = "The server is too old: no common encryption algorithm";
+"Обновите сервер или разрешите для него старый алгоритм в ~/.ssh/config (HostKeyAlgorithms, KexAlgorithms)." = "Update the server or allow the old algorithm for it in ~/.ssh/config (HostKeyAlgorithms, KexAlgorithms).";
+"У файла ключа слишком открытые права" = "The key file's permissions are too open";
+"Ключ должен быть доступен только вам: chmod 600 на файл ключа." = "Only you should be able to read the key: chmod 600 the key file.";
+"Неверный пароль ключа" = "Wrong key passphrase";
+"Введите правильную passphrase или сохраните её заново." = "Enter the correct passphrase or save it again.";
+"Репозиторий не найден" = "Repository not found";
+"Проверьте адрес репозитория и что у вашего ключа есть к нему доступ." = "Check the repository address and that your key has access to it.";
+"Нет доступа к репозиторию" = "No access to the repository";
+"Сервер git не пустил по SSH: проверьте ключ (лучше указать его для сервера в ~/.ssh/config) и адрес репозитория." = "The git server refused SSH access: check the key (best set it for the server in ~/.ssh/config) and the repository address.";
+"Не найдена программа" = "Program not found";
+"Установите недостающую программу (ssh, git) и перезапустите Relaya." = "Install the missing program (ssh, git) and restart Relaya.";
+"Не найден git. Установите Git for Windows (git-scm.com) и перезапустите Relaya." = "git not found. Install Git for Windows (git-scm.com) and restart Relaya.";

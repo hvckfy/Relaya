@@ -15,6 +15,7 @@ pub mod mcp;
 pub mod models;
 pub mod server_os;
 pub mod ssh_config;
+pub mod ssh_errors;
 pub mod sync;
 pub mod terminal;
 pub mod tile_layout;
