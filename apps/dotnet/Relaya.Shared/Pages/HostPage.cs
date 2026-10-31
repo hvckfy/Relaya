@@ -112,17 +112,6 @@ internal sealed class HostPage : UserControl
         panel.Children.Add(Ui.Card(Ui.Secondary(text)));
     }
 
-    private static string Size(long kb)
-    {
-        double v = kb;
-        foreach (var u in new[] { "K", "M", "G", "T" })
-        {
-            if (v < 1024) return $"{v:0.#} {u}";
-            v /= 1024;
-        }
-        return $"{v:0.#} P";
-    }
-
     private async Task LoadStats()
     {
         Busy(stats);
@@ -136,9 +125,9 @@ internal sealed class HostPage : UserControl
         var up = TimeSpan.FromSeconds(s.uptime);
         stats.Children.Add(Ui.Row("", L("Нагрузка"), $"{s.load1:0.00} / {s.cores} " + L("ядер"),
             new ProgressBar { Width = 160, Maximum = Math.Max(1, s.cores), Value = s.load1 }));
-        stats.Children.Add(Ui.Row("", L("Память"), $"{Size(s.memTotal - s.memAvailable)} / {Size(s.memTotal)}",
+        stats.Children.Add(Ui.Row("", L("Память"), $"{Platform.Format.Bytes(s.memTotal - s.memAvailable)} / {Platform.Format.Bytes(s.memTotal)}",
             new ProgressBar { Width = 160, Maximum = Math.Max(1, s.memTotal), Value = s.memTotal - s.memAvailable }));
-        stats.Children.Add(Ui.Row("", L("Диск /"), $"{Size(s.diskUsed)} / {Size(s.diskTotal)}",
+        stats.Children.Add(Ui.Row("", L("Диск /"), $"{Platform.Format.Bytes(s.diskUsed)} / {Platform.Format.Bytes(s.diskTotal)}",
             new ProgressBar { Width = 160, Maximum = Math.Max(1, s.diskTotal), Value = s.diskUsed }));
         stats.Children.Add(Ui.Row("", L("Работает"), up.Days > 0 ? L("%@ дн. %@ ч", up.Days, up.Hours) : L("%@ ч %@ мин", up.Hours, up.Minutes)));
     }

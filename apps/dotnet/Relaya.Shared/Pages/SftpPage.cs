@@ -109,23 +109,12 @@ internal sealed class SftpPage : UserControl
             void Cell(UIElement e, int c) { Grid.SetColumn((FrameworkElement)e, c); row.Children.Add(e); }
             Cell(new FontIcon { Glyph = f.isDirectory ? "" : f.isLink ? "" : "", FontSize = 16 }, 0);
             Cell(new TextBlock { Text = f.name, TextTrimming = TextTrimming.CharacterEllipsis }, 1);
-            Cell(Ui.Secondary(f.isDirectory ? "" : Size(f.size)), 2);
+            Cell(Ui.Secondary(f.isDirectory ? "" : Platform.Format.Bytes(f.size)), 2);
             Cell(Ui.Secondary(f.modified), 3);
             Cell(Ui.Secondary(f.permissions), 4);
             list.Items.Add(new ListViewItem { Content = row, Tag = f });
         }
         status.Text = L("%@ объектов", files.Count);
-    }
-
-    private static string Size(long b)
-    {
-        double v = b;
-        foreach (var u in new[] { "B", "KB", "MB", "GB" })
-        {
-            if (v < 1024) return $"{v:0.#} {u}";
-            v /= 1024;
-        }
-        return $"{v:0.#} TB";
     }
 
     // Windows: пикер привязывается к окну; на Linux (Uno) этого не нужно.
