@@ -141,13 +141,18 @@ struct KeysView: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(using, id: \.self) { alias in
-                    LabeledContent(alias, value: model.hosts.first { $0.alias == alias }?.subtitle ?? L("git-сервер"))
+                    let h = model.hosts.first { $0.alias == alias }
+                    LabeledContent {
+                        Text(h?.subtitle ?? "")
+                    } label: {
+                        Label(alias, systemImage: h?.isGitService ?? true ? "arrow.triangle.branch" : "server.rack")
+                    }
                 }
                 Button(L("Изменить хосты…")) { editHosts = key }
             } header: {
                 Text(L("Используется хостами · %@", "\(using.count)"))
             } footer: {
-                Text(L("Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента."))
+                Text(L("Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента. Git-серверы (User git) не показываются в списке хостов и не синхронизируются."))
             }
 
             Section {
@@ -405,38 +410,32 @@ private struct KeyHostsSheet: View {
     @State private var all: [String] = []
     @State private var selected: Set<String> = []
     @State private var newHost = ""
+    @State private var gitAdded: Set<String> = []
     @State private var error: String?
 
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                let isGit: (String) -> Bool = { alias in model.hosts.first { $0.alias == alias }?.isGitService ?? gitAdded.contains(alias) }
                 Section {
-                    ForEach(all, id: \.self) { alias in
-                        Toggle(isOn: Binding(get: { selected.contains(alias) },
-                                             set: { if $0 { selected.insert(alias) } else { selected.remove(alias) } })) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(alias)
-                                Text(model.hosts.first { $0.alias == alias }?.subtitle ?? L("git-сервер или служебная запись"))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+                    ForEach(all.filter { !isGit($0) }, id: \.self) { alias in row(alias) }
                 } header: {
-                    Text(L("Хосты, которые ходят с %@", key.name))
+                    Text(L("Серверы"))
                 } footer: {
                     Text(L("Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.bak."))
                 }
                 Section {
+                    ForEach(all.filter(isGit), id: \.self) { alias in row(alias) }
                     HStack {
-                        TextField(L("Сервер"), text: $newHost, prompt: Text("gitlab.com"))
+                        TextField(L("Git-сервер"), text: $newHost, prompt: Text("gitlab.com"))
                             .onSubmit(add)
                         Button(L("Добавить"), action: add)
                             .disabled(newHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 } header: {
-                    Text(L("Добавить сервер"))
+                    Text(L("Git-серверы"))
                 } footer: {
-                    Text(L("Хост, которого ещё нет в ~/.ssh/config, например git-сервер. Для него появится короткий блок с этим ключом."))
+                    Text(L("GitHub, GitLab, свой Gitea или Forgejo: вход как git с этим ключом. Git-серверы не показываются среди хостов и не синхронизируются."))
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
@@ -457,9 +456,24 @@ private struct KeyHostsSheet: View {
         }
     }
 
+    private func row(_ alias: String) -> some View {
+        Toggle(isOn: Binding(get: { selected.contains(alias) },
+                             set: { if $0 { selected.insert(alias) } else { selected.remove(alias) } })) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(alias)
+                if let h = model.hosts.first(where: { $0.alias == alias }) {
+                    Text(h.subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     private func add() {
-        let name = newHost.trimmingCharacters(in: .whitespaces)
+        // `git@gitlab.com` → `gitlab.com`: пользователь git ставит ядро для нового блока git-сервера.
+        var name = newHost.trimmingCharacters(in: .whitespaces)
+        if let at = name.lastIndex(of: "@") { name = String(name[name.index(after: at)...]) }
         guard !name.isEmpty, !name.contains(" ") else { return }
+        gitAdded.insert(name)
         if !all.contains(name) { all.append(name) }
         selected.insert(name)
         newHost = ""

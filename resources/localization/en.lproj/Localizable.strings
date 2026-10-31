@@ -835,3 +835,8 @@
 "ключ загружен" = "key loaded";
 "Хост, которого ещё нет в ~/.ssh/config, например git-сервер. Для него появится короткий блок с этим ключом." = "A host that isn't in ~/.ssh/config yet, such as a git server. A short block with this key is added for it.";
 "В названии не должно быть «@»: пользователя укажите в поле «Пользователь», адрес — в поле «Адрес»." = "The name can’t contain “@”: put the user in “User” and the address in “Address”.";
+"Серверы" = "Servers";
+"Git-серверы" = "Git servers";
+"Git-сервер" = "Git server";
+"GitHub, GitLab, свой Gitea или Forgejo: вход как git с этим ключом. Git-серверы не показываются среди хостов и не синхронизируются." = "GitHub, GitLab, your own Gitea or Forgejo: log in as git with this key. Git servers aren't listed among hosts and aren't synced.";
+"Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента. Git-серверы (User git) не показываются в списке хостов и не синхронизируются." = "The selected hosts and git servers use only this key (IdentitiesOnly), without trying the agent's other keys. Git servers (User git) aren't listed among hosts and aren't synced.";
