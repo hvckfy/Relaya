@@ -1,65 +1,70 @@
 import SwiftUI
 import RelayaCore
 
-/// Настройки → Синхронизация: список профилей слева, выбранный профиль справа (как «Учётные записи» в Почте).
+/// Настройки → Синхронизация. Как «Учётные записи интернета» в Системных настройках: одна сгруппированная форма
+/// со списком профилей; профиль открывается листом. Без своей колонки-списка — она не выглядит как macOS
+/// и подсвечивается иначе, чем остальная вкладка.
 struct SyncSettings: View {
     @Environment(AppModel.self) private var model
-    @State private var selection: Sync.Profile.ID?
+    @State private var editing: Sync.Profile.ID?
     @State private var passphrase = ""
 
     var body: some View {
         let sync = model.sync
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                List(selection: $selection) {
-                    ForEach(sync.profiles) { p in
+        Form {
+            Section {
+                if sync.profiles.isEmpty {
+                    Text(L("Профиль — это ваш git-репозиторий (или папка в iCloud Drive) и набор хостов: все, группы или отдельные хосты. Пароли не синхронизируются никогда."))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(sync.profiles) { p in
+                    Button { editing = p.id } label: {
                         HStack {
-                            stateIcon(sync.state(p))
+                            stateIcon(sync.state(p)).frame(width: 20)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(p.name)
                                 Text(scopeSummary(p)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
+                            Spacer()
+                            if !p.enabled { Text(L("Выключен")).foregroundStyle(.secondary) }
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                         }
-                        .tag(p.id)
-                        .opacity(p.enabled ? 1 : 0.5)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(L("Удалить профиль"), role: .destructive) { sync.remove(p.id) }
                     }
                 }
-                // Не .sidebar: в окне настроек сайдбар залезает под тулбар и красит угол окна своим материалом.
-                .listStyle(.bordered(alternatesRowBackgrounds: false))
-                HStack(spacing: 0) {
-                    Button { selection = sync.addProfile().id } label: { Image(systemName: "plus") }
-                        .help(L("Новый профиль"))
-                    Button {
-                        if let id = selection { sync.remove(id); selection = sync.profiles.first?.id }
-                    } label: { Image(systemName: "minus") }
-                        .disabled(selection == nil)
-                        .help(L("Удалить профиль"))
+            } header: {
+                Text(L("Профили"))
+            } footer: {
+                HStack {
                     Spacer()
+                    Button(L("Новый профиль…")) { editing = sync.addProfile().id }
                 }
-                .buttonStyle(.borderless)
-                .padding(.vertical, 4)
-            }
-            .frame(width: 200)
-            .padding([.leading, .top], 12)
-            .padding(.trailing, 4)
-            Divider()
-            if let i = sync.profiles.firstIndex(where: { $0.id == selection }) {
-                ProfileForm(profile: Binding(get: { sync.profiles[i] }, set: { sync.profiles[i] = $0 }), passphrase: $passphrase)
-                    .id(sync.profiles[i].id)
-            } else {
-                ContentUnavailableView {
-                    Label(L("Синхронизация"), systemImage: "arrow.triangle.2.circlepath")
-                } description: {
-                    Text(L("Профиль — это ваш git-репозиторий (или папка в iCloud Drive) и набор хостов: все, группы или отдельные хосты. Пароли не синхронизируются никогда."))
-                } actions: {
-                    Button(L("Новый профиль")) { selection = sync.addProfile().id }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .formStyle(.grouped)
         .frame(height: 520)
-        .onAppear { selection = selection ?? sync.profiles.first?.id }
+        .sheet(item: Binding(get: { editing.map(Edited.init) }, set: { editing = $0?.id })) { e in
+            if let i = sync.profiles.firstIndex(where: { $0.id == e.id }) {
+                VStack(spacing: 0) {
+                    ProfileForm(profile: Binding(get: { sync.profiles[i] }, set: { sync.profiles[i] = $0 }), passphrase: $passphrase)
+                    Divider()
+                    HStack {
+                        Button(L("Удалить профиль"), role: .destructive) { sync.remove(e.id); editing = nil }
+                        Spacer()
+                        Button(L("Готово")) { editing = nil }.keyboardShortcut(.defaultAction)
+                    }
+                    .padding()
+                }
+                .frame(width: 560, height: 600)
+            }
+        }
     }
+
+    private struct Edited: Identifiable { let id: Sync.Profile.ID }
 
     private func scopeSummary(_ p: Sync.Profile) -> String {
         if p.scope.allHosts { return L("все хосты") }
