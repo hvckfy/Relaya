@@ -57,17 +57,37 @@ internal sealed class DesktopsPage : UserControl
         foreach (var h in AppState.Hosts) via.Items.Add(h.alias);
         via.SelectedItem = d?.viaSshHost is { Length: > 0 } v ? v : via.Items[0];
         var full = new ToggleSwitch { Header = L("Во весь экран"), IsOn = d?.fullScreen == true };
+        // RD Gateway (RDP): адрес, пользователь и домен — в desktops.json, пароль — в хранилище учётных данных.
+        var gwHost = new TextBox { Header = L("Шлюз (host или host:port)"), Text = d?.gatewayHost ?? "", PlaceholderText = L("пусто — без шлюза") };
+        var gwUser = new TextBox { Header = L("Пользователь шлюза"), Text = d?.gatewayUser ?? "", PlaceholderText = L("пусто — как для сервера") };
+        var gwDomain = new TextBox { Header = L("Домен шлюза"), Text = d?.gatewayDomain ?? "" };
+        var gwPass = new PasswordBox
+        {
+            Header = L("Пароль шлюза"),
+            PlaceholderText = d != null && Platform.CredentialStore.Has("desktop-gateway:" + d.id) ? L("Сохранён — введите новый, чтобы сменить") : L("пусто — как для сервера"),
+        };
+        var gateway = new Expander
+        {
+            Header = "RD Gateway", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            IsExpanded = d?.gatewayHost is { Length: > 0 },
+            Content = new StackPanel { Spacing = 8, Children = { gwHost, gwUser, gwDomain, gwPass } },
+        };
         var dialog = new ContentDialog
         {
             Title = d == null ? L("Новый удалённый стол") : L("Изменить стол"),
-            Content = new ScrollViewer { Content = new StackPanel { Spacing = 10, MinWidth = 400, Children = { name, kind, address, port, user, via, full } } },
+            Content = new ScrollViewer { Content = new StackPanel { Spacing = 10, MinWidth = 400, Children = { name, kind, address, port, user, via, full, gateway } } },
             PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || address.Text.Trim().Length == 0) return;
         var item = new RemoteDesktop(d?.id ?? RelayaCoreMethods.CoreNewId(),
             name.Text.Trim().Length > 0 ? name.Text.Trim() : address.Text.Trim(), kind.SelectedIndex == 0 ? DesktopKind.Rdp : DesktopKind.Vnc,
             address.Text.Trim(), (long)port.Value, user.Text.Trim(), via.SelectedIndex > 0 ? via.SelectedItem as string : null, full.IsOn,
-            d?.scaleToFit, d?.rdpWidth, d?.rdpHeight, d?.rdpRetina, d?.group);
+            d?.scaleToFit, d?.rdpWidth, d?.rdpHeight, d?.rdpRetina, d?.group,
+            gatewayHost: gwHost.Text.Trim() is { Length: > 0 } gh ? gh : null,
+            gatewayUser: gwUser.Text.Trim() is { Length: > 0 } gu ? gu : null,
+            gatewayDomain: gwDomain.Text.Trim() is { Length: > 0 } gd ? gd : null);
+        if (gwPass.Password.Length > 0) Platform.CredentialStore.Write("desktop-gateway:" + item.id, gwPass.Password);
+        else if (item.gatewayHost == null) Platform.CredentialStore.Delete("desktop-gateway:" + item.id);
         AppState.Desktops = AppState.Desktops.Where(x => x.id != item.id).Append(item).ToList();
         AppState.LoadHosts();
         Build();

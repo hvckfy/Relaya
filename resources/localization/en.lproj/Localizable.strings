@@ -1070,3 +1070,9 @@
 "Сохранить в диспетчере учётных данных" = "Save in Credential Manager";
 "Громкость" = "Volume";
 "Звук" = "Sound";
+"Шлюз (host или host:port)" = "Gateway (host or host:port)";
+"пусто — без шлюза" = "empty — no gateway";
+"Пользователь шлюза" = "Gateway user";
+"пусто — как для сервера" = "empty — same as the server";
+"Домен шлюза" = "Gateway domain";
+"Пароль шлюза" = "Gateway password";

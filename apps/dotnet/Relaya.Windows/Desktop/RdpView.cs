@@ -161,7 +161,7 @@ internal sealed class RdpView : UserControl, IDisposable
         var (w, h) = PhysicalSize();
         var (user, domain) = SplitUser(desktop.user);
         var config = new RdpConfig(host, (ushort)port, user, password, domain, w, h, (uint)Math.Round(scale * 100),
-            TrustedCert(), null, null, null, null, null);
+            TrustedCert(), desktop.gatewayHost, GatewayUser(), CredentialStore.Read("desktop-gateway:" + desktop.id), GatewayDomain(), null);
         var s = RemoteSession.Rdp(config, new Listener(this));
         s.SetClipboardListener(new ClipListener(this));
         s.SetAudioListener(audio);
@@ -185,6 +185,11 @@ internal sealed class RdpView : UserControl, IDisposable
         if (w == remoteW && h == remoteH) return;
         s.Resize(w, h);
     }
+
+    // Шлюз: пользователь `DOMAIN\user` раскладывается так же, как у сервера; пустой — те же данные, что для сервера.
+    private string? GatewayUser() => desktop.gatewayUser is { Length: > 0 } u ? SplitUser(u).User : null;
+    private string? GatewayDomain() =>
+        desktop.gatewayDomain is { Length: > 0 } d ? d : desktop.gatewayUser is { Length: > 0 } u ? SplitUser(u).Domain : null;
 
     // `DOMAIN\user` или `user@domain` — домен отдельно.
     private static (string User, string? Domain) SplitUser(string user)
