@@ -76,10 +76,9 @@ pub fn config_bind_key(text: String, key: String, hosts: Vec<String>) -> String 
             if doc.lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) { doc.lines.push(String::new()); }
             // Блок «Добавить сервер» — для git-сервера: пользователь из `user@`, иначе git.
             let (user, port) = users.iter().find(|u| &u.0 == a).map(|u| (u.1.clone(), u.2)).unwrap_or((None, None));
-            doc.lines.push(format!("Host {a}"));
-            doc.lines.push(format!("    User {}", user.unwrap_or_else(|| "git".into())));
+            doc.lines.extend([format!("Host {a}"), format!("    IdentityFile {}", quoted(&key)), "    IdentitiesOnly yes".into(),
+                              format!("    User {}", user.unwrap_or_else(|| "git".into()))]);
             if let Some(p) = port { doc.lines.push(format!("    Port {p}")); }
-            doc.lines.extend([format!("    IdentityFile {}", quoted(&key)), "    IdentitiesOnly yes".into()]);
             continue;
         }
         split_if_shared(&mut doc, a, &hosts);
@@ -146,7 +145,7 @@ mod tests {
             vec!["gitlab.farcana.com".into(), "git.lan.example".into(), "web".into(), "github.com".into()]);
         assert!(out.contains("Host gitlab.farcana.com git.lan.example\n"), "{out}");
         assert!(out.contains("Host web\n    IdentityFile ~/.ssh/id_ed25519\n    IdentitiesOnly yes\n    HostName 10.0.0.1"), "{out}");
-        assert!(out.contains("Host github.com\n    User git\n    IdentityFile ~/.ssh/id_ed25519\n    IdentitiesOnly yes"), "{out}");
+        assert!(out.contains("Host github.com\n    IdentityFile ~/.ssh/id_ed25519\n    IdentitiesOnly yes\n    User git"), "{out}");
     }
 
     #[test]
@@ -172,7 +171,7 @@ mod tests {
     fn include_lines_stay_and_included_hosts_get_own_block() {
         let cfg = "Include ~/.ssh/config.d/*\n\nHost web\n    Include extra.conf\n    User root\n";
         let out = config_bind_key(cfg.into(), "~/.ssh/k".into(), vec!["web".into(), "fromfile".into()]);
-        assert_eq!(out, "Include ~/.ssh/config.d/*\n\nHost web\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    Include extra.conf\n    User root\n\nHost fromfile\n    User git\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n");
+        assert_eq!(out, "Include ~/.ssh/config.d/*\n\nHost web\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    Include extra.conf\n    User root\n\nHost fromfile\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    User git\n");
     }
 
     #[test]
@@ -197,16 +196,17 @@ mod tests {
         assert_eq!(config_key_hosts(cfg.into(), "~/.ssh/k".into()), vec!["a"]);
         let key = "C:\\Users\\My Name\\.ssh\\k";
         let out = config_bind_key("Host b\n    User x\n".into(), key.into(), vec!["b".into(), "c".into()]);
-        assert_eq!(out, "Host b\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\k\"\n    IdentitiesOnly yes\n    User x\n\nHost c\n    User git\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\k\"\n    IdentitiesOnly yes\n");
+        assert_eq!(out, "Host b\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\k\"\n    IdentitiesOnly yes\n    User x\n\nHost c\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\k\"\n    IdentitiesOnly yes\n    User git\n");
         assert_eq!(config_key_hosts(out.clone(), key.into()), vec!["b", "c"]);
-        assert_eq!(config_bind_key(out, key.into(), vec![]), "Host b\n    User x\n");
+        // Блок, созданный под git-сервер, после снятия ключа остаётся с `User git` — его настройки не теряем.
+        assert_eq!(config_bind_key(out, key.into(), vec![]), "Host b\n    User x\n\nHost c\n    User git\n");
     }
 
     #[test]
     fn new_blocks_are_git_servers_and_user_at_is_split() {
         let out = config_bind_key("Host web\n    User root\n".into(), "~/.ssh/k".into(),
             vec!["git@git.lan.mftkhv.ru".into(), "deploy@code.example:2222".into(), "plain.example".into()]);
-        assert_eq!(out, "Host web\n    User root\n\nHost git.lan.mftkhv.ru\n    User git\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n\nHost code.example\n    User deploy\n    Port 2222\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n\nHost plain.example\n    User git\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n");
+        assert_eq!(out, "Host web\n    User root\n\nHost git.lan.mftkhv.ru\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    User git\n\nHost code.example\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    User deploy\n    Port 2222\n\nHost plain.example\n    IdentityFile ~/.ssh/k\n    IdentitiesOnly yes\n    User git\n");
         assert_eq!(config_key_hosts(out.clone(), "~/.ssh/k".into()), vec!["git.lan.mftkhv.ru", "code.example", "plain.example"]);
         // `git@host` при уже существующем блоке `host` — правится он, а старая кривая запись `Host git@…` — как есть.
         let again = config_bind_key(out.clone(), "~/.ssh/k".into(), vec!["git@git.lan.mftkhv.ru".into(), "code.example".into(), "plain.example".into()]);
