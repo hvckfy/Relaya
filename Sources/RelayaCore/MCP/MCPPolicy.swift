@@ -18,6 +18,22 @@ public struct MCPPolicy: Codable, Equatable, Sendable {
     public var enabled: Bool
     public var defaultMode: Mode
     public var hosts: [String: Mode]
+    /// Шаблоны команд (как в shell: `systemctl restart *`), которые выполняются без подтверждения.
+    /// Ключ `*` — для всех хостов. Optional — старые mcp.json читаются.
+    public var allow: [String: [String]]?
+    /// Шаблоны, которые запрещены всегда, даже доверенному агенту (`rm -rf *`, `reboot*`).
+    public var deny: [String: [String]]?
+    /// Временный доступ: режим до указанного момента, потом — обычный.
+    public var grants: [String: Grant]?
+
+    public struct Grant: Codable, Equatable, Sendable {
+        public var mode: Mode
+        public var until: Date
+        public init(mode: Mode, until: Date) {
+            self.mode = mode
+            self.until = until
+        }
+    }
 
     public init(enabled: Bool = true, defaultMode: Mode = .confirm, hosts: [String: Mode] = [:]) {
         self.enabled = enabled
@@ -25,8 +41,36 @@ public struct MCPPolicy: Codable, Equatable, Sendable {
         self.hosts = hosts
     }
 
-    public func mode(for alias: String) -> Mode {
-        enabled ? (hosts[alias] ?? defaultMode) : .off
+    public func mode(for alias: String, now: Date = Date()) -> Mode {
+        guard enabled else { return .off }
+        if let g = grants?[alias], g.until > now { return g.mode }
+        return hosts[alias] ?? defaultMode
+    }
+
+    /// Активный временный доступ к хосту.
+    public func grant(for alias: String, now: Date = Date()) -> Grant? {
+        grants?[alias].flatMap { $0.until > now ? $0 : nil }
+    }
+
+    public func allowPatterns(for alias: String) -> [String] { (allow?["*"] ?? []) + (allow?[alias] ?? []) }
+    public func denyPatterns(for alias: String) -> [String] { (deny?["*"] ?? []) + (deny?[alias] ?? []) }
+
+    /// Совпадение команды с шаблоном shell (`*`, `?`, `[…]`); пробелы по краям не важны.
+    public static func matches(_ command: String, pattern: String) -> Bool {
+        let c = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        let p = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !p.isEmpty else { return false }
+        return fnmatch(p, c, 0) == 0
+    }
+
+    public func isDenied(_ command: String, on alias: String) -> Bool {
+        denyPatterns(for: alias).contains { Self.matches(command, pattern: $0) }
+    }
+
+    /// Разрешено шаблоном без подтверждения. Цепочки команд (`;`, `&&`, `|`, подстановки) шаблоном не разрешаются.
+    public func isAllowed(_ command: String, on alias: String) -> Bool {
+        for bad in [";", "&", "|", "`", "$(", "\n", ">", "<"] where command.contains(bad) { return false }
+        return allowPatterns(for: alias).contains { Self.matches(command, pattern: $0) }
     }
 
     // MARK: - Только чтение
@@ -102,6 +146,12 @@ public struct MCPLogEntry: Codable, Hashable, Identifiable, Sendable {
     public var detail: String
     public var decision: String
     public var exitCode: Int32?
+    /// Сессия агента (один запуск `Relaya --mcp`).
+    public var session: UUID?
+    /// Команда могла что-то изменить (не «только чтение») и была выполнена.
+    public var changes: Bool?
+    /// Хвост вывода (до 2000 символов).
+    public var output: String?
 
     public init(date: Date = Date(), client: String, tool: String, host: String, detail: String,
                 decision: String, exitCode: Int32? = nil) {
@@ -147,5 +197,26 @@ public struct MCPLog: Sendable {
 
     public func clear() {
         try? FileManager.default.removeItem(at: url)
+    }
+
+    /// Сводка «что изменил агент»: выполненные изменяющие команды, по сессиям, новые сверху.
+    public struct SessionSummary: Identifiable, Sendable {
+        public var id: UUID
+        public var client: String
+        public var started: Date
+        public var hosts: [String]
+        public var changes: [MCPLogEntry]
+    }
+
+    public static func summaries(_ entries: [MCPLogEntry]) -> [SessionSummary] {
+        let changing = entries.filter { $0.changes == true && $0.exitCode != nil && $0.session != nil }
+        let grouped = Dictionary(grouping: changing) { $0.session! }
+        return grouped.map { id, list in
+            let sorted = list.sorted { $0.date < $1.date }
+            var hosts: [String] = []
+            for e in sorted where !hosts.contains(e.host) { hosts.append(e.host) }
+            return SessionSummary(id: id, client: sorted[0].client, started: sorted[0].date, hosts: hosts, changes: sorted)
+        }
+        .sorted { $0.started > $1.started }
     }
 }

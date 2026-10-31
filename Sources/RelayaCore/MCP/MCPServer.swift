@@ -174,8 +174,16 @@ public final class MCPServer {
             }
             let timeout = Duration.seconds(min(max(args["timeout_seconds"] as? Int ?? 60, 1), 600))
 
+            if policy.isDenied(command, on: alias) {
+                record(name, alias, command, "запрещено: правило")
+                return ("Команда запрещена правилом пользователя для \(alias).", true)
+            }
             let decision: String
-            switch policy.mode(for: alias) {
+            let mode = policy.mode(for: alias)
+            if mode != .off, !isRead, policy.isAllowed(command, on: alias) {
+                decision = "разрешено: правило"
+            } else {
+            switch mode {
             case .off:
                 record(name, alias, command, "запрещено: нет доступа")
                 return ("У агента нет доступа к хосту \(alias).", true)
@@ -192,11 +200,13 @@ public final class MCPServer {
                 }
                 decision = "одобрено пользователем"
             case .trusted:
-                decision = "разрешено: доверенный"
+                decision = policy.grant(for: alias) != nil ? "разрешено: временный доступ" : "разрешено: доверенный"
+            }
             }
 
             let r = await execute(host, command, timeout)
-            record(name, alias, command, decision, exit: r.status)
+            record(name, alias, command, decision, exit: r.status, changes: !isRead,
+                   output: String((r.stdout + (r.stderr.isEmpty ? "" : "\n" + r.stderr)).suffix(2000)))
             var text = r.stdout
             if !r.stderr.isEmpty { text += (text.isEmpty ? "" : "\n") + "[stderr]\n" + r.stderr }
             if text.count > 50_000 { text = String(text.prefix(50_000)) + "\n…[вывод обрезан]" }
@@ -208,8 +218,16 @@ public final class MCPServer {
         }
     }
 
-    private func record(_ tool: String, _ host: String, _ detail: String, _ decision: String, exit: Int32? = nil) {
-        log?.append(MCPLogEntry(client: clientName, tool: tool, host: host, detail: detail, decision: decision, exitCode: exit))
+    /// Один запуск сервера = одна «сессия агента»: по ней собирается сводка изменений.
+    private let session = UUID()
+
+    private func record(_ tool: String, _ host: String, _ detail: String, _ decision: String, exit: Int32? = nil,
+                        changes: Bool = false, output: String? = nil) {
+        var e = MCPLogEntry(client: clientName, tool: tool, host: host, detail: detail, decision: decision, exitCode: exit)
+        e.session = session
+        e.changes = changes
+        e.output = output
+        log?.append(e)
     }
 
     // MARK: - Помощники

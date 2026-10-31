@@ -97,3 +97,32 @@ import Testing
 final class Box: @unchecked Sendable {
     var value = ""
 }
+
+struct MCPRulesTests {
+    @Test func patternsAndGrants() {
+        var p = MCPPolicy(defaultMode: .confirm)
+        p.allow = ["web": ["systemctl restart *"], "*": ["docker restart *"]]
+        p.deny = ["*": ["rm -rf *", "reboot*"]]
+        #expect(p.isAllowed("systemctl restart nginx", on: "web"))
+        #expect(!p.isAllowed("systemctl restart nginx", on: "db"))
+        #expect(p.isAllowed("docker restart api", on: "db"))
+        #expect(!p.isAllowed("systemctl restart nginx; rm -rf /", on: "web"))
+        #expect(p.isDenied("rm -rf /var", on: "web"))
+        #expect(p.isDenied("reboot now", on: "db"))
+        let now = Date()
+        p.grants = ["db": .init(mode: .trusted, until: now.addingTimeInterval(1800))]
+        #expect(p.mode(for: "db", now: now) == .trusted)
+        #expect(p.mode(for: "db", now: now.addingTimeInterval(3600)) == .confirm)
+    }
+
+    @Test func summariesGroupChangingCommands() {
+        let s = UUID()
+        var a = MCPLogEntry(client: "Claude", tool: "run_command", host: "web", detail: "systemctl restart nginx",
+                            decision: "одобрено пользователем", exitCode: 0)
+        a.session = s; a.changes = true
+        var b = MCPLogEntry(client: "Claude", tool: "run_command", host: "web", detail: "ls", decision: "разрешено: чтение", exitCode: 0)
+        b.session = s; b.changes = false
+        let sum = MCPLog.summaries([a, b])
+        #expect(sum.count == 1 && sum[0].changes.count == 1 && sum[0].hosts == ["web"])
+    }
+}
