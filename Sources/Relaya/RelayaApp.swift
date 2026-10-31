@@ -18,6 +18,8 @@ struct RelayaApp: App {
                     model.settings.applyAppearance()
                     model.reloadHosts()
                     model.tunnels.startAutoStart(hosts: model.hosts)
+                    model.sync.onImported = { [weak model] items in model?.applySynced(items) }
+                    model.sync.start()
                 }
         }
         .windowToolbarStyle(.unified)
@@ -130,6 +132,7 @@ struct RelayaApp: App {
 
         Settings {
             SettingsView()
+                .environment(model)
                 .environment(model.settings)
         }
     }

@@ -38,6 +38,11 @@ final class TunnelManager {
 
     // MARK: - Список
 
+    /// Перечитать список с диска (после синхронизации).
+    func reloadFromDisk() {
+        tunnels = store.load()
+    }
+
     func upsert(_ tunnel: Tunnel) {
         if let i = tunnels.firstIndex(where: { $0.id == tunnel.id }) {
             let wasRunning = processes[tunnel.id] != nil

@@ -92,6 +92,7 @@ final class AppModel {
     let store = SSHConfigStore()
     let keychain = KeychainStore()
     let settings = AppSettings()
+    let sync = SyncManager()
     @ObservationIgnored lazy var tunnels = TunnelManager(askpassExecutable: askpassExecutable)
 
     var screen: Screen = .hosts
@@ -366,6 +367,14 @@ final class AppModel {
                 return lhs.key < rhs.key
             }
             .map { (name: $0.key.isEmpty ? Self.ungrouped : $0.key, hosts: $0.value) }
+    }
+
+    /// После синхронизации: перечитать то, что пришло с другого Mac.
+    func applySynced(_ items: [Sync.Item]) {
+        if items.contains(.sshConfig) { reloadHosts() }
+        if items.contains(.snippets) { snippets = SnippetStore().load() }
+        if items.contains(.desktops) { desktops = RemoteDesktopStore().load() }
+        if items.contains(.tunnels) { tunnels.reloadFromDisk() }
     }
 
     func reloadHosts() {
