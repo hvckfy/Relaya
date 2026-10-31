@@ -31,7 +31,7 @@ internal sealed class KeysPage : UserControl
             var used = RelayaCoreMethods.ConfigKeyHosts(AppState.ConfigText(), "~/.ssh/" + name);
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             actions.Children.Add(Ui.Button(L("Хосты…"), async () => await EditHosts(name)));
-            actions.Children.Add(Ui.Button(L("Копировать публичный"), () => Ui.Copy(File.ReadAllText(pub).Trim())));
+            actions.Children.Add(Ui.Button(L("Копировать публичный ключ"), () => Ui.Copy(File.ReadAllText(pub).Trim())));
             var install = new MenuFlyout();
             foreach (var h in AppState.Hosts)
             {

@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Linq;
 using Relaya.Platform;
+using static Relaya.Strings;
 
 namespace Relaya.Terminal;
 
@@ -69,7 +70,7 @@ internal sealed class SshSession : IDisposable
         }
         catch (Exception e)
         {
-            End($"\x1b[31mНе удалось запустить ssh: {e.Message}\x1b[0m");
+            End("\x1b[31m" + L("Не удалось запустить ssh: %@", e.Message) + "\x1b[0m");
             return;
         }
         console = pc;
@@ -105,10 +106,10 @@ internal sealed class SshSession : IDisposable
         // Сбой в обработке вывода — не немой пустой экран: текст ошибки прямо в терминал.
         pc.HandlerFailed += e =>
         {
-            try { view.Feed(Encoding.UTF8.GetBytes($"\r\n\x1b[31mRelaya: ошибка вывода терминала: {e.Message}\x1b[0m\r\n")); }
+            try { view.Feed(Encoding.UTF8.GetBytes("\r\n\x1b[31m" + L("Relaya: ошибка вывода терминала: %@", e.Message) + "\x1b[0m\r\n")); }
             catch (Exception) { }
         };
-        pc.Exited += code => { if (console == pc) End($"\x1b[2m[сессия завершена, код {code}]\x1b[0m"); };
+        pc.Exited += code => { if (console == pc) End("\x1b[2m" + L("[сессия завершена, код %@]", code) + "\x1b[0m"); };
         pc.Start();
         StateChanged?.Invoke(true);
     }
@@ -116,7 +117,7 @@ internal sealed class SshSession : IDisposable
     private void End(string message)
     {
         ended = true;
-        view.Feed(Encoding.UTF8.GetBytes($"\r\n{message}\r\n\x1b[2mEnter — переподключиться\x1b[0m\r\n"));
+        view.Feed(Encoding.UTF8.GetBytes($"\r\n{message}\r\n\x1b[2m{L("Enter — переподключиться")}\x1b[0m\r\n"));
         StateChanged?.Invoke(false);
     }
 

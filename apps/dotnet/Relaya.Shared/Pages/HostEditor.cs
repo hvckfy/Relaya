@@ -125,7 +125,7 @@ internal static class HostEditor
             long? portValue = null;
             if (Opt(port.Text) is { } p)
             {
-                if (!long.TryParse(p, out var v) || v is < 1 or > 65535) { problem = L("Порт — число от 1 до 65535."); return null; }
+                if (!long.TryParse(p, out var v) || v is < 1 or > 65535) { problem = L("Порт — число от 1 до 65535"); return null; }
                 portValue = v;
             }
             var files = KeyFiles();

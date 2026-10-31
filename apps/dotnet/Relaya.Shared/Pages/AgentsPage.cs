@@ -61,7 +61,7 @@ internal sealed class AgentsPage : UserControl
         {
             await Platform.DesktopLauncher.Message(XamlRoot, AddToClaude(exe));
         }, accent: true));
-        connect.Children.Add(Ui.Button(L("Копировать конфиг"), () => Ui.Copy(snippet)));
+        connect.Children.Add(Ui.Button(L("Скопировать конфиг"), () => Ui.Copy(snippet)));
         body.Children.Add(Ui.Row("", "Claude Desktop / Claude Code", L("Сервер: %@ --mcp", exe), connect));
 
         body.Children.Add(Ui.Section(L("Журнал")));
@@ -69,7 +69,7 @@ internal sealed class AgentsPage : UserControl
         if (log.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Агенты ещё ничего не выполняли."))));
         foreach (var e in Enumerable.Reverse(log).Take(100))
             body.Children.Add(Ui.Row(Allowed(e) ? "" : "",
-                $"{e.host}: {e.detail}", $"{e.date} · {e.client} · {e.tool} · {e.decision}" + (e.exitCode is { } c ? $" · exit {c}" : "")));
+                $"{e.host}: {e.detail}", $"{e.date} · {e.client} · {e.tool} · {L(e.decision)}" + (e.exitCode is { } c ? $" · exit {c}" : "")));
     }
 
     // Иконка по машинному коду решения из ядра (W13); у старых записей кода нет — по тексту.

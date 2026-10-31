@@ -174,7 +174,7 @@ internal sealed class SftpPage : UserControl
     {
         var sel = Selected();
         if (sel.Count == 0) return;
-        if (!await Ui.Confirm(XamlRoot, L("Удалить %@ объект(ов)?", sel.Count), string.Join("\n", sel.Select(f => f.name)), L("Удалить"))) return;
+        if (!await Ui.Confirm(XamlRoot, L("Удалить %@ объект(ов) на сервере?", sel.Count), string.Join("\n", sel.Select(f => f.name)), L("Удалить"))) return;
         // sftp не удаляет непустые папки рекурсивно — для них ssh rm -r.
         var dirs = sel.Where(f => f.isDirectory).ToList();
         if (sel.Except(dirs).Any()) await Batch(sel.Except(dirs).Select(f => $"rm {Q(Join(f.name))}").ToArray());

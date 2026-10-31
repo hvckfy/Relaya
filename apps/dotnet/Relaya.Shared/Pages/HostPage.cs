@@ -156,7 +156,7 @@ internal sealed class HostPage : UserControl
             case DockerList.Failed f: Note(docker, r.Status == 255 ? Problem(r) : f.message); return;
             case DockerList.Containers c:
                 docker.Children.Clear();
-                if (c.list.Count == 0) { Note(docker, L("Контейнеров нет")); return; }
+                if (c.list.Count == 0) { Note(docker, L("Контейнеров нет.")); return; }
                 foreach (var ct in c.list)
                 {
                     var running = ct.state is "running" or "restarting";
@@ -194,7 +194,7 @@ internal sealed class HostPage : UserControl
         var r = await AppState.RunOnHost(host.alias, RelayaCoreMethods.TmuxListCommand());
         var list = RelayaCoreMethods.TmuxParse(r.Stdout);
         tmux.Children.Clear();
-        if (list.Count == 0) { Note(tmux, r.Status == 255 ? Problem(r) : L("Сессий нет")); return; }
+        if (list.Count == 0) { Note(tmux, r.Status == 255 ? Problem(r) : L("Сессий нет.")); return; }
         foreach (var s in list)
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
@@ -220,7 +220,7 @@ internal sealed class HostPage : UserControl
         var panel = RelayaCoreMethods.HostPanelParse(r.Stdout);
         services.Children.Clear();
         if (panel.updates is { Count: > 0 } updates)
-            services.Children.Add(Ui.Row("", L("Доступны обновления: %@", updates.Count), string.Join(", ", updates.Take(8))));
+            services.Children.Add(Ui.Row("", L("Доступно обновлений: %@", updates.Count), string.Join(", ", updates.Take(8))));
         var root = host.user == "root";
         foreach (var u in panel.services.OrderBy(RelayaCoreMethods.ServiceRank).Take(30))
         {
