@@ -29,7 +29,7 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Relaya.ico"));
 #endif
         Title = "Relaya";
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 820));
+        AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = 1280, Height = 820 });
         ConfigPath.Text = AppState.ConfigPath;
         Search.PlaceholderText = L("Поиск хостов");
         NewHostText.Text = L("Новый хост…");
