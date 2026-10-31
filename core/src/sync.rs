@@ -329,9 +329,9 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
                 Some(l) => serde_json::from_slice(l).map_err(|e| broken("mcp.json", e.into()))?,
                 None => crate::mcp::McpPolicy { enabled: false, ..Default::default() },
             };
-            let (safe, escalations) = agents::split(&base, theirs, &agents::declined(paths));
+            let (safe, escalations) = agents::split(&base, theirs, &agents::declined(&paths));
             let merged = crate::mcp::mcp_policy_merge(base, safe);
-            agents::store_pending(paths, &escalations)?;
+            agents::store_pending(&paths, &escalations)?;
             let bytes = encode_sorted(&merged).into_bytes();
             if local.as_deref() != Some(bytes.as_slice()) {
                 fs::create_dir_all(&paths.support)?;
