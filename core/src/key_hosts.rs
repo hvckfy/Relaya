@@ -105,8 +105,10 @@ fn set_key(doc: &mut Document, alias: &str, new: Option<&str>, key: &str) {
     if empty && new.is_none() {
         // Блок держался только на ключе — убрать целиком (с `# relaya:` и пустой строкой после).
         let mut e = end;
+        let mut s = b.start as usize;
         if e < doc.lines.len() && doc.lines[e].trim().is_empty() { e += 1; }
-        doc.lines.drain(b.start as usize..e);
+        else if e == doc.lines.len() && s > 0 && doc.lines[s - 1].trim().is_empty() { s -= 1; }
+        doc.lines.drain(s..e);
     } else {
         doc.lines.splice(start..end, body);
     }
