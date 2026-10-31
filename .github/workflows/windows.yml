@@ -46,6 +46,10 @@ jobs:
           $run = gh run list -R ${{ github.repository }} --workflow freerdp.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId'
           gh run download $run -R ${{ github.repository }} -n freerdp-x64-windows -D "$env:RUNNER_TEMP/freerdp"
           "FREERDP_DIR=$env:RUNNER_TEMP/freerdp".Replace('\','/') | Out-File -Append $env:GITHUB_ENV
+      # Unit-тесты чистой логики Shared (Т4) — без ядра и WinUI, до долгой сборки.
+      - name: Shared unit tests
+        shell: pwsh
+        run: dotnet test apps/dotnet/Relaya.Shared.Tests -c Release
       - name: Build Rust core + C# bindings
         shell: pwsh
         run: scripts/build-core-windows.ps1
