@@ -86,7 +86,7 @@ struct MainView: View {
         }
         .animation(.easeOut(duration: 0.12), value: model.commandPalette)
         .sheet(item: $model.sftpHost) { host in
-            SFTPView(host: host).environment(model)
+            SFTPView(tab: SFTPTab(host: host)).environment(model)
         }
         .sheet(item: $model.keyWizard) { request in
             KeyWizardView(host: request.host, model: model)
@@ -173,7 +173,7 @@ struct MainView: View {
             Group {
                 switch session.kind {
                 case .terminal(let c): SessionView(session: session, controller: c).modifier(DockTarget())
-                case .files(let h): SFTPView(host: h, embedded: true).modifier(DockTarget())
+                case .files(let t): SFTPView(tab: t, embedded: true).modifier(DockTarget())
                 case .vnc(let s): VNCContent(session: s).background(Color.black)
                 case .rdp(let s): RDPContent(session: s).background(Color.black)
                 case .tmux(let w): TmuxPaneContent(window: w).modifier(DockTarget())

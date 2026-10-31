@@ -99,8 +99,8 @@ struct SessionGrid: View {
                         .id("\(session.id)-\(controller.generation)")
                         .padding(4)
                         .background(Color(nsColor: settings.theme.backgroundColor.withAlphaComponent(ThemeStore.sessionOpacity)))
-                } else if case .files(let host) = session.kind {
-                    SFTPView(host: host, embedded: true).id(session.id)
+                } else if case .files(let tab) = session.kind {
+                    SFTPView(tab: tab, embedded: true).id(session.id)
                 } else if case .tmux(let w) = session.kind {
                     TmuxPaneContent(window: w).id(session.id)
                 }

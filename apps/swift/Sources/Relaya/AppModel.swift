@@ -7,7 +7,7 @@ import RelayaCore
 struct Session: Identifiable, Hashable {
     enum Kind {
         case terminal(SessionController)
-        case files(SSHHost)
+        case files(SFTPTab)
         case vnc(VNCSession)
         case rdp(RDPSession)
         /// Окно tmux в control mode (`tmux -CC`).
@@ -21,7 +21,7 @@ struct Session: Identifiable, Hashable {
     var host: SSHHost? {
         switch kind {
         case .terminal(let c): c.host
-        case .files(let h): h
+        case .files(let t): t.host
         case .tmux(let w): w.client.host
         case .vnc, .rdp: nil
         }
@@ -35,7 +35,7 @@ struct Session: Identifiable, Hashable {
     @MainActor var title: String {
         switch kind {
         case .terminal(let c): c.host.alias
-        case .files(let h): h.alias
+        case .files(let t): t.host.alias
         case .vnc(let s): s.desktop.name.isEmpty ? s.desktop.address : s.desktop.name
         case .rdp(let s): s.desktop.name.isEmpty ? s.desktop.address : s.desktop.name
         case .tmux(let w): w.name.isEmpty ? w.client.host.alias : "\(w.client.host.alias) · \(w.name)"
@@ -576,11 +576,11 @@ final class AppModel {
     /// Файлы хоста во вкладке (уже открытая вкладка того же хоста — активируется).
     func openFiles(_ host: SSHHost, newTab: Bool = false) {
         screen = .hosts
-        if !newTab, let existing = sessions.first(where: { if case .files(let h) = $0.kind { return h.alias == host.alias }; return false }) {
+        if !newTab, let existing = sessions.first(where: { if case .files(let t) = $0.kind { return t.host.alias == host.alias }; return false }) {
             activeSessionID = existing.id
             return
         }
-        let session = Session(kind: .files(host))
+        let session = Session(kind: .files(SFTPTab(host: host)))
         sessions.append(session)
         activeSessionID = session.id
     }

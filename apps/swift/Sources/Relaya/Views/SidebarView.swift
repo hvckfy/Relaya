@@ -21,7 +21,7 @@ struct SidebarView: View {
             if let s = model.activeSession {
                 switch s.kind {
                 case .terminal(let c): return .host(c.host.id)
-                case .files(let h): return .host(h.id)
+                case .files(let t): return .host(t.host.id)
                 case .tmux(let w): return .host(w.client.host.id)
                 case .vnc(let v): return .desktop(v.desktop.id)
                 case .rdp(let r): return .desktop(r.desktop.id)

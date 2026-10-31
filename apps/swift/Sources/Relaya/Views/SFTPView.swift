@@ -5,14 +5,10 @@ import RelayaCore
 struct SFTPView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    let host: SSHHost
+    @State private var tab: SFTPTab
     /// Во вкладке окна, а не в отдельном листе: без кнопки «Готово» и фиксированного размера.
     var embedded = false
 
-    @State private var path = ""
-    @State private var pathField = ""
-    @State private var files: [RemoteFile] = []
-    @State private var selection = Set<RemoteFile.ID>()
     @State private var loading = false
     @State private var busy: String?
     @State private var error: String?
@@ -20,10 +16,21 @@ struct SFTPView: View {
     @State private var newFolderName = ""
     @State private var confirmDelete = false
     @State private var dropTargeted = false
-    @State private var queue = TransferQueue()
-    @State private var edits: [RemoteEditSession] = []
     @State private var renaming: RemoteFile?
     @State private var renameText = ""
+
+    init(tab: SFTPTab, embedded: Bool = false) {
+        _tab = State(initialValue: tab)
+        self.embedded = embedded
+    }
+
+    private var host: SSHHost { tab.host }
+    private var path: String { get { tab.path } nonmutating set { tab.path = newValue } }
+    private var pathField: String { get { tab.pathField } nonmutating set { tab.pathField = newValue } }
+    private var files: [RemoteFile] { get { tab.files } nonmutating set { tab.files = newValue } }
+    private var selection: Set<RemoteFile.ID> { get { tab.selection } nonmutating set { tab.selection = newValue } }
+    private var queue: TransferQueue { tab.queue }
+    private var edits: [RemoteEditSession] { get { tab.edits } nonmutating set { tab.edits = newValue } }
 
     private var client: SFTPClient {
         let usePassword = !host.usesKey && model.keychain.hasPassword(for: host.keychainAccount)
@@ -37,7 +44,7 @@ struct SFTPView: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            Table(files, selection: $selection) {
+            Table(files, selection: $tab.selection) {
                 TableColumn(L("Имя")) { f in
                     Label {
                         Text(f.name)
@@ -102,7 +109,7 @@ struct SFTPView: View {
             Task { @MainActor in
                 if embedded {
                     try? await Task.sleep(for: .milliseconds(300))
-                    let open = model.sessions.contains { if case .files(let h) = $0.kind { return h.alias == alias }; return false }
+                    let open = model.sessions.contains { if case .files(let t) = $0.kind { return t.host.alias == alias }; return false }
                     if open { return }
                 }
                 queue.cancelAll()
@@ -144,7 +151,7 @@ struct SFTPView: View {
             IconButton(systemImage: "chevron.up", label: L("Наверх")) { open(SFTPClient.parent(of: path)) }
                 .disabled(path == "/" || path.isEmpty)
                 .keyboardShortcut(.upArrow, modifiers: .command)
-            TextField(L("Путь"), text: $pathField)
+            TextField(L("Путь"), text: $tab.pathField)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12.5, design: .monospaced))
                 .onSubmit { open(pathField) }
@@ -210,6 +217,7 @@ struct SFTPView: View {
     // MARK: - Действия
 
     private func start() async {
+        guard !tab.started else { return }
         if !host.usesKey, model.keychain.hasPassword(for: host.keychainAccount),
            !(await SecretGate.shared.authorize(L("Открыть файлы на %@", host.alias))) {
             error = L("Touch ID не подтверждён — пароль из Keychain не использован.")
@@ -222,6 +230,7 @@ struct SFTPView: View {
         do {
             let home = try await client.home()
             await load(home)
+            tab.started = true
         } catch {
             self.error = error.localizedDescription
             loading = false
