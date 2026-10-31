@@ -67,7 +67,8 @@ internal sealed class AgentsPage : UserControl
         body.Children.Add(Ui.Section(L("Журнал")));
         var log = McpHost.Log(200);
         if (log.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Агенты ещё ничего не выполняли."))));
-        foreach (var e in Enumerable.Reverse(log).Take(100))
+        // Ядро отдаёт журнал новыми сверху — показываем 100 последних записей как есть.
+        foreach (var e in log.Take(100))
             body.Children.Add(Ui.Row(Allowed(e) ? "" : "",
                 $"{e.host}: {e.detail}", $"{e.date} · {e.client} · {e.tool} · {L(e.decision)}" + (e.exitCode is { } c ? $" · exit {c}" : "")));
     }
