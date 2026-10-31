@@ -3,10 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.Graphics.Canvas;
-using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,7 +13,6 @@ using Relaya.Platform;
 using uniffi.relaya_core;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
-using Windows.Graphics.DirectX;
 using Windows.System;
 using static Relaya.Strings;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
@@ -27,14 +23,27 @@ using Point = Windows.Foundation.Point;
 
 namespace Relaya.Desktop;
 
-/// Удалённый стол RDP во вкладке (FreeRDP в ядре): кадры BGRA на Win2D, ввод scancode/unicode/мышь,
+/// Удалённый стол RDP во вкладке (RDP в ядре): кадры BGRA, ввод scancode/unicode/мышь,
 /// динамическое разрешение, сертификат, буфер обмена. Колбэки ядра приходят из потока сессии —
 /// в UI их переносит очередь, снятая в конструкторе (тот же надёжный путь, что у TerminalView).
-internal sealed class RdpView : UserControl, IDisposable
+/// Холст, модификаторы, scancode и звук — в приложении: RdpView.Win2D.cs (Windows), RdpView.Skia.cs (Linux).
+internal sealed partial class RdpView : UserControl, IDisposable
 {
     private readonly RemoteDesktop desktop;
     private readonly DispatcherQueue ui = DispatcherQueue.GetForCurrentThread();
-    private readonly CanvasControl canvas = new();
+    private FrameworkElement canvas = null!;
+
+    // --- Платформа ---
+    /// Создать холст (canvas) и подписать его отрисовку.
+    private partial void CreateCanvas();
+    private partial void InvalidateCanvas();
+    private partial void RemoveCanvas();
+    /// Нажата ли клавиша-модификатор сейчас.
+    private partial bool IsDown(VirtualKey key);
+    /// Scancode PC/AT для RDP (0xE0xx — расширенные), 0 — неизвестна.
+    private static partial ushort ScanCode(KeyRoutedEventArgs e);
+    /// Подпись флажка «сохранить пароль» — по имени хранилища платформы.
+    private static partial string SavePasswordText();
     private readonly ProgressRing ring = new() { IsActive = true, Width = 48, Height = 48 };
     private readonly TextBlock ringText = Pages.Ui.Secondary(L("Подключение…"));
     private readonly StackPanel connecting;
@@ -66,7 +75,7 @@ internal sealed class RdpView : UserControl, IDisposable
             Label = L("Вписать"), Icon = new FontIcon { Glyph = "" },
             IsChecked = Platform.Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
         };
-        fit.Click += (_, _) => { Platform.Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); canvas.Invalidate(); };
+        fit.Click += (_, _) => { Platform.Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); InvalidateCanvas(); };
         clipboard = new AppBarToggleButton
         {
             Label = L("Общий буфер обмена"), Icon = new FontIcon { Glyph = "" },
@@ -120,6 +129,7 @@ internal sealed class RdpView : UserControl, IDisposable
         reconnect.Click += (_, _) => _ = Connect();
         problem.ActionButton = reconnect;
 
+        CreateCanvas();
         var stage = new Grid { Children = { canvas, connecting } };
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         root.Children.Add(bar);
@@ -129,7 +139,6 @@ internal sealed class RdpView : UserControl, IDisposable
         root.Children.Add(stage);
         Content = root;
 
-        canvas.Draw += OnDraw;
         IsTabStop = true;
         UseSystemFocusVisuals = false;
         canvas.PointerPressed += (_, e) => { Focus(FocusState.Pointer); OnPointer(e); };
@@ -144,7 +153,7 @@ internal sealed class RdpView : UserControl, IDisposable
         RegisterPropertyChangedCallback(VisibilityProperty, (_, _) =>
         {
             if (Visibility != Visibility.Visible) return;
-            canvas.Invalidate();
+            InvalidateCanvas();
             _ = SendLocalClipboard();
         });
         Clipboard.ContentChanged += OnLocalClipboard;
@@ -218,7 +227,7 @@ internal sealed class RdpView : UserControl, IDisposable
     private async Task<string?> AskPassword()
     {
         var box = new PasswordBox { Header = L("Пароль") };
-        var save = new CheckBox { Content = L("Сохранить в диспетчере учётных данных"), IsChecked = true };
+        var save = new CheckBox { Content = SavePasswordText(), IsChecked = true };
         var dialog = new ContentDialog
         {
             Title = L("Пароль для %@", desktop.name), Content = new StackPanel { Spacing = 8, Children = { box, save } },
@@ -334,33 +343,19 @@ internal sealed class RdpView : UserControl, IDisposable
                     Buffer.BlockCopy(r.bgra, y * row, buffer, ((r.y + y) * remoteW + r.x) * 4, row);
             }
         }
-        ui.TryEnqueue(() => { if (Visibility == Visibility.Visible) canvas.Invalidate(); });
+        ui.TryEnqueue(() => { if (Visibility == Visibility.Visible) InvalidateCanvas(); });
     }
 
     private Rect target; // где на канве нарисован удалённый экран (DIP)
 
-    private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
+    /// Под frameLock: где рисовать удалённый экран (вписать или 1:1 в физических пикселях); запоминает target для ввода.
+    private Rect Layout(double cw, double ch)
     {
-        var ds = args.DrawingSession;
-        ds.Clear(Microsoft.UI.Colors.Black);
-        CanvasBitmap? bitmap = null;
-        try
-        {
-            lock (frameLock)
-            {
-                if (remoteW == 0 || remoteH == 0) return;
-                bitmap = CanvasBitmap.CreateFromBytes(sender, buffer, remoteW, remoteH,
-                    DirectXPixelFormat.B8G8R8A8UIntNormalized, 96, CanvasAlphaMode.Ignore);
-            }
-            var scale = XamlRoot?.RasterizationScale ?? 1.0;
-            double cw = sender.ActualWidth, ch = sender.ActualHeight;
-            double k = fit.IsChecked == true ? Math.Min(cw / remoteW, ch / remoteH) : 1.0 / scale;
-            double w = remoteW * k, h = remoteH * k;
-            target = new Rect(Math.Max(0, (cw - w) / 2), Math.Max(0, (ch - h) / 2), w, h);
-            ds.DrawImage(bitmap, target, new Rect(0, 0, remoteW, remoteH));
-        }
-        catch (Exception e) { Terminal.TerminalView.Trace("RDP draw: " + e.Message); }
-        finally { bitmap?.Dispose(); }
+        var scale = XamlRoot?.RasterizationScale ?? 1.0;
+        double k = fit.IsChecked == true ? Math.Min(cw / remoteW, ch / remoteH) : 1.0 / scale;
+        double w = remoteW * k, h = remoteH * k;
+        target = new Rect(Math.Max(0, (cw - w) / 2), Math.Max(0, (ch - h) / 2), w, h);
+        return target;
     }
 
     // --- Ввод ---
@@ -404,9 +399,8 @@ internal sealed class RdpView : UserControl, IDisposable
         // IME: символы придут в CharacterReceived и уйдут как unicode.
         if ((int)e.Key == 229) { imeActive = true; e.Handled = true; return; }
         imeActive = false;
-        var code = (ushort)e.KeyStatus.ScanCode;
+        var code = ScanCode(e);
         if (code == 0) return;
-        if (e.KeyStatus.IsExtendedKey) code |= 0xE000;
         s.Key(code, down);
         e.Handled = true;
     }
@@ -418,9 +412,6 @@ internal sealed class RdpView : UserControl, IDisposable
         s.Unicode(e.Character, false);
         e.Handled = true;
     }
-
-    private static bool IsDown(VirtualKey key) =>
-        InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     private void SendCombo(ushort[] codes)
     {
@@ -492,7 +483,7 @@ internal sealed class RdpView : UserControl, IDisposable
         session = null;
         if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);
         audio.Dispose();
-        canvas.RemoveFromVisualTree();
+        RemoveCanvas();
     }
 
     private sealed class Listener(RdpView view) : RemoteListener
