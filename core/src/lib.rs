@@ -15,6 +15,7 @@ pub mod local_ports;
 pub mod mcp;
 pub mod models;
 pub mod server_os;
+pub mod ssh_commands;
 pub mod ssh_config;
 pub mod ssh_errors;
 pub mod sync;
