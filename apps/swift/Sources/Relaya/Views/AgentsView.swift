@@ -82,46 +82,53 @@ struct AgentsView: View {
                 }
 
                 card(title: L("Права по хостам")) {
-                    HStack {
-                        Text(L("Для новых хостов"))
-                        Spacer()
-                        modePicker($policy.defaultMode)
-                    }
-                    Divider().overlay(Theme.line2)
-                    ForEach(model.hosts) { h in
-                        HStack(spacing: 8) {
-                            OSIcon(os: h.os, size: 16)
-                            Text(h.alias).fontWeight(.medium)
-                            ForEach(h.tags.prefix(2), id: \.self) { TagChip(tag: $0) }
-                            if let g = policy.grant(for: h.alias) {
-                                Text(L("%@ до %@", g.mode.title, g.until.formatted(date: .omitted, time: .shortened)))
-                                    .font(.caption).foregroundStyle(Theme.org)
-                                Button(L("Отозвать")) { policy.grants?[h.alias] = nil }
-                                    .buttonStyle(.relaya(.ghost, height: 20))
-                            }
-                            let rules = policy.allowPatterns(for: h.alias).count + policy.denyPatterns(for: h.alias).count
-                            Button(rules > 0 ? L("Правила (%@)", "\(rules)") : L("Правила")) { rulesHost = h.alias }
-                                .buttonStyle(.relaya(.ghost, height: 22))
-                            Menu {
-                                ForEach([(30, L("на 30 минут")), (120, L("на 2 часа")), (480, L("на 8 часов"))], id: \.0) { minutes, title in
-                                    Button(L("Доверенный %@", title)) {
-                                        var g = policy.grants ?? [:]
-                                        g[h.alias] = .init(mode: .trusted, until: Date().addingTimeInterval(Double(minutes) * 60))
-                                        policy.grants = g
+                    // Одна сетка на все ряды: подпись слева, «Правила», временный доступ и режим — в общих колонках справа (HIG).
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                        GridRow {
+                            Text(L("Для новых хостов"))
+                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                            modePicker($policy.defaultMode)
+                        }
+                        Divider().overlay(Theme.line2).gridCellColumns(4)
+                        ForEach(model.hosts) { h in
+                            GridRow {
+                                HStack(spacing: 8) {
+                                    OSIcon(os: h.os, size: 16)
+                                    Text(h.alias).fontWeight(.medium).lineLimit(1).truncationMode(.middle)
+                                    ForEach(h.tags.prefix(2), id: \.self) { TagChip(tag: $0) }
+                                    if let g = policy.grant(for: h.alias) {
+                                        Text(L("%@ до %@", g.mode.title, g.until.formatted(date: .omitted, time: .shortened)))
+                                            .font(.caption).foregroundStyle(Theme.org)
+                                        Button(L("Отозвать")) { policy.grants?[h.alias] = nil }
+                                            .buttonStyle(.relaya(.ghost, height: 20))
                                     }
                                 }
-                            } label: { Image(systemName: "clock.badge") }
-                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                            .help(L("Временный доступ: потом вернётся обычный режим"))
-                            modePicker(Binding(get: { policy.hosts[h.alias] ?? policy.defaultMode },
-                                               set: { policy.hosts[h.alias] = $0 }))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                rulesButton(for: h.alias)
+                                Menu {
+                                    ForEach([(30, L("на 30 минут")), (120, L("на 2 часа")), (480, L("на 8 часов"))], id: \.0) { minutes, title in
+                                        Button(L("Доверенный %@", title)) {
+                                            var g = policy.grants ?? [:]
+                                            g[h.alias] = .init(mode: .trusted, until: Date().addingTimeInterval(Double(minutes) * 60))
+                                            policy.grants = g
+                                        }
+                                    }
+                                } label: { Image(systemName: "clock.badge") }
+                                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                                .help(L("Временный доступ: потом вернётся обычный режим"))
+                                .accessibilityLabel(L("Временный доступ"))
+                                modePicker(Binding(get: { policy.hosts[h.alias] ?? policy.defaultMode },
+                                                   set: { policy.hosts[h.alias] = $0 }))
+                            }
                         }
-                    }
-                    HStack {
-                        Text(L("Правила для всех хостов"))
-                        Spacer()
-                        Button(L("Правила (%@)", "\((policy.allow?["*"]?.count ?? 0) + (policy.deny?["*"]?.count ?? 0))")) { rulesHost = "*" }
-                            .buttonStyle(.relaya(.ghost, height: 22))
+                        Divider().overlay(Theme.line2).gridCellColumns(4)
+                        GridRow {
+                            Text(L("Правила для всех хостов"))
+                            rulesButton(for: "*")
+                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                        }
                     }
                     Text(L("«Только чтение» — безопасные команды (ls, cat, df, journalctl, docker ps…) без перенаправлений и sudo. «С подтверждением» — каждую команду вы одобряете в системном окне; без ответа за 2 минуты — отказ."))
                         .font(.system(size: 11)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
@@ -209,6 +216,14 @@ struct AgentsView: View {
     }
 
     private struct RulesTarget: Identifiable { let id: String }
+
+    private func rulesButton(for alias: String) -> some View {
+        let count = alias == "*" ? (policy.allow?["*"]?.count ?? 0) + (policy.deny?["*"]?.count ?? 0)
+            : policy.allowPatterns(for: alias).count + policy.denyPatterns(for: alias).count
+        return Button(count > 0 ? L("Правила (%@)", "\(count)") : L("Правила")) { rulesHost = alias }
+            .buttonStyle(.relaya(.ghost, height: 22))
+            .gridColumnAlignment(.trailing)
+    }
 
     private func modePicker(_ binding: Binding<MCPPolicy.Mode>) -> some View {
         Picker("", selection: binding) {
