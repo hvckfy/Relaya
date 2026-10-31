@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using uniffi.relaya_core;
+using static Relaya.Strings;
 
 namespace Relaya.Platform;
 
@@ -58,7 +59,7 @@ internal sealed class SyncService
         SyncProfile p;
         lock (profilesLock)
         {
-            p = RelayaCoreMethods.SyncNewProfile(profiles.Count == 0 ? "Все хосты" : $"Профиль {profiles.Count + 1}");
+            p = RelayaCoreMethods.SyncNewProfile(profiles.Count == 0 ? L("Все хосты") : L("Профиль %@", profiles.Count + 1));
             profiles.Add(p);
         }
         Save();
@@ -100,7 +101,7 @@ internal sealed class SyncService
     {
         var p = Profiles.FirstOrDefault(x => x.id == id);
         if (p is null || !p.enabled) return;
-        if (string.IsNullOrWhiteSpace(p.remote)) { Set(p, State.Failed, p.backend == SyncBackend.Git ? "Укажите репозиторий." : "Укажите папку."); return; }
+        if (string.IsNullOrWhiteSpace(p.remote)) { Set(p, State.Failed, p.backend == SyncBackend.Git ? L("Укажите репозиторий.") : L("Укажите папку.")); return; }
         var gate = Gate(id);
         if (!gate.Wait(0)) return; // этот профиль уже синхронизируется
         try { await SyncLocked(p); }
@@ -122,7 +123,7 @@ internal sealed class SyncService
                 {
                     case SyncOutcome.Conflict c:
                         conflicts[p.id] = c.conflicts.ToList();
-                        Set(p, State.Conflict, $"Конфликт в {c.conflicts.Count} файл(ах)");
+                        Set(p, State.Conflict, L("Конфликт в %@ файл(ах)", c.conflicts.Count));
                         return;
                     case SyncOutcome.Synced s: imported = s.imported; break;
                     default: imported = new(); break;
@@ -132,7 +133,7 @@ internal sealed class SyncService
             {
                 imported = await Task.Run(() => RelayaCoreMethods.FolderSync(p, Paths, pass, p.remote));
             }
-            Set(p, State.Idle, $"Синхронизировано {DateTime.Now:HH:mm}");
+            Set(p, State.Idle, L("Синхронизировано %@", DateTime.Now.ToString("HH:mm")));
             if (imported.Count > 0) Imported?.Invoke();
         }
         catch (Exception e)
@@ -156,7 +157,7 @@ internal sealed class SyncService
             var imported = await Task.Run(() =>
                 RelayaCoreMethods.GitResolve(RepoDir(p), choices, p, Paths, CredentialStore.Read(PassphraseAccount)));
             conflicts.TryRemove(id, out _);
-            Set(p, State.Idle, "Конфликт разрешён");
+            Set(p, State.Idle, L("Конфликт разрешён"));
             if (imported.Count > 0) Imported?.Invoke();
             resolved = true;
         }

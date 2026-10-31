@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Relaya.Platform;
 using uniffi.relaya_core;
+using static Relaya.Strings;
 
 namespace Relaya.Settings;
 
@@ -19,12 +20,12 @@ internal sealed class SyncPage : UserControl
 
     private static readonly (SyncItem Item, string Title)[] Items =
     {
-        ((SyncItem)0, "Хосты (~/.ssh/config)"),
-        ((SyncItem)1, "Сниппеты"),
-        ((SyncItem)2, "Туннели хостов профиля"),
-        ((SyncItem)3, "Удалённые столы"),
-        ((SyncItem)4, "Права AI-агентов"),
-        ((SyncItem)5, "SSH-ключи (зашифрованы паролем)"),
+        ((SyncItem)0, L("Хосты (~/.ssh/config)")),
+        ((SyncItem)1, L("Сниппеты")),
+        ((SyncItem)2, L("Туннели хостов профиля")),
+        ((SyncItem)3, L("Удалённые столы")),
+        ((SyncItem)4, L("Права AI-агентов")),
+        ((SyncItem)5, L("SSH-ключи (зашифрованы паролем)")),
     };
 
     public SyncPage()
@@ -38,26 +39,26 @@ internal sealed class SyncPage : UserControl
     {
         root.Children.Clear();
         rows.Clear();
-        root.Children.Add(new TextBlock { Text = "Синхронизация", Style = Style("TitleTextBlockStyle"), Margin = new Thickness(0, 0, 0, 12) });
+        root.Children.Add(new TextBlock { Text = L("Синхронизация"), Style = Style("TitleTextBlockStyle"), Margin = new Thickness(0, 0, 0, 12) });
         root.Children.Add(new TextBlock
         {
-            Text = "Профиль — ваш git-репозиторий или папка (OneDrive, сетевой диск) и набор хостов. Пароли серверов не синхронизируются никогда.",
+            Text = L("Профиль — ваш git-репозиторий или папка (OneDrive, сетевой диск) и набор хостов. Пароли серверов не синхронизируются никогда."),
             TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new Thickness(0, 0, 0, 12),
         });
 
-        var pass = new PasswordBox { PlaceholderText = sync.HasPassphrase ? "Задан — введите новый, чтобы сменить" : "Не задан", Width = 280 };
-        var savePass = new Button { Content = "Сохранить" };
+        var pass = new PasswordBox { PlaceholderText = sync.HasPassphrase ? L("Задан — введите новый, чтобы сменить") : L("Не задан"), Width = 280 };
+        var savePass = new Button { Content = L("Сохранить") };
         savePass.Click += (_, _) => { sync.SetPassphrase(pass.Password); pass.Password = ""; Build(); };
         root.Children.Add(Card("Пароль шифрования ключей",
-            "Нужен, чтобы передавать SSH-ключи. Одинаковый на всех устройствах. Хранится в диспетчере учётных данных Windows.",
+            L("Нужен, чтобы передавать SSH-ключи. Одинаковый на всех устройствах. Хранится в диспетчере учётных данных Windows."),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pass, savePass } }));
 
-        root.Children.Add(new TextBlock { Text = "Профили", Style = Style("BodyStrongTextBlockStyle"), Margin = new Thickness(0, 16, 0, 4) });
+        root.Children.Add(new TextBlock { Text = L("Профили"), Style = Style("BodyStrongTextBlockStyle"), Margin = new Thickness(0, 16, 0, 4) });
         foreach (var p in sync.Profiles) root.Children.Add(ProfileCard(p));
 
-        var add = new Button { Content = "Новый профиль", Style = Style("AccentButtonStyle"), Margin = new Thickness(0, 8, 0, 0) };
+        var add = new Button { Content = L("Новый профиль"), Style = Style("AccentButtonStyle"), Margin = new Thickness(0, 8, 0, 0) };
         add.Click += (_, _) => { sync.Add(); Build(); };
-        var all = new Button { Content = "Синхронизировать всё", Margin = new Thickness(8, 8, 0, 0) };
+        var all = new Button { Content = L("Синхронизировать всё"), Margin = new Thickness(8, 8, 0, 0) };
         all.Click += async (_, _) => await sync.SyncAll();
         root.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { add, all } });
         UpdateStates();
@@ -74,15 +75,15 @@ internal sealed class SyncPage : UserControl
         var enabled = new ToggleSwitch { IsOn = initial.enabled, OnContent = "", OffContent = "", MinWidth = 0 };
         enabled.Toggled += (_, _) => Change(p => p with { enabled = enabled.IsOn });
 
-        var name = new TextBox { Header = "Название", Text = initial.name };
+        var name = new TextBox { Header = L("Название"), Text = initial.name };
         name.LostFocus += (_, _) => Change(p => p with { name = name.Text.Trim().Length > 0 ? name.Text.Trim() : p.name });
 
-        var backend = new ComboBox { Header = "Где хранить", Items = { "Git-репозиторий", "Папка (OneDrive, сетевой диск)" },
+        var backend = new ComboBox { Header = L("Где хранить"), Items = { L("Git-репозиторий"), L("Папка (OneDrive, сетевой диск)") },
             SelectedIndex = initial.backend == SyncBackend.Git ? 0 : 1, MinWidth = 280 };
         var remote = new TextBox { Text = initial.remote };
         void RemoteHeader() => remote.Header = backend.SelectedIndex == 0
-            ? "Репозиторий (git@server:relaya.git) — доступ вашими ключами из ~/.ssh"
-            : "Путь к папке, например C:\\Users\\you\\OneDrive\\Relaya";
+            ? L("Репозиторий (git@server:relaya.git) — доступ вашими ключами из ~/.ssh")
+            : L("Путь к папке, например C:\\Users\\you\\OneDrive\\Relaya");
         RemoteHeader();
         backend.SelectionChanged += (_, _) =>
         {
@@ -91,8 +92,8 @@ internal sealed class SyncPage : UserControl
         };
         remote.LostFocus += (_, _) => Change(p => p with { remote = remote.Text.Trim() });
 
-        var allHosts = new ToggleSwitch { Header = "Все хосты", IsOn = initial.scope.allHosts };
-        var groups = new TextBox { Header = "Группы и хосты через запятую (если не «все»)",
+        var allHosts = new ToggleSwitch { Header = L("Все хосты"), IsOn = initial.scope.allHosts };
+        var groups = new TextBox { Header = L("Группы и хосты через запятую (если не «все»)"),
             Text = string.Join(", ", initial.scope.groups.Concat(initial.scope.hosts)), IsEnabled = !initial.scope.allHosts };
         allHosts.Toggled += (_, _) => { groups.IsEnabled = !allHosts.IsOn; Change(p => p with { scope = p.scope with { allHosts = allHosts.IsOn } }); };
         groups.LostFocus += (_, _) =>
@@ -107,7 +108,7 @@ internal sealed class SyncPage : UserControl
         };
 
         var items = new StackPanel { Spacing = 0 };
-        items.Children.Add(new TextBlock { Text = "Что синхронизировать", Margin = new Thickness(0, 8, 0, 4) });
+        items.Children.Add(new TextBlock { Text = L("Что синхронизировать"), Margin = new Thickness(0, 8, 0, 4) });
         foreach (var (item, title) in Items)
         {
             var box = new CheckBox { Content = title, IsChecked = initial.items.Contains(item) };
@@ -118,17 +119,17 @@ internal sealed class SyncPage : UserControl
             items.Children.Add(box);
         }
 
-        var auto = new ToggleSwitch { Header = "Автоматически каждые 10 минут", IsOn = initial.auto };
+        var auto = new ToggleSwitch { Header = L("Автоматически каждые 10 минут"), IsOn = initial.auto };
         auto.Toggled += (_, _) => Change(p => p with { auto = auto.IsOn });
 
-        var syncNow = new Button { Content = "Синхронизировать", Style = Style("AccentButtonStyle") };
+        var syncNow = new Button { Content = L("Синхронизировать"), Style = Style("AccentButtonStyle") };
         syncNow.Click += async (_, _) => await sync.Sync(id);
-        var delete = new Button { Content = "Удалить профиль" };
+        var delete = new Button { Content = L("Удалить профиль") };
         delete.Click += (_, _) => { sync.Remove(id); Build(); };
 
-        var keepMine = new Button { Content = "Оставить мои" };
+        var keepMine = new Button { Content = L("Оставить мои") };
         keepMine.Click += async (_, _) => await sync.Resolve(id, keepMine: true);
-        var takeTheirs = new Button { Content = "Взять с сервера" };
+        var takeTheirs = new Button { Content = L("Взять с сервера") };
         takeTheirs.Click += async (_, _) => await sync.Resolve(id, keepMine: false);
         var conflict = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = Visibility.Collapsed,
             Children = { keepMine, takeTheirs } };
@@ -174,8 +175,8 @@ internal sealed class SyncPage : UserControl
             row.Ring.Visibility = state == SyncService.State.Syncing ? Visibility.Visible : Visibility.Collapsed;
             row.Status.Text = state switch
             {
-                SyncService.State.Syncing => "Синхронизация…",
-                _ => message ?? (p.enabled ? "Ещё не синхронизирован" : "Выключен"),
+                SyncService.State.Syncing => L("Синхронизация…"),
+                _ => message ?? (p.enabled ? L("Ещё не синхронизирован") : L("Выключен")),
             };
             row.Status.Foreground = state is SyncService.State.Failed or SyncService.State.Conflict
                 ? new SolidColorBrush(Microsoft.UI.Colors.IndianRed) : Brush("TextFillColorSecondaryBrush");

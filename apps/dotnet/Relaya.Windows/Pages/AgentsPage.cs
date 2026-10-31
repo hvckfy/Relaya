@@ -16,7 +16,7 @@ namespace Relaya.Pages;
 /// Политика — mcp.json в общем формате с Mac; сам сервер — `Relaya.exe --mcp`.
 internal sealed class AgentsPage : UserControl
 {
-    private static readonly string[] Modes = { "Нет доступа", "Только чтение", "С подтверждением", "Полный доступ" };
+    private static readonly string[] Modes = { "Нет доступа", "Только чтение", "С подтверждением", "Доверенный" };
 
     public AgentsPage() => Build();
 
