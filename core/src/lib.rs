@@ -11,6 +11,7 @@ pub mod fuzzy;
 pub mod host_panel;
 pub mod host_stats;
 pub mod key_hosts;
+pub mod key_install;
 pub mod local_ports;
 pub mod localize;
 pub mod mcp;
