@@ -1135,3 +1135,6 @@
 "Нет службы хранения паролей: установите gnome-keyring (GNOME, XFCE) или KWallet (KDE) и войдите в систему заново. Без неё пароли серверов не сохраняются, ключи работают." = "No password storage service. Install gnome-keyring (GNOME, Xfce) or KWallet (KDE) and log in again. Without it server passwords are not saved; keys still work.";
 "Разделить вправо (Ctrl+Shift+D)" = "Split right (Ctrl+Shift+D)";
 "Разделить вниз (Ctrl+Shift+E)" = "Split down (Ctrl+Shift+E)";
+"Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):" = "The certificate of %@ has changed since the last connection. Trust it only if the server was reinstalled. New fingerprint (SHA-256):";
+"Ctrl+Alt+Del" = "Ctrl+Alt+Del";
+"Клавиша Windows" = "Windows key";

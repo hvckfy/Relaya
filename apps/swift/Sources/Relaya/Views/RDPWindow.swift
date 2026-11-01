@@ -45,7 +45,9 @@ struct RDPContent: View {
                     Button(L("Доверять")) { session.answerTrust(true) }
                     Button(L("Отмена"), role: .cancel) { session.answerTrust(false) }
                 } message: {
-                    Text(L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", session.desktop.summary)
+                    Text((session.trustPromptChanged
+                          ? L("Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):", session.desktop.summary)
+                          : L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", session.desktop.summary))
                          + "\n\n" + (session.trustPrompt ?? ""))
                 }
             switch session.phase {
@@ -90,6 +92,13 @@ struct RDPContent: View {
                 ResolutionMenu(session: session)
             }
             ToolbarItem {
+                Menu {
+                    Button(L("Ctrl+Alt+Del")) { session.sendCtrlAltDel() }
+                    Button(L("Клавиша Windows")) { session.sendWindowsKey() }
+                } label: { Label(L("Отправить сочетание"), systemImage: "keyboard") }
+                .disabled(session.phase != .connected)
+            }
+            ToolbarItem {
                 Button { session.disconnect() } label: { Label(L("Отключить"), systemImage: "xmark.circle") }
                     .disabled(session.phase != .connected && session.phase != .connecting)
             }
@@ -124,7 +133,7 @@ struct RDPContent: View {
     }
 }
 
-/// Встраивает холст RDPeek в SwiftUI.
+/// Встраивает холст RDP в SwiftUI.
 private struct CanvasHost: NSViewRepresentable {
     let view: NSView
 

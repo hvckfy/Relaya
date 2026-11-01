@@ -1,10 +1,10 @@
 import AppKit
 import Observation
-import RDPKit
 import RelayaCore
 
-/// Встроенный RDP-клиент на RDPKit: NLA, H.264, клавиатура и мышь (виды взяты из RDPeek).
-/// Пароль — из Keychain или из окна ввода, сертификат сервера — доверие при первом подключении.
+/// Встроенный RDP на FreeRDP ядра (тот же движок, что на Windows и Linux): кадры BGRA во вкладке, клавиатура,
+/// мышь, звук, общий буфер обмена, смена разрешения на лету. Пароль — из Keychain или из окна ввода,
+/// сертификат сервера — доверие при первом подключении, смена отпечатка — предупреждение.
 @MainActor
 @Observable
 final class RDPSession {
@@ -18,68 +18,61 @@ final class RDPSession {
     private let keychain = KeychainStore(service: "app.relaya.rdp-password")
 
     private(set) var phase: Phase = .idle
-    /// Отпечаток сертификата сервера (SHA-256), когда он пришёл.
+    /// Отпечаток сертификата сервера (SHA-256), которому доверились.
     private(set) var certificate: String?
     /// Подключение оборвано из-за смены сертификата сервера.
     private(set) var certificateMismatch = false
-    /// Первое подключение: отпечаток сертификата ждёт решения пользователя (alert в окне).
+    /// Отпечаток ждёт решения пользователя (alert в окне); `changed` — раньше доверяли другому.
     private(set) var trustPrompt: String?
-    @ObservationIgnored private var trustReply: ((Bool) -> Void)?
+    private(set) var trustPromptChanged = false
 
-    fileprivate func askTrust(_ fingerprint: String, reply: @escaping (Bool) -> Void) {
-        trustReply = reply
-        trustPrompt = fingerprint
-    }
-
-    /// Ответ на «доверять сертификату?»: только после него отправляются учётные данные.
+    /// Ответ на «доверять сертификату?»: ядро ждёт его до отправки учётных данных.
     func answerTrust(_ trust: Bool) {
+        if trust, let fp = trustPrompt {
+            UserDefaults.standard.set(fp, forKey: certificateKey)
+            certificate = fp
+        }
+        if !trust, trustPromptChanged { certificateMismatch = true }
         trustPrompt = nil
-        trustReply?(trust)
-        trustReply = nil
+        engine?.acceptCertificate(trust)
     }
     /// Фиксированное разрешение (nil — по размеру окна) и масштаб; меняются на лету из меню окна.
     private(set) var fixedSize: (width: Int, height: Int)?
     private(set) var retina: Bool
-    /// Сервер поддерживает смену разрешения без переподключения.
-    private(set) var canResize = false
-    @ObservationIgnored private var displayControl: RDPDisplayControlSession?
-    @ObservationIgnored private var lastRequest: RDPDisplayRequest?
+    /// FreeRDP меняет разрешение через канал disp без переподключения.
+    var canResize: Bool { phase == .connected }
     @ObservationIgnored private var surface: (points: CGSize, scale: CGFloat)?
     @ObservationIgnored private var resizeTask: Task<Void, Never>?
-    /// Холст: экран удалённой машины и слой ввода.
-    let canvas = RemoteDesktopCanvasNSView()
-
-    @ObservationIgnored private var cancellation: RDPConnectionCancellation?
-    @ObservationIgnored private var inputSession: RDPInputSession?
+    @ObservationIgnored private var lastSize: (Int, Int)?
+    /// Холст: экран удалённой машины и ввод.
+    let canvas = RDPCanvasView(frame: .zero)
+    @ObservationIgnored private let audio = RDPAudio()
+    @ObservationIgnored private var engine: RDPEngine?
     @ObservationIgnored private var tunnel: Tunnel?
     @ObservationIgnored private var target: (host: String, port: Int) = ("", 0)
-    @ObservationIgnored private var presented = 0
+    @ObservationIgnored private var lastPasteboard = NSPasteboard.general.changeCount
 
     init(desktop: RemoteDesktop, model: AppModel) {
         self.desktop = desktop
         self.model = model
         if let w = desktop.rdpWidth, let h = desktop.rdpHeight { fixedSize = (w, h) }
         retina = desktop.rdpRetina ?? true
-        canvas.onSurfaceChange = { [weak self] points, scale in
-            MainActor.assumeIsolated { self?.surfaceChanged(points: points, scale: scale) }
-        }
+        canvas.onSurfaceChange = { [weak self] points, scale in self?.surfaceChanged(points: points, scale: scale) }
+        canvas.onFocus = { [weak self] in self?.sendLocalClipboard() }
     }
 
     // MARK: - Разрешение
 
-    /// Запрос размера рабочего стола: пиксели окна (или фиксированные) и масштаб Retina/100%.
-    private func displayRequest(points: CGSize, scale: CGFloat) -> RDPDisplayRequest {
-        let scaleFactors = RDPDisplayScaleFactors(backingScaleFactor: retina ? scale : 1)
-        if let fixedSize {
-            // Своё разрешение из формы может быть любым числом — зажимаем в допустимое для RDP (иначе UInt32 падает).
-            let w = UInt32(min(8192, max(640, fixedSize.width)))
-            let h = UInt32(min(8192, max(480, fixedSize.height)))
-            return RDPDisplayRequest(width: w, height: h, scaleFactors: scaleFactors)
-        }
-        let w = UInt32(min(8192, max(640, (points.width * scale).rounded())))
-        let h = UInt32(min(8192, max(480, (points.height * scale).rounded())))
-        return RDPDisplayRequest(width: w, height: h, scaleFactors: scaleFactors)
+    /// Размер рабочего стола в пикселях: фиксированный или по окну (Retina — в пикселях экрана, 100% — в точках).
+    private func desiredSize(points: CGSize, scale: CGFloat) -> (Int, Int) {
+        if let fixedSize { return (min(8192, max(640, fixedSize.width)), min(8192, max(480, fixedSize.height))) }
+        let k = retina ? scale : 1
+        // Чётная ширина — требование RDP к размеру рабочего стола.
+        let w = Int((points.width * k).rounded()) & ~1, h = Int((points.height * k).rounded())
+        return (min(8192, max(640, w)), min(8192, max(480, h)))
     }
+
+    private var scalePercent: Int { retina ? Int(((surface?.scale ?? 2) * 100).rounded()) : 100 }
 
     private func surfaceChanged(points: CGSize, scale: CGFloat) {
         surface = (points, scale)
@@ -89,15 +82,15 @@ final class RDPSession {
 
     /// Окно перестали тянуть — через полсекунды просим сервер перестроить рабочий стол.
     private func scheduleResize(delay: Duration = .milliseconds(500)) {
-        guard displayControl != nil, let surface else { return }
+        guard phase == .connected, let surface else { return }
+        let size = desiredSize(points: surface.points, scale: surface.scale)
+        guard lastSize.map({ $0 != size }) ?? true else { return }
         resizeTask?.cancel()
-        let request = displayRequest(points: surface.points, scale: surface.scale)
-        guard request != lastRequest else { return }
         resizeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: delay)
-            guard !Task.isCancelled, let self, let control = self.displayControl, request != self.lastRequest else { return }
-            control.send(request)
-            self.lastRequest = request
+            guard !Task.isCancelled, let self, let engine = self.engine else { return }
+            engine.resize(width: size.0, height: size.1)
+            self.lastSize = size
         }
     }
 
@@ -118,11 +111,26 @@ final class RDPSession {
         if let i = model.desktops.firstIndex(where: { $0.id == desktop.id }) { change(&model.desktops[i]) }
     }
 
-    fileprivate func displayControlReady(_ session: RDPDisplayControlSession) {
-        displayControl = session
-        canResize = true
-        lastRequest = nil
-        scheduleResize(delay: .milliseconds(200))
+    /// Меню окна: сочетания, которые Mac не отдаёт приложению.
+    func sendCtrlAltDel() { canvas.send(RDPCanvasView.ctrlAltDel) }
+    func sendWindowsKey() { canvas.send(RDPCanvasView.windowsKey) }
+
+    // MARK: - Буфер обмена
+
+    /// Локальный буфер уходит на сервер, только когда вкладка в фокусе (W-RDP-1): копирование для других целей
+    /// не рассылается на все открытые столы.
+    private func sendLocalClipboard() {
+        let pb = NSPasteboard.general
+        guard pb.changeCount != lastPasteboard, let text = pb.string(forType: .string) else { return }
+        lastPasteboard = pb.changeCount
+        engine?.setClipboard(text)
+    }
+
+    private func remoteClipboard(_ text: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        lastPasteboard = pb.changeCount
     }
 
     var account: String { desktop.keychainAccount }
@@ -195,10 +203,15 @@ final class RDPSession {
     }
 
     func disconnect() {
-        cancellation?.cancel()
-        cancellation = nil
+        let e = engine
+        engine = nil
+        canvas.engine = nil
+        canvas.releaseAll()
+        audio.stop()
+        e?.disconnect()
         if let t = tunnel { model.tunnels.stop(t.id) }
         tunnel = nil
+        if phase == .connected || phase == .connecting { phase = .disconnected(nil) }
     }
 
     func forgetCertificate() {
@@ -213,164 +226,77 @@ final class RDPSession {
             phase = .disconnected(L("Укажите имя пользователя."))
             return
         }
-        let credentials: RDPCredentials
-        // Учётки без пароля бывают (локальный пользователь, NLA выключен): RDPKit.validated их отвергает, собираем сами.
-        if password.isEmpty {
-            credentials = RDPCredentials(username: name, domain: domain?.trimmingCharacters(in: .whitespaces), password: "")
-        } else {
-            do {
-                guard let valid = try RDPCredentials.validated(username: name, domain: domain, password: password) else { return }
-                credentials = valid
-            } catch {
-                phase = .disconnected(L("Учётные данные: %@", "\(error.localizedDescription)"))
-                return
-            }
-        }
         phase = .connecting
-        presented = 0
-
+        certificateMismatch = false
         let scale = canvas.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         let points = canvas.bounds.size.width > 100 ? canvas.bounds.size : CGSize(width: 1440, height: 900)
-        let initial = displayRequest(points: points, scale: scale)
-        displayControl = nil
-        canResize = false
-        lastRequest = initial
-        var configuration = RDPConnectionConfiguration(
-            host: target.host,
-            port: UInt16(target.port),
-            credentials: credentials,
-            timeoutSeconds: 15,
-            graphicsFrameCaptureLimit: nil,
-            desktopWidth: UInt16(min(initial.width, 8192)),
-            desktopHeight: UInt16(min(initial.height, 8192)),
-            clipboardEnabled: false,
-            audioPlaybackEnabled: false,
-            clientName: "Relaya"
-        )
-        configuration.scaleFactors = initial.scaleFactors
+        surface = (points, scale)
+        let size = desiredSize(points: points, scale: scale)
+        lastSize = size
 
-        let cancellation = RDPConnectionCancellation()
-        self.cancellation = cancellation
-        let mismatch = Flag()
-        let knownCertificate = UserDefaults.standard.string(forKey: certificateKey)
-        let certificateKey = certificateKey
-
-        // Слабая ссылка, которую можно унести в поток сессии: обращения к ней — только через главный поток.
         let owner = WeakSession(self)
-        // run() блокирует поток на всю сессию — отдельный Thread, не executor Swift Concurrency.
-        let thread = Thread {
-            let decodeQueue = RDPFrameDecodeQueue(
-                shouldCancel: { cancellation.isCancelled },
-                onDecoded: { presentation, _, _, _ in
-                    nonisolated(unsafe) let presentation = presentation
-                    DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.present(presentation) } }
-                },
-                onDecodeFailed: { _, _ in }
-            )
-            defer { decodeQueue.cancel() }
-
-            let report = RDPSessionClient().run(
-                configuration: configuration,
-                onGraphicsFrame: { frame in
-                    _ = decodeQueue.submitAndWait(frame, receivedAt: Date(), shouldContinue: { !cancellation.isCancelled })
-                },
-                onInputReady: { session in
-                    nonisolated(unsafe) let session = session
-                    DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.activated(session) } }
-                },
-                onDisplayControlReady: { session in
-                    DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.displayControlReady(session) } }
-                },
-                onCertificate: { info in
-                    let fingerprint = info.sha256
-                    if let known = knownCertificate, let fingerprint, known != fingerprint {
-                        // Сменившийся сертификат — отказ до отправки пароля.
-                        mismatch.value = true
-                        cancellation.cancel()
-                    } else if knownCertificate == nil, let fingerprint {
-                        // Первое подключение: показываем отпечаток и ждём решения, пароль пока не отправлен.
-                        let decided = DispatchSemaphore(value: 0)
-                        let answer = Flag()
-                        DispatchQueue.main.async {
-                            MainActor.assumeIsolated {
-                                guard let session = owner.value else { decided.signal(); return }
-                                session.askTrust(fingerprint) { ok in answer.value = ok; decided.signal() }
-                            }
-                        }
-                        if decided.wait(timeout: .now() + 300) == .timedOut || !answer.value {
-                            cancellation.cancel()
-                        } else {
-                            UserDefaults.standard.set(fingerprint, forKey: certificateKey)
-                        }
-                    }
-                    DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.certificate = fingerprint } }
-                },
-                cancellation: cancellation
-            )
-            let message = report.error ?? ""
-            let status = report.status
-            // Только настоящая смена сертификата, а не обычная отмена или отказ доверять.
-            let certificateChanged = mismatch.value
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated { owner.value?.finished(status: status, message: message, certificateChanged: certificateChanged) }
-            }
+        var events = RDPEngine.Events()
+        events.connected = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.connected(w, h) } } }
+        events.resized = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.reset(width: w, height: h) } } }
+        events.frame = { rects in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.apply(rects) } } }
+        events.certificate = { sha, _ in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.askTrust(sha) } } }
+        events.closed = { kind, message in
+            DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.finished(kind, message) } }
         }
-        thread.name = "Relaya RDP"
-        thread.qualityOfService = QualityOfService.userInitiated
-        thread.start()
+        events.clipboard = { text in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.remoteClipboard(text) } } }
+        events.audio = { format, pcm in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.audio.play(format, pcm) } } }
+        events.audioVolume = { v in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.audio.setServerVolume(v) } } }
+
+        let trusted = UserDefaults.standard.string(forKey: certificateKey)
+        certificate = trusted
+        let engine = RDPEngine(config: .init(host: target.host, port: target.port, user: name, password: password,
+                                             domain: domain?.trimmingCharacters(in: .whitespaces), width: size.0, height: size.1,
+                                             scalePercent: scalePercent, trustedCertificate: trusted),
+                               events: events)
+        self.engine = engine
+        canvas.engine = engine
+        engine.connect()
     }
 
-    private func present(_ presentation: RDPDecodedFramePresentation) {
-        presented += 1
-        canvas.displayView.present(presentation, id: presented)
-        canvas.update(frame: RDPFrameMetadata(presentation.frame), hasPresentedFrame: true, inputSession: inputSession)
-        if presented == 1 {
-            phase = .connected
-            canvas.makeInputFirstResponder()
-        }
+    private func askTrust(_ fingerprint: String) {
+        trustPromptChanged = UserDefaults.standard.string(forKey: certificateKey) != nil
+        trustPrompt = fingerprint
     }
 
-    private func activated(_ session: RDPInputSession) {
-        inputSession = session
-        canvas.update(frame: nil, hasPresentedFrame: false, inputSession: session)
+    private func connected(_ width: Int, _ height: Int) {
+        canvas.reset(width: width, height: height)
+        phase = .connected
+        canvas.window?.makeFirstResponder(canvas)
+        sendLocalClipboard()
+        scheduleResize(delay: .milliseconds(200))
     }
 
-    private func finished(status: String, message: String, certificateChanged: Bool) {
-        guard cancellation != nil || certificateChanged else {
-            phase = .disconnected(nil)   // закрыли сами
-            return
-        }
-        cancellation = nil
-        inputSession = nil
+    private func finished(_ kind: RDPEngine.CloseKind, _ message: String) {
+        guard engine != nil else { return }   // закрыли сами
+        engine = nil
+        canvas.engine = nil
+        audio.stop()
+        trustPrompt = nil
         if let t = tunnel { model.tunnels.stop(t.id) }
         tunnel = nil
-        certificateMismatch = certificateChanged
-        if certificateChanged {
-            phase = .disconnected(L("Сертификат сервера изменился с прошлого подключения. Если это ожидаемо (сервер переустановили), сбросьте доверие и подключитесь снова."))
-            return
-        }
-        if status.localizedCaseInsensitiveContains("logon") || message.localizedCaseInsensitiveContains("logon") {
+        switch kind {
+        case .closedByUser:
+            phase = .disconnected(nil)
+        case .authFailed:
             try? keychain.deletePassword(for: account)
-            phase = .disconnected(L("Неверное имя пользователя или пароль."))
-            return
+            phase = .needsCredentials
+        case .certRejected:
+            phase = certificateMismatch
+                ? .disconnected(L("Сертификат сервера изменился с прошлого подключения. Если это ожидаемо (сервер переустановили), сбросьте доверие и подключитесь снова."))
+                : .disconnected(nil)
+        default:
+            phase = .disconnected(message.isEmpty ? nil : SSHErrorText.describeRemote(.rdp, message))
         }
-        let raw = message.isEmpty ? status : message
-        phase = .disconnected(raw.isEmpty ? nil : SSHErrorText.describeRemote(.rdp, raw))
     }
 }
 
-/// Слабая ссылка на сессию для потока RDPKit. Читается только на главном потоке.
+/// Слабая ссылка на сессию для колбэков ядра. Читается только на главном потоке.
 private final class WeakSession: @unchecked Sendable {
     weak var value: RDPSession?
     init(_ value: RDPSession) { self.value = value }
-}
-
-/// Флаг, который поток сессии RDP и главный поток читают и пишут под замком.
-private final class Flag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _value = false
-    var value: Bool {
-        get { lock.withLock { _value } }
-        set { lock.withLock { _value = newValue } }
-    }
 }
