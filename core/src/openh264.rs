@@ -128,6 +128,13 @@ pub fn openh264_verify(path: String) -> bool {
     sha256_file(&path).map(|h| h == openh264_info(platform).library_sha256).unwrap_or(false)
 }
 
+/// Нужен ли этой сборке ядра OpenH264 от Cisco для H.264 (true — собрано с rdp-freerdp и не на Windows).
+/// Клиент показывает переключатель загрузки OpenH264 только при true. Windows декодирует H.264 средствами системы.
+#[uniffi::export]
+pub fn openh264_supported() -> bool {
+    cfg!(all(feature = "rdp-freerdp", not(windows)))
+}
+
 /// Скопировать библиотеку в приватный каталог (0700, только этот процесс) и проверить хеш копии. Вернуть путь копии
 /// для dlopen; None — файл не тот или копия не удалась. Вызывать непосредственно перед загрузкой кодека.
 #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
@@ -175,6 +182,7 @@ mod tests {
             assert_eq!(i.notice, "OpenH264 Video Codec provided by Cisco Systems, Inc.");
         }
         assert!(openh264_current_platform().is_some());
+        assert_eq!(openh264_supported(), cfg!(all(feature = "rdp-freerdp", not(windows))));
         let dir = tempfile::tempdir().unwrap();
         let f = dir.path().join("libopenh264.so");
         std::fs::write(&f, b"not cisco").unwrap();
