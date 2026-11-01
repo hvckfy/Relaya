@@ -190,6 +190,8 @@ extern "C" fn on_closed(user: *mut c_void, kind: c_int, message: *const c_char) 
         2 => RemoteCloseKind::Network,
         3 => RemoteCloseKind::ServerClosed,
         4 => RemoteCloseKind::CertRejected,
+        6 => RemoteCloseKind::CredentialsRequired,
+        7 => RemoteCloseKind::AccountProblem,
         _ => RemoteCloseKind::Protocol,
     };
     *ctx(user).closed.locked() = Some(RemoteClose { kind, message: text(message) });

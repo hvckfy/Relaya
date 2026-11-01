@@ -58,6 +58,8 @@ public final class VNCEngine: @unchecked Sendable {
             case .certRejected: .certRejected
             case .protocol: .protocolError
             case .closedByUser: .closedByUser
+            case .credentialsRequired: .credentialsRequired
+            case .accountProblem: .accountProblem
             }
             events.closed(kind, close.message)
         }

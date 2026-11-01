@@ -476,11 +476,12 @@ static DWORD verify_changed_cert(freerdp* instance, const char* host, UINT16 por
 static BOOL authenticate(freerdp* instance, char** username, char** password, char** domain, rdp_auth_reason reason)
 {
 	WINPR_UNUSED(instance);
-	WINPR_UNUSED(username);
 	WINPR_UNUSED(password);
 	WINPR_UNUSED(domain);
 	WINPR_UNUSED(reason);
-	return TRUE;
+	/* R-5: без имени FreeRDP шёл с пустой личностью и получал отказ. Учётные данные уже в настройках; нет имени —
+	   отказываемся, закрытие придёт как «нужны учётные данные», и клиент спросит логин и пароль. */
+	return username && *username && **username ? TRUE : FALSE;
 }
 
 static BOOL client_new(freerdp* instance, rdpContext* context)
@@ -636,9 +637,23 @@ static int close_kind(UINT32 error, int cert_rejected)
 		case FREERDP_ERROR_AUTHENTICATION_FAILED:
 		case FREERDP_ERROR_CONNECT_LOGON_FAILURE:
 		case FREERDP_ERROR_CONNECT_WRONG_PASSWORD:
-		case FREERDP_ERROR_CONNECT_ACCOUNT_LOCKED_OUT:
-		case FREERDP_ERROR_CONNECT_PASSWORD_EXPIRED:
 			return RELAYA_CLOSE_AUTH;
+		/* R-3: пароль может быть верным — учётная запись не пускает; сохранённый пароль клиент не стирает. */
+		case FREERDP_ERROR_CONNECT_ACCOUNT_LOCKED_OUT:
+		case FREERDP_ERROR_CONNECT_ACCOUNT_DISABLED:
+		case FREERDP_ERROR_CONNECT_ACCOUNT_EXPIRED:
+		case FREERDP_ERROR_CONNECT_ACCOUNT_RESTRICTION:
+		case FREERDP_ERROR_CONNECT_PASSWORD_EXPIRED:
+		case FREERDP_ERROR_CONNECT_PASSWORD_CERTAINLY_EXPIRED:
+		case FREERDP_ERROR_CONNECT_PASSWORD_MUST_CHANGE:
+		case FREERDP_ERROR_CONNECT_LOGON_TYPE_NOT_GRANTED:
+		case FREERDP_ERROR_CONNECT_CLIENT_REVOKED:
+		case FREERDP_ERROR_CONNECT_KDC_UNREACHABLE:
+			return RELAYA_CLOSE_ACCOUNT;
+		/* R-2, R-5: сервер требует NLA без учётных данных или имени нет — клиент спрашивает логин и пароль, как mstsc. */
+		case FREERDP_ERROR_CONNECT_HYBRID_REQUIRED_BY_SERVER:
+		case FREERDP_ERROR_CONNECT_NO_OR_MISSING_CREDENTIALS:
+			return RELAYA_CLOSE_CREDENTIALS;
 		case FREERDP_ERROR_DNS_ERROR:
 		case FREERDP_ERROR_DNS_NAME_NOT_FOUND:
 		case FREERDP_ERROR_CONNECT_TRANSPORT_FAILED:

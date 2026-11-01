@@ -1387,3 +1387,13 @@
 "Схема для тёмной темы" = "Scheme for dark theme";
 "Схема по теме окна" = "Scheme follows window theme";
 "Светлая и тёмная схема меняются вместе с оформлением" = "Light and dark schemes switch with the appearance";
+"Разместить рядом" = "Place beside";
+"Перетащить в плитки другой вкладки" = "Drag into another tab's tiles";
+"Учётная запись ограничена — чаще всего пустой пароль" = "The account is restricted — usually a blank password";
+"Windows по умолчанию не пускает по сети учётные записи без пароля: задайте пароль или отключите политику «Учётные записи: разрешить использование пустых паролей только при консольном входе»." = "By default Windows doesn't let accounts without a password sign in over the network: set a password or disable the policy “Accounts: Limit local account use of blank passwords to console logon only”.";
+"Нет права на удалённый вход" = "No permission to sign in remotely";
+"Добавьте пользователя в группу «Пользователи удалённого рабочего стола» или выдайте право «Разрешить вход через службу удалённых рабочих столов»." = "Add the user to the “Remote Desktop Users” group or grant “Allow log on through Remote Desktop Services”.";
+"Контроллер домена недоступен" = "The domain controller is unreachable";
+"Сервер не может проверить доменную учётную запись: проверьте связь сервера с контроллером домена или войдите локальной учётной записью." = "The server can't verify the domain account: check its connection to the domain controller or sign in with a local account.";
+"Срок действия учётной записи истёк" = "The account has expired";
+"Попросите администратора продлить учётную запись." = "Ask the administrator to extend the account.";

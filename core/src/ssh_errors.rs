@@ -94,6 +94,19 @@ pub enum RemoteProtocol {
 
 /// RDP: тексты RDPKit (Mac), IronRDP (`RemoteClose`) и коды Windows. Порядок важен: частные правила раньше общих.
 const RDP_RULES: &[(&[&str], &str, &str)] = &[
+    // R-3: виды отказа учётной записи — раньше «неверного пароля» и общего CredSSP.
+    (&["account_restriction", "account restriction"],
+     "Учётная запись ограничена — чаще всего пустой пароль",
+     "Windows по умолчанию не пускает по сети учётные записи без пароля: задайте пароль или отключите политику «Учётные записи: разрешить использование пустых паролей только при консольном входе»."),
+    (&["logon_type_not_granted", "logon type not granted"],
+     "Нет права на удалённый вход",
+     "Добавьте пользователя в группу «Пользователи удалённого рабочего стола» или выдайте право «Разрешить вход через службу удалённых рабочих столов»."),
+    (&["kdc_unreachable", "kdc unreachable"],
+     "Контроллер домена недоступен",
+     "Сервер не может проверить доменную учётную запись: проверьте связь сервера с контроллером домена или войдите локальной учётной записью."),
+    (&["account_expired", "account expired"],
+     "Срок действия учётной записи истёк",
+     "Попросите администратора продлить учётную запись."),
     (&["account_locked", "account locked", "account is locked", "account_disabled", "account disabled", "учётная запись заблокирована", "учетная запись заблокирована"],
      "Учётная запись заблокирована или отключена",
      "Обратитесь к администратору сервера или подождите, пока блокировка снимется сама."),
@@ -261,6 +274,12 @@ mod tests {
         );
         assert_eq!(rdp("STATUS_PASSWORD_EXPIRED").as_deref(), Some("Пароль истёк — сервер требует сменить его"));
         assert_eq!(rdp("STATUS_ACCOUNT_LOCKED_OUT").as_deref(), Some("Учётная запись заблокирована или отключена"));
+        assert_eq!(rdp("ERRCONNECT_ACCOUNT_RESTRICTION: x").as_deref(), Some("Учётная запись ограничена — чаще всего пустой пароль"));
+        assert_eq!(rdp("ERRCONNECT_LOGON_TYPE_NOT_GRANTED: x").as_deref(), Some("Нет права на удалённый вход"));
+        assert_eq!(rdp("ERRCONNECT_KDC_UNREACHABLE: x").as_deref(), Some("Контроллер домена недоступен"));
+        assert_eq!(rdp("ERRCONNECT_ACCOUNT_EXPIRED: x").as_deref(), Some("Срок действия учётной записи истёк"));
+        assert_eq!(rdp("ERRCONNECT_ACCOUNT_DISABLED: x").as_deref(), Some("Учётная запись заблокирована или отключена"));
+        assert_eq!(rdp("ERRCONNECT_PASSWORD_MUST_CHANGE: x").as_deref(), Some("Пароль истёк — сервер требует сменить его"));
         assert_eq!(
             rdp("negotiation failure: HYBRID_REQUIRED_BY_SERVER").as_deref(),
             Some("Сервер требует проверку подлинности на уровне сети (NLA)")

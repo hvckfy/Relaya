@@ -43,7 +43,11 @@ public final class RDPEngine: @unchecked Sendable {
         public let bgra: Data
     }
 
-    public enum CloseKind: Sendable { case authFailed, network, serverClosed, certRejected, protocolError, closedByUser }
+    /// `credentialsRequired` — сервер требует логин и пароль (форма входа); `accountProblem` — учётная запись не пускает,
+    /// сохранённый пароль не стирать (R-2, R-3).
+    public enum CloseKind: Sendable {
+        case authFailed, network, serverClosed, certRejected, protocolError, closedByUser, credentialsRequired, accountProblem
+    }
 
     public struct AudioFormat: Sendable, Equatable {
         public let sampleRate: Int, channels: Int, bitsPerSample: Int
@@ -112,6 +116,8 @@ public final class RDPEngine: @unchecked Sendable {
             case .certRejected: .certRejected
             case .protocol: .protocolError
             case .closedByUser: .closedByUser
+            case .credentialsRequired: .credentialsRequired
+            case .accountProblem: .accountProblem
             }
             events.closed(kind, close.message)
         }
