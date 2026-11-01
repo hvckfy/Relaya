@@ -161,7 +161,7 @@ internal sealed class TileHost : UserControl, IDisposable
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0),
-                Children = { connectionInfo, disconnected, portsPanel, search },
+                Children = { DragGrip(), connectionInfo, disconnected, portsPanel, search },
             },
         };
         foreach (var c in new ICommandBarElement[]
@@ -462,8 +462,31 @@ internal sealed class TileHost : UserControl, IDisposable
         return id;
     }
 
-    // Плитки другой вкладки переезжают сюда (перетаскивание вкладки): первая — к краю цели, остальные — рядом с ней.
-    private void Adopt(TileHost source, Edge edge, string? target)
+    /// Ручка «Перетащить в плитки»: тянут на заголовок другой вкладки, ждут показа и бросают на край её плитки.
+    private Border DragGrip()
+    {
+        var label = L("Перетащить в плитки другой вкладки");
+        var grip = new Border
+        {
+            CanDrag = true, Padding = new Thickness(4, 8, 4, 8), VerticalAlignment = VerticalAlignment.Center,
+            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"),
+            Child = new FontIcon { Glyph = "\uE7C2", FontSize = Pages.Ui.IconMedium },
+        };
+        ToolTipService.SetToolTip(grip, label);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(grip, label);
+        grip.DragStarting += (_, e) =>
+        {
+            MainWindow.DraggedTiles = this;
+            e.Data.SetText("relaya-tiles");
+            e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        };
+        grip.DropCompleted += (_, _) => MainWindow.DraggedTiles = null;
+        return grip;
+    }
+
+    // Плитки другой вкладки переезжают сюда (ручка или «Разместить рядом»): первая — к краю цели
+    // (null — край всего холста), остальные — рядом с ней.
+    internal void Adopt(TileHost source, Edge edge, string? target)
     {
         var moving = source.panes.ToList();
         source.panes.Clear();
