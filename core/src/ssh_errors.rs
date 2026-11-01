@@ -195,6 +195,13 @@ fn explain_with(rules: &[(&[&str], &str, &str)], output: &str) -> Option<SshProb
 /// Объяснение ошибки RDP или VNC (FreeRDP, RoyalVNC, текст `RemoteClose`), если она известна.
 /// Как и у `ssh_explain`, `title` и `hint` — ключи локализации.
 #[uniffi::export]
+/// V-1: сервер VNC временно блокирует вход (первое правило VNC_RULES). RoyalVNCKit отдаёт это как ошибку
+/// аутентификации, но пароль может быть верным — сохранённый стирать нельзя (вид AccountProblem, как у RDP).
+pub(crate) fn vnc_locked_out(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    VNC_RULES[0].0.iter().any(|needle| lower.contains(needle))
+}
+
 pub fn remote_explain(protocol: RemoteProtocol, message: String) -> Option<SshProblem> {
     match protocol {
         RemoteProtocol::Rdp => explain_with(RDP_RULES, &message),
@@ -315,6 +322,9 @@ mod tests {
         assert_eq!(rdp("connection timed out").as_deref(), Some("Сервер RDP не отвечает"));
         assert_eq!(vnc("Authentication failed").as_deref(), Some("Неверный пароль VNC"));
         assert_eq!(vnc("Too many authentication failures").as_deref(), Some("Сервер VNC временно блокирует вход"));
+        assert!(vnc_locked_out("Too many authentication failures"));
+        assert!(vnc_locked_out("Server: temporarily blocked"));
+        assert!(!vnc_locked_out("Authentication failed"));
         assert_eq!(
             vnc("Unsupported security type: VeNCrypt").as_deref(),
             Some("Неподдерживаемый тип аутентификации или шифрования")
