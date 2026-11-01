@@ -1128,10 +1128,8 @@ pub fn sync_validate_remote(remote: String) -> Result<(), CoreError> {
         }
         return if authority.is_empty() { Err(bad()) } else { Ok(()) };
     }
-    for scheme in ["ssh://"] {
-        if let Some(rest) = lower.strip_prefix(scheme) {
-            return if rest.split('/').next().unwrap_or("").is_empty() { Err(bad()) } else { Ok(()) };
-        }
+    if let Some(rest) = lower.strip_prefix("ssh://") {
+        return if rest.split('/').next().unwrap_or("").is_empty() { Err(bad()) } else { Ok(()) };
     }
     if let Some(rest) = r.strip_prefix("file://") {
         return if rest.starts_with('/') { Ok(()) } else { Err(bad()) };
