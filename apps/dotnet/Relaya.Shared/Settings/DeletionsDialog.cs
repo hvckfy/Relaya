@@ -26,8 +26,7 @@ internal static class DeletionsDialog
             var list = new StackPanel { Spacing = 4 };
             foreach (var p in pending)
             {
-                var when = DateTimeOffset.TryParse(p.deletedAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)
-                    ? t.LocalDateTime.ToString("g") : p.deletedAt;
+                var when = Format.Date(p.deletedAt);
                 // По умолчанию ничего не отмечено: удаления из синхронизации мог подделать чужой репозиторий.
                 var box = new CheckBox
                 {

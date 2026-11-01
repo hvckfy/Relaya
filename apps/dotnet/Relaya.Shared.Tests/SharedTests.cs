@@ -14,6 +14,16 @@ public class FormatTests
         Assert.Equal(expected, Format.Bytes(value).Replace(',', '.'));
 }
 
+public class DateTests
+{
+    [Fact]
+    public void BadIsoIsShownAsIs() => Assert.Equal("not a date", Format.Date("not a date"));
+
+    [Fact]
+    public void IsoBecomesLocalShortDate() =>
+        Assert.Equal(new System.DateTimeOffset(2026, 11, 1, 10, 0, 0, System.TimeSpan.Zero).ToLocalTime().ToString("g"), Format.Date("2026-11-01T10:00:00Z"));
+}
+
 public class PasswordPromptTests
 {
     [Theory]

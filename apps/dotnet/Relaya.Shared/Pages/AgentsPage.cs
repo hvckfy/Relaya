@@ -70,7 +70,7 @@ internal sealed class AgentsPage : UserControl
         // Ядро отдаёт журнал новыми сверху — показываем 100 последних записей как есть.
         foreach (var e in log.Take(100))
             body.Children.Add(Ui.Row(Allowed(e) ? "" : "",
-                $"{e.host}: {e.detail}", $"{e.date} · {e.client} · {e.tool} · {L(e.decision)}" + (e.exitCode is { } c ? $" · exit {c}" : "")));
+                $"{e.host}: {e.detail}", $"{Platform.Format.Date(e.date)} · {e.client} · {e.tool} · {L(e.decision)}" + (e.exitCode is { } c ? $" · exit {c}" : "")));
     }
 
     // Иконка по машинному коду решения из ядра (W13); у старых записей кода нет — по тексту.

@@ -13,4 +13,9 @@ internal static class Format
         }
         return $"{v:0.#} PB";
     }
+
+    /// Дата из ядра (ISO 8601) — коротко в локальном времени и формате языка интерфейса (UI-W5).
+    public static string Date(string iso) =>
+        System.DateTimeOffset.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t)
+            ? t.ToLocalTime().ToString("g") : iso;
 }
