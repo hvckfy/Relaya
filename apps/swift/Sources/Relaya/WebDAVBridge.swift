@@ -221,11 +221,16 @@ actor DAVServer {
                     return WebDAV.response(201, "Created")
                 }
                 let overwrite = req.header("overwrite")?.uppercased() != "F"
+                // Overwrite: F и цель уже есть — 412 Precondition Failed (RFC 4918 9.9.3); `mv -n` молча ничего
+                // не сделал бы, а клиент получил бы 201 и решил, что переименование прошло.
+                if !overwrite, try await exists(dest) { return WebDAV.response(412, "Precondition Failed") }
+                let existed = overwrite ? try await exists(dest) : false
                 let tool = req.method == "MOVE" ? "mv" : "cp -a"
-                try await shell("\(tool) \(overwrite ? "" : "-n ")-- \(StreamTransfer.quote(remote)) \(StreamTransfer.quote(dest))")
+                try await shell("\(tool) -- \(StreamTransfer.quote(remote)) \(StreamTransfer.quote(dest))")
                 invalidate(remote)
                 invalidate(dest)
-                return WebDAV.response(201, "Created")
+                // 204 — цель заменена, 201 — создана (RFC 4918 9.9.4).
+                return existed ? WebDAV.response(204, "No Content") : WebDAV.response(201, "Created")
             default:
                 return WebDAV.response(405, "Method Not Allowed")
             }
@@ -281,6 +286,16 @@ actor DAVServer {
     private func invalidate(_ path: String) {
         listings[SFTPClient.parent(of: path)] = nil
         listings[path] = nil
+    }
+
+    /// Есть ли путь на сервере (файл, папка или ссылка).
+    private func exists(_ path: String) async throws -> Bool {
+        let q = StreamTransfer.quote(path)
+        let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, "test -e \(q) || test -L \(q)"],
+                                            environment: ssh.environment, timeout: .seconds(60))
+        if r.status == 0 { return true }
+        if r.status == 1 { return false }
+        throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message)
     }
 
     private func shell(_ command: String) async throws {
