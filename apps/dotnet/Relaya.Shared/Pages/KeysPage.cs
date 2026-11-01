@@ -156,8 +156,9 @@ internal sealed class KeysPage : UserControl
             var file = Path.Combine(AppState.SshDir, name.Text.Trim());
             if (name.Text.Trim().Length == 0 || File.Exists(file)) { error.Text = L("Файл уже есть или имя пустое."); args.Cancel = true; deferral.Complete(); return; }
             Directory.CreateDirectory(AppState.SshDir);
-            var r = await AppState.Run(AppState.KeygenExe, new[] { "-t", "ed25519", "-f", file, "-C", comment.Text, "-N", pass.Password }, null, null, 20);
-            if (r.Status != 0) { error.Text = r.Stderr.Trim(); args.Cancel = true; }
+            // Passphrase — вводом в псевдотерминал, не аргументом ssh-keygen (виден был бы в списке процессов).
+            var (ok, err) = await Platform.KeyGen.CreateAsync(file, comment.Text, pass.Password);
+            if (!ok) { error.Text = err; args.Cancel = true; }
             deferral.Complete();
         };
         if (await d.ShowAsync() == ContentDialogResult.Primary) await Build();

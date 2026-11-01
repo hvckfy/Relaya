@@ -201,8 +201,8 @@ internal sealed class KeyWizardPage : UserControl
                 Set(current, "running");
                 if (File.Exists(keyFile) || File.Exists(keyFile + ".pub")) throw new InvalidOperationException(L("Файл %@ уже существует", keyFile));
                 Directory.CreateDirectory(AppState.SshDir);
-                var r = await AppState.Run(AppState.KeygenExe, new[] { "-t", "ed25519", "-f", keyFile, "-C", $"{Environment.UserName}@{Environment.MachineName}", "-N", passphrase, "-q" }, null, null, 30);
-                if (r.Status != 0) throw new InvalidOperationException("ssh-keygen: " + r.Stderr.Trim());
+                var (ok, err) = await Platform.KeyGen.CreateAsync(keyFile, $"{Environment.UserName}@{Environment.MachineName}", passphrase);
+                if (!ok) throw new InvalidOperationException("ssh-keygen: " + err);
                 createdKey = true;
                 Set(current, "ok");
             }
