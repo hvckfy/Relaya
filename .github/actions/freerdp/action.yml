@@ -18,7 +18,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: core/native/vcpkg_installed
-        key: freerdp-${{ inputs.triplet }}-${{ hashFiles('core/native/vcpkg.json', 'core/native/freerdp.version') }}
+        key: freerdp-${{ inputs.triplet }}-${{ hashFiles('core/native/vcpkg.json', 'core/native/freerdp.version', 'core/native/triplets/**') }}
     - name: Build FreeRDP
       if: steps.cache.outputs.cache-hit != 'true'
       shell: pwsh
@@ -35,7 +35,7 @@ runs:
           git -C $env:VCPKG_INSTALLATION_ROOT checkout -q $baseline
         }
         $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT ($IsWindows ? "vcpkg.exe" : "vcpkg")
-        & $vcpkg install --x-manifest-root=core/native --x-install-root=core/native/vcpkg_installed --triplet ${{ inputs.triplet }}
+        & $vcpkg install --x-manifest-root=core/native --x-install-root=core/native/vcpkg_installed --overlay-triplets=core/native/triplets --triplet ${{ inputs.triplet }}
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Export FREERDP_DIR
       id: dir
