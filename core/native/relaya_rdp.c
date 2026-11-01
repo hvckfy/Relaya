@@ -61,6 +61,8 @@ struct relaya_rdp
 	int cert_rejected;
 	/* Пустой пароль, а сервер требует NLA: второй заход — NLA с пустой строкой вместо «нет учётных данных». */
 	int blank_nla;
+	/* authenticate() отказал из-за пустого имени: FreeRDP закроется с CONNECT_CANCELLED — это «нужны учётные данные». */
+	int no_username;
 	int closed;
 	uint16_t last_x, last_y;
 };
@@ -475,13 +477,17 @@ static DWORD verify_changed_cert(freerdp* instance, const char* host, UINT16 por
 /* Учётные данные уже в настройках; ничего не спрашиваем в консоли. */
 static BOOL authenticate(freerdp* instance, char** username, char** password, char** domain, rdp_auth_reason reason)
 {
-	WINPR_UNUSED(instance);
 	WINPR_UNUSED(password);
 	WINPR_UNUSED(domain);
 	WINPR_UNUSED(reason);
 	/* R-5: без имени FreeRDP шёл с пустой личностью и получал отказ. Учётные данные уже в настройках; нет имени —
 	   отказываемся, закрытие придёт как «нужны учётные данные», и клиент спросит логин и пароль. */
-	return username && *username && **username ? TRUE : FALSE;
+	if (username && *username && **username)
+		return TRUE;
+	relaya_rdp* r = owner_of(instance->context);
+	if (r)
+		r->no_username = 1;
+	return FALSE;
 }
 
 static BOOL client_new(freerdp* instance, rdpContext* context)
@@ -629,10 +635,13 @@ relaya_rdp* relaya_rdp_new(const relaya_rdp_config* config, const relaya_rdp_cal
 	return r;
 }
 
-static int close_kind(UINT32 error, int cert_rejected)
+static int close_kind(UINT32 error, int cert_rejected, int no_username)
 {
 	if (cert_rejected)
 		return RELAYA_CLOSE_CERT;
+	/* R-5: отмена из-за пустого имени — форма входа, а не «ошибка протокола». Обычная отмена (Отключить) — USER. */
+	if (no_username && error == FREERDP_ERROR_CONNECT_CANCELLED)
+		return RELAYA_CLOSE_CREDENTIALS;
 	switch (error)
 	{
 		case FREERDP_ERROR_SUCCESS:
@@ -652,6 +661,7 @@ static int close_kind(UINT32 error, int cert_rejected)
 		case FREERDP_ERROR_CONNECT_LOGON_TYPE_NOT_GRANTED:
 		case FREERDP_ERROR_CONNECT_CLIENT_REVOKED:
 		case FREERDP_ERROR_CONNECT_KDC_UNREACHABLE:
+		case FREERDP_ERROR_CONNECT_ACCESS_DENIED:
 			return RELAYA_CLOSE_ACCOUNT;
 		/* R-2, R-5: сервер требует NLA без учётных данных или имени нет — клиент спрашивает логин и пароль, как mstsc. */
 		case FREERDP_ERROR_CONNECT_HYBRID_REQUIRED_BY_SERVER:
@@ -789,7 +799,7 @@ void relaya_rdp_run(relaya_rdp* r)
 		char msg[512];
 		_snprintf(msg, sizeof(msg), "%s: %s", freerdp_get_last_error_name(e), freerdp_get_last_error_string(e));
 		msg[sizeof(msg) - 1] = 0; /* _snprintf не ставит '\0' при усечении */
-		close_once(r, close_kind(e, r->cert_rejected), msg);
+		close_once(r, close_kind(e, r->cert_rejected, r->no_username), msg);
 	}
 	else
 	{

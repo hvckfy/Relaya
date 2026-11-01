@@ -104,13 +104,16 @@ const RDP_RULES: &[(&[&str], &str, &str)] = &[
     (&["kdc_unreachable", "kdc unreachable"],
      "Контроллер домена недоступен",
      "Сервер не может проверить доменную учётную запись: проверьте связь сервера с контроллером домена или войдите локальной учётной записью."),
+    (&["connect_access_denied", "status_access_denied", "access_denied", "access denied"],
+     "Сервер отказал в доступе этой учётной записи",
+     "Учётные данные приняты, но вход запрещён: проверьте, что пользователь входит в группу «Пользователи удалённого рабочего стола», и политики доступа сервера."),
     (&["account_expired", "account expired"],
      "Срок действия учётной записи истёк",
      "Попросите администратора продлить учётную запись."),
     (&["account_locked", "account locked", "account is locked", "account_disabled", "account disabled", "учётная запись заблокирована", "учетная запись заблокирована"],
      "Учётная запись заблокирована или отключена",
      "Обратитесь к администратору сервера или подождите, пока блокировка снимется сама."),
-    (&["password_expired", "password expired", "password_must_change", "must change password", "срок действия пароля истёк", "срок действия пароля истек"],
+    (&["password_expired", "password_certainly_expired", "password expired", "password_must_change", "must change password", "срок действия пароля истёк", "срок действия пароля истек"],
      "Пароль истёк — сервер требует сменить его",
      "Войдите на сервер другим способом (консоль, веб-доступ) и смените пароль, затем подключитесь снова."),
     (&["logon_failure", "logon failure", "sec_e_logon_denied", "status_logon_failure", "wrong password", "invalid credentials",
@@ -274,12 +277,26 @@ mod tests {
         );
         assert_eq!(rdp("STATUS_PASSWORD_EXPIRED").as_deref(), Some("Пароль истёк — сервер требует сменить его"));
         assert_eq!(rdp("STATUS_ACCOUNT_LOCKED_OUT").as_deref(), Some("Учётная запись заблокирована или отключена"));
-        assert_eq!(rdp("ERRCONNECT_ACCOUNT_RESTRICTION: x").as_deref(), Some("Учётная запись ограничена — чаще всего пустой пароль"));
+        assert_eq!(
+            rdp("ERRCONNECT_ACCOUNT_RESTRICTION: x").as_deref(),
+            Some("Учётная запись ограничена — чаще всего пустой пароль")
+        );
         assert_eq!(rdp("ERRCONNECT_LOGON_TYPE_NOT_GRANTED: x").as_deref(), Some("Нет права на удалённый вход"));
         assert_eq!(rdp("ERRCONNECT_KDC_UNREACHABLE: x").as_deref(), Some("Контроллер домена недоступен"));
         assert_eq!(rdp("ERRCONNECT_ACCOUNT_EXPIRED: x").as_deref(), Some("Срок действия учётной записи истёк"));
-        assert_eq!(rdp("ERRCONNECT_ACCOUNT_DISABLED: x").as_deref(), Some("Учётная запись заблокирована или отключена"));
-        assert_eq!(rdp("ERRCONNECT_PASSWORD_MUST_CHANGE: x").as_deref(), Some("Пароль истёк — сервер требует сменить его"));
+        assert_eq!(rdp("ERRCONNECT_ACCESS_DENIED: x").as_deref(), Some("Сервер отказал в доступе этой учётной записи"));
+        assert_eq!(
+            rdp("ERRCONNECT_PASSWORD_CERTAINLY_EXPIRED: x").as_deref(),
+            Some("Пароль истёк — сервер требует сменить его")
+        );
+        assert_eq!(
+            rdp("ERRCONNECT_ACCOUNT_DISABLED: x").as_deref(),
+            Some("Учётная запись заблокирована или отключена")
+        );
+        assert_eq!(
+            rdp("ERRCONNECT_PASSWORD_MUST_CHANGE: x").as_deref(),
+            Some("Пароль истёк — сервер требует сменить его")
+        );
         assert_eq!(
             rdp("negotiation failure: HYBRID_REQUIRED_BY_SERVER").as_deref(),
             Some("Сервер требует проверку подлинности на уровне сети (NLA)")
