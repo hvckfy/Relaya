@@ -760,7 +760,7 @@ void relaya_rdp_run(relaya_rdp* r)
 		UINT32 e = freerdp_get_last_error(context);
 		/* Сервер требует NLA, а пароля нет — один повтор с NLA и пустым паролем (см. apply_settings). */
 		if (attempt == 0 && (!r->password || !r->password[0]) && !r->blank_nla && !r->cert_rejected &&
-		    strcmp(freerdp_get_last_error_name(e), "ERRCONNECT_HYBRID_REQUIRED_BY_SERVER") == 0)
+		    e == FREERDP_ERROR_CONNECT_HYBRID_REQUIRED_BY_SERVER)
 		{
 			r->blank_nla = 1;
 			freerdp_client_stop(context);
