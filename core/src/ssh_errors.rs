@@ -192,9 +192,6 @@ fn explain_with(rules: &[(&[&str], &str, &str)], output: &str) -> Option<SshProb
     None
 }
 
-/// Объяснение ошибки RDP или VNC (FreeRDP, RoyalVNC, текст `RemoteClose`), если она известна.
-/// Как и у `ssh_explain`, `title` и `hint` — ключи локализации.
-#[uniffi::export]
 /// V-1: сервер VNC временно блокирует вход (первое правило VNC_RULES). RoyalVNCKit отдаёт это как ошибку
 /// аутентификации, но пароль может быть верным — сохранённый стирать нельзя (вид AccountProblem, как у RDP).
 pub(crate) fn vnc_locked_out(message: &str) -> bool {
@@ -202,6 +199,9 @@ pub(crate) fn vnc_locked_out(message: &str) -> bool {
     VNC_RULES[0].0.iter().any(|needle| lower.contains(needle))
 }
 
+/// Объяснение ошибки RDP или VNC (FreeRDP, RoyalVNC, текст `RemoteClose`), если она известна.
+/// Как и у `ssh_explain`, `title` и `hint` — ключи локализации.
+#[uniffi::export]
 pub fn remote_explain(protocol: RemoteProtocol, message: String) -> Option<SshProblem> {
     match protocol {
         RemoteProtocol::Rdp => explain_with(RDP_RULES, &message),
