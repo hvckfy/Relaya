@@ -233,12 +233,13 @@ internal sealed class TileHost : UserControl, IDisposable
         // сохранённый не подошёл — «Ввести новый…». Пароль вводится в запрос ssh и сохраняется по флажку.
         var login = new InfoBar { Severity = InfoBarSeverity.Informational, IsClosable = true, Margin = new Thickness(4, 0, 4, 4) };
         var enter = new Button { Style = Pages.Ui.Style("AccentButtonStyle") };
+        var saveByDefault = true; // сохранённый пароль, не подставленный из-за ProxyCommand, не перезаписываем по умолчанию
         login.ActionButton = enter;
         enter.Click += async (_, _) =>
         {
             login.IsOpen = false;
             var box = new PasswordBox { Header = L("Пароль") };
-            var save = new CheckBox { Content = Platform.PlatformText.PasswordSaved(), IsChecked = true };
+            var save = new CheckBox { Content = Platform.PlatformText.PasswordSaved(), IsChecked = saveByDefault };
             var d = new ContentDialog
             {
                 Title = L("Пароль для %@", alias), Content = new StackPanel { Spacing = 8, Children = { box, save } },
@@ -253,8 +254,10 @@ internal sealed class TileHost : UserControl, IDisposable
         };
         session.LoginPasswordNeeded += none => ui.TryEnqueue(() =>
         {
-            login.Title = none ? L("Сервер спрашивает пароль") : L("Сохранённый пароль не подошёл");
-            enter.Content = none ? L("Ввести и сохранить…") : L("Ввести новый…");
+            var held = none && Platform.CredentialStore.Has(alias) && !Platform.Askpass.CanAutofill(alias);
+            saveByDefault = !held;
+            login.Title = held ? L("Сохранённый пароль не подставляется (ProxyCommand)") : none ? L("Сервер спрашивает пароль") : L("Сохранённый пароль не подошёл");
+            enter.Content = held ? L("Ввести…") : none ? L("Ввести и сохранить…") : L("Ввести новый…");
             login.IsOpen = true;
         });
         // Вошли по паролю — предложить ключ: «Настроить», «Не сейчас», «Больше не предлагать».
@@ -274,7 +277,7 @@ internal sealed class TileHost : UserControl, IDisposable
         };
         later.Click += (_, _) => { offer.IsOpen = false; view.Focus(FocusState.Programmatic); };
         never.Click += (_, _) => { Platform.Settings.Set("terminal.offerKeySetup", "0"); offer.IsOpen = false; view.Focus(FocusState.Programmatic); };
-        session.KeySetupOffered += () => ui.TryEnqueue(() => offer.IsOpen = true);
+        session.KeySetupOffered += () => ui.TryEnqueue(() => { login.IsOpen = false; offer.IsOpen = true; });
         // Ключ сервера при первом подключении (как окно на Mac): ContentDialog с отпечатком, по умолчанию «Отмена».
         session.HostKeyRequested += fp => ui.TryEnqueue(async () =>
         {
@@ -314,17 +317,17 @@ internal sealed class TileHost : UserControl, IDisposable
             if (pending.Tag is string text) { if (text.EndsWith('\r')) view.Type(text); else view.Paste(text); }
             view.Focus(FocusState.Programmatic);
         };
-        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
+        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         body.Children.Add(header);
         Grid.SetRow(ask, 1);
         body.Children.Add(ask);
         Grid.SetRow(offer, 2);
         body.Children.Add(offer);
-        Grid.SetRow(login, 2);
+        Grid.SetRow(login, 3);
         body.Children.Add(login);
-        Grid.SetRow(pending, 3);
+        Grid.SetRow(pending, 4);
         body.Children.Add(pending);
-        Grid.SetRow(view, 4);
+        Grid.SetRow(view, 5);
         body.Children.Add(view);
         var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(4) };
         var pane = new Pane(id, view, session, alias, frame, title) { Owner = this };
