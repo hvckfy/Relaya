@@ -122,9 +122,9 @@ Requires macOS 14 Sonoma or later; Liquid Glass needs macOS 26. Universal binary
 
 1. Download `Relaya-X.Y.Z-windows-x64-en-setup.exe` (English) or `…-ru-setup.exe` (Russian) from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. Portable `…-windows-x64-<lang>.zip` builds are there too.
 2. The installer isn't code-signed yet, so SmartScreen asks once: *More info → Run anyway*.
-3. Needs Windows 10 1809+ (Mica background on Windows 11) and the built-in **OpenSSH Client** (*Settings → Apps → Optional features*). Sync needs [Git for Windows](https://git-scm.com).
+3. Needs Windows 10 1809+ (Mica background on Windows 11) and the built-in **OpenSSH Client**. The installer offers it on an *Additional components* page (it asks for administrator rights only for that step) together with [Git for Windows](https://git-scm.com), which is needed only for sync through git — folder sync works without it. If a component can't be installed, the last page says how to add it by hand (*Settings → Apps → Optional features → OpenSSH Client*).
 
-The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, Windows Hello confirmation, RDP (via Remote Desktop Connection for now) and VNC (via an installed viewer). In progress: a built-in RDP tab on FreeRDP (H.264, sound, clipboard, RD Gateway). Not yet on Windows: session recording.
+The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, Windows Hello confirmation, a built-in RDP tab on FreeRDP (sound, clipboard, RD Gateway, dynamic resolution; Remote Desktop Connection stays as a fallback) and VNC (via an installed viewer). Not yet on Windows: session recording.
 
 ### Linux (in progress)
 
