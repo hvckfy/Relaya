@@ -58,12 +58,11 @@ struct DesktopsView: View {
                 }
             }
             Spacer()
-            Button(L("Подключить")) {
-                // VNC и RDP — во встроенных окнах Relaya.
-                openWindow(id: d.kind == .vnc ? "vnc" : "rdp", value: d.id)
-            }
-            .buttonStyle(.relayaPrimary)
+            // «Подключить» везде одинаково — вкладкой, как из боковой панели (UI-M2); отдельное окно — в меню.
+            Button(L("Подключить")) { model.openDesktop(d) }
+                .buttonStyle(.relayaPrimary)
             Menu {
+                Button(L("Открыть в отдельном окне")) { openWindow(id: d.kind == .vnc ? "vnc" : "rdp", value: d.id) }
                 Button(d.kind == .vnc ? L("Открыть в «Общем экране» macOS") : L("Открыть в Windows App")) {
                     Task { await model.open(d) }
                 }
