@@ -1157,3 +1157,4 @@
 "не найдено" = "not found";
 "не найдено — обязательно" = "not found — required";
 "Без них часть Relaya не работает. Что поставить и как — в «Компонентах»." = "Part of Relaya does not work without them. See Components for what to install and how.";
+"%@ из %@" = "%@ of %@";

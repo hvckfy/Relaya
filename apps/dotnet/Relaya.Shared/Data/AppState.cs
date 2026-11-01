@@ -146,7 +146,8 @@ internal static class AppState
     public static Task<Result> RunOnHost(string alias, string command, int timeoutSeconds = 30) =>
         Run(SshExe, new[] { "-o", "ConnectTimeout=10", alias, "--", command }, alias, null, timeoutSeconds);
 
-    public static async Task<Result> Run(string exe, IEnumerable<string> args, string? askpassAlias, string? stdin, int timeoutSeconds = 60)
+    public static async Task<Result> Run(string exe, IEnumerable<string> args, string? askpassAlias, string? stdin, int timeoutSeconds = 60,
+        System.Threading.CancellationToken cancel = default)
     {
         var info = new ProcessStartInfo(exe)
         {
@@ -172,7 +173,15 @@ internal static class AppState
                 finally { try { p.StandardInput.Close(); } catch (IOException) { } }
             });
             var exited = Task.WhenAll(p.WaitForExitAsync(), input);
-            if (await Task.WhenAny(exited, deadline) != exited)
+            // Отмена человеком (передача SFTP): процесс убиваем, как по таймауту.
+            var cancelled = Task.Delay(System.Threading.Timeout.Infinite, cancel).ContinueWith(_ => { }, TaskScheduler.Default);
+            var first = await Task.WhenAny(exited, deadline, cancelled);
+            if (first == cancelled)
+            {
+                try { p.Kill(true); } catch (InvalidOperationException) { }
+                return new Result(-1, "", Strings.L("Отменено"));
+            }
+            if (first != exited)
             {
                 try { p.Kill(true); } catch (InvalidOperationException) { }
                 return new Result(-1, "", Strings.L("Время ожидания истекло"));

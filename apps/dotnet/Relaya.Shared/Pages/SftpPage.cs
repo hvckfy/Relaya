@@ -23,6 +23,11 @@ internal sealed class SftpPage : UserControl
     private readonly ListView list = new() { SelectionMode = ListViewSelectionMode.Extended };
     private readonly TextBlock status = Ui.Secondary("");
     private readonly ProgressBar busy = new() { IsIndeterminate = true, Visibility = Visibility.Collapsed };
+    // Передача (UI-W7): определённый прогресс, когда размер известен, сколько передано и «Отмена».
+    private readonly ProgressBar progress = new() { Minimum = 0, Maximum = 1, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock progressText = Ui.Secondary("");
+    private readonly Grid transferBar = new() { ColumnSpacing = 12, Visibility = Visibility.Collapsed };
+    private System.Threading.CancellationTokenSource? transferCancel;
     private List<RemoteFile> files = new();
 
     public SftpPage(string alias)
@@ -52,8 +57,18 @@ internal sealed class SftpPage : UserControl
             RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new(), new() { Height = GridLength.Auto } },
         };
         root.Children.Add(toolbar);
-        Grid.SetRow(busy, 1);
-        root.Children.Add(busy);
+        var cancel = Ui.Button(L("Отмена"), () => transferCancel?.Cancel());
+        transferBar.ColumnDefinitions.Add(new ColumnDefinition());
+        transferBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        transferBar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        transferBar.Children.Add(progress);
+        Grid.SetColumn(progressText, 1);
+        transferBar.Children.Add(progressText);
+        Grid.SetColumn(cancel, 2);
+        transferBar.Children.Add(cancel);
+        var bars = new Grid { Children = { busy, transferBar } };
+        Grid.SetRow(bars, 1);
+        root.Children.Add(bars);
         Grid.SetRow(list, 2);
         root.Children.Add(list);
         Grid.SetRow(status, 3);
@@ -90,14 +105,39 @@ internal sealed class SftpPage : UserControl
 
     private Task<AppState.Result> Batch(params string[] commands) => Run(CommandTimeout, commands);
 
-    private Task<AppState.Result> Transfer(params string[] commands) => Run(TransferTimeout, commands);
-
-    private async Task<AppState.Result> Run(int timeoutSeconds, string[] commands)
+    /// Передача с прогрессом: done() — сколько байт уже есть у получателя (или null, если не знаем), total — сколько всего.
+    private async Task<AppState.Result> Transfer(string[] commands, long total, Func<long?>? done)
     {
-        busy.Visibility = Visibility.Visible;
+        transferCancel = new System.Threading.CancellationTokenSource();
+        busy.Visibility = Visibility.Collapsed;
+        transferBar.Visibility = Visibility.Visible;
+        progress.IsIndeterminate = done == null || total <= 0;
+        progress.Value = 0;
+        progressText.Text = total > 0 ? Platform.Format.Bytes(total) : "";
+        var timer = DispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(500);
+        timer.Tick += (_, _) =>
+        {
+            if (done?.Invoke() is not { } bytes || total <= 0) return;
+            progress.Value = Math.Min(1, bytes / (double)total);
+            progressText.Text = L("%@ из %@", Platform.Format.Bytes(Math.Min(bytes, total)), Platform.Format.Bytes(total));
+        };
+        timer.Start();
+        try { return await Run(TransferTimeout, commands, transferCancel.Token); }
+        finally
+        {
+            timer.Stop();
+            transferBar.Visibility = Visibility.Collapsed;
+            transferCancel = null;
+        }
+    }
+
+    private async Task<AppState.Result> Run(int timeoutSeconds, string[] commands, System.Threading.CancellationToken cancel = default)
+    {
+        if (transferCancel == null) busy.Visibility = Visibility.Visible;
         var r = await AppState.Run(AppState.SftpExe,
             new[] { "-o", "BatchMode=no", "-b", "-", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", alias },
-            alias, string.Join("\n", commands) + "\n", timeoutSeconds);
+            alias, string.Join("\n", commands) + "\n", timeoutSeconds, cancel);
         busy.Visibility = Visibility.Collapsed;
         if (r.Status != 0)
             status.Text = Platform.SshErrors.Describe(string.Join("\n", r.Stderr.Split('\n').Where(l => !l.StartsWith("sftp>"))), L("Ошибка sftp"));
@@ -143,7 +183,10 @@ internal sealed class SftpPage : UserControl
         picker.FileTypeFilter.Add("*");
         Attach(picker);
         if (await picker.PickSingleFolderAsync() is not { } folder) return;
-        var r = await Transfer(sel.Select(f => $"get -r {Q(Join(f.name))} {Q(folder.Path)}").ToArray());
+        // Прогресс — по размеру скачанных файлов в папке назначения; для папок размер неизвестен.
+        var total = sel.Any(f => f.isDirectory) ? 0 : sel.Sum(f => f.size);
+        long? Done() => sel.Sum(f => new System.IO.FileInfo(System.IO.Path.Combine(folder.Path, f.name)) is { Exists: true } fi ? fi.Length : 0);
+        var r = await Transfer(sel.Select(f => $"get -r {Q(Join(f.name))} {Q(folder.Path)}").ToArray(), total, Done);
         if (r.Status == 0) status.Text = L("Скачано в %@", folder.Path);
     }
 
@@ -158,7 +201,10 @@ internal sealed class SftpPage : UserControl
 
     private async Task Put(IEnumerable<string> local)
     {
-        var r = await Transfer(local.Select(l => $"put -r {Q(l)} {Q(path)}").ToArray());
+        // Загрузка: размер знаем, сколько уже на сервере — нет (sftp -b молчит), поэтому полоса неопределённая.
+        var items = local.ToList();
+        var total = items.Sum(l => System.IO.File.Exists(l) ? new System.IO.FileInfo(l).Length : 0);
+        var r = await Transfer(items.Select(l => $"put -r {Q(l)} {Q(path)}").ToArray(), total, null);
         if (r.Status == 0) await Open(path);
     }
 
