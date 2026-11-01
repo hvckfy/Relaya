@@ -1251,3 +1251,5 @@
 "Сохранить пароль" = "Save Password";
 "Предлагать вход по ключу" = "Offer key sign-in";
 "После входа по паролю на хост без ключа терминал предложит настроить вход по ключу" = "After a password login to a host without a key, the terminal offers to set up key sign-in";
+"Открыть во внешнем VNC-клиенте (TightVNC, RealVNC, UltraVNC или TigerVNC)" = "Open in an external VNC client (TightVNC, RealVNC, UltraVNC or TigerVNC)";
+"Открыть во внешнем VNC-клиенте (vncviewer или Remmina)" = "Open in an external VNC client (vncviewer or Remmina)";

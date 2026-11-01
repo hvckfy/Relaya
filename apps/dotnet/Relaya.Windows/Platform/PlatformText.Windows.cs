@@ -12,4 +12,5 @@ internal static partial class PlatformText
     public static partial string SyncFolderOption() => L("Папка (OneDrive, сетевой диск)");
     public static partial string SyncFolderPath() => L("Путь к папке, например C:\\Users\\you\\OneDrive\\Relaya");
     public static partial string ExternalRdp() => L("Открыть в Подключении к удалённому рабочему столу");
+    public static partial string ExternalVnc() => L("Открыть во внешнем VNC-клиенте (TightVNC, RealVNC, UltraVNC или TigerVNC)");
 }
