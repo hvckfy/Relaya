@@ -641,6 +641,7 @@ public sealed partial class MainWindow : Window
         await sync.SyncAll();
     }
     private void OnPaletteKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; Pages.CommandPalette.Show(this); }
+    private void OnSnippetPaletteKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; Pages.CommandPalette.Show(this, snippetsOnly: true); }
 
     public void FocusSearch() => Search.Focus(FocusState.Keyboard);
 }

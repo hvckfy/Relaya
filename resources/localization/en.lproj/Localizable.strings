@@ -1352,3 +1352,4 @@
 "Сохранено на сервере: %@" = "Saved to the server: %@";
 "Изменения в %@ сохраняются на сервер, пока открыта эта вкладка" = "Changes to %@ are saved to the server while this tab is open";
 "Не удалось открыть файл" = "Could not open the file";
+"Сниппет…" = "Snippet…";

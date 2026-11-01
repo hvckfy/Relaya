@@ -24,11 +24,13 @@ internal static class CommandPalette
 
     private const int RecentLimit = 8;
 
-    public static void Show(MainWindow window)
+    /// `snippetsOnly` — палитра сниппетов (Ctrl+Shift+S, 5.5, как ⇧⌘P на Mac): только сниппеты, вставка в активный терминал.
+    public static void Show(MainWindow window, bool snippetsOnly = false)
     {
         if (window.Content is not FrameworkElement root) return;
         var all = Items(window);
-        var box = new TextBox { PlaceholderText = L("Хост, действие, сниппет…") };
+        if (snippetsOnly) all = all.Where(i => i.Id.StartsWith("snippet:")).ToList();
+        var box = new TextBox { PlaceholderText = snippetsOnly ? L("Сниппет…") : L("Хост, действие, сниппет…") };
         AutomationProperties.SetName(box, L("Палитра команд"));
         var list = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 360, IsItemClickEnabled = true };
         var hint = Ui.Secondary(L("↑↓ — выбрать · Enter — открыть · Ctrl+Enter — файлы · Esc — закрыть"));

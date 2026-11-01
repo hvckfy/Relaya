@@ -14,6 +14,7 @@
             <KeyboardAccelerator Modifiers="Control,Shift" Key="Tab" Invoked="OnPrevTabKey" />
             <KeyboardAccelerator Modifiers="Control" Key="K" Invoked="OnSearchKey" />
             <KeyboardAccelerator Modifiers="Control,Shift" Key="P" Invoked="OnPaletteKey" />
+            <KeyboardAccelerator Modifiers="Control,Shift" Key="S" Invoked="OnSnippetPaletteKey" />
         </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
