@@ -149,6 +149,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        // П-9: общие ssh-соединения хостов закрываются при сне и блокировке экрана, а не живут до таймаута.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil,
+                                                          queue: .main) { _ in SSHMux.closeAll() }
+        DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsLocked"), object: nil,
+                                                            queue: .main) { _ in SSHMux.closeAll() }
     }
 
     /// Работающие туннели живут в строке меню — закрытие последнего окна их не убивает.
@@ -159,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Временные файлы диска WebDAV (каталог процесса 0700) — удалить при выходе.
     func applicationWillTerminate(_ notification: Notification) {
+        SSHMux.closeAll()
         do { try WebDAV.tempCleanup() } catch {
             NSLog("Relaya WebDAV: временные файлы не удалены: \(error.localizedDescription)")
         }
