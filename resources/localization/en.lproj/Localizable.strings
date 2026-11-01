@@ -1312,3 +1312,4 @@
 "Папка на сервере" = "Folder on the server";
 "/ — весь сервер, ~ — домашняя папка" = "/ is the whole server, ~ is the home folder";
 "Подключить как диск" = "Mount as Volume";
+"Не удалось переместить в Корзину: %@" = "Could not move to the Trash: %@";
