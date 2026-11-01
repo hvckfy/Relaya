@@ -1367,3 +1367,8 @@
 "Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине." = "“SSH keys” is off, so the keys aren't loaded. Turn it on and set the same encryption password as on the other machine.";
 "Пароль шифрования ключей не задан — ключи не загружаются. Задайте тот же пароль, что на другой машине." = "The key encryption password isn't set, so the keys aren't loaded. Set the same password as on the other machine.";
 "Включить" = "Turn On";
+"без пароля" = "no password";
+"Синхронизировать ключи без пароля?" = "Sync keys without a password?";
+"Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы." = "This isn't safe: private keys go to the repository effectively unprotected, and anyone with access to it can sign in to your servers.";
+"Синхронизировать без пароля" = "Sync Without Password";
+"Ключи синхронизируются без пароля — в репозитории они фактически открыты. Чтобы защитить их, введите пароль и сохраните." = "Keys sync without a password, so they're effectively unprotected in the repository. To protect them, enter a password and save.";
