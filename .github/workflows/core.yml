@@ -17,7 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, ubuntu-latest, windows-latest]
+        # Linux — 24.04: toolchain Swift для RoyalVNCKit собран под неё (libxml2.so.2).
+        os: [macos-15, ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
