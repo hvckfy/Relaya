@@ -43,17 +43,15 @@ internal sealed class TileHost : UserControl, IDisposable
     private Pane? active;
     private int searchFrom = int.MaxValue;
     // Рассылка ввода (как на Mac): переключатель в панели и предупреждение, пока она включена.
-    private readonly Microsoft.UI.Xaml.Controls.Primitives.ToggleButton broadcastToggle = new()
+    // Видна только при нескольких плитках (как на Mac: рассылка имеет смысл в сетке) или пока рассылка включена.
+    private readonly AppBarToggleButton broadcastToggle = new()
     {
-        Content = new FontIcon { Glyph = "\uEC05", FontSize = 16 }, Padding = new Thickness(8),
+        Icon = new FontIcon { Glyph = "\uEC05" }, LabelPosition = CommandBarLabelPosition.Collapsed, Visibility = Visibility.Collapsed,
     };
     private readonly InfoBar broadcastBar = new() { Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(8, 0, 8, 4) };
     private readonly CheckBox broadcastHere = new();
     // Запись сессии активной плитки в файл (4.14): переключатель и «Показать файл записи».
-    private readonly Microsoft.UI.Xaml.Controls.Primitives.ToggleButton recordToggle = new()
-    {
-        Content = new FontIcon { Glyph = "\uE7C8", FontSize = 16 }, Padding = new Thickness(8),
-    };
+    private readonly AppBarToggleButton recordToggle = new() { Icon = new FontIcon { Glyph = "\uE7C8" } };
     // Порты сервера из вывода активной плитки: «:3000» — открыть в браузере через туннель.
     private readonly StackPanel portsPanel = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     // Состояние активной плитки рядом с портами, как строка состояния на Mac (4.24).
@@ -101,37 +99,12 @@ internal sealed class TileHost : UserControl, IDisposable
         broadcastHere.Click += (_, _) => { if (active != null) Broadcast.SetIncluded(active.Session, broadcastHere.IsChecked == true); };
         broadcastBar.Content = broadcastHere;
         Broadcast.Changed += OnBroadcastChanged;
-        var recordTip = L("Записывать сессию в файл (Ctrl+Shift+L)");
-        ToolTipService.SetToolTip(recordToggle, recordTip);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(recordToggle, recordTip);
+        broadcastToggle.Label = broadcastTip;
+        recordToggle.Label = L("Записывать сессию в файл (Ctrl+Shift+L)");
         recordToggle.Click += (_, _) => active?.Session.ToggleRecording();
-        var showRecording = new MenuFlyout();
-        var showItem = new MenuFlyoutItem { Text = L("Показать файл записи") };
-        showItem.Click += (_, _) => Platform.Shell.OpenFolder(SshSession.RecordingsFolder);
-        showRecording.Items.Add(showItem);
-        recordToggle.ContextFlyout = showRecording;
-        var bar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 8, 4),
-            Children =
-            {
-                connectionInfo,
-                disconnected,
-                portsPanel,
-                search,
-                recordToggle,
-                broadcastToggle,
-                // Кнопки разделения — тот же путь, что Ctrl+Shift+D/E: на Skia X11 нет перетаскивания вкладок (Л4).
-                Pages.Ui.IconButton("\uE90D", L("Разделить вправо (Ctrl+Shift+D)"), () => Split(Edge.Right)),
-                Pages.Ui.IconButton("\uE90E", L("Разделить вниз (Ctrl+Shift+E)"), () => Split(Edge.Bottom)),
-                Pages.Ui.IconButton("", L("Поиск (Ctrl+Shift+F)"), OpenSearch),
-                Pages.Ui.IconButton("", L("Мельче (Ctrl+−)"), () => active?.View.ZoomFont(-1)),
-                Pages.Ui.IconButton("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
-            },
-        };
         // Е.20, как на Mac: действия хоста активной плитки над терминалом. Команды вставляются без Enter.
         var osMenu = new MenuFlyout();
-        var osButton = new DropDownButton { Content = L("Действия"), Flyout = osMenu };
+
         osMenu.Opening += (_, _) =>
         {
             osMenu.Items.Clear();
@@ -150,8 +123,7 @@ internal sealed class TileHost : UserControl, IDisposable
             }
         };
         var snippetMenu = new MenuFlyout();
-        var snippetButton = new DropDownButton { Content = L("Сниппеты"), Flyout = snippetMenu };
-        ToolTipService.SetToolTip(snippetButton, L("Вставить сохранённую команду"));
+
         snippetMenu.Opening += (_, _) =>
         {
             snippetMenu.Items.Clear();
@@ -165,27 +137,57 @@ internal sealed class TileHost : UserControl, IDisposable
                 snippetMenu.Items.Add(item);
             }
         };
-        var files = new Button { Content = "SFTP" };
-        ToolTipService.SetToolTip(files, L("Файлы на сервере"));
-        files.Click += (_, _) => { if (ActiveAlias is { } a) MainWindow.Current?.OpenSftp(a); };
-        var edit = new Button { Content = L("Изменить хост") };
-        edit.Click += (_, _) => { if (ActiveAlias is { } a && AppState.Host(a) is { } h) _ = Pages.HostEditor.Show(XamlRoot, h, false); };
-        var keyLogin = new Button { Content = L("Вход по ключу…") };
-        keyLogin.Click += (_, _) => { if (ActiveAlias is { } a && AppState.Host(a) is { } h) MainWindow.Current?.ShowPage(new Pages.KeyWizardPage(h)); };
-        var hostBar = new StackPanel
+        // Панель над терминалом — CommandBar (Fluent): частые действия кнопками, остальное — в «Ещё» (…). Узкое окно
+        // само уносит кнопки в «Ещё» (IsDynamicOverflowEnabled). Слева — состояние плитки: адрес, «отключён», порты, поиск.
+        AppBarButton Command(string glyph, string label, Action run, bool iconOnly = false)
         {
-            Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(8, 4, 0, 4),
-            Children = { osButton, snippetButton, files, edit, keyLogin },
+            var b = new AppBarButton { Icon = new FontIcon { Glyph = glyph }, Label = label };
+            if (iconOnly) { b.LabelPosition = CommandBarLabelPosition.Collapsed; ToolTipService.SetToolTip(b, label); }
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, label);
+            b.Click += (_, _) => run();
+            return b;
+        }
+        var files = Command("", "SFTP", () => { if (ActiveAlias is { } a) MainWindow.Current?.OpenSftp(a); });
+        ToolTipService.SetToolTip(files, L("Файлы на сервере"));
+        var snippets = new AppBarButton { Icon = new FontIcon { Glyph = "" }, Label = L("Сниппеты"), Flyout = snippetMenu };
+        ToolTipService.SetToolTip(snippets, L("Вставить сохранённую команду"));
+        var actions = new AppBarButton { Icon = new FontIcon { Glyph = "" }, Label = L("Действия"), Flyout = osMenu };
+        var showRecording = Command("", L("Показать файл записи"), () => Platform.Shell.OpenFolder(SshSession.RecordingsFolder));
+        var commands = new CommandBar
+        {
+            DefaultLabelPosition = CommandBarLabelPosition.Right, IsDynamicOverflowEnabled = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0, 4, 0),
+            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"),
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0),
+                Children = { connectionInfo, disconnected, portsPanel, search },
+            },
         };
+        foreach (var c in new ICommandBarElement[]
+        {
+            files, snippets, new AppBarSeparator(),
+            // Разделение — тот же путь, что Ctrl+Shift+D/E: на Skia X11 нет перетаскивания вкладок (Л4).
+            Command("", L("Разделить вправо (Ctrl+Shift+D)"), () => Split(Edge.Right), iconOnly: true),
+            Command("", L("Разделить вниз (Ctrl+Shift+E)"), () => Split(Edge.Bottom), iconOnly: true),
+            Command("", L("Поиск (Ctrl+Shift+F)"), OpenSearch, iconOnly: true),
+            broadcastToggle,
+        }) commands.PrimaryCommands.Add(c);
+        foreach (var c in new ICommandBarElement[]
+        {
+            actions,
+            Command("", L("Изменить хост"), () => { if (ActiveAlias is { } a && AppState.Host(a) is { } h) _ = Pages.HostEditor.Show(XamlRoot, h, false); }),
+            Command("", L("Вход по ключу…"), () => { if (ActiveAlias is { } a && AppState.Host(a) is { } h) MainWindow.Current?.ShowPage(new Pages.KeyWizardPage(h)); }),
+            new AppBarSeparator(),
+            recordToggle, showRecording,
+            new AppBarSeparator(),
+            Command("", L("Мельче (Ctrl+−)"), () => active?.View.ZoomFont(-1)),
+            Command("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
+        }) commands.SecondaryCommands.Add(c);
         // Прозрачный фон: без него пустые места холста не получают DragOver/Drop.
         var stage = new Grid { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), Children = { grid, dropHint } };
-        // Панели хоста и плиток — в колонках одной строки: при узком окне не наезжают друг на друга.
-        var toolbar = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } } };
-        toolbar.Children.Add(hostBar);
-        Grid.SetColumn(bar, 1);
-        toolbar.Children.Add(bar);
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
-        root.Children.Add(toolbar);
+        root.Children.Add(commands);
         Grid.SetRow(broadcastBar, 1);
         root.Children.Add(broadcastBar);
         Grid.SetRow(stage, 2);
@@ -506,10 +508,16 @@ internal sealed class TileHost : UserControl, IDisposable
     // Состояние рассылки меняется из любой вкладки — обновляем панель через UI-очередь.
     private void OnBroadcastChanged() => ui.TryEnqueue(UpdateBroadcast);
 
+    // Рассылка ввода — только в режиме плиток (больше одного терминала), как на Mac; включённая видна всегда,
+    // чтобы её можно было выключить.
+    private void UpdateBroadcastVisibility() =>
+        broadcastToggle.Visibility = panes.Count > 1 || Broadcast.Enabled ? Visibility.Visible : Visibility.Collapsed;
+
     private void UpdateBroadcast()
     {
         var on = Broadcast.Enabled;
         broadcastToggle.IsChecked = on;
+        UpdateBroadcastVisibility();
         broadcastBar.IsOpen = on;
         if (!on) return;
         broadcastBar.Title = L("Ввод во все терминалы");
@@ -600,6 +608,7 @@ internal sealed class TileHost : UserControl, IDisposable
 
     private void Layout()
     {
+        UpdateBroadcastVisibility();
         foreach (var p in panes) (p.Frame.Parent as Panel)?.Children.Remove(p.Frame);
         grid.Children.Clear();
         if (panes.Count == 0 || layout == null) return;
