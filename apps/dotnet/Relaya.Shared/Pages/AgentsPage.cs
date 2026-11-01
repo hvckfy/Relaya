@@ -100,7 +100,19 @@ internal sealed class AgentsPage : UserControl
         {
             var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude");
             var file = Path.Combine(dir, "claude_desktop_config.json");
-            var root = File.Exists(file) ? JsonNode.Parse(File.ReadAllText(file)) as JsonObject ?? new JsonObject() : new JsonObject();
+            // Битый или не-объект конфиг Claude не перезаписываем — пользователь потерял бы свои настройки (10.6, как на Mac).
+            JsonObject root;
+            if (File.Exists(file))
+            {
+                JsonNode? parsed;
+                try { parsed = JsonNode.Parse(File.ReadAllText(file)); }
+                catch (System.Text.Json.JsonException) { parsed = null; }
+                if (parsed is not JsonObject obj) return L("Файл %@ не JSON-объект — не меняю его. Добавьте конфиг вручную.", file);
+                root = obj;
+            }
+            else root = new JsonObject();
+            if (root["mcpServers"] is { } existing && existing is not JsonObject)
+                return L("Файл %@ не JSON-объект — не меняю его. Добавьте конфиг вручную.", file);
             var servers = root["mcpServers"] as JsonObject ?? new JsonObject();
             servers["relaya"] = new JsonObject { ["command"] = exe, ["args"] = new JsonArray("--mcp") };
             root["mcpServers"] = servers;
