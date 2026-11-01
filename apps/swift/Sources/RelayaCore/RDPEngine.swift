@@ -21,16 +21,19 @@ public final class RDPEngine: @unchecked Sendable {
         public var gatewayUser: String?
         public var gatewayPassword: String?
         public var gatewayDomain: String?
+        /// Проверенная библиотека OpenH264 (OpenH264.libraryPath); nil — без H.264.
+        public var h264LibraryPath: String?
 
         public init(host: String, port: Int, user: String, password: String, domain: String?,
                     width: Int, height: Int, scalePercent: Int, trustedCertificate: String?,
                     gatewayHost: String? = nil, gatewayUser: String? = nil, gatewayPassword: String? = nil,
-                    gatewayDomain: String? = nil) {
+                    gatewayDomain: String? = nil, h264LibraryPath: String? = nil) {
             self.host = host; self.port = port; self.user = user; self.password = password; self.domain = domain
             self.width = width; self.height = height; self.scalePercent = scalePercent
             self.trustedCertificate = trustedCertificate
             self.gatewayHost = gatewayHost; self.gatewayUser = gatewayUser
             self.gatewayPassword = gatewayPassword; self.gatewayDomain = gatewayDomain
+            self.h264LibraryPath = h264LibraryPath
         }
     }
 
@@ -70,7 +73,7 @@ public final class RDPEngine: @unchecked Sendable {
                               scalePercent: UInt32(clamping: c.scalePercent), trustedCertSha256: c.trustedCertificate,
                               gatewayHost: c.gatewayHost, gatewayUser: c.gatewayUser, gatewayPassword: c.gatewayPassword,
                               gatewayDomain: c.gatewayDomain,
-                              h264LibraryPath: nil),
+                              h264LibraryPath: c.h264LibraryPath),
             listener: listener)
         // Звук и буфер обмена — до connect: иначе сервер не предложит каналы.
         session.setClipboardListener(listener: listener)

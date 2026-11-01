@@ -265,7 +265,8 @@ final class RDPSession {
                                              gatewayHost: desktop.gatewayHost.flatMap { $0.isEmpty ? nil : $0 },
                                              gatewayUser: desktop.gatewayUser.flatMap { $0.isEmpty ? nil : $0 },
                                              gatewayPassword: try? keychain.password(for: desktop.gatewayKeychainAccount),
-                                             gatewayDomain: desktop.gatewayDomain.flatMap { $0.isEmpty ? nil : $0 }),
+                                             gatewayDomain: desktop.gatewayDomain.flatMap { $0.isEmpty ? nil : $0 },
+                                             h264LibraryPath: OpenH264.libraryPath),
                                events: events)
         self.engine = engine
         canvas.engine = engine

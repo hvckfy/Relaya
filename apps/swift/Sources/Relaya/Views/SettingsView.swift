@@ -124,9 +124,32 @@ private struct AppearanceSettings: View {
 }
 
 private struct BehaviorSettings: View {
+    private func enableH264() {
+        h264Busy = true
+        h264Error = nil
+        Task {
+            do {
+                try await OpenH264.install()
+                h264On = OpenH264.isInstalled
+            } catch {
+                h264Error = error.localizedDescription
+                h264On = false
+            }
+            h264Busy = false
+        }
+    }
+
+    private func disableH264() {
+        do { try OpenH264.remove(); h264On = false } catch { h264Error = error.localizedDescription }
+    }
+
     @Environment(AppSettings.self) private var settings
     @AppStorage(AskpassBroker.confirmEachUseKey) private var confirmEachUse = false
     @AppStorage(MCPLog.maxSizeKey) private var logMaxKB = 256
+    @State private var h264On = OpenH264.isInstalled
+    @State private var h264Busy = false
+    @State private var h264Error: String?
+    @State private var h264Confirm = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -137,6 +160,27 @@ private struct BehaviorSettings: View {
             if Bundle.main.localizations.filter({ $0 != "Base" }).count > 1 {
                 Picker(L("Язык"), selection: $settings.language) {
                     ForEach(AppSettings.Language.allCases) { Text($0.title).tag($0) }
+                }
+            }
+            // 9.12: H.264 для RDP — кодек Cisco скачивается только по включению, лицензия показывается до загрузки.
+            if OpenH264.info != nil {
+                Section {
+                    Toggle(isOn: Binding(get: { h264On }, set: { on in on ? (h264Confirm = true) : disableH264() })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("H.264 для удалённых столов (OpenH264 от Cisco)"))
+                            Text(L("Чётче и быстрее на медленном канале. Кодек скачивается с сервера Cisco и проверяется по отпечатку."))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(h264Busy)
+                    if h264Busy { ProgressView().controlSize(.small) }
+                    if let h264Error { Text(h264Error).font(.caption).foregroundStyle(.red) }
+                }
+                .alert(L("Скачать OpenH264 от Cisco?"), isPresented: $h264Confirm) {
+                    Button(L("Скачать и включить")) { enableH264() }
+                    Button(L("Отмена"), role: .cancel) {}
+                } message: {
+                    Text(OpenH264.notice)
                 }
             }
             LabeledContent(L("Максимальный размер журналов")) {
