@@ -8,7 +8,8 @@ namespace Relaya.Desktop;
 
 /// Звук удалённого стола на Linux: PCM 16 бит от ядра (поток сессии) → stdin `pacat` (PulseAudio и PipeWire-pulse).
 /// Формат — по первому пакету. Громкость — наша (ползунок) × присланная сервером, умножаем сами сэмплы.
-/// Нет pacat — звука нет, сессия работает.
+/// Нет pacat — звука нет, сессия работает. Запись в pacat — из своего потока через очередь на ~1 с: поток сессии ядра,
+/// который приносит и кадры, на звуке не ждёт; не успевает pacat — старые куски отбрасываются (как DiscardOnBufferOverflow).
 internal sealed class RdpAudio : RemoteAudioListener, IDisposable
 {
     private readonly object gate = new();
@@ -17,6 +18,8 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
     private AudioFormat? format;
     private float server = 1f;
     private int percent;
+    private System.Collections.Concurrent.BlockingCollection<byte[]>? queue;
+    private const int QueueChunks = 50; // ≈ 1 с при кусках по 20 мс
 
     public RdpAudio(string volume) => percent = int.TryParse(volume, out var v) ? Math.Clamp(v, 0, 100) : 100;
 
@@ -43,6 +46,12 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
                     player = Process.Start(info);
                     input = player?.StandardInput.BaseStream;
                     format = f;
+                    if (input is { } stream)
+                    {
+                        var q = new System.Collections.Concurrent.BlockingCollection<byte[]>(QueueChunks);
+                        queue = q;
+                        new System.Threading.Thread(() => Writer(q, stream)) { IsBackground = true, Name = "RDP audio" }.Start();
+                    }
                 }
                 catch (Exception e)
                 {
@@ -51,12 +60,21 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
                     return;
                 }
             }
-            if (input == null) return;
+            if (queue is not { } q) return;
             var gain = Math.Clamp(percent / 100f * server, 0f, 1f);
             if (gain < 0.999f) Scale(pcm, gain);
-            try { input.Write(pcm); input.Flush(); }
-            catch (Exception) { Stop(); }
+            // Очередь полна — выкидываем самый старый кусок, чтобы звук не отставал.
+            while (!q.TryAdd(pcm)) q.TryTake(out _);
         }
+    }
+
+    private static void Writer(System.Collections.Concurrent.BlockingCollection<byte[]> q, Stream stream)
+    {
+        try
+        {
+            foreach (var chunk in q.GetConsumingEnumerable()) { stream.Write(chunk); stream.Flush(); }
+        }
+        catch (Exception e) { Terminal.TerminalView.Trace("RDP audio: " + e.Message); }
     }
 
     // s16le: каждый сэмпл × gain.
@@ -80,6 +98,8 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
 
     private void Stop()
     {
+        queue?.CompleteAdding();
+        queue = null;
         try { input?.Dispose(); } catch (Exception) { }
         try { if (player is { HasExited: false }) player.Kill(); player?.Dispose(); } catch (Exception) { }
         input = null;
