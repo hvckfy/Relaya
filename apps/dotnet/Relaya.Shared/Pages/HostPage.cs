@@ -71,7 +71,7 @@ internal sealed class HostPage : UserControl
                 var item = new MenuFlyoutItem { Text = L(a.title) };
                 // Как на Mac: команда вставляется в терминал без Enter — пользователь видит её и запускает сам.
                 // sudo уже в команде ядра; под root его нет смысла звать (а на Alpine его может не быть).
-                item.Click += (_, _) => MainWindow.Current?.OpenSession(h.alias, h.user == "root" ? WithoutSudo(a.command) : a.command);
+                item.Click += (_, _) => MainWindow.Current?.OpenSession(h.alias, RelayaCoreMethods.OsCommandForUser(a.command, h.user ?? ""));
                 menu.Items.Add(item);
             }
             osButtons.Children.Add(new DropDownButton { Content = L("Действия"), Flyout = menu });
@@ -283,7 +283,4 @@ internal sealed class HostPage : UserControl
         }
     }
 
-    // Ведущий `sudo ` — в начале и после &&, ;, |.
-    private static string WithoutSudo(string command) =>
-        System.Text.RegularExpressions.Regex.Replace(command, @"(^|&&|;|\|)(\s*)sudo\s+", "$1$2");
 }
