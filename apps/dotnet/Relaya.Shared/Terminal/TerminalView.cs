@@ -129,7 +129,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     public void Paste(string text)
     {
         text = text.Replace("\r\n", "\r").Replace('\n', '\r');
-        Send(Emulator.Snapshot().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
+        Send(Emulator.CursorState().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
         Focus(FocusState.Programmatic);
     }
 
@@ -192,7 +192,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             Send("\x1b" + (shift ? ch : char.ToLowerInvariant(ch)));
             return;
         }
-        var app = Emulator.Snapshot().appCursor;
+        var app = Emulator.CursorState().appCursor;
         string Arrow(char c) => app ? $"\x1bO{c}" : $"\x1b[{c}";
         var seq = e.Key switch
         {
@@ -225,7 +225,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
         if (!content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text)) return;
         var text = (await content.GetTextAsync()).Replace("\r\n", "\r").Replace('\n', '\r');
-        Send(Emulator.Snapshot().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
+        Send(Emulator.CursorState().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
     }
 
     // --- Мышь: выделение (или отчёты программе, если она их просит; Shift — всегда выделение). ---
@@ -233,15 +233,16 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     private (int Row, int Col) CellAt(PointerRoutedEventArgs e)
     {
         var p = e.GetCurrentPoint(this).Position;
-        var s = Emulator.Snapshot();
+        var s = Emulator.CursorState();
         var col = (int)Math.Clamp(Math.Floor((p.X - Pad) / cellW), 0, s.cols - 1);
         var row = (int)Math.Clamp(Math.Floor((p.Y - Pad) / cellH), 0, s.rows - 1);
         return (row, col);
     }
 
-    private bool ReportsMouse(out TermSnapshot s)
+    // Режимы — лёгким CursorState без ячеек (П2): зовётся на каждое движение мыши и клавишу.
+    private bool ReportsMouse(out TermCursor s)
     {
-        s = Emulator.Snapshot();
+        s = Emulator.CursorState();
         return s.mouseReporting && s.mouseSgr && !IsDown(VirtualKey.Shift);
     }
 
@@ -408,7 +409,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         if (!measured || ActualWidth <= 0) return;
         var cols = (uint)Math.Max(1, Math.Floor((ActualWidth - 2 * Pad) / cellW));
         var rows = (uint)Math.Max(1, Math.Floor((ActualHeight - 2 * Pad) / cellH));
-        var s = Emulator.Snapshot();
+        var s = Emulator.CursorState();
         if (s.cols == cols && s.rows == rows) return;
         Emulator.Resize(cols, rows);
         Resized?.Invoke(cols, rows);
