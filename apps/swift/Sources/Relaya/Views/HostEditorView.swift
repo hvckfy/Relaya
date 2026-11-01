@@ -16,6 +16,9 @@ struct HostEditorView: View {
     @State private var passwordEdited = false
     @State private var hasSavedPassword = false
     @State private var storeInKeychain = true
+    /// ~/.ssh/config и список ключей читаются один раз при открытии, а не на каждую перерисовку (П6).
+    @State private var document: SSHConfigDocument?
+    @State private var keyFiles: [String] = []
 
     init(original: SSHHost?, draft: SSHHost) {
         self.original = original
@@ -46,6 +49,8 @@ struct HostEditorView: View {
         .frame(width: 640, height: 760)
         .background(Theme.bg)
         .onAppear {
+            document = try? model.store.loadDocument()
+            keyFiles = Self.scanKeyFiles()
             if let original { hasSavedPassword = model.keychain.hasPassword(for: original.keychainAccount) }
             // У нового хоста без сохранённого пароля галочка включена — достаточно ввести пароль.
             storeInKeychain = true
@@ -257,7 +262,6 @@ struct HostEditorView: View {
 
     // MARK: - Данные
 
-    private var document: SSHConfigDocument? { try? model.store.loadDocument() }
 
     private var existingBlock: SSHConfigDocument.Block? {
         guard let original else { return nil }
@@ -314,7 +318,7 @@ struct HostEditorView: View {
     }
 
     /// Файлы приватных ключей в ~/.ssh — те, у которых рядом лежит `.pub`.
-    private var keyFiles: [String] {
+    private static func scanKeyFiles() -> [String] {
         let dir = RelayaPaths.sshDirectory
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         return names
