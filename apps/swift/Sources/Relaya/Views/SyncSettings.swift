@@ -238,7 +238,7 @@ private struct ProfileForm: View {
                         Label {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(L("Синхронизировать ключи без пароля?")).bold()
-                                Text(L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы."))
+                                Text(L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы. Из истории git их уже не убрать — если передумаете, ключи придётся заменить."))
                                 HStack {
                                     Button(L("Отмена")) { confirmEmptyPassphrase = false; passphraseFocused = true }
                                         .keyboardShortcut(.cancelAction)
