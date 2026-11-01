@@ -32,7 +32,7 @@ internal static partial class Shell
         var error = p.StandardError.ReadToEndAsync();
         if (!p.WaitForExit(10000))
         {
-            try { p.Kill(); } catch (Exception) { }
+            try { p.Kill(); } catch (InvalidOperationException) { } // уже завершился
             throw new IOException(L("gio trash не ответил за 10 секунд."));
         }
         if (p.ExitCode != 0) throw new IOException(error.Result.Trim());
