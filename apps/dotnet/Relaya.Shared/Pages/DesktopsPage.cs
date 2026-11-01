@@ -36,19 +36,22 @@ internal sealed class DesktopsPage : UserControl
             actions.Children.Add(Ui.IconButton("\ue8a7", d.kind == DesktopKind.Rdp ? Platform.PlatformText.ExternalRdp() : Platform.PlatformText.ExternalVnc(),
                 () => Platform.DesktopLauncher.OpenExternal(d, XamlRoot)));
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(d)));
-            actions.Children.Add(Ui.IconButton("", L("Удалить"), async () =>
-            {
-                if (!await Ui.Confirm(XamlRoot, L("Удалить %@?", d.name), L("Удалённый стол будет удалён; сохранённые пароли тоже."), L("Удалить"))) return;
-                Platform.CredentialStore.Delete("desktop:" + d.id);
-                Platform.CredentialStore.Delete("desktop-gateway:" + d.id);
-                AppState.Desktops = AppState.Desktops.Where(x => x.id != d.id).ToList();
-                AppState.LoadHosts();
-                Build();
-            }));
+            actions.Children.Add(Ui.IconButton("", L("Удалить"), async () => { if (await DeleteAsync(d, XamlRoot)) Build(); }));
             var via = d.viaSshHost is { Length: > 0 } v ? " · " + L("через %@", v) : "";
             body.Children.Add(Ui.Row(d.kind == DesktopKind.Rdp ? "" : "", d.name,
                 $"{(d.kind == DesktopKind.Rdp ? "RDP" : "VNC")} {d.address}:{d.port}" + (d.user.Length > 0 ? $" · {d.user}" : "") + via, actions));
         }
+    }
+
+    /// Удаление стола с подтверждением и его паролями; общее для страницы и меню в боковой панели.
+    public static async Task<bool> DeleteAsync(RemoteDesktop d, XamlRoot root)
+    {
+        if (!await Ui.Confirm(root, L("Удалить %@?", d.name), L("Удалённый стол будет удалён; сохранённые пароли тоже."), L("Удалить"))) return false;
+        Platform.CredentialStore.Delete("desktop:" + d.id);
+        Platform.CredentialStore.Delete("desktop-gateway:" + d.id);
+        AppState.Desktops = AppState.Desktops.Where(x => x.id != d.id).ToList();
+        AppState.LoadHosts();
+        return true;
     }
 
     private async Task Edit(RemoteDesktop? d)

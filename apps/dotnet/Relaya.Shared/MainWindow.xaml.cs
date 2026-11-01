@@ -189,6 +189,7 @@ public sealed partial class MainWindow : Window
                     () => _ = Platform.DesktopLauncher.OpenExternal(d, Content.XamlRoot));
                 menu.Items.Add(new MenuFlyoutSeparator());
                 Add(L("Изменить…"), () => ShowPage(new Pages.DesktopsPage(d.id)));
+                Add(L("Удалить…"), () => _ = Pages.DesktopsPage.DeleteAsync(d, Content.XamlRoot));
                 item.ContextFlyout = menu;
                 return item;
             }
