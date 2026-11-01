@@ -45,10 +45,9 @@ public enum ServerOS: String, Sendable, CaseIterable {
 
 /// Готовые команды для меню «Действия» в сессии.
 /// Команда для пользователя сервера: под root `sudo` не нужен (и его может не быть, как на OpenWrt) — убирается
-/// только в начале команды и после ; && || |, а не внутри аргументов и строк. Одно место для всех экранов (А3).
+/// только в начале команды и после ; && || |, а не внутри аргументов и строк. Правило ядра, общее с Windows/Linux (А3).
 public func commandForUser(_ command: String, user: String?) -> String {
-    guard user == "root" else { return command }
-    return command.replacingOccurrences(of: #"(^|[;&|]\s*)sudo\s+"#, with: "$1", options: .regularExpression)
+    osCommandForUser(command: command, user: user ?? "")
 }
 
 public struct OSAction: Sendable, Hashable {
