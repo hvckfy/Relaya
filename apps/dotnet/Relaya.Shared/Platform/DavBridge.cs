@@ -90,6 +90,8 @@ internal sealed partial class DavBridge
     private static partial Task UnmountVolumeAsync(string url);
     private static partial void OpenVolume(string url);
     private static partial bool PlatformSupported();
+    /// Требовать ли Basic-пароль. Mac и Linux — всегда; Windows — нет (см. DavBridge.Windows.cs, решение аудита безопасности).
+    private static partial bool RequiresBasic();
 
     /// Имя диска: хост, а для вложенной папки — «хост · папка».
     private static string VolumeName(string alias, string path)
@@ -168,7 +170,7 @@ internal sealed partial class DavBridge
     private async Task<byte[]> HandleAsync(DavRequest req)
     {
         var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{User}:{password}"));
-        if (Header(req, "authorization") != expected)
+        if (RequiresBasic() && Header(req, "authorization") != expected)
             return Response(401, "Unauthorized", new() { ["WWW-Authenticate"] = "Basic realm=\"Relaya\"" });
         if (RemotePath(req.path) is not { } remote) return Response(404, "Not Found");
         if (remote == root && req.method is "DELETE" or "MOVE") return Response(403, "Forbidden");

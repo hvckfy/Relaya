@@ -24,4 +24,5 @@ internal sealed partial class DavBridge
     private static partial void OpenVolume(string url) => _ = AppState.Run("gio", new[] { "open", url }, null, null, 30);
 
     private static partial bool PlatformSupported() => true;
+    private static partial bool RequiresBasic() => true;
 }

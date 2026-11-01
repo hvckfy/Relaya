@@ -1313,3 +1313,4 @@
 "/ — весь сервер, ~ — домашняя папка" = "/ is the whole server, ~ is the home folder";
 "Подключить как диск" = "Mount as Volume";
 "Не удалось переместить в Корзину: %@" = "Could not move to the Trash: %@";
+"Не удалось подключить диск: служба WebClient не запущена или не установлена." = "Could not connect the drive: the WebClient service is not running or not installed.";
