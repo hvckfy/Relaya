@@ -18,7 +18,8 @@ env:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    # Toolchain swift.org собран под 24.04 (libxml2.so.2); на более новом образе его нет.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Fetch RoyalVNC
@@ -27,6 +28,9 @@ jobs:
           git fetch -q --depth 1 "$ROYALVNC_REPO" "$ROYALVNC_COMMIT" && git checkout -q FETCH_HEAD
       - name: Swift
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq binutils libc6-dev libcurl4-openssl-dev libedit2 libgcc-13-dev libpython3-dev \
+            libsqlite3-0 libstdc++-13-dev libxml2-dev libncurses-dev libz3-dev pkg-config zlib1g-dev >/dev/null
           v="$SWIFT_VERSION"; os=ubuntu2404; tag="swift-$v-RELEASE"
           curl -fsSL "https://download.swift.org/swift-$v-release/$os/$tag/$tag-ubuntu24.04.tar.gz" | sudo tar xz -C /opt
           echo "/opt/$tag-ubuntu24.04/usr/bin" >> "$GITHUB_PATH"
