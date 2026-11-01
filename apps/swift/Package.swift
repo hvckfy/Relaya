@@ -8,6 +8,8 @@ let freerdpDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     .appending(path: "../../core/build/freerdp").standardized.path
 let freerdpLinker: [LinkerSetting] = FileManager.default.fileExists(atPath: freerdpDir + "/libfreerdp3.dylib") ? [
     .linkedLibrary("freerdp3"), .linkedLibrary("freerdp-client3"), .linkedLibrary("winpr3"),
+    // flate2 в ядре с rdp-freerdp собирается против zlib — системная из macOS SDK.
+    .linkedLibrary("z"),
     // Сборка и тесты берут dylib отсюда; в .app они лежат в Contents/Frameworks (bundle-macos.sh).
     .unsafeFlags(["-L", freerdpDir, "-Xlinker", "-rpath", "-Xlinker", freerdpDir,
                   "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
