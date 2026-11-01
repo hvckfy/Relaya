@@ -213,14 +213,17 @@ internal sealed class SshSession : IDisposable
             decoder.GetChars(data, 0, data.Length, chars, 0);
             tail.Append(chars);
             if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
-            var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
+            // П-7: признаки считаются один раз на кусок; без ESC в хвосте регулярка не нужна.
+            var text = StripCsi(tail.ToString()).Replace("\r", "");
+            var secret = uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(text);
+            var prompt = PasswordPrompt.Matches(text);
             // Пауза рассылки ставится до того, как запрос появится на экране: ответ на него не успеет уйти в другие
             // терминалы, даже если набран сразу (L-SEC-1, гонка первого символа).
-            if (uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(text)) secretPrompt = true;
+            if (secret) secretPrompt = true;
             view.Feed(data);
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
-            if (!loggedIn && PasswordPrompt.Matches(text)) sawPasswordPrompt = true;
+            if (!loggedIn && prompt) sawPasswordPrompt = true;
             if (!loggedIn && view.Emulator.LoginReady())
             {
                 loggedIn = true;
@@ -253,16 +256,16 @@ internal sealed class SshSession : IDisposable
             }
             // До входа (запросы самого ssh: пароль, passphrase, 2FA) — рассылки нет вовсе; после — по правилу ядра
             // terminal_secret_prompt, общему для Mac, Windows и Linux (L-SEC-1).
-            secretPrompt = !loggedIn || uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(text);
+            secretPrompt = !loggedIn || secret;
             NotePorts(new string(chars));
             Log(chars);
-            if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
+            if (!loggedIn && !passwordSent && prompt && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
                 passwordSent = true;
                 tail.Clear();
                 pc.Write(Encoding.UTF8.GetBytes(password + "\r"));
             }
-            else if (!loggedIn && PasswordPrompt.Matches(text) && !offeredLoginPassword)
+            else if (!loggedIn && prompt && !offeredLoginPassword)
             {
                 // Пароля нет — «Ввести и сохранить…»; подставленный уже не подошёл (ssh спрашивает снова) — «Ввести новый…».
                 offeredLoginPassword = true;
@@ -309,10 +312,18 @@ internal sealed class SshSession : IDisposable
         StateChanged?.Invoke(true);
     }
 
+    private static readonly System.Text.RegularExpressions.Regex Csi =
+        new("\x1b\\[[0-9;?]*[A-Za-z]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Escape-последовательности CSI убираются только если ESC вообще есть.
+    private static string StripCsi(string text) => text.Contains('\x1b') ? Csi.Replace(text, "") : text;
+
     // Порты из нового куска вывода (без escape-последовательностей): новые — в начало списка.
     private void NotePorts(string chunk)
     {
-        var plain = System.Text.RegularExpressions.Regex.Replace(chunk, "\x1b\\[[0-9;?]*[A-Za-z]", "");
+        // Порт — это цифры: кусок без цифр (набор, перерисовка) не идёт в ядро.
+        if (!chunk.AsSpan().ContainsAnyInRange('0', '9')) return;
+        var plain = StripCsi(chunk);
         var found = uniffi.relaya_core.RelayaCoreMethods.LocalPortsFind(plain);
         if (found.Count == 0) return;
         bool changed;
