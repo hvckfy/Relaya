@@ -10,10 +10,6 @@ internal static class PasswordPrompt
         return t.EndsWith(':') && (t.Contains("password") || t.Contains("пароль")) && !t.Contains("passphrase") && !t.Contains("new");
     }
 
-    /// Последняя непустая строка похожа на запрос секрета (пауза рассылки ввода, L-SEC-1). Правило и тесты — в ядре
-    /// (terminal_secret_prompt), одно на Mac, Windows и Linux: пароль, passphrase, PIN, токен, коды, многие языки.
-    public static bool IsSecretPrompt(string tail) => uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(tail);
-
     public static bool Matches(string tail)
     {
         var lines = tail.Split('\n');

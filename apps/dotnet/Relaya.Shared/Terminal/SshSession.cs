@@ -133,7 +133,7 @@ internal sealed class SshSession : IDisposable
             var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
             // Пауза рассылки ставится до того, как запрос появится на экране: ответ на него не успеет уйти в другие
             // терминалы, даже если набран сразу (L-SEC-1, гонка первого символа).
-            if (PasswordPrompt.IsSecretPrompt(text)) secretPrompt = true;
+            if (uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(text)) secretPrompt = true;
             view.Feed(data);
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
@@ -146,8 +146,9 @@ internal sealed class SshSession : IDisposable
                 try { HostKeyRequested?.Invoke(fp); }
                 catch (Exception e) { Relaya.Terminal.TerminalView.Trace("HostKeyRequested: " + e.GetType().Name); }
             }
-            // До входа (запросы самого ssh: пароль, passphrase, 2FA) — рассылки нет вовсе; после — по широкому правилу (L-SEC-1).
-            secretPrompt = !loggedIn || PasswordPrompt.IsSecretPrompt(text);
+            // До входа (запросы самого ssh: пароль, passphrase, 2FA) — рассылки нет вовсе; после — по правилу ядра
+            // terminal_secret_prompt, общему для Mac, Windows и Linux (L-SEC-1).
+            secretPrompt = !loggedIn || uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(text);
             NotePorts(new string(chars));
             if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
