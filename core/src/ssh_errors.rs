@@ -194,6 +194,7 @@ fn explain_with(rules: &[(&[&str], &str, &str)], output: &str) -> Option<SshProb
 
 /// V-1: сервер VNC временно блокирует вход (первое правило VNC_RULES). RoyalVNCKit отдаёт это как ошибку
 /// аутентификации, но пароль может быть верным — сохранённый стирать нельзя (вид AccountProblem, как у RDP).
+#[cfg_attr(not(feature = "vnc-royal"), allow(dead_code))] // нужна движку VNC
 pub(crate) fn vnc_locked_out(message: &str) -> bool {
     let lower = message.to_lowercase();
     VNC_RULES[0].0.iter().any(|needle| lower.contains(needle))
