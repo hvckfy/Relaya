@@ -374,9 +374,82 @@ fn password_script(enabled: bool, file: &str, dropin_dir: &str) -> String {
     )
 }
 
+/// Команда для пользователя `user`: под root `sudo` лишний (а без sudo в системе — ошибка), поэтому убирается —
+/// только как отдельная команда: в начале строки и после `;`, `&&`, `||`, `|`, вне кавычек. `sudo` с ключами
+/// (`sudo -u x …`) не трогается. Для остальных пользователей команда не меняется.
+#[uniffi::export]
+pub fn os_command_for_user(command: String, user: String) -> String {
+    if user != "root" {
+        return command;
+    }
+    let chars: Vec<char> = command.chars().collect();
+    let mut out = String::with_capacity(command.len());
+    let (mut quote, mut at_start, mut i) = (None::<char>, true, 0);
+    while i < chars.len() {
+        let c = chars[i];
+        if let Some(q) = quote {
+            out.push(c);
+            if c == q {
+                quote = None;
+            } else if c == '\\' && q == '"' && i + 1 < chars.len() {
+                out.push(chars[i + 1]);
+                i += 1;
+            }
+            i += 1;
+            continue;
+        }
+        if at_start && c.is_whitespace() {
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        if at_start && chars[i..].starts_with(&['s', 'u', 'd', 'o']) {
+            let after = chars.get(i + 4).copied();
+            let next = chars[i + 4..].iter().find(|c| !c.is_whitespace()).copied();
+            if after.map(char::is_whitespace).unwrap_or(false) && next.map(|n| n != '-').unwrap_or(false) {
+                i += 4;
+                while i < chars.len() && chars[i].is_whitespace() {
+                    i += 1;
+                }
+                at_start = false;
+                continue;
+            }
+        }
+        at_start = false;
+        match c {
+            '\'' | '"' => quote = Some(c),
+            ';' | '|' | '&' => at_start = true,
+            '\\' if i + 1 < chars.len() => {
+                out.push(c);
+                out.push(chars[i + 1]);
+                i += 2;
+                continue;
+            }
+            _ => {}
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sudo_is_dropped_only_as_a_command_for_root() {
+        let root = |c: &str| os_command_for_user(c.into(), "root".into());
+        assert_eq!(root("sudo apt update && sudo apt upgrade"), "apt update && apt upgrade");
+        assert_eq!(root("sudo a; sudo b || sudo c | sudo d"), "a; b || c | d");
+        assert_eq!(root("  sudo   ls"), "  ls");
+        assert_eq!(root("echo 'sudo rm' \"; sudo x\""), "echo 'sudo rm' \"; sudo x\"");
+        assert_eq!(root("visudo -c; pseudo sudo"), "visudo -c; pseudo sudo");
+        assert_eq!(root("sudo -u www ls"), "sudo -u www ls");
+        assert_eq!(root("echo \\; sudo x"), "echo \\; x");
+        assert_eq!(root("sudo"), "sudo");
+        assert_eq!(os_command_for_user("sudo apt update".into(), "deploy".into()), "sudo apt update");
+    }
 
     #[test]
     fn probe_and_banner() {
