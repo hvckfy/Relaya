@@ -152,7 +152,7 @@ internal sealed class TileHost : UserControl, IDisposable
             {
                 var item = new MenuFlyoutItem { Text = sn.name };
                 ToolTipService.SetToolTip(item, sn.command);
-                item.Click += (_, _) => active?.View.Paste(sn.command);
+                item.Click += (_, _) => { if (MainWindow.Current is { } w) Pages.CommandPalette.InsertSnippet(w, sn, active?.View); };
                 snippetMenu.Items.Add(item);
             }
         };
@@ -170,9 +170,13 @@ internal sealed class TileHost : UserControl, IDisposable
         };
         // Прозрачный фон: без него пустые места холста не получают DragOver/Drop.
         var stage = new Grid { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), Children = { grid, dropHint } };
+        // Панели хоста и плиток — в колонках одной строки: при узком окне не наезжают друг на друга.
+        var toolbar = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } } };
+        toolbar.Children.Add(hostBar);
+        Grid.SetColumn(bar, 1);
+        toolbar.Children.Add(bar);
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
-        root.Children.Add(hostBar);
-        root.Children.Add(bar);
+        root.Children.Add(toolbar);
         Grid.SetRow(broadcastBar, 1);
         root.Children.Add(broadcastBar);
         Grid.SetRow(stage, 2);

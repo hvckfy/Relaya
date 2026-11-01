@@ -189,9 +189,10 @@ internal static class CommandPalette
 
     // Сниппет без переменных — сразу в последний терминал (как вставка, без Enter); с {{переменными}} или без
     // открытого терминала — страница сниппетов, где их заполняют.
-    private static void InsertSnippet(MainWindow w, Snippet s)
+    // Общее для палитры и панели над терминалом (Е.20); target — терминал, куда вставлять (по умолчанию последний).
+    internal static void InsertSnippet(MainWindow w, Snippet s, Terminal.TerminalView? target = null)
     {
-        if (w.LastTerminal is { } terminal && RelayaCoreMethods.SnippetVariables(s.command).Count == 0)
+        if ((target ?? w.LastTerminal) is { } terminal && RelayaCoreMethods.SnippetVariables(s.command).Count == 0)
         {
             w.SelectTerminal(terminal);
             terminal.Paste(s.command);
