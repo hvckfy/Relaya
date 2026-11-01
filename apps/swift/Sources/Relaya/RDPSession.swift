@@ -48,6 +48,26 @@ final class RDPSession {
     let canvas = RDPCanvasView(frame: .zero)
     @ObservationIgnored private let audio = RDPAudio()
     @ObservationIgnored private var pendingSave: (password: String, account: String)?
+
+    // Е.18: звук и общий буфер обмена по столу — как desktop.<id>.volume / .clipboard на Windows и Linux.
+    private var volumeKey: String { "desktop.\(desktop.id.uuidString).volume" }
+    private var clipboardKey: String { "desktop.\(desktop.id.uuidString).clipboard" }
+
+    /// Громкость 0…100.
+    var volume: Double = 100 {
+        didSet {
+            UserDefaults.standard.set(volume, forKey: volumeKey)
+            audio.setUserVolume(volume / 100)
+        }
+    }
+
+    /// Общий буфер обмена с сервером; выключение очищает отправленный текст на сервере (как W-RDP-2).
+    var clipboardEnabled = true {
+        didSet {
+            UserDefaults.standard.set(clipboardEnabled, forKey: clipboardKey)
+            if !clipboardEnabled { engine?.setClipboard("") } else { lastPasteboard = -1; sendLocalClipboard() }
+        }
+    }
     @ObservationIgnored private var engine: RDPEngine?
     @ObservationIgnored private var tunnel: Tunnel?
     @ObservationIgnored private var target: (host: String, port: Int) = ("", 0)
@@ -58,6 +78,9 @@ final class RDPSession {
         self.model = model
         if let w = desktop.rdpWidth, let h = desktop.rdpHeight { fixedSize = (w, h) }
         retina = desktop.rdpRetina ?? true
+        volume = UserDefaults.standard.object(forKey: "desktop.\(desktop.id.uuidString).volume") as? Double ?? 100
+        clipboardEnabled = UserDefaults.standard.object(forKey: "desktop.\(desktop.id.uuidString).clipboard") as? Bool ?? true
+        audio.setUserVolume(volume / 100)  // в init didSet не срабатывает
         canvas.onSurfaceChange = { [weak self] points, scale in self?.surfaceChanged(points: points, scale: scale) }
         canvas.onFocus = { [weak self] in self?.sendLocalClipboard() }
     }
@@ -125,6 +148,7 @@ final class RDPSession {
     /// Локальный буфер уходит на сервер, только когда вкладка в фокусе (W-RDP-1): копирование для других целей
     /// не рассылается на все открытые столы.
     private func sendLocalClipboard() {
+        guard clipboardEnabled else { return }
         let pb = NSPasteboard.general
         guard pb.changeCount != lastPasteboard, let text = pb.string(forType: .string) else { return }
         lastPasteboard = pb.changeCount
@@ -132,6 +156,7 @@ final class RDPSession {
     }
 
     private func remoteClipboard(_ text: String) {
+        guard clipboardEnabled else { return }
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)

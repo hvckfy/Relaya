@@ -12,6 +12,12 @@ final class RDPAudio: @unchecked Sendable {
     private var output: AVAudioFormat?
     private var lastReset = Date.distantPast
     private var serverVolume: Float = 1
+    private var userVolume: Float = 1
+
+    /// Громкость пользователя 0…1 (ползунок в окне стола) × громкость сервера.
+    func setUserVolume(_ v: Double) {
+        queue.async { self.userVolume = Float(v); self.apply() }
+    }
 
     init() {
         engine.attach(player)
@@ -21,7 +27,7 @@ final class RDPAudio: @unchecked Sendable {
         queue.async { self.serverVolume = Float(v); self.apply() }
     }
 
-    private func apply() { player.volume = serverVolume }
+    private func apply() { player.volume = userVolume * serverVolume }
 
     func play(_ f: RDPEngine.AudioFormat, _ pcm: Data) {
         queue.async { self.enqueue(f, pcm) }

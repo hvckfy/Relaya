@@ -93,6 +93,16 @@ struct RDPContent: View {
                 ResolutionMenu(session: session)
             }
             ToolbarItem {
+                RDPSoundButton(session: session)
+            }
+            ToolbarItem {
+                Toggle(isOn: $session.clipboardEnabled) {
+                    Label(L("Общий буфер обмена"), systemImage: "doc.on.clipboard")
+                }
+                .toggleStyle(.button)
+                .help(L("Общий буфер обмена с удалённым столом"))
+            }
+            ToolbarItem {
                 Button { session.toggleFullScreen() } label: {
                     Label(L("Во весь экран"), systemImage: "arrow.up.left.and.arrow.down.right")
                 }
@@ -138,6 +148,28 @@ struct RDPContent: View {
         guard !user.isEmpty else { return }
         session.provide(user: user, password: password, save: save)
         password = ""
+    }
+}
+
+/// Громкость звука стола (Е.18) — ползунок во всплывающей панели, как Sound flyout на Windows.
+private struct RDPSoundButton: View {
+    @Bindable var session: RDPSession
+    @State private var shown = false
+
+    var body: some View {
+        Button { shown.toggle() } label: {
+            Label(L("Звук"), systemImage: session.volume == 0 ? "speaker.slash" : "speaker.wave.2")
+        }
+        .help(L("Громкость звука удалённого стола"))
+        .popover(isPresented: $shown) {
+            HStack {
+                Image(systemName: "speaker")
+                Slider(value: $session.volume, in: 0...100)
+                Image(systemName: "speaker.wave.3")
+            }
+            .padding()
+            .frame(width: 240)
+        }
     }
 }
 
