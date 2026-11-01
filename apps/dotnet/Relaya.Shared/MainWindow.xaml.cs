@@ -52,6 +52,18 @@ public sealed partial class MainWindow : Window
         Title = "Relaya";
         RestoreBounds();
         ConfigPath.Text = AppState.ConfigPath;
+        // Не хватает обязательного компонента (Linux: ssh, libsecret, хранилище паролей) — сказать на стартовом экране (Л5).
+        if (Platform.Components.List().Any(c => c.Required && !c.Found))
+        {
+            var open = new Button { Content = L("Компоненты") };
+            open.Click += (_, _) => ShowPage(Pages.ComponentsPage.Build());
+            Empty.Children.Insert(0, new InfoBar
+            {
+                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, MaxWidth = 560, Margin = new Thickness(0, 0, 0, 16),
+                Title = L("Не хватает обязательных компонентов"), Message = L("Без них часть Relaya не работает. Что поставить и как — в «Компонентах»."),
+                ActionButton = open,
+            });
+        }
         Search.PlaceholderText = L("Поиск хостов");
         NewHostText.Text = L("Новый хост…");
         AppState.HostsChanged += () => ui.TryEnqueue(() => Render(Search.Text.Trim()));

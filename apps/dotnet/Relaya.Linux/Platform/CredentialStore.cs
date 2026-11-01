@@ -31,6 +31,29 @@ internal static class CredentialStore
 
     public static bool Has(string account) => Read(account) != null;
 
+    /// Есть ли служба Secret Service (для «Компонентов»): пробный поиск без ошибки D-Bus.
+    /// false и при отсутствии libsecret.
+    public static bool ServiceAvailable()
+    {
+        try
+        {
+            var attrs = Attributes("relaya-probe");
+            try
+            {
+                var p = secret_password_lookupv_sync(schema.Value, attrs, IntPtr.Zero, out var error);
+                if (p != IntPtr.Zero) secret_password_free(p);
+                if (error == IntPtr.Zero) return true;
+                Drop(error);
+                return false;
+            }
+            finally { g_hash_table_unref(attrs); }
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; }
+    }
+
+    /// Загружается ли libsecret.
+    public static bool LibraryAvailable() => NativeLibrary.TryLoad(Secret, out _);
+
     /// Без libsecret или без службы секретов — понятное сообщение (Н12, Л5), а не исключение загрузчика.
     /// Два случая разные: нет библиотеки (поставить libsecret) и нет службы (поставить и запустить keyring).
     public static void Write(string account, string secret)

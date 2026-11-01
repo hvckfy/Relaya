@@ -23,10 +23,14 @@ internal sealed class SettingsPage : UserControl
         bar.Items.Add(terminal);
         bar.Items.Add(syncItem);
         bar.Items.Add(about);
+        // Внешние программы и службы (Л5) — только там, где их ставит не установщик (Linux).
+        var components = new SelectorBarItem { Text = L("Компоненты") };
+        if (Platform.Components.List().Count > 0) bar.Items.Add(components);
         bar.SelectionChanged += (_, _) =>
         {
             body.Content = bar.SelectedItem == syncItem ? (sync ??= new Settings.SyncPage())
-                : bar.SelectedItem == about ? About() : Terminal();
+                : bar.SelectedItem == about ? About()
+                : bar.SelectedItem == components ? ComponentsPage.Build() : Terminal();
         };
         body.Content = Terminal();
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() } };
