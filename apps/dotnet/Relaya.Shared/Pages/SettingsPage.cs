@@ -43,6 +43,15 @@ internal sealed class SettingsPage : UserControl
     private static UIElement Terminal()
     {
         var (page, list) = Ui.Scaffold(L("Терминал"));
+        // Оформление окна (12.1): как в системе, светлое или тёмное — сразу, без перезапуска.
+        var appTheme = new ComboBox { MinWidth = 220, Items = { L("Системная"), L("Светлая"), L("Тёмная") } };
+        appTheme.SelectedIndex = Platform.Settings.Get("app.theme", "system") switch { "light" => 1, "dark" => 2, _ => 0 };
+        appTheme.SelectionChanged += (_, _) =>
+        {
+            Platform.Settings.Set("app.theme", appTheme.SelectedIndex switch { 1 => "light", 2 => "dark", _ => "system" });
+            MainWindow.Current?.ApplyTheme();
+        };
+        list.Children.Add(Ui.Row("\uE790", L("Оформление"), L("Цвета окна Relaya"), appTheme));
         var theme = new ComboBox { MinWidth = 220 };
         foreach (var n in TerminalTheme.Names) theme.Items.Add(n);
         theme.SelectedItem = Platform.Settings.Get("terminal.theme", "Relaya");

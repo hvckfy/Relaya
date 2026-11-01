@@ -51,6 +51,7 @@ public sealed partial class MainWindow : Window
 #endif
         Title = "Relaya";
         RestoreBounds();
+        ApplyTheme();
         AddShortcuts();
         ConfigPath.Text = AppState.ConfigPath;
         // Не хватает обязательного компонента (Linux: ssh, libsecret, хранилище паролей) — сказать на стартовом экране (Л5).
@@ -418,6 +419,16 @@ public sealed partial class MainWindow : Window
         if (Page.Content is Pages.HostPage hp) return hp.Host;
         var alias = ((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.ActiveAlias : null;
         return alias != null ? AppState.Host(alias) : null;
+    }
+
+    /// Тема окна из настройки app.theme (system | light | dark).
+    internal void ApplyTheme()
+    {
+        if (Content is FrameworkElement root)
+            root.RequestedTheme = Platform.Settings.Get("app.theme", "system") switch
+            {
+                "light" => ElementTheme.Light, "dark" => ElementTheme.Dark, _ => ElementTheme.Default,
+            };
     }
 
     private void AddShortcuts()
