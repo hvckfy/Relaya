@@ -245,7 +245,7 @@ internal sealed class HostPage : UserControl
             }
             default:
             {
-                var tiles = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 180, ItemHeight = 96 };
+                var tiles = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 180, ItemHeight = 112 }; // заголовок, значение, подпись и полоса — без переноса
                 foreach (var m in metrics) tiles.Children.Add(Tile(m.Title, m.Value, m.Part));
                 tiles.Children.Add(Tile(L("Работает"), uptime, null));
                 stats.Children.Add(tiles);
@@ -256,14 +256,24 @@ internal sealed class HostPage : UserControl
 
     public const string StatsStyleKey = "host.statsStyle";
 
+    // Плитка «Состояния»: значение в одну строку (Subtitle), «X / Y» — занятое крупно, «из Y» подписью ниже; всё с
+    // многоточием, полный текст — в подсказке. Переноса нет: вторая строка обрезалась снизу плитки.
     private static UIElement Tile(string title, string value, double? part)
     {
-        var panel = new StackPanel { Spacing = 4 };
-        panel.Children.Add(Ui.Secondary(title));
-        panel.Children.Add(new TextBlock { Text = value, Style = Ui.Style("SubtitleTextBlockStyle"), TextWrapping = TextWrapping.Wrap });
+        var panel = new StackPanel { Spacing = 2 };
+        TextBlock Line(string text, string style, bool secondary) => new()
+        {
+            Text = text, Style = Ui.Style(style), TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = secondary ? Ui.Brush("TextFillColorSecondaryBrush") : Ui.Brush("TextFillColorPrimaryBrush"),
+        };
+        var slash = value.IndexOf(" / ", StringComparison.Ordinal);
+        panel.Children.Add(Line(title, "CaptionTextBlockStyle", true));
+        panel.Children.Add(Line(slash > 0 ? value[..slash] : value, "SubtitleTextBlockStyle", false));
+        if (slash > 0) panel.Children.Add(Line(L("из %@", value[(slash + 3)..]), "CaptionTextBlockStyle", true));
         if (part is { } p) panel.Children.Add(new ProgressBar { Maximum = 1, Value = Math.Min(1, p) });
         var card = Ui.Card(panel);
         card.Margin = new Thickness(0, 0, 8, 8);
+        ToolTipService.SetToolTip(card, $"{title}: {value}");
         return card;
     }
 
