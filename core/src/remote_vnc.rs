@@ -3,8 +3,10 @@
 //! (VNC, ARD — имя и пароль macOS, MS-Logon) и ответом `provide_credentials`, без блокировки потоков FFI.
 //! RoyalVNCKit — отдельная библиотека рядом с ядром (Linux — .so с -static-stdlib, Windows — dll + рантайм Swift).
 
+use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr, CString};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use crate::remote::{FrameRect, RemoteClose, RemoteCloseKind, RemoteListener};
 
@@ -125,7 +127,8 @@ struct Shared {
     /// Пароль из конфигурации: забирается при первом запросе и затирается после передачи в RoyalVNC.
     /// Известный остаток: RoyalVNC копирует его в свою Swift-строку, её обнулить нельзя (принятый низкий риск).
     password: Mutex<Option<String>>,
-    pending_auth: Mutex<Option<usize>>,
+    /// Ожидающий запрос учётных данных и нужно ли ему имя (по типу запроса, не по ответу клиента).
+    pending_auth: Mutex<Option<(usize, bool)>>,
     size: Mutex<(u16, u16)>,
     connected: Mutex<bool>,
     closed: Mutex<bool>,
@@ -135,8 +138,8 @@ struct Native {
     connection: Ptr,
     delegate: Ptr,
     settings: Ptr,
-    /// Адрес `Arc<Shared>` в контексте соединения: освобождается вместе с сессией.
-    context: *const Shared,
+    /// Ключ сессии в `SESSIONS`, переданный RoyalVNC как контекст соединения.
+    context: usize,
 }
 unsafe impl Send for Native {}
 
@@ -147,9 +150,23 @@ pub struct VncSession {
     pointer: Mutex<(u16, u16)>,
 }
 
-fn shared_of<'a>(connection: Ptr) -> Option<&'a Shared> {
-    let p = unsafe { rvnc_connection_context_get(connection) } as *const Shared;
-    unsafe { p.as_ref() }
+/// Сессии по ключу. RoyalVNC получает ключ, а не указатель: колбэк, пришедший из его потока после закрытия сессии,
+/// не найдёт её (None), а не разыменует освобождённую память.
+fn sessions() -> &'static Mutex<HashMap<usize, Weak<Shared>>> {
+    static SESSIONS: OnceLock<Mutex<HashMap<usize, Weak<Shared>>>> = OnceLock::new();
+    SESSIONS.get_or_init(Default::default)
+}
+
+fn session_register(shared: &Arc<Shared>) -> usize {
+    static NEXT: AtomicUsize = AtomicUsize::new(1);
+    let key = NEXT.fetch_add(1, Ordering::Relaxed);
+    sessions().lock().unwrap_or_else(|e| e.into_inner()).insert(key, Arc::downgrade(shared));
+    key
+}
+
+fn shared_of(connection: Ptr) -> Option<Arc<Shared>> {
+    let key = unsafe { rvnc_connection_context_get(connection) } as usize;
+    sessions().lock().unwrap_or_else(|e| e.into_inner()).get(&key)?.upgrade()
 }
 
 /// Прямоугольник кадра BGRA построчно; вне буфера — ничего (не читаем чужую память).
@@ -224,7 +241,7 @@ extern "C" fn on_auth(connection: Ptr, _ctx: Ptr, request: Ptr) {
     let listener = s.auth.lock().unwrap_or_else(|e| e.into_inner()).clone();
     match listener {
         Some(l) => {
-            *s.pending_auth.lock().unwrap_or_else(|e| e.into_inner()) = Some(request as usize);
+            *s.pending_auth.lock().unwrap_or_else(|e| e.into_inner()) = Some((request as usize, needs_user));
             l.on_credentials(VncAuthKind::from_raw(raw), needs_user);
         }
         None => unsafe { rvnc_authentication_request_cancel(request) },
@@ -346,7 +363,7 @@ impl VncSession {
                 std::ptr::null_mut(),
             )
         };
-        let context = Arc::into_raw(self.shared.clone());
+        let context = session_register(&self.shared);
         let connection =
             unsafe { rvnc_connection_create(settings, std::ptr::null_mut(), std::ptr::null_mut(), context as Ptr) };
         let delegate =
@@ -358,15 +375,18 @@ impl VncSession {
         *slot = Some(Native { connection, delegate, settings, context });
     }
 
-    /// Ответ на `on_credentials`. Для ARD и MS-Logon нужно имя.
+    /// Ответ на `on_credentials`. Для ARD и MS-Logon нужно имя: передаётся ли оно, решает тип запроса, без имени —
+    /// пустое.
     pub fn provide_credentials(&self, user: Option<String>, password: String) {
-        let Some(request) = self.shared.pending_auth.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
-        let needs_user = user.is_some();
+        let Some((request, needs_user)) = self.shared.pending_auth.lock().unwrap_or_else(|e| e.into_inner()).take()
+        else {
+            return;
+        };
         complete(request as Ptr, needs_user, user.as_deref().unwrap_or(""), password);
     }
 
     pub fn cancel_credentials(&self) {
-        if let Some(request) = self.shared.pending_auth.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some((request, _)) = self.shared.pending_auth.lock().unwrap_or_else(|e| e.into_inner()).take() {
             unsafe { rvnc_authentication_request_cancel(request as Ptr) };
         }
     }
@@ -439,14 +459,16 @@ impl VncSession {
 
 impl Drop for VncSession {
     fn drop(&mut self) {
+        self.cancel_credentials();
         let native = self.native.get_mut().unwrap_or_else(|e| e.into_inner()).take();
         if let Some(n) = native {
+            // Сначала убрать ключ: поздние колбэки RoyalVNC больше не найдут сессию.
+            sessions().lock().unwrap_or_else(|e| e.into_inner()).remove(&n.context);
             unsafe {
                 rvnc_connection_disconnect(n.connection);
                 rvnc_connection_destroy(n.connection);
                 rvnc_connection_delegate_destroy(n.delegate);
                 rvnc_settings_destroy(n.settings);
-                drop(Arc::from_raw(n.context));
             }
         }
     }
