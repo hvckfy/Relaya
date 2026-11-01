@@ -43,12 +43,18 @@ private struct SessionTab: View {
     let active: Bool
     @State private var hovering = false
 
+    /// Цвет иконки вкладки: цвет хоста из редактора (Е.10), иначе цвет первой метки.
+    private var tabTint: Color? {
+        if let name = session.host?.color, let c = Theme.hostColors.first(where: { $0.name == name }) { return c.color }
+        return session.host?.tags.first.map(TagStyle.color)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: session.systemImage)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(session.controller?.ended == true ? Theme.tx2.opacity(0.4)
-                                 : session.host?.tags.first.map(TagStyle.color) ?? Theme.tx2)
+                                 : tabTint ?? Theme.tx2)
                 .frame(width: 14)
             if model.receivesBroadcast(session) {
                 Image(systemName: "dot.radiowaves.left.and.right")

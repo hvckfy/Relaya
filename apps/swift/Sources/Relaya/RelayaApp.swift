@@ -72,7 +72,7 @@ struct RelayaApp: App {
                 Divider()
                 // Е.16: размер шрифта терминала с клавиатуры (⌘+ / ⌘− / ⌘0), как Ctrl+= / Ctrl+− на Windows и Linux.
                 Button(L("Крупнее")) { model.settings.fontSize = min(24, model.settings.fontSize + 1) }
-                    .keyboardShortcut("+", modifiers: .command)
+                    .keyboardShortcut("=", modifiers: .command)  // ⌘= / ⌘+ без Shift на любой раскладке, как в Safari
                 Button(L("Мельче")) { model.settings.fontSize = max(9, model.settings.fontSize - 1) }
                     .keyboardShortcut("-", modifiers: .command)
                 Button(L("Обычный размер")) { model.settings.fontSize = 12.5 }
