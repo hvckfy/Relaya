@@ -59,6 +59,8 @@ struct relaya_rdp
 	CliprdrClientContext* cliprdr;
 	char* local_text;
 	int cert_rejected;
+	/* Пустой пароль, а сервер требует NLA: второй заход — NLA с пустой строкой вместо «нет учётных данных». */
+	int blank_nla;
 	int closed;
 	uint16_t last_x, last_y;
 };
@@ -525,7 +527,13 @@ static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 	   Остаётся только TLS: у него есть сертификат, и verify_cert (TOFU) спрашивается; старая RDP Security без
 	   сертификата выключена, чтобы подмену сервера нельзя было пропустить молча. Непустой пароль всегда идёт через NLA:
 	   автоповтора без NLA нет — иначе пароль ушёл бы серверу в обход CredSSP (решение аудита безопасности). */
-	if (!r->password || !r->password[0])
+	const BOOL no_password = !r->password || !r->password[0];
+	/* Учётная запись без пароля на сервере, где NLA обязателен (ERRCONNECT_HYBRID_REQUIRED_BY_SERVER): FreeRDP
+	   считает NULL-пароль отсутствием учётных данных, поэтому передаём пустую строку — CredSSP с пустым паролем,
+	   как у mstsc и прежнего RDPKit. Секрета нет, обхода CredSSP нет. */
+	if (no_password && r->blank_nla)
+		ok &= freerdp_settings_set_string(s, FreeRDP_Password, "");
+	else if (no_password)
 	{
 		ok &= freerdp_settings_set_bool(s, FreeRDP_NlaSecurity, FALSE);
 		/* HYBRID_EX — тоже CredSSP; без этого nego просит [SSL|HYBRID|HYBRID_EX] и сервер выбирает NLA. */
@@ -729,6 +737,8 @@ void relaya_rdp_run(relaya_rdp* r)
 	ep.ClientFree = client_free;
 	ep.ClientStart = client_start;
 	ep.ClientStop = client_stop;
+	for (int attempt = 0;; attempt++)
+	{
 	rdpContext* context = freerdp_client_context_new(&ep);
 	if (!context)
 	{
@@ -748,6 +758,16 @@ void relaya_rdp_run(relaya_rdp* r)
 	if (!freerdp_connect(instance))
 	{
 		UINT32 e = freerdp_get_last_error(context);
+		/* Сервер требует NLA, а пароля нет — один повтор с NLA и пустым паролем (см. apply_settings). */
+		if (attempt == 0 && (!r->password || !r->password[0]) && !r->blank_nla && !r->cert_rejected &&
+		    strcmp(freerdp_get_last_error_name(e), "ERRCONNECT_HYBRID_REQUIRED_BY_SERVER") == 0)
+		{
+			r->blank_nla = 1;
+			freerdp_client_stop(context);
+			r->context = NULL;
+			freerdp_client_context_free(context);
+			continue;
+		}
 		char msg[512];
 		_snprintf(msg, sizeof(msg), "%s: %s", freerdp_get_last_error_name(e), freerdp_get_last_error_string(e));
 		msg[sizeof(msg) - 1] = 0; /* _snprintf не ставит '\0' при усечении */
@@ -778,6 +798,8 @@ void relaya_rdp_run(relaya_rdp* r)
 	freerdp_client_stop(context);
 	r->context = NULL;
 	freerdp_client_context_free(context);
+	return;
+	}
 }
 
 void relaya_rdp_free(relaya_rdp* r)
