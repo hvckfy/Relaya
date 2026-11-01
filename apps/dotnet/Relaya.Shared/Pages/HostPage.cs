@@ -15,6 +15,9 @@ namespace Relaya.Pages;
 internal sealed class HostPage : UserControl
 {
     private readonly SshHost host;
+
+    /// Хост карточки — для сочетаний окна (F2 — изменить, Ctrl+Shift+T — подключить, Ctrl+Shift+O — файлы).
+    public SshHost Host => host;
     private readonly StackPanel stats = new() { Spacing = 4 };
     private readonly StackPanel docker = new() { Spacing = 4 };
     private readonly StackPanel tmux = new() { Spacing = 4 };

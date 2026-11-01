@@ -51,6 +51,7 @@ public sealed partial class MainWindow : Window
 #endif
         Title = "Relaya";
         RestoreBounds();
+        AddShortcuts();
         ConfigPath.Text = AppState.ConfigPath;
         // Не хватает обязательного компонента (Linux: ssh, libsecret, хранилище паролей) — сказать на стартовом экране (Л5).
         if (Platform.Components.List().Any(c => c.Required && !c.Found))
@@ -377,6 +378,43 @@ public sealed partial class MainWindow : Window
         if (Tabs.TabItems.Count == 0) return;
         var i = Math.Max(0, Tabs.SelectedIndex);
         Tabs.SelectedIndex = (i + delta + Tabs.TabItems.Count) % Tabs.TabItems.Count;
+    }
+
+    // Сочетания как на Mac (⌘ → Ctrl+Shift, где Ctrl+буква нужна shell): Ctrl+Shift+N — новый хост, F2 — изменить,
+    // F5 — перечитать ~/.ssh/config, Ctrl+Shift+T — новая вкладка к хосту, Ctrl+Shift+R — переподключить,
+    // Ctrl+Shift+O — файлы хоста, Ctrl+Alt+1…9 — вкладка по номеру.
+    private SshHost? CurrentHost()
+    {
+        if (Page.Content is Pages.HostPage hp) return hp.Host;
+        var alias = ((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.ActiveAlias : null;
+        return alias != null ? AppState.Host(alias) : null;
+    }
+
+    private void AddShortcuts()
+    {
+        void Add(Windows.System.VirtualKey key, Windows.System.VirtualKeyModifiers mods, Action action)
+        {
+            var a = new KeyboardAccelerator { Key = key, Modifiers = mods };
+            a.Invoked += (_, e) => { e.Handled = true; action(); };
+            ((UIElement)Content).KeyboardAccelerators.Add(a);
+        }
+        var cs = Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift;
+        var none = Windows.System.VirtualKeyModifiers.None;
+        Add(Windows.System.VirtualKey.N, cs, () => _ = Pages.HostEditor.Show(Content.XamlRoot, null, false));
+        Add(Windows.System.VirtualKey.F2, none, () => { if (CurrentHost() is { } h) _ = Pages.HostEditor.Show(Content.XamlRoot, h, false); });
+        Add(Windows.System.VirtualKey.F5, none, AppState.LoadHosts);
+        Add(Windows.System.VirtualKey.T, cs, () => { if (CurrentHost() is { } h) OpenSession(h.alias); });
+        Add(Windows.System.VirtualKey.O, cs, () => { if (CurrentHost() is { } h) OpenSftp(h.alias); });
+        Add(Windows.System.VirtualKey.R, cs, () =>
+        {
+            if (((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t) t.ReconnectActive();
+        });
+        for (var i = 1; i <= 9; i++)
+        {
+            var index = i - 1;
+            Add(Windows.System.VirtualKey.Number0 + i, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Menu,
+                () => { if (index < Tabs.TabItems.Count) Tabs.SelectedIndex = index; });
+        }
     }
 
     private void OnCloseTabKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; CloseActiveTab(); }

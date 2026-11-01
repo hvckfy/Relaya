@@ -1229,3 +1229,6 @@
 "Папка (Nextcloud, Syncthing, сетевой диск)" = "Folder (Nextcloud, Syncthing, network drive)";
 "Путь к папке, например ~/Nextcloud/Relaya" = "Folder path, for example ~/Nextcloud/Relaya";
 "Открыть во внешнем RDP-клиенте (FreeRDP или Remmina)" = "Open in an external RDP client (FreeRDP or Remmina)";
+"Новый хост, изменить хост, перечитать ~/.ssh/config" = "New host, edit host, reload ~/.ssh/config";
+"Новая вкладка к хосту, файлы хоста" = "New tab to the host, host files";
+"Переподключить, вкладка по номеру" = "Reconnect, tab by number";

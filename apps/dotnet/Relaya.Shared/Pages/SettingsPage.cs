@@ -108,6 +108,9 @@ internal sealed class SettingsPage : UserControl
             ("Ctrl+Alt+← ↑ → ↓", L("Соседняя плитка")),
             ("Ctrl+W, Ctrl+Tab", L("Закрыть вкладку, следующая вкладка")),
             ("Ctrl+K", L("Поиск хостов (Enter — подключиться)")),
+            ("Ctrl+Shift+N, F2, F5", L("Новый хост, изменить хост, перечитать ~/.ssh/config")),
+            ("Ctrl+Shift+T, Ctrl+Shift+O", L("Новая вкладка к хосту, файлы хоста")),
+            ("Ctrl+Shift+R, Ctrl+Alt+1…9", L("Переподключить, вкладка по номеру")),
         })
             list.Children.Add(Ui.Row(null, k, d));
         return page;

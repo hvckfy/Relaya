@@ -54,6 +54,13 @@ internal sealed class TileHost : UserControl, IDisposable
     public event Action<bool>? AliveChanged;
 
     public TerminalView? Active => active?.View;
+    public string? ActiveAlias => active?.Alias;
+
+    /// Переподключить активную плитку (Ctrl+Shift+R).
+    public void ReconnectActive()
+    {
+        if (active is { } p) { p.Session.Start(); p.View.Focus(FocusState.Programmatic); }
+    }
     public IEnumerable<string> TmuxNames => panes.Select(p => p.Session.TmuxName);
     public bool Contains(TerminalView v) => panes.Any(p => p.View == v);
 
