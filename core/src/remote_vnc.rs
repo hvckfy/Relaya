@@ -122,6 +122,9 @@ struct Shared {
     listener: Arc<dyn RemoteListener>,
     auth: Mutex<Option<Arc<dyn VncAuthListener>>>,
     config: VncConfig,
+    /// Пароль из конфигурации: забирается при первом запросе и затирается после передачи в RoyalVNC.
+    /// Известный остаток: RoyalVNC копирует его в свою Swift-строку, её обнулить нельзя (принятый низкий риск).
+    password: Mutex<Option<String>>,
     pending_auth: Mutex<Option<usize>>,
     size: Mutex<(u16, u16)>,
     connected: Mutex<bool>,
@@ -213,7 +216,8 @@ extern "C" fn on_auth(connection: Ptr, _ctx: Ptr, request: Ptr) {
     let Some(s) = shared_of(connection) else { return };
     let raw = unsafe { rvnc_authentication_request_authentication_type_get(request) };
     let needs_user = unsafe { rvnc_authentication_type_requires_username(raw) };
-    if let Some(password) = s.config.password.as_deref().filter(|p| !p.is_empty()) {
+    let stored = s.password.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some(password) = stored.filter(|p| !p.is_empty()) {
         complete(request, needs_user, s.config.user.as_deref().unwrap_or(""), password);
         return;
     }
@@ -227,11 +231,19 @@ extern "C" fn on_auth(connection: Ptr, _ctx: Ptr, request: Ptr) {
     }
 }
 
-fn complete(request: Ptr, needs_user: bool, user: &str, password: &str) {
-    let (u, p) = (
-        CString::new(user.replace('\0', "")).unwrap_or_default(),
-        CString::new(password.replace('\0', "")).unwrap_or_default(),
-    );
+/// Затереть байты строки перед освобождением.
+fn wipe(mut s: String) {
+    // Нули — допустимый UTF-8, инвариант String сохраняется.
+    unsafe { s.as_mut_vec() }.fill(0);
+    std::hint::black_box(&s);
+}
+
+/// Передать учётные данные RoyalVNC; свои копии пароля (исходная строка и CString) затираются после вызова.
+fn complete(request: Ptr, needs_user: bool, user: &str, password: String) {
+    let cleaned: String = password.chars().filter(|&c| c != '\0').collect();
+    wipe(password);
+    let u = CString::new(user.replace('\0', "")).unwrap_or_default();
+    let p = CString::new(cleaned).unwrap_or_default();
     unsafe {
         if needs_user {
             rvnc_authentication_request_complete_with_username_password(request, u.as_ptr(), p.as_ptr());
@@ -239,6 +251,9 @@ fn complete(request: Ptr, needs_user: bool, user: &str, password: &str) {
             rvnc_authentication_request_complete_with_password(request, p.as_ptr());
         }
     }
+    let mut bytes = p.into_bytes_with_nul();
+    bytes.fill(0);
+    std::hint::black_box(&bytes);
 }
 
 extern "C" fn on_create(connection: Ptr, _ctx: Ptr, fb: Ptr) {
@@ -287,11 +302,13 @@ pub fn vnc_keysym_for_char(codepoint: u32) -> u32 {
 #[uniffi::export]
 impl VncSession {
     #[uniffi::constructor]
-    pub fn vnc(config: VncConfig, listener: Arc<dyn RemoteListener>) -> Arc<Self> {
+    pub fn vnc(mut config: VncConfig, listener: Arc<dyn RemoteListener>) -> Arc<Self> {
+        let password = Mutex::new(config.password.take());
         let shared = Arc::new(Shared {
             listener,
             auth: Mutex::new(None),
             config,
+            password,
             pending_auth: Mutex::new(None),
             size: Mutex::new((0, 0)),
             connected: Mutex::new(false),
@@ -345,7 +362,7 @@ impl VncSession {
     pub fn provide_credentials(&self, user: Option<String>, password: String) {
         let Some(request) = self.shared.pending_auth.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
         let needs_user = user.is_some();
-        complete(request as Ptr, needs_user, user.as_deref().unwrap_or(""), &password);
+        complete(request as Ptr, needs_user, user.as_deref().unwrap_or(""), password);
     }
 
     pub fn cancel_credentials(&self) {

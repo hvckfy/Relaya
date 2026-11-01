@@ -1099,9 +1099,9 @@ impl Git {
     }
 }
 
-/// Можно ли синхронизироваться с этим адресом (S-GIT-1, S-GIT-2). Разрешены `https://`, `ssh://`, `git://`,
+/// Можно ли синхронизироваться с этим адресом (S-GIT-1, S-GIT-2). Разрешены `https://`, `ssh://`,
 /// scp-форма `user@host:path`, `file://` и абсолютный путь к локальному репозиторию. Отклоняются транспорты-команды
-/// (`ext::`, `fd::` и любые `<имя>::`), всё, что начинается с «-», `http://` и https-адрес с паролем или токеном.
+/// (`ext::`, `fd::` и любые `<имя>::`), всё, что начинается с «-», `http://`, `git://` (без шифрования и проверки сервера) и https-адрес с паролем или токеном.
 /// Клиенты вызывают при сохранении профиля; `git_sync` проверяет сам.
 #[uniffi::export]
 pub fn sync_validate_remote(remote: String) -> Result<(), CoreError> {
@@ -1128,7 +1128,7 @@ pub fn sync_validate_remote(remote: String) -> Result<(), CoreError> {
         }
         return if authority.is_empty() { Err(bad()) } else { Ok(()) };
     }
-    for scheme in ["ssh://", "git://"] {
+    for scheme in ["ssh://"] {
         if let Some(rest) = lower.strip_prefix(scheme) {
             return if rest.split('/').next().unwrap_or("").is_empty() { Err(bad()) } else { Ok(()) };
         }
@@ -1498,7 +1498,6 @@ mod tests {
             "https://github.com/me/cfg.git",
             "https://git@github.com/me/cfg.git",
             "ssh://git@host:2222/srv/cfg.git",
-            "git://host/cfg",
             "git@github.com:me/cfg.git",
             "host:cfg.git",
             "file:///srv/cfg.git",
@@ -1509,6 +1508,7 @@ mod tests {
             assert!(sync_validate_remote(ok.into()).is_ok(), "{ok}");
         }
         for bad in [
+            "git://host/cfg",
             "ext::sh -c touch% /tmp/pwned",
             "fd::17",
             "EXT::sh",

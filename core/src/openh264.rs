@@ -97,7 +97,7 @@ pub fn openh264_info(platform: CodecPlatform) -> OpenH264Info {
     let (_, file, archive, lib) = PINS.iter().find(|p| p.0 == platform).copied().expect("every platform is pinned");
     OpenH264Info {
         version: VERSION.into(),
-        url: format!("http://ciscobinary.openh264.org/{file}.bz2"),
+        url: format!("https://ciscobinary.openh264.org/{file}.bz2"),
         archive_sha256: archive.into(),
         library_sha256: lib.into(),
         file_name: file.into(),
@@ -170,7 +170,7 @@ mod tests {
             CodecPlatform::WindowsArm64,
         ] {
             let i = openh264_info(p);
-            assert!(i.url.starts_with("http://ciscobinary.openh264.org/") && i.url.ends_with(".bz2"));
+            assert!(i.url.starts_with("https://ciscobinary.openh264.org/") && i.url.ends_with(".bz2"));
             assert_eq!((i.archive_sha256.len(), i.library_sha256.len()), (64, 64));
             assert_eq!(i.notice, "OpenH264 Video Codec provided by Cisco Systems, Inc.");
         }
