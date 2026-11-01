@@ -511,6 +511,21 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { return System.Array.Empty<System.Text.RegularExpressions.Match>(); }
     }
 
+    // Замер отрисовки (перед П-2 на Win2D): каждые 300 кадров в terminal.log — среднее и худшее время кадра.
+    private int frames;
+    private TimeSpan frameTotal, frameWorst;
+
+    private void NoteFrameTime(TimeSpan t)
+    {
+        frames++;
+        frameTotal += t;
+        if (t > frameWorst) frameWorst = t;
+        if (frames < 300) return;
+        Trace($"frames: {frames}, avg {frameTotal.TotalMilliseconds / frames:F2} ms, worst {frameWorst.TotalMilliseconds:F2} ms, {screen.cols}x{screen.rows}");
+        frames = 0;
+        frameTotal = frameWorst = TimeSpan.Zero;
+    }
+
     private bool drawnText;
     private string? drawError;
 
@@ -524,7 +539,9 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         try
         {
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
             DrawFrame(painter);
+            NoteFrameTime(System.Diagnostics.Stopwatch.GetElapsedTime(started));
             if (!drawnText && Emulator.ScreenText().FirstOrDefault(l => l.Trim().Length > 0) is { } first)
             {
                 drawnText = true;
