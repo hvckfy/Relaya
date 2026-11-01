@@ -74,6 +74,8 @@ public sealed partial class MainWindow : Window
         AppState.HostsChanged += () => ui.TryEnqueue(() => Render(Search.Text.Trim()));
         Platform.Settings.Changed += () => ui.TryEnqueue(ApplyBackground);
         AppState.LoadHosts();
+        // Первый запуск — онбординг, когда окно уже на экране (1.15).
+        Activated += async (_, _) => { if (Content?.XamlRoot is { } r && !onboardingShown) { onboardingShown = true; await Pages.OnboardingPage.ShowIfFirstRun(r); } };
         Platform.SyncService.Shared.Imported += () => ui.TryEnqueue(AppState.LoadHosts);
         Platform.SyncService.Shared.AgentEscalationsPending += list =>
             ui.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.AgentEscalationsDialog.Show(root, list); });
@@ -553,6 +555,8 @@ public sealed partial class MainWindow : Window
 
     // Кнопка синхронизации в панели (11.9): видна при включённых профилях, во время синхронизации — кольцо,
     // при ошибке или конфликте подсказка ведёт в «Синхронизацию».
+    private bool onboardingShown;
+
     private void UpdateSyncButton()
     {
         var sync = Platform.SyncService.Shared;

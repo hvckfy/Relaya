@@ -1315,3 +1315,8 @@
 "Не удалось переместить в Корзину: %@" = "Could not move to the Trash: %@";
 "Не удалось подключить диск: служба WebClient не запущена или не установлена." = "Could not connect the drive: the WebClient service is not running or not installed.";
 "Не выбрана" = "None";
+"Ваши ключи живут в ~/.ssh, а не у нас" = "Your keys live in ~/.ssh, not with us";
+"Хостов в ~/.ssh/config: %@, пар ключей: %@. Только чтение: ничего не копируется." = "Hosts in ~/.ssh/config: %@, key pairs: %@. Read-only: nothing is copied.";
+"Хостов пока нет — добавьте первый кнопкой «Новый хост…» внизу панели." = "No hosts yet — add the first one with New Host… at the bottom of the pane.";
+"Пароли" = "Passwords";
+"Подключения идут через системный OpenSSH — ~/.ssh/config, ssh-agent и ProxyJump работают как в терминале." = "Connections go through the system OpenSSH — ~/.ssh/config, ssh-agent and ProxyJump work as in a terminal.";
