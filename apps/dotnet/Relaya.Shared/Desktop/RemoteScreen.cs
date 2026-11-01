@@ -23,6 +23,12 @@ internal sealed partial class RemoteScreen : UserControl
     private Rect target;
     private bool fit = true;
     private FrameworkElement canvas = null!;
+    // 1:1 — холст размером с экран сервера в прокрутке, как на Mac; «вписать» — холст по окну, прокрутки нет.
+    private readonly ScrollViewer scroll = new()
+    {
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        ZoomMode = ZoomMode.Disabled,
+    };
 
     private partial void CreateCanvas();
     private partial void InvalidateCanvas();
@@ -30,7 +36,9 @@ internal sealed partial class RemoteScreen : UserControl
     public RemoteScreen()
     {
         CreateCanvas();
-        Content = canvas;
+        scroll.Content = canvas;
+        Content = scroll;
+        ApplyMode();
         // Скрытая вкладка не рисует; при показе — одна перерисовка из буфера.
         RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => { if (Visibility == Visibility.Visible) InvalidateCanvas(); });
     }
@@ -41,7 +49,7 @@ internal sealed partial class RemoteScreen : UserControl
     public bool Fit
     {
         get => fit;
-        set { fit = value; InvalidateCanvas(); }
+        set { fit = value; ApplyMode(); InvalidateCanvas(); }
     }
 
     public (int Width, int Height) Size { get { lock (frameLock) return (remoteW, remoteH); } }
@@ -50,7 +58,7 @@ internal sealed partial class RemoteScreen : UserControl
     public void Reset(ushort w, ushort h)
     {
         lock (frameLock) { remoteW = w; remoteH = h; buffer = new byte[w * h * 4]; dirty.Clear(); fullDirty = true; }
-        ui.TryEnqueue(InvalidateCanvas);
+        ui.TryEnqueue(() => { ApplyMode(); InvalidateCanvas(); });
     }
 
     /// Изменённые прямоугольники (из потока сессии).
@@ -69,6 +77,19 @@ internal sealed partial class RemoteScreen : UserControl
             if (dirty.Count > 64) { dirty.Clear(); fullDirty = true; }
         }
         ui.TryEnqueue(() => { if (Visibility == Visibility.Visible) InvalidateCanvas(); });
+    }
+
+    // Размер холста: по окну («вписать») или экран сервера в физических пикселях (1:1, прокрутка).
+    private void ApplyMode()
+    {
+        int w, h;
+        lock (frameLock) (w, h) = (remoteW, remoteH);
+        var scale = XamlRoot?.RasterizationScale ?? 1.0;
+        var oneToOne = !fit && w > 0 && h > 0;
+        scroll.HorizontalScrollMode = scroll.VerticalScrollMode = oneToOne ? ScrollMode.Enabled : ScrollMode.Disabled;
+        scroll.HorizontalScrollBarVisibility = scroll.VerticalScrollBarVisibility = oneToOne ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        canvas.Width = oneToOne ? w / scale : double.NaN;
+        canvas.Height = oneToOne ? h / scale : double.NaN;
     }
 
     /// Точка на холсте → пиксель сервера; вне картинки — null.
