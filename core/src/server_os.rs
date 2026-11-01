@@ -418,7 +418,7 @@ pub fn os_command_for_user(command: String, user: String) -> String {
         at_start = false;
         match c {
             '\'' | '"' => quote = Some(c),
-            ';' | '|' | '&' => at_start = true,
+            ';' | '|' | '&' | '\n' => at_start = true,
             '\\' if i + 1 < chars.len() => {
                 out.push(c);
                 out.push(chars[i + 1]);
@@ -449,6 +449,7 @@ mod tests {
         // Экранированная `\;` — не разделитель команд.
         assert_eq!(root("echo \\; sudo x"), "echo \\; sudo x");
         assert_eq!(root("sudo"), "sudo");
+        assert_eq!(root("sudo apt update\nsudo reboot"), "apt update\nreboot", "строки — тоже отдельные команды");
         assert_eq!(os_command_for_user("sudo apt update".into(), "deploy".into()), "sudo apt update");
     }
 
