@@ -11,10 +11,13 @@ namespace Relaya.Platform;
 /// VNC — установленный VNC-клиент (TightVNC, RealVNC, UltraVNC, TigerVNC). Туннель и запуск — в Relaya.Shared.
 internal static partial class DesktopLauncher
 {
+    // RDP и VNC — во вкладке (ядро: FreeRDP и RoyalVNC); внешний клиент остаётся запасной кнопкой.
     private static partial bool OpenInTab(RemoteDesktop d)
     {
-        if (d.kind != DesktopKind.Rdp || MainWindow.Current is not { } w) return false;
-        w.OpenTab(d.name, "", new Desktop.RdpView(d), null);
+        if (MainWindow.Current is not { } w) return false;
+        if (d.kind == DesktopKind.Rdp) { w.OpenTab(d.name, "\uE7F4", new Desktop.RdpView(d), null); return true; }
+        var v = new Desktop.VncView(d);
+        w.OpenTab(d.name, "\uE7F8", v, v);
         return true;
     }
 
