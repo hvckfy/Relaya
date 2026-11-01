@@ -528,6 +528,11 @@ static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 	   Остаётся только TLS: у него есть сертификат, и verify_cert (TOFU) спрашивается; старая RDP Security без
 	   сертификата выключена, чтобы подмену сервера нельзя было пропустить молча. Непустой пароль всегда идёт через NLA:
 	   автоповтора без NLA нет — иначе пароль ушёл бы серверу в обход CredSSP (решение аудита безопасности). */
+	/* R-1 (аудит безопасности): Standard RDP Security (RC4, без сертификата и без TOFU) не предлагаем никогда —
+	   иначе MITM мог бы продавить откат на неаутентифицированный канал. TLS всегда; NLA идёт поверх него.
+	   Серверы, умеющие только RDP Security, не подключатся — это осознанный отказ (fail-closed). */
+	ok &= freerdp_settings_set_bool(s, FreeRDP_RdpSecurity, FALSE);
+	ok &= freerdp_settings_set_bool(s, FreeRDP_TlsSecurity, TRUE);
 	const BOOL no_password = !r->password || !r->password[0];
 	/* Учётная запись без пароля на сервере, где NLA обязателен (ERRCONNECT_HYBRID_REQUIRED_BY_SERVER): FreeRDP
 	   считает NULL-пароль отсутствием учётных данных, поэтому передаём пустую строку — CredSSP с пустым паролем,
@@ -541,8 +546,6 @@ static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 		ok &= freerdp_settings_set_bool(s, FreeRDP_ExtSecurity, FALSE);
 		ok &= freerdp_settings_set_bool(s, FreeRDP_RdstlsSecurity, FALSE);
 		ok &= freerdp_settings_set_bool(s, FreeRDP_AadSecurity, FALSE);
-		ok &= freerdp_settings_set_bool(s, FreeRDP_TlsSecurity, TRUE);
-		ok &= freerdp_settings_set_bool(s, FreeRDP_RdpSecurity, FALSE);
 	}
 	if (r->domain)
 		ok &= freerdp_settings_set_string(s, FreeRDP_Domain, r->domain);
