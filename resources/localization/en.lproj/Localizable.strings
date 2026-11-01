@@ -1243,3 +1243,6 @@
 "Библиотека кодека не прошла проверку — не устанавливаю." = "The codec library failed verification — not installed.";
 "Не удалось распаковать кодек." = "Couldn't unpack the codec.";
 "Завершить все сессии tmux на %@?" = "End all tmux sessions on %@?";
+"Очистить журнал агентов?" = "Clear the agent log?";
+"Записи о выполненных командах будут удалены." = "The records of run commands will be deleted.";
+"Очистить журнал" = "Clear Log";

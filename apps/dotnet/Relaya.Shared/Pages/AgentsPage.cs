@@ -18,6 +18,8 @@ internal sealed class AgentsPage : UserControl
 {
     private static readonly string[] Modes = { "Нет доступа", "Только чтение", "С подтверждением", "Доверенный" };
 
+    private string? filterHost;
+
     public AgentsPage() => Build();
 
     private void Build()
@@ -31,6 +33,7 @@ internal sealed class AgentsPage : UserControl
                 Severity = InfoBarSeverity.Error, IsOpen = true, IsClosable = false,
                 Title = L("Политика не прочитана — доступ выключен"),
                 Message = L("Файл mcp.json повреждён. Агенты не получат доступ, пока вы не сохраните настройки заново."),
+                ActionButton = Ui.Button(L("Создать политику заново"), () => { McpHost.ResetPolicy(); Build(); }),
             });
 
         var enabled = new ToggleSwitch { IsOn = policy.enabled, OnContent = "", OffContent = "", MinWidth = 0 };
@@ -65,10 +68,26 @@ internal sealed class AgentsPage : UserControl
         body.Children.Add(Ui.Row("", "Claude Desktop / Claude Code", L("Сервер: %@ --mcp", exe), connect));
 
         body.Children.Add(Ui.Section(L("Журнал")));
-        var log = McpHost.Log(200);
+        var log = McpHost.Log(500);
         if (log.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Агенты ещё ничего не выполняли."))));
+        else
+        {
+            // Фильтр по хосту и очистка журнала (10.4).
+            var hosts = new ComboBox { MinWidth = 200 };
+            hosts.Items.Add(L("Все хосты"));
+            foreach (var h in log.Select(x => x.host).Distinct().OrderBy(x => x)) hosts.Items.Add(h);
+            hosts.SelectedIndex = filterHost is { } fh && hosts.Items.Contains(fh) ? hosts.Items.IndexOf(fh) : 0;
+            hosts.SelectionChanged += (_, _) => { filterHost = hosts.SelectedIndex > 0 ? hosts.SelectedItem as string : null; Build(); };
+            var clear = Ui.Button(L("Очистить журнал"), async () =>
+            {
+                if (!await Ui.Confirm(XamlRoot, L("Очистить журнал агентов?"), L("Записи о выполненных командах будут удалены."), L("Очистить"))) return;
+                McpHost.ClearLog();
+                Build();
+            });
+            body.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { hosts, clear } });
+        }
         // Ядро отдаёт журнал новыми сверху — показываем 100 последних записей как есть.
-        foreach (var e in log.Take(100))
+        foreach (var e in log.Where(x => filterHost == null || x.host == filterHost).Take(100))
             body.Children.Add(Ui.Row(Allowed(e) ? "" : "",
                 $"{e.host}: {e.detail}", $"{Platform.Format.Date(e.date)} · {e.client} · {e.tool} · {L(e.decision)}" + (e.exitCode is { } c ? $" · exit {c}" : "")));
     }

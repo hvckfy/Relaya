@@ -49,6 +49,19 @@ internal static class McpHost
         AtomicFile.Write(PolicyFile, RelayaCoreMethods.McpPolicyEncode(policy), privateFile: true);
     }
 
+    /// Очистить журнал агентов (вместе с .old).
+    public static void ClearLog()
+    {
+        foreach (var f in new[] { LogFile, LogFile + ".old" }) if (File.Exists(f)) File.Delete(f);
+    }
+
+    /// Повреждённую политику — в копию рядом и начать с политики по умолчанию (10.8).
+    public static void ResetPolicy()
+    {
+        if (File.Exists(PolicyFile)) File.Move(PolicyFile, PolicyFile + $".broken-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
+        SavePolicy(RelayaCoreMethods.McpPolicyDecode(""));
+    }
+
     public static List<McpLogEntry> Log(uint limit = 500) =>
         RelayaCoreMethods.McpLogParse(File.Exists(LogFile) ? File.ReadAllText(LogFile) : "", limit);
 
