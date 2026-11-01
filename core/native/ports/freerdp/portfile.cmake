@@ -97,6 +97,10 @@ vcpkg_cmake_configure(
         -DWITH_CLANG_FORMAT=OFF
         -DWITH_MANPAGES=OFF
         -DWITH_OPENSSL=ON
+        # NTLM (NLA) без legacy-провайдера OpenSSL 3: MD4/RC4 встроенные, иначе NTOWFv2 не считается и вход падает в SAM.
+        -DWITH_INTERNAL_MD4=ON
+        -DWITH_INTERNAL_MD5=ON
+        -DWITH_INTERNAL_RC4=ON
         -DWITH_SAMPLE=OFF
         -DWITH_SNDIO=OFF
         -DWITH_UNICODE_BUILTIN=ON
