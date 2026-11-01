@@ -1125,3 +1125,5 @@
 "SSH-туннель не поднялся за 60 секунд." = "The SSH tunnel did not come up within 60 seconds.";
 "Адрес репозитория не поддерживается: %@" = "Repository address is not supported: %@";
 "В адресе репозитория пароль или токен — используйте ssh или credential helper" = "The repository address contains a password or token — use ssh or a credential helper";
+"Оставить мой" = "Keep mine";
+"Взять с другой машины" = "Take the other machine’s";

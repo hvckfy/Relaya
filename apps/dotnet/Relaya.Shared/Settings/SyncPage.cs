@@ -42,7 +42,6 @@ internal sealed class SyncPage : UserControl
 
     private int shownRenamed, shownSkipped;
 
-    private static string Short(string s) => s.Length > 300 ? s[..300] + "…" : s;
 
     // Конфликт по файлам (C8, и для git тоже): ContentDialog, у каждого файла выбор «мой / с другой машины».
     private async System.Threading.Tasks.Task PickConflicts(string id)
@@ -50,20 +49,44 @@ internal sealed class SyncPage : UserControl
         if (sync.Profiles.FirstOrDefault(x => x.id == id) is not { } p) return;
         var list = sync.ConflictsOf(p);
         if (list.Count == 0) return;
-        var panel = new StackPanel { Spacing = 12 };
+        // Две версии рядом, как на Mac (UI-W3): слева моя, справа с другой машины, выбор — под ними.
+        var panel = new StackPanel { Spacing = 16 };
         var choices = new List<(string Path, RadioButtons Box)>();
+        UIElement Version(string title, string text) => new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = title, Style = Style("BodyStrongTextBlockStyle") },
+                Pages.Ui.Card(new ScrollViewer
+                {
+                    MaxHeight = 220, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = new TextBlock { Text = text, IsTextSelectionEnabled = true, FontFamily = new FontFamily("Cascadia Mono, Consolas") },
+                }),
+            },
+        };
         foreach (var c in list)
         {
-            var box = new RadioButtons { Header = c.path, Items = { L("Мой"), L("С другой машины") }, SelectedIndex = 0, MaxColumns = 2 };
-            ToolTipService.SetToolTip(box, L("Мой: %@\nС другой машины: %@", Short(c.mine), Short(c.theirs)));
+            var sides = new Grid { ColumnSpacing = 12, ColumnDefinitions = { new(), new() } };
+            var mine = Version(L("Мой"), c.mine);
+            var theirs = Version(L("С другой машины"), c.theirs);
+            Grid.SetColumn((FrameworkElement)theirs, 1);
+            sides.Children.Add(mine);
+            sides.Children.Add(theirs);
+            var box = new RadioButtons { Items = { L("Оставить мой"), L("Взять с другой машины") }, SelectedIndex = 0, MaxColumns = 2 };
             choices.Add((c.path, box));
-            panel.Children.Add(box);
+            panel.Children.Add(new StackPanel
+            {
+                Spacing = 8,
+                Children = { new TextBlock { Text = c.path, Style = Style("SubtitleTextBlockStyle") }, sides, box },
+            });
         }
         var dialog = new ContentDialog
         {
-            Title = L("Конфликт синхронизации"), Content = new ScrollViewer { Content = panel, MaxHeight = 480 },
+            Title = L("Конфликт синхронизации"), Content = new ScrollViewer { Content = panel, MaxHeight = 560 },
             PrimaryButtonText = L("Применить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
+        dialog.Resources["ContentDialogMaxWidth"] = 960d;
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         await sync.Resolve(id, choices.ToDictionary(c => c.Path, c => c.Box.SelectedIndex == 0));
     }
