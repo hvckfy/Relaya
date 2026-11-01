@@ -1,4 +1,5 @@
 import Foundation
+import RelayaRust
 import Security
 
 /// Пароли серверов в системном Keychain (generic password).
@@ -97,19 +98,9 @@ public enum PasswordPrompt {
             && !t.contains("current password")
     }
 
-    /// Любой запрос секрета в последней строке — для рассылки ввода (L-SEC-1): пароль, passphrase ключа, PIN,
-    /// одноразовый код, токен, на нескольких языках. Строка оканчивается двоеточием (возможно, с пробелом).
-    public static func isSecret(_ tail: String) -> Bool {
-        let line = tail.split(whereSeparator: \.isNewline).last.map(String.init) ?? ""
-        let t = line.trimmingCharacters(in: .whitespaces).lowercased()
-        guard t.hasSuffix(":") || t.hasSuffix(">") else { return false }
-        return secretWords.contains { t.contains($0) }
-    }
-
-    private static let secretWords = [
-        "password", "passphrase", "passcode", "pin", "token", "otp", "code", "secret", "verification",
-        "пароль", "код", "passwort", "kennwort", "mot de passe", "contraseña", "senha", "parola", "hasło", "wachtwoord",
-    ]
+    /// Любой запрос секрета в последней строке — для рассылки ввода (L-SEC-1). Правило в ядре
+    /// (terminal_secret_prompt), общее с Windows и Linux.
+    public static func isSecret(_ tail: String) -> Bool { terminalSecretPrompt(tail: tail) }
 
     /// Запрос пароля sudo в конце вывода: `[sudo] password for alex:` (Linux) или `[sudo] пароль для alex:`.
     public static func isSudo(_ tail: String) -> Bool {
