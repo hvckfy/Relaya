@@ -47,7 +47,7 @@ internal sealed class SftpPage : UserControl
                 Ui.Button(L("Скачать"), () => _ = Download(), glyph: ""),
                 Ui.Button(L("Загрузить"), () => _ = Upload(), glyph: ""),
                 Ui.IconButton("", L("Новая папка"), () => _ = NewFolder()),
-                Ui.IconButton("\uE70F", L("Открыть в редакторе"), () => _ = Edit()),
+                Ui.IconButton("\uE70F", L("Открыть в редакторе"), Edit),
                 Ui.IconButton("", L("Переименовать"), () => _ = Rename()),
                 Ui.IconButton("", L("Удалить"), () => _ = Delete()),
             },
@@ -72,8 +72,16 @@ internal sealed class SftpPage : UserControl
         root.Children.Add(bars);
         Grid.SetRow(list, 2);
         root.Children.Add(list);
-        Grid.SetRow(status, 3);
-        root.Children.Add(status);
+        var clear = new HyperlinkButton { Content = L("Очистить") };
+        clear.Click += (_, _) => { jobs.RemoveAll(j => j.State is JobState.Done or JobState.Failed or JobState.Cancelled); RenderJobs(); };
+        var queueHeader = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } } };
+        queueHeader.Children.Add(new TextBlock { Text = L("Передачи"), Style = Ui.Style("BodyStrongTextBlockStyle"), VerticalAlignment = VerticalAlignment.Center });
+        Grid.SetColumn(clear, 1);
+        queueHeader.Children.Add(clear);
+        queuePanel.Child = new StackPanel { Spacing = 4, Children = { queueHeader, new ScrollViewer { Content = jobRows, MaxHeight = 160 } } };
+        var footer = new StackPanel { Spacing = 8, Children = { queuePanel, status } };
+        Grid.SetRow(footer, 3);
+        root.Children.Add(footer);
         Content = root;
         // Сочетания как в файловом менеджере (Е.19): Enter — открыть, Backspace — наверх, F5 — обновить,
         // F2 — переименовать, Delete — удалить, Ctrl+Shift+N — новая папка.
@@ -123,9 +131,12 @@ internal sealed class SftpPage : UserControl
     private Task<AppState.Result> Batch(params string[] commands) => Run(CommandTimeout, commands);
 
     /// Передача с прогрессом: done() — сколько байт уже есть у получателя (или null, если не знаем), total — сколько всего.
-    private async Task<AppState.Result> Transfer(string[] commands, long total, Func<long?>? done)
+    private bool cancelled;
+
+    private async Task<AppState.Result> Transfer(string[] commands, long total, Func<long?>? done, Action<long>? onBytes = null)
     {
         transferCancel = new System.Threading.CancellationTokenSource();
+        cancelled = false;
         busy.Visibility = Visibility.Collapsed;
         transferBar.Visibility = Visibility.Visible;
         progress.IsIndeterminate = done == null || total <= 0;
@@ -136,6 +147,7 @@ internal sealed class SftpPage : UserControl
         timer.Tick += (_, _) =>
         {
             if (done?.Invoke() is not { } bytes || total <= 0) return;
+            onBytes?.Invoke(bytes);
             progress.Value = Math.Min(1, bytes / (double)total);
             progressText.Text = L("%@ из %@", Platform.Format.Bytes(Math.Min(bytes, total)), Platform.Format.Bytes(total));
         };
@@ -143,6 +155,7 @@ internal sealed class SftpPage : UserControl
         try { return await Run(TransferTimeout, commands, transferCancel.Token); }
         finally
         {
+            cancelled = transferCancel.IsCancellationRequested;
             timer.Stop();
             transferBar.Visibility = Visibility.Collapsed;
             transferCancel = null;
@@ -201,11 +214,17 @@ internal sealed class SftpPage : UserControl
         picker.FileTypeFilter.Add("*");
         Attach(picker);
         if (await picker.PickSingleFolderAsync() is not { } folder) return;
-        // Прогресс — по размеру скачанных файлов в папке назначения; для папок размер неизвестен.
-        var total = sel.Any(f => f.isDirectory) ? 0 : sel.Sum(f => f.size);
-        long? Done() => sel.Sum(f => new System.IO.FileInfo(System.IO.Path.Combine(folder.Path, f.name)) is { Exists: true } fi ? fi.Length : 0);
-        var r = await Transfer(sel.Select(f => $"get -r {Q(Join(f.name))} {Q(folder.Path)}").ToArray(), total, Done);
-        if (r.Status == 0) status.Text = L("Скачано в %@", folder.Path);
+        // Прогресс — по размеру скачанного файла в папке назначения; для папок размер неизвестен.
+        foreach (var f in sel)
+        {
+            var target = System.IO.Path.Combine(folder.Path, f.name);
+            Enqueue(new Job
+            {
+                Name = f.name, Commands = new[] { $"get -r {Q(Join(f.name))} {Q(folder.Path)}" }, Total = f.isDirectory ? 0 : f.size,
+                Done = () => new System.IO.FileInfo(target) is { Exists: true } fi ? fi.Length : 0,
+                Finished = () => { status.Text = L("Скачано в %@", folder.Path); return Task.CompletedTask; },
+            });
+        }
     }
 
     private async Task Upload()
@@ -217,20 +236,118 @@ internal sealed class SftpPage : UserControl
         if (picked.Count > 0) await Put(picked.Select(f => f.Path));
     }
 
-    private async Task Put(IEnumerable<string> local)
+    private Task Put(IEnumerable<string> local)
     {
         // Загрузка: размер знаем, сколько уже на сервере — нет (sftp -b молчит), поэтому полоса неопределённая.
-        var items = local.ToList();
-        var total = items.Sum(l => System.IO.File.Exists(l) ? new System.IO.FileInfo(l).Length : 0);
-        var r = await Transfer(items.Select(l => $"put -r {Q(l)} {Q(path)}").ToArray(), total, null);
-        if (r.Status == 0) await Open(path);
+        var dir = path;
+        foreach (var l in local)
+            Enqueue(new Job
+            {
+                Name = System.IO.Path.GetFileName(l.TrimEnd('\\', '/')), Commands = new[] { $"put -r {Q(l)} {Q(dir)}" },
+                Total = System.IO.File.Exists(l) ? new System.IO.FileInfo(l).Length : 0,
+                Finished = async () => { if (path == dir) await Open(path); },
+            });
+        return Task.CompletedTask;
+    }
+
+    // 6.4, как на Mac: очередь передач — по одной за раз, у каждой состояние, скорость, «Отменить» и «Повторить».
+    private enum JobState { Queued, Running, Done, Failed, Cancelled }
+
+    private sealed class Job
+    {
+        public required string Name;
+        public required string[] Commands;
+        public long Total;
+        public Func<long?>? Done;
+        public Func<Task>? Finished;
+        public JobState State;
+        public string Error = "";
+        public long Bytes;
+        public DateTime Started;
+        public DateTime Ended;
+    }
+
+    private readonly List<Job> jobs = new();
+    private Job? running;
+    private readonly StackPanel jobRows = new() { Spacing = 4 };
+    private readonly Border queuePanel = new() { Visibility = Visibility.Collapsed };
+
+    private void Enqueue(Job job)
+    {
+        jobs.Add(job);
+        RenderJobs();
+        if (running == null) _ = ProcessJobsAsync();
+    }
+
+    private async Task ProcessJobsAsync()
+    {
+        while (jobs.FirstOrDefault(j => j.State == JobState.Queued) is { } job)
+        {
+            running = job;
+            job.State = JobState.Running;
+            job.Started = DateTime.UtcNow;
+            job.Bytes = 0;
+            RenderJobs();
+            var r = await Transfer(job.Commands, job.Total, job.Done, b => { job.Bytes = b; RenderJobs(); });
+            job.Ended = DateTime.UtcNow;
+            job.State = r.Status == 0 ? JobState.Done : cancelled ? JobState.Cancelled : JobState.Failed;
+            job.Error = r.Status == 0 ? "" : status.Text;
+            running = null;
+            RenderJobs();
+            if (job.State == JobState.Done && job.Finished != null) await job.Finished();
+        }
+    }
+
+    private void RenderJobs()
+    {
+        jobRows.Children.Clear();
+        queuePanel.Visibility = jobs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var job in jobs)
+        {
+            var row = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto }, new() { Width = GridLength.Auto } }, ColumnSpacing = 12 };
+            row.Children.Add(new TextBlock { Text = job.Name, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+            var state = Ui.Secondary(JobText(job));
+            state.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(state, 1);
+            row.Children.Add(state);
+            UIElement? action = job.State switch
+            {
+                JobState.Queued => Ui.IconButton("", L("Отменить"), () => { job.State = JobState.Cancelled; RenderJobs(); }),
+                JobState.Running => Ui.IconButton("", L("Отменить"), () => transferCancel?.Cancel()),
+                JobState.Failed or JobState.Cancelled => Ui.IconButton("", L("Повторить"), () =>
+                {
+                    job.State = JobState.Queued;
+                    RenderJobs();
+                    if (running == null) _ = ProcessJobsAsync();
+                }),
+                _ => null,
+            };
+            if (action is FrameworkElement a) { Grid.SetColumn(a, 2); row.Children.Add(a); }
+            jobRows.Children.Add(row);
+        }
+    }
+
+    private static string JobText(Job job)
+    {
+        switch (job.State)
+        {
+            case JobState.Queued: return L("В очереди");
+            case JobState.Cancelled: return L("Отменено");
+            case JobState.Failed: return job.Error;
+            case JobState.Done: return job.Total > 0 ? Platform.Format.Bytes(job.Total) : L("Готово");
+        }
+        var parts = new List<string>();
+        if (job.Bytes > 0) parts.Add(job.Total > 0 ? L("%@ из %@", Platform.Format.Bytes(job.Bytes), Platform.Format.Bytes(job.Total)) : Platform.Format.Bytes(job.Bytes));
+        var seconds = (DateTime.UtcNow - job.Started).TotalSeconds;
+        if (job.Bytes > 0 && seconds >= 1) parts.Add(Platform.Format.Bytes((long)(job.Bytes / seconds)) + L("/с"));
+        return string.Join(" · ", parts);
     }
 
     // 6.6, как на Mac: файл скачивается в личную папку Relaya (не в общий /tmp), открывается приложением по умолчанию,
     // каждое сохранение уходит обратно в ту же папку на сервере. Слежка — пока открыта страница файлов.
     private readonly List<System.IO.FileSystemWatcher> edits = new();
 
-    private async Task Edit()
+    private void Edit()
     {
         if (Selected() is not [{ isDirectory: false } f]) { status.Text = L("Выберите один файл"); return; }
         var remoteDir = path;
@@ -238,9 +355,17 @@ internal sealed class SftpPage : UserControl
         System.IO.Directory.CreateDirectory(dir);
         var local = System.IO.Path.Combine(dir, f.name);
         long? Done() => new System.IO.FileInfo(local) is { Exists: true } fi ? fi.Length : 0;
-        var r = await Transfer(new[] { $"get {Q(Join(f.name))} {Q(local)}" }, f.size, Done);
-        if (r.Status != 0) return;
-        var watcher = new System.IO.FileSystemWatcher(dir, f.name) { NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.Size };
+        // Скачивание — через ту же очередь (одна передача за раз), открытие — когда оно закончилось.
+        Enqueue(new Job
+        {
+            Name = f.name, Commands = new[] { $"get {Q(Join(f.name))} {Q(local)}" }, Total = f.size, Done = Done,
+            Finished = () => StartEditing(f.name, dir, local, remoteDir),
+        });
+    }
+
+    private async Task StartEditing(string name, string dir, string local, string remoteDir)
+    {
+        var watcher = new System.IO.FileSystemWatcher(dir, name) { NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.Size };
         var ui = DispatcherQueue;
         var pending = false;
         // Редакторы пишут файл несколькими событиями подряд — загружаем раз, через секунду после первого.
@@ -250,12 +375,15 @@ internal sealed class SftpPage : UserControl
             pending = true;
             await Task.Delay(1000);
             pending = false;
-            var up = await Run(TransferTimeout, new[] { $"put {Q(local)} {Q(remoteDir)}" });
-            if (up.Status == 0) status.Text = L("Сохранено на сервере: %@", f.name);
+            Enqueue(new Job
+            {
+                Name = name, Commands = new[] { $"put {Q(local)} {Q(remoteDir)}" }, Total = new System.IO.FileInfo(local).Length,
+                Finished = () => { status.Text = L("Сохранено на сервере: %@", name); return Task.CompletedTask; },
+            });
         });
         watcher.EnableRaisingEvents = true;
         edits.Add(watcher);
-        try { Platform.Shell.OpenFile(local); status.Text = L("Изменения в %@ сохраняются на сервер, пока открыта эта вкладка", f.name); }
+        try { Platform.Shell.OpenFile(local); status.Text = L("Изменения в %@ сохраняются на сервер, пока открыта эта вкладка", name); }
         catch (System.IO.IOException e) { await Ui.ShowError(XamlRoot, L("Не удалось открыть файл"), e.Message); }
     }
 
