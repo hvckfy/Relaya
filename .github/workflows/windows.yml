@@ -114,10 +114,8 @@ jobs:
           gh release view $env:GITHUB_REF_NAME 2>$null; if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --generate-notes 2>$null; Start-Sleep 5 }
           gh release upload $env:GITHUB_REF_NAME $zip (Get-Item build/Relaya-*-${{ matrix.lang }}-setup.exe).FullName --clobber
       # Настоящий TerminalView (WinUI + Win2D): Feed из фонового потока, проверка отрисованного кадра.
-      # Диагностика: окно WinUI в раннере отрисовывается, но тест пока не всегда завершается — не блокирует сборку.
       - name: Terminal view selftest
         shell: pwsh
-        continue-on-error: true
         run: |
           # Отдельная сборка с RELAYA_SELFTEST — в самом конце, после артефактов: в релиз этот режим не попадает.
           $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.0.0' }
@@ -130,5 +128,5 @@ jobs:
           $tl = "$env:APPDATA\Relaya\terminal.log"
           if (Test-Path $tl) { Get-Content $tl }
           if ($p.HasExited -and $p.ExitCode -eq 0) { exit 0 }
-          Write-Host "::warning::Terminal view selftest did not pass (diagnostic step, see terminal.log above)"
+          Write-Host "::error::Terminal view selftest failed (see terminal.log above)"
           exit 1
