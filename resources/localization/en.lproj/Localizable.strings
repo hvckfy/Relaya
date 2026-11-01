@@ -1361,3 +1361,5 @@
 "↑↓ — выбрать · Enter — вставить · Esc — закрыть" = "↑↓ — choose · Enter — insert · Esc — close";
 "пароль · сохранён" = "password · saved";
 "ключ из агента или пароль" = "agent key or password";
+"Не удалось установить соединение с сервером RDP" = "Could not establish a connection to the RDP server";
+"Соединение оборвалось до входа: проверьте, что туннель SSH запущен и порт верный, а на сервере включён удалённый рабочий стол; если сервер требует TLS 1.0 — обновите его." = "The connection dropped before sign-in: check that the SSH tunnel is running and the port is right, and that Remote Desktop is enabled on the server; if the server requires TLS 1.0, update it.";
