@@ -44,6 +44,9 @@ internal static class Ui
     /// Карточка-строка: иконка, заголовок с описанием и элемент справа.
     public static Border Row(string? glyph, string title, string? description, UIElement? trailing = null, Action? onClick = null)
     {
+        // Переключатель или ползунок без своей подписи читалка объявляет по заголовку строки.
+        if (trailing != null && string.IsNullOrEmpty(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(trailing)))
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(trailing, title);
         var grid = new Grid
         {
             ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } },
