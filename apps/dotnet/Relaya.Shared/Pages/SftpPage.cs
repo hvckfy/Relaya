@@ -74,6 +74,21 @@ internal sealed class SftpPage : UserControl
         Grid.SetRow(status, 3);
         root.Children.Add(status);
         Content = root;
+        // Сочетания как в файловом менеджере (Е.19): Enter — открыть, Backspace — наверх, F5 — обновить,
+        // F2 — переименовать, Delete — удалить, Ctrl+Shift+N — новая папка.
+        void Key(Windows.System.VirtualKey key, Windows.System.VirtualKeyModifiers mods, Action action)
+        {
+            var k = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = key, Modifiers = mods };
+            k.Invoked += (_, e) => { if (FocusManager.GetFocusedElement(XamlRoot) is TextBox) return; e.Handled = true; action(); };
+            list.KeyboardAccelerators.Add(k);
+        }
+        var none = Windows.System.VirtualKeyModifiers.None;
+        Key(Windows.System.VirtualKey.Enter, none, () => { if (Selected().FirstOrDefault() is { } f && (f.isDirectory || f.isLink)) _ = Open(Join(f.name)); });
+        Key(Windows.System.VirtualKey.Back, none, () => _ = Open(Parent(path)));
+        Key(Windows.System.VirtualKey.F5, none, () => _ = Open(path));
+        Key(Windows.System.VirtualKey.F2, none, () => _ = Rename());
+        Key(Windows.System.VirtualKey.Delete, none, () => _ = Delete());
+        Key(Windows.System.VirtualKey.N, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, () => _ = NewFolder());
         AllowDrop = true;
         DragOver += (_, e) => { e.AcceptedOperation = DataPackageOperation.Copy; e.DragUIOverride.Caption = L("Загрузить в %@", path); };
         Drop += async (_, e) =>
