@@ -93,6 +93,21 @@ if (Environment.GetEnvironmentVariable("RELAYA_SMOKE_SSH_KEY") is { Length: > 0 
                 pc.Write(Encoding.UTF8.GetBytes("echo relaya-remote\r"));
             }
         }, seconds: 40);
+    // Ввод на запросе пароля: ключ под passphrase, ssh спрашивает её в ConPTY, вводим как с клавиатуры (баг v0.16.7).
+    if (Environment.GetEnvironmentVariable("RELAYA_SMOKE_SSH_KEY_PASS") is { Length: > 0 } locked)
+    {
+        var typedPass = false;
+        failed += Check("ssh passphrase", $"\"{ssh}\" -tt -i \"{locked}\" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL {user}@localhost \"echo relaya-pass-ok\"",
+            s => typedPass && HasLine(s, "relaya-pass-ok"),
+            onScreen: (pc, s) =>
+            {
+                if (!typedPass && s.Any(l => l.Contains("passphrase", StringComparison.OrdinalIgnoreCase)))
+                {
+                    typedPass = true;
+                    pc.Write(Encoding.UTF8.GetBytes("relaya-smoke-pass\r"));
+                }
+            }, seconds: 40);
+    }
 }
 else Log("ssh localhost: SKIP (no RELAYA_SMOKE_SSH_KEY)");
 

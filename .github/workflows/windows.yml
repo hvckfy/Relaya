@@ -64,10 +64,13 @@ jobs:
           ssh-keygen -q -t ed25519 -N "" -f $key
           $auth = "$env:ProgramData\ssh\administrators_authorized_keys"
           New-Item -ItemType Directory -Force "$env:ProgramData\ssh" | Out-Null
-          Get-Content "$key.pub" | Set-Content -Encoding ascii $auth
+          $locked = "$env:RUNNER_TEMP\\relaya_smoke_key_pass"
+          ssh-keygen -q -t ed25519 -N "relaya-smoke-pass" -f $locked
+          Get-Content "$key.pub", "$locked.pub" | Set-Content -Encoding ascii $auth
           icacls $auth /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
           Start-Service sshd
           "RELAYA_SMOKE_SSH_KEY=$key" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "RELAYA_SMOKE_SSH_KEY_PASS=$locked" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       # Терминал как в приложении: WinExe без консоли, ConPTY, эмулятор ядра, ввод, Resize, ssh.
       - name: Terminal smoke test
         shell: pwsh
