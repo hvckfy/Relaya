@@ -176,6 +176,11 @@ internal sealed partial class TerminalView
             if (blob != null) canvas.DrawText(blob, 0, 0, paint);
         }
 
+        // SKCanvasElement не хранит прошлый кадр — всегда кадр целиком.
+        public bool Retained => false;
+
+        public void ClearRow(double y, double h, Color color) { }
+
         public void Dispose() => paint.Dispose();
     }
 }
