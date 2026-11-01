@@ -23,7 +23,7 @@ jobs:
   build-test:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Select Xcode
         # SDK macOS 26 — для Liquid Glass. Берём самый новый Xcode 26 из образа.
@@ -52,7 +52,7 @@ jobs:
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           scripts/build-core-macos.sh
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: apps/swift/.build
           key: spm-${{ runner.os }}-${{ hashFiles('apps/swift/Package.resolved', 'apps/swift/Package.swift') }}
