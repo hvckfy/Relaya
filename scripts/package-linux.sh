@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 # Пакеты Linux-клиента из готового dotnet publish: AppImage (основной) и .deb.
-#   scripts/package-linux.sh <каталог publish> <версия>  →  build/Relaya-<версия>-x86_64.AppImage, build/relaya_<версия>_amd64.deb
+#   scripts/package-linux.sh <каталог publish> <версия> <ru|en>
+#     →  build/Relaya-<версия>-<язык>-x86_64.AppImage, build/relaya_<версия>-<язык>_amd64.deb
+# Язык — язык сборки (ADR-002, -p:RelayaLang): от него подпись в меню. Имя пакета .deb одно (relaya),
+# поэтому ru и en заменяют друг друга при установке, а не ставятся рядом.
 # Нужны: appimagetool (в PATH или APPIMAGETOOL), ImageMagick (convert/magick), dpkg-deb.
 # Интеграция по freedesktop: Desktop Entry, иконки hicolor 16…512 (Icon Theme), AppStream metainfo.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PUB="$(cd "$1" && pwd)"
 VERSION="$2"
+LANG_CODE="${3:-en}"
+case "$LANG_CODE" in
+  ru) COMMENT="SSH-хосты, терминалы, туннели и удалённые столы" ;;
+  en) COMMENT="SSH hosts, terminals, tunnels and remote desktops" ;;
+  *) echo "язык: ru или en, получено «$LANG_CODE»" >&2; exit 2 ;;
+esac
 OUT="$ROOT/build"
 WORK="$OUT/pkg"
 rm -rf "$WORK" && mkdir -p "$WORK"
@@ -19,7 +28,7 @@ desktop() {
 [Desktop Entry]
 Type=Application
 Name=Relaya
-Comment=SSH hosts, terminals, tunnels and remote desktops
+Comment=$COMMENT
 Exec=$1 %U
 Icon=relaya
 Terminal=false
@@ -51,7 +60,7 @@ exec "$HERE/usr/lib/relaya/relaya" "$@"
 RUN
 chmod +x "$APPDIR/AppRun"
 TOOL="${APPIMAGETOOL:-appimagetool}"
-ARCH=x86_64 "$TOOL" "$APPDIR" "$OUT/Relaya-$VERSION-x86_64.AppImage"
+ARCH=x86_64 "$TOOL" "$APPDIR" "$OUT/Relaya-$VERSION-$LANG_CODE-x86_64.AppImage"
 
 # --- .deb: /opt/relaya, команда relaya в /usr/bin ---
 DEB="$WORK/deb"
@@ -75,5 +84,5 @@ Description: SSH hosts, terminals, tunnels and remote desktops
  Relaya keeps ~/.ssh/config hosts, opens native terminals, SFTP, tunnels,
  RDP and VNC, and syncs settings with the macOS and Windows clients.
 CTRL
-dpkg-deb --root-owner-group --build "$DEB" "$OUT/relaya_${VERSION}_amd64.deb"
+dpkg-deb --root-owner-group --build "$DEB" "$OUT/relaya_${VERSION}-${LANG_CODE}_amd64.deb"
 echo "packages: $OUT/Relaya-$VERSION-x86_64.AppImage $OUT/relaya_${VERSION}_amd64.deb"

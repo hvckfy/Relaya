@@ -26,6 +26,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Две сборки, как у Mac и Windows (ADR-002): язык интерфейса задаётся при сборке.
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [ru, en]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -52,7 +57,7 @@ jobs:
           version=0.0.0
           if [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then version="${BASH_REMATCH[1]}"; fi
           dotnet publish apps/dotnet/Relaya.Linux/Relaya.Linux.csproj -c Release -f net10.0-desktop -r linux-x64 \
-            --self-contained -p:Version=$version -o build/relaya-linux-x64
+            --self-contained -p:Version=$version -p:RelayaLang=${{ matrix.lang }} -o build/relaya-linux-x64-${{ matrix.lang }}
       - name: Package AppImage and .deb
         run: |
           version=0.0.0
@@ -61,10 +66,10 @@ jobs:
           export APPIMAGE_EXTRACT_AND_RUN=1  # без FUSE на раннере
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
-          APPIMAGETOOL="$PWD/appimagetool" scripts/package-linux.sh build/relaya-linux-x64 "$version"
+          APPIMAGETOOL="$PWD/appimagetool" scripts/package-linux.sh build/relaya-linux-x64-${{ matrix.lang }} "$version" ${{ matrix.lang }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Relaya-linux-x64
+          name: Relaya-linux-x64-${{ matrix.lang }}
           path: |
             build/Relaya-*.AppImage
             build/relaya_*.deb
@@ -78,7 +83,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: Relaya-linux-x64
+          pattern: Relaya-linux-x64-*
+          merge-multiple: true
           path: build
       - name: Publish to release
         env:

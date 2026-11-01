@@ -193,7 +193,7 @@ To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build
 
 Windows (needs Rust, .NET 10 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild (add `-p:RelayaLang=en` or `ru` for a single-language build); `apps/dotnet/installer/Relaya.iss` (Inno Setup 6) builds the installer.
 
-Linux (needs Rust and .NET 10): `scripts/build-core-linux.sh`, then `dotnet publish apps/dotnet/Relaya.Linux -r linux-x64`.
+Linux (needs Rust and .NET 10): `scripts/build-core-linux.sh`, then `dotnet publish apps/dotnet/Relaya.Linux -r linux-x64 -p:RelayaLang=en` (or `ru`; without it the system language is used); `scripts/package-linux.sh <publish dir> <version> <ru|en>` builds the AppImage and .deb.
 
 ## Contributing
 
