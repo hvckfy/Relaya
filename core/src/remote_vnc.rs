@@ -22,12 +22,6 @@ type delegate_fb = extern "C" fn(Ptr, Ptr, Ptr);
 #[allow(non_camel_case_types)]
 type delegate_update = extern "C" fn(Ptr, Ptr, Ptr, u16, u16, u16, u16);
 
-/// Временная блокировка VNC-сервера (то же правило, что «Сервер VNC временно блокирует вход» в ssh_errors).
-fn vnc_temporarily_blocked(message: &str) -> bool {
-    crate::ssh_errors::remote_explain(crate::ssh_errors::RemoteProtocol::Vnc, message.to_string())
-        .is_some_and(|p| p.title == "Сервер VNC временно блокирует вход")
-}
-
 extern "C" {
     fn rvnc_settings_create(
         debug: bool,
@@ -228,9 +222,6 @@ extern "C" fn on_state(connection: Ptr, _ctx: Ptr, state: Ptr) {
     };
     let kind = if message.is_empty() {
         RemoteCloseKind::ClosedByUser
-    } else if vnc_temporarily_blocked(&message) {
-        // V-1: сервер временно блокирует вход после неудачных попыток — пароль может быть верным, не стирать.
-        RemoteCloseKind::AccountProblem
     } else if unsafe { rvnc_connection_state_error_is_authentication_error_get(state) } {
         RemoteCloseKind::AuthFailed
     } else if *s.connected.locked() {
