@@ -814,7 +814,8 @@ final class AppModel {
                 unmountOnQuitInstalled = true
                 NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil,
                                                        queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.finderBridges.values.forEach { $0.stop() } }
+                    // Выход: диски отключаются, а не остаются привязанными к остановленному серверу; не дольше 3 с на диск.
+                    MainActor.assumeIsolated { self?.finderBridges.values.forEach { $0.stop(wait: .seconds(3)) } }
                 }
             }
         } catch {
