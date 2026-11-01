@@ -132,6 +132,20 @@ pub fn remote_supports_h264() -> bool {
     cfg!(feature = "rdp-freerdp")
 }
 
+/// Где лежат проверенные копии: на Linux — XDG_RUNTIME_DIR (только пользователь, чистится при выходе из сеанса),
+/// как сокет askpass; без него и на других ОС — temp_dir (на macOS он и так пользовательский).
+#[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
+fn copies_root() -> std::path::PathBuf {
+    if cfg!(target_os = "linux") {
+        if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from) {
+            if dir.is_absolute() && dir.is_dir() {
+                return dir;
+            }
+        }
+    }
+    std::env::temp_dir()
+}
+
 /// Скопировать библиотеку в приватный каталог (0700, только этот процесс) и проверить хеш копии. Вернуть путь копии
 /// для dlopen; None — файл не тот или копия не удалась. Вызывать непосредственно перед загрузкой кодека.
 #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
@@ -139,7 +153,7 @@ pub(crate) fn checked_copy(path: &str) -> Option<std::path::PathBuf> {
     let platform = openh264_current_platform()?;
     #[cfg(unix)]
     remove_stale_copies();
-    let dir = std::env::temp_dir().join(format!("relaya-openh264-{}-{}", std::process::id(), crate::models::new_id()));
+    let dir = copies_root().join(format!("relaya-openh264-{}-{}", std::process::id(), crate::models::new_id()));
     std::fs::create_dir(&dir).ok()?;
     #[cfg(unix)]
     {
@@ -164,7 +178,7 @@ fn remove_stale_copies() {
         fn kill(pid: i32, sig: i32) -> i32;
     }
     const ESRCH: i32 = 3; // одинаково в Linux и macOS
-    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    let Ok(entries) = std::fs::read_dir(copies_root()) else { return };
     for entry in entries.flatten() {
         let name = entry.file_name();
         let Some(rest) = name.to_str().and_then(|n| n.strip_prefix("relaya-openh264-")) else { continue };
@@ -215,7 +229,7 @@ mod tests {
         #[cfg(unix)]
         {
             // pid, которого нет (больше pid_max), — каталог удаляется; свой — остаётся.
-            let tmp = std::env::temp_dir();
+            let tmp = copies_root();
             let stale = tmp.join(format!("relaya-openh264-{}-test", i32::MAX - 1));
             let mine = tmp.join(format!("relaya-openh264-{}-test", std::process::id()));
             std::fs::create_dir_all(&stale).unwrap();
