@@ -1246,3 +1246,6 @@
 "Очистить журнал агентов?" = "Clear the agent log?";
 "Записи о выполненных командах будут удалены." = "The records of run commands will be deleted.";
 "Очистить журнал" = "Clear Log";
+"Имя и пароль пользователя macOS." = "The macOS user name and password.";
+"Пароль VNC: у классического VNC учитываются только первые 8 символов." = "VNC password: classic VNC uses only the first 8 characters.";
+"Сохранить пароль" = "Save Password";
