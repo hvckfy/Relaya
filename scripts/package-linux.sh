@@ -38,6 +38,21 @@ StartupWMClass=relaya
 DESK
 }
 
+# MSBuild копирует цепочку libX.so -> libX.so.3 -> libX.so.3.x как отдельные файлы. Загрузчику по rpath $ORIGIN нужен
+# только файл с именем SONAME (libX.so.3): остальные копии библиотек с SONAME убираем, чтобы пакет не вырос в 2–3 раза.
+# Библиотеки без версии в SONAME (librelaya_core.so, libRoyalVNCKit.so) остаются как есть.
+for f in "$PUB"/*.so "$PUB"/*.so.*; do
+  [[ -f "$f" ]] || continue
+  soname=$(readelf -d "$f" 2>/dev/null | sed -n 's/.*(SONAME).*\[\(.*\)\]/\1/p')
+  if [[ -n "$soname" && "$(basename "$f")" != "$soname" && -f "$PUB/$soname" ]]; then rm -f "$f"; fi
+done
+# Проверка: ядро находит все свои библиотеки внутри пакета (rpath $ORIGIN), без «not found».
+if ldd "$PUB/librelaya_core.so" | grep -q 'not found'; then
+  ldd "$PUB/librelaya_core.so" | grep 'not found' >&2
+  echo "librelaya_core.so: не хватает библиотек в пакете" >&2
+  exit 1
+fi
+
 # --- AppImage: приложение целиком в usr/lib/relaya, запуск через AppRun ---
 APPDIR="$WORK/Relaya.AppDir"
 mkdir -p "$APPDIR/usr/lib/relaya" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
