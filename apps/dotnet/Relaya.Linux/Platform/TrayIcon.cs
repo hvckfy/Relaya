@@ -30,12 +30,14 @@ internal static class TrayIcon
             await conn.ConnectAsync();
             var service = $"org.kde.StatusNotifierItem-{Environment.ProcessId}-1";
             var menu = new TrayMenu(ui);
-            item = new StatusNotifierItem(ui);
-            await conn.RegisterObjectAsync(item);
+            var sni = new StatusNotifierItem(ui);
+            await conn.RegisterObjectAsync(sni);
             await conn.RegisterObjectAsync(menu);
             await conn.RegisterServiceAsync(service);
             var watcher = conn.CreateProxy<IStatusNotifierWatcher>("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher");
             await watcher.RegisterStatusNotifierItemAsync(service);
+            // Значок считается показанным, только если его принял StatusNotifierWatcher: без него окно не прячется.
+            item = sni;
             TunnelManager.Shared.Changed += () => ui.TryEnqueue(() => { menu.Rebuild(); Refresh(); });
             connection = conn;
             Refresh();
