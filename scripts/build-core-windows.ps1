@@ -18,4 +18,9 @@ if (-not (Get-Command uniffi-bindgen-cs -ErrorAction SilentlyContinue)) {
 $out = "$root/apps/dotnet/Relaya.Shared/Core"
 New-Item -ItemType Directory -Force $out | Out-Null
 uniffi-bindgen-cs --library target/release/relaya_core.dll --out-dir $out
+# Сгенерированный код не под нашими правилами nullable: предупреждения глушим только в нём (А9), а не во всём проекте.
+Get-ChildItem "$out/*.cs" | ForEach-Object {
+    $text = Get-Content $_.FullName -Raw
+    if (-not $text.StartsWith("#nullable disable")) { Set-Content $_.FullName ("#nullable disable`n#pragma warning disable`n" + $text) -NoNewline }
+}
 Pop-Location

@@ -18,7 +18,6 @@
     <!-- Сгенерированные UniFFI-привязки не проходят наши предупреждения. -->
     <!-- Свой Main (Program.cs): askpass- и MCP-режимы без окна. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
-    <NoWarn>$(NoWarn);CS8618;CS8625;CS8603;CS8604;CS0168</NoWarn>
   </PropertyGroup>
   <!-- Язык интерфейса при сборке (ADR-002): -p:RelayaLang=ru|en; без флага — по языку Windows. -->
   <!-- Самопроверка TerminalView (Relaya.exe с ключом selftest-terminal) — только в CI: -p:RelayaSelftest=true. -->
