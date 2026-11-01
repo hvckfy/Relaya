@@ -71,21 +71,32 @@ public sealed partial class MainWindow : Window
         Tabs.CanDragTabs = true;
         Tabs.CanReorderTabs = true;
         Tabs.AllowDrop = true;
+        // Перетаскивание вкладки: выбор не трогаем — TabView с перестановкой (CanReorderTabs) сам выбирает
+        // перетаскиваемую, и подмена SelectedItem откатывалась. На экране держим вкладку, открытую до нажатия:
+        // на её плитки и бросают; OnTabSelected на это время ничего не показывает.
         Tabs.TabDragStarting += (_, e) =>
         {
             DraggedTiles = (e.Tab.Tag as Tab)?.Content as Terminal.TileHost;
-            // Нажатие на вкладку уже выбрало её, и на экране её же плитки — бросить некуда. Показываем вкладку,
-            // открытую до нажатия: на неё и перетаскивают.
-            if (Tabs.SelectedItem == e.Tab && previousTab != null && Tabs.TabItems.Contains(previousTab)) Tabs.SelectedItem = previousTab;
+            var under = Tabs.SelectedItem is TabViewItem sel && sel != e.Tab ? sel : previousTab;
+            if (under != null && under != e.Tab && Tabs.TabItems.Contains(under) && under.Tag is Tab t)
+            {
+                dragUnder = under;
+                Show(t.Content);
+            }
             e.Data.SetText("relaya-tab");
             e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
         };
-        // Бросок в плитки забирает вкладку (Adopt закрывает её); осталась — была перестановка или бросок мимо:
-        // выбранной снова становится перетащенная, а не подменённая на время перетаскивания.
+        // Бросок в плитки забирает вкладку (Adopt закрывает её) — остаётся вкладка, на которую бросили;
+        // осталась — была перестановка или бросок мимо: выбрана и видна перетащенная.
         Tabs.TabDragCompleted += (_, e) =>
         {
             DraggedTiles = null;
-            if (Tabs.TabItems.Contains(e.Tab)) Tabs.SelectedItem = e.Tab;
+            var under = dragUnder;
+            dragUnder = null;
+            var target = Tabs.TabItems.Contains(e.Tab) ? e.Tab : under != null && Tabs.TabItems.Contains(under) ? under : null;
+            if (target == null) return;
+            Tabs.SelectedItem = target;
+            if (target.Tag is Tab t) Show(t.Content); // выбор мог уже стоять на ней — SelectionChanged тогда не придёт
         };
         TabHost.ChildrenTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Nav.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
@@ -565,8 +576,12 @@ public sealed partial class MainWindow : Window
     // Вкладка, выбранная до последнего переключения, — цель перетаскивания вкладки на плитки.
     private TabViewItem? previousTab;
 
+    // Вкладка, чьи плитки на экране, пока перетаскивают другую (null — перетаскивания нет).
+    private TabViewItem? dragUnder;
+
     private void OnTabSelected(object sender, SelectionChangedEventArgs e)
     {
+        if (dragUnder != null) return; // идёт перетаскивание: экран не переключаем, previousTab не трогаем
         if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem removed) previousTab = removed;
         if ((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t)
         {
