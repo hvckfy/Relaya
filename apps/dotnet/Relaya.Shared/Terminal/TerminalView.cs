@@ -202,11 +202,20 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             Send("\x1b" + (shift ? ch : char.ToLowerInvariant(ch)));
             return;
         }
+        // Ctrl+буква и Ctrl+[ \ ] Space — управляющие коды из KeyDown (Л2): Uno X11 их в CharacterReceived не присылает,
+        // WinUI присылает, но там они пропускаются, так что байт уходит один раз. Ctrl+Alt — это AltGr, не трогаем.
+        if (ctrl && !alt && ControlCode(e.Key) is { } control)
+        {
+            e.Handled = true;
+            Send(control.ToString());
+            return;
+        }
         var app = Emulator.CursorState().appCursor;
         string Arrow(char c) => app ? $"\x1bO{c}" : $"\x1b[{c}";
         var seq = e.Key switch
         {
             VirtualKey.Tab => shift ? "\x1b[Z" : "\t",
+            VirtualKey.Enter => "\r", VirtualKey.Back => "\x7f", VirtualKey.Escape => "\x1b",
             VirtualKey.Up => Arrow('A'), VirtualKey.Down => Arrow('B'),
             VirtualKey.Right => Arrow('C'), VirtualKey.Left => Arrow('D'),
             VirtualKey.Home => Arrow('H'), VirtualKey.End => Arrow('F'),
@@ -222,12 +231,23 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         Send(seq);
     }
 
+    private static char? ControlCode(VirtualKey key) => key switch
+    {
+        >= VirtualKey.A and <= VirtualKey.Z => (char)(key - VirtualKey.A + 1),
+        VirtualKey.Space => '\0',
+        (VirtualKey)219 => '\x1b', // [
+        (VirtualKey)220 => '\x1c', // \
+        (VirtualKey)221 => '\x1d', // ]
+        _ => null,
+    };
+
     private void OnCharacterReceived(UIElement sender, CharacterReceivedRoutedEventArgs e)
     {
         e.Handled = true;
         var ch = e.Character;
-        if (ch == '\t') return; // уже отправлен в KeyDown
-        Send(ch == '\b' ? "\x7f" : ch.ToString());
+        // Управляющие символы (Tab, Enter, Backspace, Esc, Ctrl+буква) уже отправлены в KeyDown.
+        if (ch < ' ' || ch == '\x7f') return;
+        Send(ch.ToString());
     }
 
     private async System.Threading.Tasks.Task Paste()
