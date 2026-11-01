@@ -48,7 +48,7 @@ impl TmuxParser {
     }
 
     pub fn feed(&self, bytes: Vec<u8>) -> Vec<TmuxEvent> {
-        let mut st = self.state.lock().unwrap();
+        let mut st = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         st.0.extend(bytes);
         let mut events = Vec::new();
         while let Some(nl) = st.0.iter().position(|&b| b == b'\n') {

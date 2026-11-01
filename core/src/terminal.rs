@@ -3,6 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::LockExt;
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point};
@@ -90,9 +91,9 @@ impl EventListener for Listen {
     fn send_event(&self, event: Event) {
         match event {
             // Ответы терминала (DA, позиция курсора) уходят обратно в ssh.
-            Event::PtyWrite(s) => self.0.out.lock().unwrap().extend_from_slice(s.as_bytes()),
-            Event::Title(t) => *self.0.title.lock().unwrap() = Some(t),
-            Event::ResetTitle => *self.0.title.lock().unwrap() = None,
+            Event::PtyWrite(s) => self.0.out.locked().extend_from_slice(s.as_bytes()),
+            Event::Title(t) => *self.0.title.locked() = Some(t),
+            Event::ResetTitle => *self.0.title.locked() = None,
             _ => {}
         }
     }
@@ -139,33 +140,33 @@ impl TerminalEmulator {
 
     /// Байты от ssh.
     pub fn feed(&self, data: Vec<u8>) {
-        let mut g = self.inner.lock().unwrap();
+        let mut g = self.inner.locked();
         let Inner { term, parser } = &mut *g;
         parser.advance(term, &data);
     }
 
     /// Байты, которые терминал должен отправить в ssh (ответы на запросы).
     pub fn take_output(&self) -> Vec<u8> {
-        std::mem::take(&mut *self.listener.out.lock().unwrap())
+        std::mem::take(&mut *self.listener.out.locked())
     }
 
     pub fn resize(&self, cols: u32, rows: u32) {
         let size = Size { cols: cols.max(1) as usize, rows: rows.max(1) as usize };
-        self.inner.lock().unwrap().term.resize(size);
+        self.inner.locked().term.resize(size);
     }
 
     /// Прокрутка истории: >0 вверх, <0 вниз.
     pub fn scroll(&self, lines: i32) {
-        self.inner.lock().unwrap().term.scroll_display(Scroll::Delta(lines));
+        self.inner.locked().term.scroll_display(Scroll::Delta(lines));
     }
 
     pub fn scroll_to_bottom(&self) {
-        self.inner.lock().unwrap().term.scroll_display(Scroll::Bottom);
+        self.inner.locked().term.scroll_display(Scroll::Bottom);
     }
 
     /// Вся история и экран как текст, сверху вниз (0 — самая старая строка) — для поиска.
     pub fn history_lines(&self) -> Vec<String> {
-        let g = self.inner.lock().unwrap();
+        let g = self.inner.locked();
         let grid = g.term.grid();
         let top = -(grid.history_size() as i32);
         (top..grid.screen_lines() as i32)
@@ -183,7 +184,7 @@ impl TerminalEmulator {
 
     /// Показать строку истории `index` (как в history_lines) в верхней строке экрана; возвращает её номер на экране.
     pub fn reveal_line(&self, index: u32) -> u32 {
-        let mut g = self.inner.lock().unwrap();
+        let mut g = self.inner.locked();
         let history = g.term.grid().history_size() as i32;
         let screen = g.term.grid().screen_lines() as i32;
         let line = index as i32 - history;
@@ -214,7 +215,7 @@ impl TerminalEmulator {
     /// Изменения экрана с прошлого вызова (П1): вместо полного снимка на каждый кадр — только изменённые строки.
     /// Первый вызов, resize и прокрутка истории дают `full`.
     pub fn damage(&self) -> TermDamage {
-        let mut g = self.inner.lock().unwrap();
+        let mut g = self.inner.locked();
         let rows_dirty: Option<Vec<usize>> = match g.term.damage() {
             alacritty_terminal::term::TermDamage::Full => None,
             alacritty_terminal::term::TermDamage::Partial(it) => Some(it.map(|d| d.line).collect()),
@@ -239,12 +240,12 @@ impl TerminalEmulator {
 
     /// Курсор, режимы и заголовок без ячеек.
     pub fn cursor_state(&self) -> TermCursor {
-        let g = self.inner.lock().unwrap();
+        let g = self.inner.locked();
         cursor_of(&g.term, &self.listener)
     }
 
     pub fn snapshot(&self) -> TermSnapshot {
-        let g = self.inner.lock().unwrap();
+        let g = self.inner.locked();
         let term = &g.term;
         let grid = term.grid();
         let (cols, rows) = (grid.columns(), grid.screen_lines());
@@ -295,7 +296,7 @@ impl TerminalEmulator {
             app_cursor: mode.contains(TermMode::APP_CURSOR),
             mouse_sgr: mode.contains(TermMode::SGR_MOUSE),
             mouse_drag: mode.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION),
-            title: self.listener.title.lock().unwrap().clone(),
+            title: self.listener.title.locked().clone(),
             cells,
         }
     }
@@ -354,7 +355,7 @@ fn cursor_of(term: &Term<Listen>, listener: &Listener) -> TermCursor {
         app_cursor: mode.contains(TermMode::APP_CURSOR),
         mouse_sgr: mode.contains(TermMode::SGR_MOUSE),
         mouse_drag: mode.intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION),
-        title: listener.title.lock().unwrap().clone(),
+        title: listener.title.locked().clone(),
     }
 }
 

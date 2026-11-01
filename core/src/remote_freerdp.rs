@@ -6,6 +6,7 @@ use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::sync::{Arc, Mutex};
 
 use crate::remote::{AudioFormat, FrameRect, RemoteClose, RemoteCloseKind, RemoteSession};
+use crate::LockExt;
 
 #[repr(C)]
 struct Config {
@@ -134,17 +135,11 @@ extern "C" fn on_rect(user: *mut c_void, buffer: *const u8, len: usize, stride: 
         let start = line as usize * stride + x as usize * 4;
         bgra.extend_from_slice(unsafe { std::slice::from_raw_parts(buffer.add(start), row) });
     }
-    ctx(user).rects.lock().unwrap().push(FrameRect {
-        x: x as u16,
-        y: y as u16,
-        width: w as u16,
-        height: h as u16,
-        bgra,
-    });
+    ctx(user).rects.locked().push(FrameRect { x: x as u16, y: y as u16, width: w as u16, height: h as u16, bgra });
 }
 
 extern "C" fn on_frame_end(user: *mut c_void) {
-    let rects = std::mem::take(&mut *ctx(user).rects.lock().unwrap());
+    let rects = std::mem::take(&mut *ctx(user).rects.locked());
     if !rects.is_empty() {
         ctx(user).session.listener().on_frame(rects);
     }
@@ -195,7 +190,7 @@ extern "C" fn on_closed(user: *mut c_void, kind: c_int, message: *const c_char) 
         4 => RemoteCloseKind::CertRejected,
         _ => RemoteCloseKind::Protocol,
     };
-    *ctx(user).closed.lock().unwrap() = Some(RemoteClose { kind, message: text(message) });
+    *ctx(user).closed.locked() = Some(RemoteClose { kind, message: text(message) });
 }
 
 fn cstr(s: &str) -> CString {
@@ -210,7 +205,7 @@ fn ptr(s: &Option<CString>) -> *const c_char {
 
 /// Запустить сессию FreeRDP в своём потоке. Повторный вызов ничего не делает.
 pub(crate) fn connect(session: Arc<RemoteSession>) {
-    if session.native.lock().unwrap().is_some() {
+    if session.native.locked().is_some() {
         return;
     }
     let c = session.config().clone();
@@ -269,7 +264,7 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
             .on_closed(RemoteClose { kind: RemoteCloseKind::Protocol, message: "relaya_rdp_new failed".into() });
         return;
     }
-    *session.native.lock().unwrap() = Some(Native(raw));
+    *session.native.locked() = Some(Native(raw));
     let (ctx_addr, raw_addr) = (ctx as usize, raw as usize);
     std::thread::Builder::new()
         .name("relaya-freerdp".into())
@@ -283,7 +278,7 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
                 .take()
                 .unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
             // Сначала убрать указатель, чтобы команды после закрытия не ушли в освобождённую сессию.
-            let native = ctx.session.native.lock().unwrap().take();
+            let native = ctx.session.native.locked().take();
             if let Some(Native(p)) = native {
                 unsafe { relaya_rdp_free(p) }
             }

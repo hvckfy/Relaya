@@ -36,6 +36,18 @@ pub mod webdav;
 
 pub use error::CoreError;
 
+/// Захват мьютекса без паники: отравленный (паника в другом потоке) отдаёт данные как есть.
+/// Паника через FFI роняет приложение, поэтому `lock().unwrap()` в ядре не используется.
+pub(crate) trait LockExt<T> {
+    fn locked(&self) -> std::sync::MutexGuard<'_, T>;
+}
+
+impl<T> LockExt<T> for std::sync::Mutex<T> {
+    fn locked(&self) -> std::sync::MutexGuard<'_, T> {
+        self.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
 /// Все процессы ядра создаются здесь: на Windows без консольного окна (CREATE_NO_WINDOW), иначе GUI-приложение
 /// показывает вспыхивающую консоль на каждый вызов git. Дочерние процессы (ssh из GIT_SSH_COMMAND) консоль не получают.
 pub(crate) fn command(program: &str) -> std::process::Command {

@@ -70,7 +70,7 @@ impl DavParser {
     }
 
     pub fn feed(&self, data: Vec<u8>) -> Vec<DavRequest> {
-        let mut buf = self.buffer.lock().unwrap();
+        let mut buf = self.buffer.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         buf.extend(data);
         let mut out = Vec::new();
         while let Some(r) = next(&mut buf) {

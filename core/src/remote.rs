@@ -9,6 +9,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::LockExt;
 use ironrdp::cliprdr::backend::CliprdrBackend;
 use ironrdp::cliprdr::pdu::{
     ClipboardFormat, ClipboardFormatId, ClipboardGeneralCapabilityFlags, FileContentsRequest, FileContentsResponse,
@@ -299,7 +300,7 @@ impl RemoteSession {
             return;
         }
         #[allow(unreachable_code)]
-        let mut slot = self.commands.lock().unwrap();
+        let mut slot = self.commands.locked();
         if slot.is_some() {
             return;
         }
@@ -321,7 +322,7 @@ impl RemoteSession {
 
     /// Ответ на `on_cert`.
     pub fn accept_cert(&self, accept: bool) {
-        if let Some(tx) = self.cert_answer.lock().unwrap().take() {
+        if let Some(tx) = self.cert_answer.locked().take() {
             let _ = tx.send(accept);
         }
     }
@@ -329,7 +330,7 @@ impl RemoteSession {
     /// Клавиша по scancode набора 1; расширенные — с префиксом 0xE0 (например 0xE04B — стрелка влево).
     pub fn key(&self, scancode: u16, down: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.key(scancode, down);
             return;
         }
@@ -341,7 +342,7 @@ impl RemoteSession {
     /// Символ, которого нет в раскладке сервера (IME, эмодзи).
     pub fn unicode(&self, codepoint: u32, down: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.unicode(codepoint, down);
             return;
         }
@@ -356,7 +357,7 @@ impl RemoteSession {
 
     pub fn pointer(&self, x: u16, y: u16) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.pointer(x, y);
             return;
         }
@@ -366,7 +367,7 @@ impl RemoteSession {
     /// Кнопка мыши: 0 — левая, 1 — средняя, 2 — правая, 3 и 4 — «назад» и «вперёд».
     pub fn button(&self, button: u8, down: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.button(button, down);
             return;
         }
@@ -389,7 +390,7 @@ impl RemoteSession {
     /// Колесо: `units` — как WHEEL_DELTA (120 на щелчок), положительное — вверх/вправо.
     pub fn wheel(&self, units: i16, vertical: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.wheel(units, vertical);
             return;
         }
@@ -402,18 +403,18 @@ impl RemoteSession {
 
     /// Получать текст, скопированный на удалённой машине. Без слушателя буфер обмена только отдаётся серверу.
     pub fn set_clipboard_listener(&self, listener: Arc<dyn RemoteClipboardListener>) {
-        *self.clipboard.lock().unwrap() = Some(listener);
+        *self.clipboard.locked() = Some(listener);
     }
 
     /// Получать звук удалённой машины. Вызывать до `connect`: от этого зависит, попросим ли мы звук у сервера.
     pub fn set_audio_listener(&self, listener: Arc<dyn RemoteAudioListener>) {
-        *self.audio.lock().unwrap() = Some(listener);
+        *self.audio.locked() = Some(listener);
     }
 
     /// Текст из локального буфера обмена: станет доступен для вставки на удалённой машине.
     pub fn set_clipboard(&self, text: String) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.set_clipboard(&text);
             return;
         }
@@ -423,7 +424,7 @@ impl RemoteSession {
     /// Новый размер окна: через Display Control, если сервер его поддерживает.
     pub fn resize(&self, width: u16, height: u16) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.resize(width, height);
             return;
         }
@@ -432,7 +433,7 @@ impl RemoteSession {
 
     pub fn disconnect(&self) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             n.disconnect();
         }
         self.send(Cmd::Disconnect);
@@ -533,7 +534,7 @@ impl RemoteSession {
             return true;
         }
         let (tx, rx) = mpsc::channel();
-        *self.cert_answer.lock().unwrap() = Some(tx);
+        *self.cert_answer.locked() = Some(tx);
         self.listener.on_cert(sha256, subject);
         matches!(rx.recv_timeout(CERT_TIMEOUT), Ok(true))
     }
@@ -548,15 +549,15 @@ impl RemoteSession {
     }
     #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужны движку FreeRDP
     pub(crate) fn clipboard_listener(&self) -> Option<Arc<dyn RemoteClipboardListener>> {
-        self.clipboard.lock().unwrap().clone()
+        self.clipboard.locked().clone()
     }
     #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужны движку FreeRDP
     pub(crate) fn audio_listener(&self) -> Option<Arc<dyn RemoteAudioListener>> {
-        self.audio.lock().unwrap().clone()
+        self.audio.locked().clone()
     }
 
     fn send(&self, cmd: Cmd) {
-        if let Some(tx) = self.commands.lock().unwrap().as_ref() {
+        if let Some(tx) = self.commands.locked().as_ref() {
             let _ = tx.send(cmd);
         }
     }
@@ -588,7 +589,7 @@ impl RemoteSession {
             enable_server_pointer: true,
             request_data: None,
             autologon: false,
-            enable_audio_playback: self.audio.lock().unwrap().is_some(),
+            enable_audio_playback: self.audio.locked().is_some(),
             compression_type: None,
             pointer_software_rendering: true,
             multitransport_flags: None,
@@ -661,7 +662,7 @@ impl RemoteSession {
         let mut connector = connector::ClientConnector::new(self.connector_config(), client_addr)
             .with_static_channel(drdynvc)
             .with_static_channel(CliprdrClient::new(Box::new(TextClipboard { events: clip_tx })));
-        if let Some(l) = self.audio.lock().unwrap().clone() {
+        if let Some(l) = self.audio.locked().clone() {
             connector = connector.with_static_channel(ironrdp::rdpsnd::client::Rdpsnd::new(Box::new(Audio::new(l))));
         }
 
@@ -797,7 +798,7 @@ impl RemoteSession {
             }
             Clip::RemoteCopy(has_text) => {
                 // Текст забираем сразу, только если клиент его ждёт.
-                if !has_text || self.clipboard.lock().unwrap().is_none() {
+                if !has_text || self.clipboard.locked().is_none() {
                     return Ok(None);
                 }
                 let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { return Ok(None) };
@@ -817,7 +818,7 @@ impl RemoteSession {
                 stage.process_svc_processor_messages(msgs).map(Some)
             }
             Clip::Data(text) => {
-                if let Some(l) = self.clipboard.lock().unwrap().clone() {
+                if let Some(l) = self.clipboard.locked().clone() {
                     l.on_remote_clipboard(text.trim_end_matches('\0').to_string());
                 }
                 Ok(None)
@@ -962,7 +963,7 @@ mod tests {
         struct A(Mutex<Vec<(AudioFormat, usize)>>);
         impl RemoteAudioListener for A {
             fn on_audio(&self, f: AudioFormat, _: u32, pcm: Vec<u8>) {
-                self.0.lock().unwrap().push((f, pcm.len()));
+                self.0.locked().push((f, pcm.len()));
             }
             fn on_audio_volume(&self, _: u16, _: u16) {}
             fn on_audio_closed(&self) {}
@@ -977,7 +978,7 @@ mod tests {
         a.wave(1, 0, std::borrow::Cow::Borrowed(&[0u8; 8]));
         a.wave(99, 0, std::borrow::Cow::Borrowed(&[0u8; 8]));
         assert_eq!(
-            l.0.lock().unwrap().as_slice(),
+            l.0.locked().as_slice(),
             &[(AudioFormat { sample_rate: 44_100, channels: 2, bits_per_sample: 16 }, 8)]
         );
     }
@@ -991,7 +992,7 @@ mod tests {
             fn on_resize(&self, _: u16, _: u16) {}
             fn on_cert(&self, _: String, _: String) {}
             fn on_closed(&self, c: RemoteClose) {
-                *self.0.lock().unwrap() = Some(c);
+                *self.0.locked() = Some(c);
             }
         }
         let l = Arc::new(L(Mutex::new(None)));
@@ -1013,9 +1014,9 @@ mod tests {
         };
         RemoteSession::rdp(cfg, l.clone()).connect();
         let start = Instant::now();
-        while l.0.lock().unwrap().is_none() && start.elapsed() < Duration::from_secs(20) {
+        while l.0.locked().is_none() && start.elapsed() < Duration::from_secs(20) {
             std::thread::sleep(Duration::from_millis(50));
         }
-        assert_eq!(l.0.lock().unwrap().as_ref().map(|c| c.kind), Some(RemoteCloseKind::Network));
+        assert_eq!(l.0.locked().as_ref().map(|c| c.kind), Some(RemoteCloseKind::Network));
     }
 }

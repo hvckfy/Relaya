@@ -3,6 +3,7 @@
 
 use crate::shell_quote;
 use crate::ssh_config::SshHost;
+use crate::LockExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -807,7 +808,7 @@ impl McpServer {
         let params = msg.get("params").cloned().unwrap_or(json!({}));
         let result = match method {
             "initialize" => {
-                if let Some(n) = params.pointer("/clientInfo/name").and_then(Value::as_str) { *self.client.lock().unwrap() = mcp_client_name(n); }
+                if let Some(n) = params.pointer("/clientInfo/name").and_then(Value::as_str) { *self.client.locked() = mcp_client_name(n); }
                 json!({
                     "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or("2025-06-18"),
                     "capabilities": {"tools": {}},
@@ -845,7 +846,7 @@ impl McpServer {
         self.backend.log(McpLogEntry {
             id: crate::models::new_id(),
             date: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-            client: self.client.lock().unwrap().clone(),
+            client: self.client.locked().clone(),
             tool: tool.into(),
             host: host.into(),
             detail: mcp_mask_secrets(detail.into()),
@@ -917,7 +918,7 @@ impl McpServer {
                             McpDecision::AllowedRead
                         }
                         McpMode::Confirm => {
-                            let client = self.client.lock().unwrap().clone();
+                            let client = self.client.locked().clone();
                             if !self.backend.confirm(host.clone(), command.clone(), client) {
                                 self.record(name, alias, &command, McpDecision::RejectedByUser, None, false, None);
                                 return (format!("Пользователь отклонил выполнение команды на {alias}."), true);
@@ -984,14 +985,14 @@ mod tests {
             self.policy.clone()
         }
         fn execute(&self, _h: SshHost, c: String, _t: u32) -> ExecResult {
-            self.ran.lock().unwrap().push(c);
+            self.ran.locked().push(c);
             ExecResult { status: 0, stdout: "ok".into(), stderr: "".into() }
         }
         fn confirm(&self, _h: SshHost, _c: String, _cl: String) -> bool {
             self.confirm
         }
         fn log(&self, e: McpLogEntry) {
-            self.logged.lock().unwrap().push(e);
+            self.logged.locked().push(e);
         }
     }
     fn server(policy: McpPolicy, confirm: bool) -> (McpServer, Arc<Fake>) {
@@ -1173,7 +1174,7 @@ mod tests {
         assert_eq!(call(&s, "run_command", json!({"host": "git@forge.lan", "command": "uptime"}))["isError"], true);
         assert_eq!(call(&s, "run_command", json!({"host": "web", "command": "rm x"}))["isError"], true);
         assert_eq!(call(&s, "run_command", json!({"host": "web", "command": "uptime"}))["isError"], false);
-        assert_eq!(f.ran.lock().unwrap().as_slice(), ["uptime"]);
+        assert_eq!(f.ran.locked().as_slice(), ["uptime"]);
 
         let mut c = McpPolicy {
             allow: Some(HashMap::from([("web".into(), vec!["systemctl restart *".into()])])),

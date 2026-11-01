@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use crate::remote::{FrameRect, RemoteClose, RemoteCloseKind, RemoteListener};
+use crate::LockExt;
 
 type Ptr = *mut c_void;
 
@@ -160,13 +161,13 @@ fn sessions() -> &'static Mutex<HashMap<usize, Weak<Shared>>> {
 fn session_register(shared: &Arc<Shared>) -> usize {
     static NEXT: AtomicUsize = AtomicUsize::new(1);
     let key = NEXT.fetch_add(1, Ordering::Relaxed);
-    sessions().lock().unwrap_or_else(|e| e.into_inner()).insert(key, Arc::downgrade(shared));
+    sessions().locked().insert(key, Arc::downgrade(shared));
     key
 }
 
 fn shared_of(connection: Ptr) -> Option<Arc<Shared>> {
     let key = unsafe { rvnc_connection_context_get(connection) } as usize;
-    sessions().lock().unwrap_or_else(|e| e.into_inner()).get(&key)?.upgrade()
+    sessions().locked().get(&key)?.upgrade()
 }
 
 /// Прямоугольник кадра BGRA построчно; вне буфера — ничего (не читаем чужую память).
@@ -194,12 +195,12 @@ extern "C" fn on_state(connection: Ptr, _ctx: Ptr, state: Ptr) {
     let Some(s) = shared_of(connection) else { return };
     let status = unsafe { rvnc_connection_state_status_get(state) };
     if status == STATUS_CONNECTED {
-        *s.connected.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        *s.connected.locked() = true;
     }
     if status != STATUS_DISCONNECTED {
         return;
     }
-    let mut closed = s.closed.lock().unwrap_or_else(|e| e.into_inner());
+    let mut closed = s.closed.locked();
     if *closed {
         return;
     }
@@ -216,7 +217,7 @@ extern "C" fn on_state(connection: Ptr, _ctx: Ptr, state: Ptr) {
         RemoteCloseKind::ClosedByUser
     } else if unsafe { rvnc_connection_state_error_is_authentication_error_get(state) } {
         RemoteCloseKind::AuthFailed
-    } else if *s.connected.lock().unwrap_or_else(|e| e.into_inner()) {
+    } else if *s.connected.locked() {
         RemoteCloseKind::ServerClosed
     } else {
         RemoteCloseKind::Network
@@ -233,15 +234,15 @@ extern "C" fn on_auth(connection: Ptr, _ctx: Ptr, request: Ptr) {
     let Some(s) = shared_of(connection) else { return };
     let raw = unsafe { rvnc_authentication_request_authentication_type_get(request) };
     let needs_user = unsafe { rvnc_authentication_type_requires_username(raw) };
-    let stored = s.password.lock().unwrap_or_else(|e| e.into_inner()).take();
+    let stored = s.password.locked().take();
     if let Some(password) = stored.filter(|p| !p.is_empty()) {
         complete(request, needs_user, s.config.user.as_deref().unwrap_or(""), password);
         return;
     }
-    let listener = s.auth.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let listener = s.auth.locked().clone();
     match listener {
         Some(l) => {
-            *s.pending_auth.lock().unwrap_or_else(|e| e.into_inner()) = Some((request as usize, needs_user));
+            *s.pending_auth.locked() = Some((request as usize, needs_user));
             l.on_credentials(VncAuthKind::from_raw(raw), needs_user);
         }
         None => unsafe { rvnc_authentication_request_cancel(request) },
@@ -276,7 +277,7 @@ fn complete(request: Ptr, needs_user: bool, user: &str, password: String) {
 extern "C" fn on_create(connection: Ptr, _ctx: Ptr, fb: Ptr) {
     let Some(s) = shared_of(connection) else { return };
     let (w, h) = unsafe { (rvnc_framebuffer_size_width_get(fb), rvnc_framebuffer_size_height_get(fb)) };
-    *s.size.lock().unwrap_or_else(|e| e.into_inner()) = (w, h);
+    *s.size.locked() = (w, h);
     s.listener.on_connected(w, h);
 }
 
@@ -285,7 +286,7 @@ extern "C" fn on_resize(connection: Ptr, _ctx: Ptr, fb: Ptr) {
     let Some(s) = shared_of(connection) else { return };
     let (w, h) = unsafe { (rvnc_framebuffer_size_width_get(fb), rvnc_framebuffer_size_height_get(fb)) };
     let changed = {
-        let mut size = s.size.lock().unwrap_or_else(|e| e.into_inner());
+        let mut size = s.size.locked();
         let changed = *size != (w, h);
         *size = (w, h);
         changed
@@ -336,12 +337,12 @@ impl VncSession {
 
     /// Слушатель запроса учётных данных (до `connect`), если в конфигурации их нет.
     pub fn set_auth_listener(&self, listener: Arc<dyn VncAuthListener>) {
-        *self.shared.auth.lock().unwrap_or_else(|e| e.into_inner()) = Some(listener);
+        *self.shared.auth.locked() = Some(listener);
     }
 
     /// Подключиться; RoyalVNC работает в своих потоках. Повторный вызов ничего не делает.
     pub fn connect(&self) {
-        let mut slot = self.native.lock().unwrap_or_else(|e| e.into_inner());
+        let mut slot = self.native.locked();
         if slot.is_some() {
             return;
         }
@@ -378,15 +379,14 @@ impl VncSession {
     /// Ответ на `on_credentials`. Для ARD и MS-Logon нужно имя: передаётся ли оно, решает тип запроса, без имени —
     /// пустое.
     pub fn provide_credentials(&self, user: Option<String>, password: String) {
-        let Some((request, needs_user)) = self.shared.pending_auth.lock().unwrap_or_else(|e| e.into_inner()).take()
-        else {
+        let Some((request, needs_user)) = self.shared.pending_auth.locked().take() else {
             return;
         };
         complete(request as Ptr, needs_user, user.as_deref().unwrap_or(""), password);
     }
 
     pub fn cancel_credentials(&self) {
-        if let Some((request, _)) = self.shared.pending_auth.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some((request, _)) = self.shared.pending_auth.locked().take() {
             unsafe { rvnc_authentication_request_cancel(request as Ptr) };
         }
     }
@@ -408,7 +408,7 @@ impl VncSession {
     }
 
     pub fn pointer(&self, x: u16, y: u16) {
-        *self.pointer.lock().unwrap_or_else(|e| e.into_inner()) = (x, y);
+        *self.pointer.locked() = (x, y);
         self.with(|c| unsafe { rvnc_connection_mouse_move(c, x, y) });
     }
 
@@ -417,7 +417,7 @@ impl VncSession {
         if button > 2 {
             return;
         }
-        let (x, y) = *self.pointer.lock().unwrap_or_else(|e| e.into_inner());
+        let (x, y) = *self.pointer.locked();
         self.with(|c| unsafe {
             if down {
                 rvnc_connection_mouse_down(c, button as i32, x, y)
@@ -439,7 +439,7 @@ impl VncSession {
             (false, false) => 0,
         };
         let steps = (units.unsigned_abs() as u32 / 120).max(1);
-        let (x, y) = *self.pointer.lock().unwrap_or_else(|e| e.into_inner());
+        let (x, y) = *self.pointer.locked();
         self.with(|c| unsafe { rvnc_connection_mouse_wheel(c, wheel, x, y, steps) });
     }
 
@@ -451,7 +451,7 @@ impl VncSession {
 
 impl VncSession {
     fn with(&self, f: impl FnOnce(Ptr)) {
-        if let Some(n) = self.native.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(n) = self.native.locked().as_ref() {
             f(n.connection);
         }
     }
@@ -463,7 +463,7 @@ impl Drop for VncSession {
         let native = self.native.get_mut().unwrap_or_else(|e| e.into_inner()).take();
         if let Some(n) = native {
             // Сначала убрать ключ: поздние колбэки RoyalVNC больше не найдут сессию.
-            sessions().lock().unwrap_or_else(|e| e.into_inner()).remove(&n.context);
+            sessions().locked().remove(&n.context);
             unsafe {
                 rvnc_connection_disconnect(n.connection);
                 rvnc_connection_destroy(n.connection);
@@ -495,7 +495,7 @@ mod tests {
             fn on_resize(&self, _: u16, _: u16) {}
             fn on_cert(&self, _: String, _: String) {}
             fn on_closed(&self, c: RemoteClose) {
-                *self.0.lock().unwrap() = Some(c);
+                *self.0.locked() = Some(c);
             }
         }
         let l = Arc::new(L(Mutex::new(None)));
@@ -505,10 +505,10 @@ mod tests {
         );
         s.connect();
         let start = Instant::now();
-        while l.0.lock().unwrap().is_none() && start.elapsed() < Duration::from_secs(20) {
+        while l.0.locked().is_none() && start.elapsed() < Duration::from_secs(20) {
             std::thread::sleep(Duration::from_millis(50));
         }
-        let kind = l.0.lock().unwrap().as_ref().map(|c| c.kind);
+        let kind = l.0.locked().as_ref().map(|c| c.kind);
         assert!(matches!(kind, Some(RemoteCloseKind::Network) | Some(RemoteCloseKind::ServerClosed)), "{kind:?}");
     }
 }
