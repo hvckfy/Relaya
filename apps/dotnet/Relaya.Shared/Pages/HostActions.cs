@@ -66,7 +66,7 @@ internal static class HostActions
                 var cmd = RelayaCoreMethods.OsCommandForUser(
                     RelayaCoreMethods.OsPasswordLoginCommand(h.os ?? ServerOs.Linux, enabled), h.user ?? "");
                 var text = enabled
-                    ? L("На %@ будет разрешён вход по паролю в sshd. Команда откроется в терминале — проверьте её и нажмите Enter.", h.alias)
+                    ? L("На %@ будет разрешён вход по паролю в sshd — это слабее, чем вход только по ключу: пароль можно подобрать. Команда откроется в терминале — проверьте её и нажмите Enter.", h.alias)
                     : L("На %@ будет запрещён вход по паролю в sshd. Сначала убедитесь, что вход по ключу работает, иначе можно потерять доступ.", h.alias);
                 if (await Ui.Confirm(anchor.XamlRoot, enabled ? L("Разрешить вход по паролю?") : L("Запретить вход по паролю?"), text,
                         enabled ? L("Разрешить") : L("Запретить")))
