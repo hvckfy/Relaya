@@ -49,7 +49,7 @@ struct SnippetsView: View {
                                 }
                                 Divider()
                                 Button(L("Удалить…"), role: .destructive) {
-                                    model.pendingDelete = PendingDelete(title: L("Удалить сниппет «%@»?", s.name),
+                                    model.pendingRemoval = PendingDelete(title: L("Удалить сниппет «%@»?", s.name),
                                                                         message: L("Сниппет будет удалён на всех машинах после синхронизации.")) {
                                         model.snippets.removeAll { $0.id == s.id }
                                     }

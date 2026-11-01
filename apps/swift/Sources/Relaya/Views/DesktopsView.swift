@@ -69,7 +69,7 @@ struct DesktopsView: View {
                 Button(L("Изменить…")) { editing = d }
                 Divider()
                 Button(L("Удалить…"), role: .destructive) {
-                    model.pendingDelete = PendingDelete(title: L("Удалить «%@»?", d.displayName),
+                    model.pendingRemoval = PendingDelete(title: L("Удалить «%@»?", d.displayName),
                                                         message: L("Подключение к рабочему столу и его сохранённые пароли будут удалены.")) {
                         model.deleteDesktop(d)
                     }

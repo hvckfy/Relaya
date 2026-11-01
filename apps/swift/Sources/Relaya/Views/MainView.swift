@@ -24,12 +24,7 @@ struct MainView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Е.8: деление плитки кнопками в панели, как на Windows и Linux (меню и ⌘D / ⇧⌘D остаются).
-                if model.activeSession?.host != nil {
-                    Button { model.splitActive(.right) } label: { Label(L("Разделить вправо"), systemImage: "rectangle.split.2x1") }
-                        .help(L("Разделить вправо (⌘D)"))
-                    Button { model.splitActive(.bottom) } label: { Label(L("Разделить вниз"), systemImage: "rectangle.split.1x2") }
-                        .help(L("Разделить вниз (⇧⌘D)"))
-                }
+                if model.activeSession?.host != nil { SplitToolbarButtons() }
                 if !model.sync.activeProfiles.isEmpty { SyncToolbarButton() }
                 if !model.allTags.isEmpty {
                     Menu {
@@ -70,7 +65,7 @@ struct MainView: View {
         .searchable(text: $model.searchText, placement: .sidebar, prompt: L("Хосты и подключения"))
         // Без своей заливки тулбара: сайдбар идёт на всю высоту окна (как в Finder),
         // а над рабочей областью виден её фон.
-        .deleteConfirmation($model.pendingDelete)
+        .deleteConfirmation($model.pendingRemoval)
         .sheet(isPresented: Binding(get: { !model.sync.pendingDeletions.isEmpty },
                                     set: { if !$0, !model.sync.pendingDeletions.isEmpty { model.sync.resolveDeletions(confirm: []) } })) {
             PendingDeletionsSheet(items: model.sync.pendingDeletions) { model.sync.resolveDeletions(confirm: $0) }
@@ -272,7 +267,7 @@ private struct SaveLayoutActions: View {
 
 private struct RenameLayoutActions: View {
     @Environment(AppModel.self) private var model
-    let saved: SavedLayout
+    let saved: AppModel.SavedLayout
     @State private var name = ""
 
     var body: some View {
@@ -297,5 +292,16 @@ private struct FinderMountActions: View {
             .onAppear { path = model.finderLastPath[host.alias] ?? "/" }
         Button(L("Подключить")) { Task { await model.openInFinder(host, path: path) } }
         Button(L("Отмена"), role: .cancel) {}
+    }
+}
+
+private struct SplitToolbarButtons: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button { model.splitActive(.right) } label: { Label(L("Разделить вправо"), systemImage: "rectangle.split.2x1") }
+            .help(L("Разделить вправо (⌘D)"))
+        Button { model.splitActive(.bottom) } label: { Label(L("Разделить вниз"), systemImage: "rectangle.split.1x2") }
+            .help(L("Разделить вниз (⇧⌘D)"))
     }
 }

@@ -17,7 +17,7 @@ struct SettingsView: View {
                 .tabItem { Label(L("Синхронизация"), systemImage: "arrow.triangle.2.circlepath") }
         }
         .frame(width: 640)
-        .deleteConfirmation(Binding(get: { model.pendingDelete }, set: { model.pendingDelete = $0 }))
+        .deleteConfirmation(Binding(get: { model.pendingRemoval }, set: { model.pendingRemoval = $0 }))
     }
 }
 

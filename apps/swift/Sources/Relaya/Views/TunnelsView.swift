@@ -115,7 +115,7 @@ private struct TunnelRow: View {
                 }
                 Divider()
                 Button(L("Удалить…"), role: .destructive) {
-                    model.pendingDelete = PendingDelete(title: L("Удалить туннель «%@»?", tunnel.name.isEmpty ? tunnel.spec : tunnel.name),
+                    model.pendingRemoval = PendingDelete(title: L("Удалить туннель «%@»?", tunnel.name.isEmpty ? tunnel.spec : tunnel.name),
                                                         message: L("Если он запущен, он будет остановлен.")) {
                         model.tunnels.delete(tunnel.id)
                     }

@@ -91,7 +91,7 @@ struct SyncSettings: View {
 
     /// Удаление профиля удаляет и локальный клон репозитория — только после подтверждения (UI-M1).
     private func askRemove(_ id: Sync.Profile.ID, name: String) {
-        model.pendingDelete = PendingDelete(title: L("Удалить профиль «%@»?", name),
+        model.pendingRemoval = PendingDelete(title: L("Удалить профиль «%@»?", name),
                                             message: L("Синхронизация по нему остановится, локальная копия репозитория будет удалена. Данные на этой машине и в самом репозитории останутся.")) {
             model.sync.remove(id)
         }
