@@ -7,7 +7,7 @@
 
 use crate::error::CoreError;
 use crate::models::{encode_sorted, try_decode_list, RemoteDesktop, Snippet, Tunnel};
-use crate::ssh_config::{parse_config, split_key_value, aliases, Document};
+use crate::ssh_config::{aliases, parse_config, split_key_value, Document};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use serde::{Deserialize, Serialize};
@@ -17,11 +17,21 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "camelCase")]
-pub enum SyncItem { SshConfig, Snippets, Tunnels, Desktops, Agents, Keys }
+pub enum SyncItem {
+    SshConfig,
+    Snippets,
+    Tunnels,
+    Desktops,
+    Agents,
+    Keys,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "camelCase")]
-pub enum SyncBackend { Git, ICloud }
+pub enum SyncBackend {
+    Git,
+    ICloud,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
@@ -46,35 +56,61 @@ pub struct SyncProfile {
 impl SyncProfile {
     /// Сниппеты и права агентов не привязаны к хостам — только для профиля «все хосты».
     pub fn effective_items(&self) -> HashSet<SyncItem> {
-        self.items.iter().copied().filter(|i| self.scope.all_hosts || !matches!(i, SyncItem::Snippets | SyncItem::Agents)).collect()
+        self.items
+            .iter()
+            .copied()
+            .filter(|i| self.scope.all_hosts || !matches!(i, SyncItem::Snippets | SyncItem::Agents))
+            .collect()
     }
     fn contains(&self, h: &crate::ssh_config::SshHost) -> bool {
-        self.scope.all_hosts || self.scope.hosts.contains(&h.alias) || h.group.as_ref().map(|g| self.scope.groups.contains(g)).unwrap_or(false)
+        self.scope.all_hosts
+            || self.scope.hosts.contains(&h.alias)
+            || h.group.as_ref().map(|g| self.scope.groups.contains(g)).unwrap_or(false)
     }
 }
 
 #[uniffi::export]
 pub fn sync_new_profile(name: String) -> SyncProfile {
-    SyncProfile { id: crate::models::new_id(), name, backend: SyncBackend::Git, remote: String::new(),
-                  scope: SyncScope { all_hosts: true, groups: vec![], hosts: vec![] },
-                  items: vec![SyncItem::SshConfig, SyncItem::Snippets, SyncItem::Tunnels, SyncItem::Desktops], auto: true, enabled: true }
+    SyncProfile {
+        id: crate::models::new_id(),
+        name,
+        backend: SyncBackend::Git,
+        remote: String::new(),
+        scope: SyncScope { all_hosts: true, groups: vec![], hosts: vec![] },
+        items: vec![SyncItem::SshConfig, SyncItem::Snippets, SyncItem::Tunnels, SyncItem::Desktops],
+        auto: true,
+        enabled: true,
+    }
 }
 
 /// Где лежат локальные файлы: папка `~/.ssh` и папка данных приложения.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct SyncPaths { pub ssh: String, pub support: String }
-
-impl SyncPaths {
-    fn config(&self) -> PathBuf { Path::new(&self.ssh).join("config") }
-    fn support(&self, f: &str) -> PathBuf { Path::new(&self.support).join(f) }
+pub struct SyncPaths {
+    pub ssh: String,
+    pub support: String,
 }
 
-fn read(p: &Path) -> Option<Vec<u8>> { fs::read(p).ok() }
+impl SyncPaths {
+    fn config(&self) -> PathBuf {
+        Path::new(&self.ssh).join("config")
+    }
+    fn support(&self, f: &str) -> PathBuf {
+        Path::new(&self.support).join(f)
+    }
+}
+
+fn read(p: &Path) -> Option<Vec<u8>> {
+    fs::read(p).ok()
+}
 
 fn write_if_changed(dir: &Path, rel: &str, data: &[u8], changed: &mut Vec<String>) -> Result<(), CoreError> {
     let dest = dir.join(rel);
-    if read(&dest).as_deref() == Some(data) { return Ok(()); }
-    if let Some(parent) = dest.parent() { fs::create_dir_all(parent)?; }
+    if read(&dest).as_deref() == Some(data) {
+        return Ok(());
+    }
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::write(&dest, data)?;
     changed.push(rel.into());
     Ok(())
@@ -90,22 +126,34 @@ pub fn config_extract(text: String, aliases_in: Vec<String>) -> String {
     sorted.sort();
     let mut taken: Vec<(u32, u32, u32)> = Vec::new();
     for a in sorted {
-        if let Some(b) = doc.block(&a) { if !taken.iter().any(|t| t.0 == b.start) { taken.push((b.start, b.host_line, b.end)); } }
+        if let Some(b) = doc.block(&a) {
+            if !taken.iter().any(|t| t.0 == b.start) {
+                taken.push((b.start, b.host_line, b.end));
+            }
+        }
     }
     taken.sort();
     // Из общего блока `Host a b` уходят только выбранные имена: невыбранное не должно попасть в общий файл.
-    let blocks: Vec<String> = taken.iter().map(|&(s, h, e)| {
-        let mut lines = doc.lines[s as usize..e as usize].to_vec();
-        let (_, v) = split_key_value(doc.lines[h as usize].trim());
-        let names = aliases(&v);
-        let chosen: Vec<&String> = names.iter().filter(|n| aliases_in.contains(n)).collect();
-        if chosen.len() < names.len() {
-            let indent: String = doc.lines[h as usize].chars().take_while(|c| c.is_whitespace()).collect();
-            lines[(h - s) as usize] = format!("{indent}Host {}", chosen.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(" "));
-        }
-        lines.join("\n")
-    }).collect();
-    if blocks.is_empty() { String::new() } else { blocks.join("\n\n") + "\n" }
+    let blocks: Vec<String> = taken
+        .iter()
+        .map(|&(s, h, e)| {
+            let mut lines = doc.lines[s as usize..e as usize].to_vec();
+            let (_, v) = split_key_value(doc.lines[h as usize].trim());
+            let names = aliases(&v);
+            let chosen: Vec<&String> = names.iter().filter(|n| aliases_in.contains(n)).collect();
+            if chosen.len() < names.len() {
+                let indent: String = doc.lines[h as usize].chars().take_while(|c| c.is_whitespace()).collect();
+                lines[(h - s) as usize] =
+                    format!("{indent}Host {}", chosen.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(" "));
+            }
+            lines.join("\n")
+        })
+        .collect();
+    if blocks.is_empty() {
+        String::new()
+    } else {
+        blocks.join("\n\n") + "\n"
+    }
 }
 
 /// Убрать `alias` из локального конфига: из общего блока — только имя, свой блок — целиком.
@@ -134,7 +182,9 @@ pub fn config_merge(local: String, incoming: String) -> String {
     let mut seen = HashSet::new();
     let mut cut_any = false;
     for h in parse_config(incoming.clone()) {
-        if seen.contains(&h.alias) { continue; }
+        if seen.contains(&h.alias) {
+            continue;
+        }
         let Some(b) = source.block(&h.alias) else { continue };
         let block = source.lines[b.start as usize..b.end as usize].to_vec();
         let (_, v) = split_key_value(source.lines[b.host_line as usize].trim());
@@ -143,23 +193,35 @@ pub fn config_merge(local: String, incoming: String) -> String {
         for a in &names {
             seen.insert(a.clone());
             while let Some((p, cut)) = take_alias(&mut doc, a) {
-                if cut.is_some() { cut_any = true; }
-                if let (Some(cur), Some((start, len))) = (pos.as_mut(), cut) { if start < *cur { *cur -= len.min(*cur - start); } }
+                if cut.is_some() {
+                    cut_any = true;
+                }
+                if let (Some(cur), Some((start, len))) = (pos.as_mut(), cut) {
+                    if start < *cur {
+                        *cur -= len.min(*cur - start);
+                    }
+                }
                 pos.get_or_insert(p);
             }
         }
         match pos {
             Some(p) => {
                 let mut ins = block;
-                if p > 0 && !doc.lines[p - 1].trim().is_empty() { ins.insert(0, String::new()); }
-                if p < doc.lines.len() && !doc.lines[p].trim().is_empty() { ins.push(String::new()); }
+                if p > 0 && !doc.lines[p - 1].trim().is_empty() {
+                    ins.insert(0, String::new());
+                }
+                if p < doc.lines.len() && !doc.lines[p].trim().is_empty() {
+                    ins.push(String::new());
+                }
                 doc.lines.splice(p..p, ins);
             }
             None => doc.replace_or_append(&h.alias, block),
         }
     }
     // Вырезанный последним блок оставляет пустую строку-разделитель в конце.
-    while cut_any && doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) { doc.lines.pop(); }
+    while cut_any && doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) {
+        doc.lines.pop();
+    }
     doc.text()
 }
 
@@ -168,7 +230,12 @@ pub fn config_merge(local: String, incoming: String) -> String {
 /// Записать в `dir` то, что относится к профилю. Возвращает изменённые пути.
 /// Удалённое на этой машине с прошлой синхронизации уходит из общих файлов и попадает в `relaya/deleted.json`.
 #[uniffi::export]
-pub fn sync_export(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<String>, CoreError> {
+pub fn sync_export(
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+    dir: String,
+) -> Result<Vec<String>, CoreError> {
     let local = local_items(&profile, &paths)?;
     let mut tombs = tombstones::prepare(&profile, &paths, Path::new(&dir), &local)?;
     let mut changed = export_inner(profile.clone(), paths.clone(), passphrase, dir.clone())?;
@@ -178,12 +245,18 @@ pub fn sync_export(profile: SyncProfile, paths: SyncPaths, passphrase: Option<St
     Ok(changed)
 }
 
-fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<String>, CoreError> {
+fn export_inner(
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+    dir: String,
+) -> Result<Vec<String>, CoreError> {
     let dir = Path::new(&dir);
     let items = profile.effective_items();
     let mut changed = Vec::new();
     let config_text = fs::read_to_string(paths.config()).unwrap_or_default();
-    let hosts: Vec<_> = parse_config(config_text.clone()).into_iter().filter(|h| profile.contains(h) && !h.is_git_service()).collect();
+    let hosts: Vec<_> =
+        parse_config(config_text.clone()).into_iter().filter(|h| profile.contains(h) && !h.is_git_service()).collect();
     let aliases_set: HashSet<String> = hosts.iter().map(|h| h.alias.clone()).collect();
 
     // Своё добавляется к тому, что уже в папке, а не заменяет её: Mac без хостов не должен обнулить общий файл.
@@ -195,14 +268,23 @@ fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
     }
     if items.contains(&SyncItem::Snippets) {
         if let Ok(j) = fs::read_to_string(paths.support("snippets.json")) {
-            let mut list = merged_with_existing(dir, "relaya/snippets.json", try_decode_list::<Snippet>(&j).map_err(|e| broken("snippets.json", e))?, |x| x.id.clone())?;
+            let mut list = merged_with_existing(
+                dir,
+                "relaya/snippets.json",
+                try_decode_list::<Snippet>(&j).map_err(|e| broken("snippets.json", e))?,
+                |x| x.id.clone(),
+            )?;
             list.sort_by(|a, b| a.id.cmp(&b.id));
             write_if_changed(dir, "relaya/snippets.json", encode_sorted(&list).as_bytes(), &mut changed)?;
         }
     }
     if items.contains(&SyncItem::Tunnels) {
         if let Ok(j) = fs::read_to_string(paths.support("tunnels.json")) {
-            let mine: Vec<Tunnel> = try_decode_list::<Tunnel>(&j).map_err(|e| broken("tunnels.json", e))?.into_iter().filter(|t| aliases_set.contains(&t.host_alias)).collect();
+            let mine: Vec<Tunnel> = try_decode_list::<Tunnel>(&j)
+                .map_err(|e| broken("tunnels.json", e))?
+                .into_iter()
+                .filter(|t| aliases_set.contains(&t.host_alias))
+                .collect();
             let mut list = merged_with_existing(dir, "relaya/tunnels.json", mine, |x| x.id.clone())?;
             list.sort_by(|a, b| a.id.cmp(&b.id));
             write_if_changed(dir, "relaya/tunnels.json", encode_sorted(&list).as_bytes(), &mut changed)?;
@@ -210,10 +292,15 @@ fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
     }
     if items.contains(&SyncItem::Desktops) {
         if let Ok(j) = fs::read_to_string(paths.support("desktops.json")) {
-            let mine: Vec<RemoteDesktop> = try_decode_list::<RemoteDesktop>(&j).map_err(|e| broken("desktops.json", e))?.into_iter().filter(|d| {
-                profile.scope.all_hosts || d.group.as_ref().map(|g| profile.scope.groups.contains(g)).unwrap_or(false)
-                    || d.via_ssh_host.as_ref().map(|v| aliases_set.contains(v)).unwrap_or(false)
-            }).collect();
+            let mine: Vec<RemoteDesktop> = try_decode_list::<RemoteDesktop>(&j)
+                .map_err(|e| broken("desktops.json", e))?
+                .into_iter()
+                .filter(|d| {
+                    profile.scope.all_hosts
+                        || d.group.as_ref().map(|g| profile.scope.groups.contains(g)).unwrap_or(false)
+                        || d.via_ssh_host.as_ref().map(|v| aliases_set.contains(v)).unwrap_or(false)
+                })
+                .collect();
             let mut list = merged_with_existing(dir, "relaya/desktops.json", mine, |x| x.id.clone())?;
             list.sort_by(|a, b| a.id.cmp(&b.id));
             write_if_changed(dir, "relaya/desktops.json", encode_sorted(&list).as_bytes(), &mut changed)?;
@@ -224,7 +311,10 @@ fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
         if let Some(d) = read(&paths.support("mcp.json")) {
             let mine: crate::mcp::McpPolicy = serde_json::from_slice(&d).map_err(|e| broken("mcp.json", e.into()))?;
             let mut out = match read(&dir.join("relaya/mcp.json")) {
-                Some(s) => crate::mcp::mcp_policy_merge(serde_json::from_slice(&s).map_err(|e| broken_shared("mcp.json", e.into()))?, mine),
+                Some(s) => crate::mcp::mcp_policy_merge(
+                    serde_json::from_slice(&s).map_err(|e| broken_shared("mcp.json", e.into()))?,
+                    mine,
+                ),
                 None => mine,
             };
             out.grants = None;
@@ -233,9 +323,17 @@ fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
     }
     if let (true, Some(pass)) = (items.contains(&SyncItem::Keys), passphrase) {
         // `~` раскрывается через папку .ssh из SyncPaths (на Windows HOME обычно не задан), разделители и регистр — как у Windows.
-        let used: HashSet<String> = hosts.iter().flat_map(|h| {
-            if h.identity_files.is_empty() { h.identity_file.clone().into_iter().collect() } else { h.identity_files.clone() }
-        }).map(|p| key_path_norm(&paths.ssh, &p)).collect();
+        let used: HashSet<String> = hosts
+            .iter()
+            .flat_map(|h| {
+                if h.identity_files.is_empty() {
+                    h.identity_file.clone().into_iter().collect()
+                } else {
+                    h.identity_files.clone()
+                }
+            })
+            .map(|p| key_path_norm(&paths.ssh, &p))
+            .collect();
         changed.extend(keys_export(&paths.ssh, &pass, Some(&used), dir)?);
     }
     Ok(changed)
@@ -243,19 +341,26 @@ fn export_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
 
 /// Список в папке + свои элементы (свои заменяют одноимённые по id): выгрузка ничего не удаляет из общего.
 fn merged_with_existing<T>(dir: &Path, rel: &str, mine: Vec<T>, id: impl Fn(&T) -> String) -> Result<Vec<T>, CoreError>
-where T: for<'de> Deserialize<'de> + Clone {
+where
+    T: for<'de> Deserialize<'de> + Clone,
+{
     let mut out: Vec<T> = match fs::read_to_string(dir.join(rel)) {
         Ok(s) => try_decode_list(&s).map_err(|e| broken(rel, e))?,
         Err(_) => Vec::new(),
     };
     for item in mine {
-        match out.iter().position(|o| id(o) == id(&item)) { Some(i) => out[i] = item, None => out.push(item) }
+        match out.iter().position(|o| id(o) == id(&item)) {
+            Some(i) => out[i] = item,
+            None => out.push(item),
+        }
     }
     Ok(out)
 }
 
 /// Файл не читается: синхронизация останавливается и ничего не перезаписывает.
-fn broken(name: &str, e: CoreError) -> CoreError { CoreError::Json(format!("{name} повреждён, синхронизация остановлена: {e}")) }
+fn broken(name: &str, e: CoreError) -> CoreError {
+    CoreError::Json(format!("{name} повреждён, синхронизация остановлена: {e}"))
+}
 
 /// То же для файла в папке или репозитории синхронизации (отдельный ключ локализации).
 fn broken_shared(name: &str, e: CoreError) -> CoreError {
@@ -265,14 +370,28 @@ fn broken_shared(name: &str, e: CoreError) -> CoreError {
 /// Влить в локальные файлы содержимое `dir`. Возвращает изменившиеся пункты.
 /// Надгробия из `relaya/deleted.json` удаляют локальные элементы, которые не правились с прошлой синхронизации.
 #[uniffi::export]
-pub fn sync_import(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<SyncItem>, CoreError> {
+pub fn sync_import(
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+    dir: String,
+) -> Result<Vec<SyncItem>, CoreError> {
     let mut changed = import_inner(profile.clone(), paths.clone(), passphrase, dir.clone())?;
-    for item in tombstones::apply_locally(&profile, &paths, Path::new(&dir))? { if !changed.contains(&item) { changed.push(item); } }
+    for item in tombstones::apply_locally(&profile, &paths, Path::new(&dir))? {
+        if !changed.contains(&item) {
+            changed.push(item);
+        }
+    }
     tombstones::save_snapshot(&profile, &paths, &local_items(&profile, &paths)?, &[])?;
     Ok(changed)
 }
 
-fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, dir: String) -> Result<Vec<SyncItem>, CoreError> {
+fn import_inner(
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+    dir: String,
+) -> Result<Vec<SyncItem>, CoreError> {
     let dir = Path::new(&dir);
     let items = profile.effective_items();
     let mut changed = Vec::new();
@@ -280,14 +399,22 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
     if items.contains(&SyncItem::SshConfig) {
         if let Ok(incoming) = fs::read_to_string(dir.join("ssh/config")) {
             // Профиль «группа work» не должен приносить чужие хосты из общего файла.
-            let incoming = if profile.scope.all_hosts { incoming } else {
-                let wanted: Vec<String> = parse_config(incoming.clone()).into_iter()
-                    .filter(|h| profile.contains(h) && !h.is_git_service()).map(|h| h.alias).collect();
+            let incoming = if profile.scope.all_hosts {
+                incoming
+            } else {
+                let wanted: Vec<String> = parse_config(incoming.clone())
+                    .into_iter()
+                    .filter(|h| profile.contains(h) && !h.is_git_service())
+                    .map(|h| h.alias)
+                    .collect();
                 config_extract(incoming, wanted)
             };
             let local = fs::read_to_string(paths.config()).unwrap_or_default();
             // UseKeychain с Mac ломает ssh на Windows и Linux — там конфиг получает IgnoreUnknown.
-            let merged = crate::ssh_config::config_for_platform(config_merge(local.clone(), incoming), crate::ssh_config::ConfigPlatform::current());
+            let merged = crate::ssh_config::config_for_platform(
+                config_merge(local.clone(), incoming),
+                crate::ssh_config::ConfigPlatform::current(),
+            );
             if merged != local {
                 fs::create_dir_all(&paths.ssh)?;
                 // Без копии конфиг не меняем: ошибка бэкапа прерывает импорт.
@@ -301,20 +428,42 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
             }
         }
     }
-    if items.contains(&SyncItem::Snippets) && merge_list_where::<Snippet>(&dir.join("relaya/snippets.json"), &paths.support("snippets.json"), |x| x.id.clone(), |_| true)? {
+    if items.contains(&SyncItem::Snippets)
+        && merge_list_where::<Snippet>(
+            &dir.join("relaya/snippets.json"),
+            &paths.support("snippets.json"),
+            |x| x.id.clone(),
+            |_| true,
+        )?
+    {
         changed.push(SyncItem::Snippets);
     }
     // Хосты профиля по общему файлу: туннели и рабочие столы чужих хостов не приходят.
-    let scoped: HashSet<String> = fs::read_to_string(dir.join("ssh/config")).map(|t| parse_config(t).into_iter()
-        .filter(|h| profile.contains(h)).map(|h| h.alias).collect()).unwrap_or_default();
+    let scoped: HashSet<String> = fs::read_to_string(dir.join("ssh/config"))
+        .map(|t| parse_config(t).into_iter().filter(|h| profile.contains(h)).map(|h| h.alias).collect())
+        .unwrap_or_default();
     let all = profile.scope.all_hosts;
-    if items.contains(&SyncItem::Tunnels) && merge_list_where::<Tunnel>(&dir.join("relaya/tunnels.json"), &paths.support("tunnels.json"), |x| x.id.clone(),
-        |t| all || scoped.contains(&t.host_alias))? {
+    if items.contains(&SyncItem::Tunnels)
+        && merge_list_where::<Tunnel>(
+            &dir.join("relaya/tunnels.json"),
+            &paths.support("tunnels.json"),
+            |x| x.id.clone(),
+            |t| all || scoped.contains(&t.host_alias),
+        )?
+    {
         changed.push(SyncItem::Tunnels);
     }
-    if items.contains(&SyncItem::Desktops) && merge_list_where::<RemoteDesktop>(&dir.join("relaya/desktops.json"), &paths.support("desktops.json"), |x| x.id.clone(),
-        |d| all || d.group.as_ref().map(|g| profile.scope.groups.contains(g)).unwrap_or(false)
-            || d.via_ssh_host.as_ref().map(|v| scoped.contains(v)).unwrap_or(false))? {
+    if items.contains(&SyncItem::Desktops)
+        && merge_list_where::<RemoteDesktop>(
+            &dir.join("relaya/desktops.json"),
+            &paths.support("desktops.json"),
+            |x| x.id.clone(),
+            |d| {
+                all || d.group.as_ref().map(|g| profile.scope.groups.contains(g)).unwrap_or(false)
+                    || d.via_ssh_host.as_ref().map(|v| scoped.contains(v)).unwrap_or(false)
+            },
+        )?
+    {
         changed.push(SyncItem::Desktops);
     }
     if items.contains(&SyncItem::Agents) {
@@ -323,7 +472,8 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
         // Расширение прав (хост строже → мягче, новое allow-правило) не применяется молча: оно ждёт подтверждения
         // (`sync_take_agent_escalations` / `sync_apply_agent_escalations`), остальное сливается сразу.
         if let Some(d) = read(&dir.join("relaya/mcp.json")) {
-            let theirs: crate::mcp::McpPolicy = serde_json::from_slice(&d).map_err(|e| broken_shared("mcp.json", e.into()))?;
+            let theirs: crate::mcp::McpPolicy =
+                serde_json::from_slice(&d).map_err(|e| broken_shared("mcp.json", e.into()))?;
             let local = read(&paths.support("mcp.json"));
             let base = match &local {
                 Some(l) => serde_json::from_slice(l).map_err(|e| broken("mcp.json", e.into()))?,
@@ -342,24 +492,44 @@ fn import_inner(profile: SyncProfile, paths: SyncPaths, passphrase: Option<Strin
     }
     if items.contains(&SyncItem::Keys) {
         // Только ключи, которыми пользуются хосты профиля (по имени файла внутри .ssh).
-        let only: Option<HashSet<String>> = (!all).then(|| fs::read_to_string(dir.join("ssh/config")).map(|t| parse_config(t).into_iter()
-            .filter(|h| scoped.contains(&h.alias)).flat_map(|h| h.identity_files.into_iter())
-            .filter_map(|p| p.replace('\\', "/").rsplit('/').next().map(str::to_string)).collect()).unwrap_or_default());
+        let only: Option<HashSet<String>> = (!all).then(|| {
+            fs::read_to_string(dir.join("ssh/config"))
+                .map(|t| {
+                    parse_config(t)
+                        .into_iter()
+                        .filter(|h| scoped.contains(&h.alias))
+                        .flat_map(|h| h.identity_files.into_iter())
+                        .filter_map(|p| p.replace('\\', "/").rsplit('/').next().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
         let (added, renamed, skipped) = keys_import(&paths.ssh, passphrase.as_deref(), dir, only.as_ref())?;
-        if !added.is_empty() { changed.push(SyncItem::Keys); }
-        if !renamed.is_empty() { remember_renamed(&paths, renamed); }
+        if !added.is_empty() {
+            changed.push(SyncItem::Keys);
+        }
+        if !renamed.is_empty() {
+            remember_renamed(&paths, renamed);
+        }
         remember_skipped(&paths, skipped);
     }
     Ok(changed)
 }
 
 /// Пришедшие элементы заменяют свои по id, новые добавляются, остальные остаются.
-fn merge_list_where<T>(incoming: &Path, local: &Path, id: impl Fn(&T) -> String, keep: impl Fn(&T) -> bool) -> Result<bool, CoreError>
-where T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone {
+fn merge_list_where<T>(
+    incoming: &Path,
+    local: &Path,
+    id: impl Fn(&T) -> String,
+    keep: impl Fn(&T) -> bool,
+) -> Result<bool, CoreError>
+where
+    T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone,
+{
     let Ok(j) = fs::read_to_string(incoming) else { return Ok(false) };
     let name = incoming.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let theirs: Vec<T> = try_decode_list::<T>(&j).map_err(|e| broken_shared(&name, e))?
-        .into_iter().filter(|x| keep(x)).collect();
+    let theirs: Vec<T> =
+        try_decode_list::<T>(&j).map_err(|e| broken_shared(&name, e))?.into_iter().filter(|x| keep(x)).collect();
     let mut mine: Vec<T> = match fs::read_to_string(local) {
         Ok(s) => match try_decode_list(&s) {
             Ok(v) => v,
@@ -374,22 +544,36 @@ where T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone {
     let mut changed = false;
     for item in theirs {
         match mine.iter().position(|m| id(m) == id(&item)) {
-            Some(i) => if mine[i] != item { mine[i] = item; changed = true },
-            None => { mine.push(item); changed = true }
+            Some(i) => {
+                if mine[i] != item {
+                    mine[i] = item;
+                    changed = true
+                }
+            }
+            None => {
+                mine.push(item);
+                changed = true
+            }
         }
     }
     if changed {
-        if let Some(p) = local.parent() { fs::create_dir_all(p)?; }
+        if let Some(p) = local.parent() {
+            fs::create_dir_all(p)?;
+        }
         fs::write(local, encode_sorted(&mine))?;
     }
     Ok(changed)
 }
 /// Временный файл рядом → права 0600 → rename: ssh никогда не прочтёт половину конфига, а ключ не будет открыт.
 fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
-    let tmp = dest.with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+    let tmp = dest
+        .with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
     fs::write(&tmp, data)?;
     set_private(&tmp);
-    if let Err(e) = fs::rename(&tmp, dest) { let _ = fs::remove_file(&tmp); return Err(e.into()); }
+    if let Err(e) = fs::rename(&tmp, dest) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.into());
+    }
     Ok(())
 }
 
@@ -428,11 +612,15 @@ pub fn key_encrypt(data: Vec<u8>, passphrase: String, rounds: u32) -> Vec<u8> {
 
 #[uniffi::export]
 pub fn key_decrypt(blob: Vec<u8>, passphrase: String) -> Result<Vec<u8>, CoreError> {
-    if blob.len() <= 5 + 16 + 4 + 28 || &blob[..5] != MAGIC { return Err(CoreError::Decrypt); }
+    if blob.len() <= 5 + 16 + 4 + 28 || &blob[..5] != MAGIC {
+        return Err(CoreError::Decrypt);
+    }
     let salt = &blob[5..21];
     let rounds = u32::from_be_bytes(blob[21..25].try_into().unwrap());
     // Число итераций берётся из файла: без границ чужой файл подвесил бы расшифровку (или ослабил ключ).
-    if !(MIN_ROUNDS..=MAX_ROUNDS).contains(&rounds) { return Err(CoreError::Decrypt); }
+    if !(MIN_ROUNDS..=MAX_ROUNDS).contains(&rounds) {
+        return Err(CoreError::Decrypt);
+    }
     let cipher = ChaCha20Poly1305::new(&derive(&passphrase, salt, rounds));
     cipher.decrypt(Nonce::from_slice(&blob[25..37]), &blob[37..]).map_err(|_| CoreError::Decrypt)
 }
@@ -441,26 +629,43 @@ pub fn key_decrypt(blob: Vec<u8>, passphrase: String) -> Result<Vec<u8>, CoreErr
 fn key_path_norm(ssh: &str, p: &str) -> String {
     let p = p.trim().trim_matches('"').replace('\\', "/");
     let ssh = ssh.replace('\\', "/").trim_end_matches('/').to_string();
-    let full = if let Some(rest) = p.strip_prefix("~/.ssh/") { format!("{ssh}/{rest}") }
-        else if let Some(rest) = p.strip_prefix("~/") { format!("{}/{rest}", ssh.rsplit_once('/').map(|x| x.0).unwrap_or("")) }
-        else { p };
-    if cfg!(windows) { full.to_lowercase() } else { full }
+    let full = if let Some(rest) = p.strip_prefix("~/.ssh/") {
+        format!("{ssh}/{rest}")
+    } else if let Some(rest) = p.strip_prefix("~/") {
+        format!("{}/{rest}", ssh.rsplit_once('/').map(|x| x.0).unwrap_or(""))
+    } else {
+        p
+    };
+    if cfg!(windows) {
+        full.to_lowercase()
+    } else {
+        full
+    }
 }
 
 fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path) -> Result<Vec<String>, CoreError> {
     let keys_dir = dir.join("keys");
     let mut changed = Vec::new();
     let Ok(entries) = fs::read_dir(ssh) else { return Ok(changed) };
-    let mut names: Vec<String> = entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).filter(|n| n.ends_with(".pub")).collect();
+    let mut names: Vec<String> =
+        entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).filter(|n| n.ends_with(".pub")).collect();
     names.sort();
     for name in names {
         let base = name.trim_end_matches(".pub").to_string();
         let private = Path::new(ssh).join(&base);
-        if let Some(only) = only { if !only.contains(&key_path_norm(ssh, &private.to_string_lossy())) { continue; } }
+        if let Some(only) = only {
+            if !only.contains(&key_path_norm(ssh, &private.to_string_lossy())) {
+                continue;
+            }
+        }
         let Some(key) = read(&private) else { continue };
         fs::create_dir_all(&keys_dir)?;
         let out = keys_dir.join(format!("{base}.relaya-key"));
-        if let Some(existing) = read(&out) { if key_decrypt(existing, pass.into()).ok().as_deref() == Some(key.as_slice()) { continue; } }
+        if let Some(existing) = read(&out) {
+            if key_decrypt(existing, pass.into()).ok().as_deref() == Some(key.as_slice()) {
+                continue;
+            }
+        }
         fs::write(&out, key_encrypt(key, pass.into(), 600_000))?;
         fs::copy(Path::new(ssh).join(&name), keys_dir.join(&name))?;
         changed.push(format!("keys/{base}"));
@@ -471,62 +676,104 @@ fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path
 /// Ключ из синхронизации не встал под своим именем: там уже лежит другой ключ.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
-pub struct RenamedKey { pub name: String, pub saved_as: String }
+pub struct RenamedKey {
+    pub name: String,
+    pub saved_as: String,
+}
 
 /// Почему ключ из синхронизации не попал в ~/.ssh.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "camelCase")]
-pub enum KeySkipReason { NoPassphrase, WrongPassphrase }
+pub enum KeySkipReason {
+    NoPassphrase,
+    WrongPassphrase,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
-pub struct SkippedKey { pub name: String, pub reason: KeySkipReason }
+pub struct SkippedKey {
+    pub name: String,
+    pub reason: KeySkipReason,
+}
 
-fn keys_import(ssh: &str, pass: Option<&str>, dir: &Path, only: Option<&HashSet<String>>)
-    -> Result<(Vec<String>, Vec<RenamedKey>, Vec<SkippedKey>), CoreError> {
+fn keys_import(
+    ssh: &str,
+    pass: Option<&str>,
+    dir: &Path,
+    only: Option<&HashSet<String>>,
+) -> Result<(Vec<String>, Vec<RenamedKey>, Vec<SkippedKey>), CoreError> {
     let keys_dir = dir.join("keys");
     let (mut added, mut renamed, mut skipped) = (Vec::new(), Vec::new(), Vec::new());
     let Ok(entries) = fs::read_dir(&keys_dir) else { return Ok((added, renamed, skipped)) };
-    let mut names: Vec<String> = entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).filter(|n| n.ends_with(".relaya-key")).collect();
+    let mut names: Vec<String> =
+        entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).filter(|n| n.ends_with(".relaya-key")).collect();
     names.sort();
     for name in names {
         let base = name.trim_end_matches(".relaya-key").to_string();
-        if let Some(only) = only { if !only.contains(&base) { continue; } }
+        if let Some(only) = only {
+            if !only.contains(&base) {
+                continue;
+            }
+        }
         // Без пароля или с неверным паролем ключ пропускается, остальное импортируется; клиент узнаёт об этом.
         let Some(pass) = pass else {
-            if !Path::new(ssh).join(&base).exists() { skipped.push(SkippedKey { name: base, reason: KeySkipReason::NoPassphrase }); }
+            if !Path::new(ssh).join(&base).exists() {
+                skipped.push(SkippedKey { name: base, reason: KeySkipReason::NoPassphrase });
+            }
             continue;
         };
         let key = match key_decrypt(fs::read(keys_dir.join(&name))?, pass.into()) {
             Ok(k) => k,
-            Err(CoreError::Decrypt) => { skipped.push(SkippedKey { name: base, reason: KeySkipReason::WrongPassphrase }); continue; }
+            Err(CoreError::Decrypt) => {
+                skipped.push(SkippedKey { name: base, reason: KeySkipReason::WrongPassphrase });
+                continue;
+            }
             Err(e) => return Err(e),
         };
         let mut target = base.clone();
         let dest_of = |t: &str| Path::new(ssh).join(t);
         if let Some(existing) = read(&dest_of(&target)) {
-            if existing == key { continue; }
+            if existing == key {
+                continue;
+            }
             // Одноимённый, но другой ключ: свой не трогаем, пришедший кладём рядом и сообщаем клиенту.
             target = format!("{base}.from-sync");
             let mut n = 2;
-            while let Some(e) = read(&dest_of(&target)) { if e == key { break; } target = format!("{base}.from-sync-{n}"); n += 1; }
-            if read(&dest_of(&target)).as_deref() == Some(key.as_slice()) { continue; }
+            while let Some(e) = read(&dest_of(&target)) {
+                if e == key {
+                    break;
+                }
+                target = format!("{base}.from-sync-{n}");
+                n += 1;
+            }
+            if read(&dest_of(&target)).as_deref() == Some(key.as_slice()) {
+                continue;
+            }
             renamed.push(RenamedKey { name: base.clone(), saved_as: target.clone() });
         }
         fs::create_dir_all(ssh)?;
         write_private_atomic(&dest_of(&target), &key)?;
-        if let Some(p) = read(&keys_dir.join(format!("{base}.pub"))) { let _ = fs::write(Path::new(ssh).join(format!("{target}.pub")), p); }
+        if let Some(p) = read(&keys_dir.join(format!("{base}.pub"))) {
+            let _ = fs::write(Path::new(ssh).join(format!("{target}.pub")), p);
+        }
         added.push(target);
     }
     Ok((added, renamed, skipped))
 }
 
-fn warnings_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-warnings.json") }
-fn skipped_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-skipped-keys.json") }
+fn warnings_file(paths: &SyncPaths) -> PathBuf {
+    paths.support("sync-warnings.json")
+}
+fn skipped_file(paths: &SyncPaths) -> PathBuf {
+    paths.support("sync-skipped-keys.json")
+}
 
 /// Последний импорт заменяет список: ключ, который потом импортировался, из него уходит.
 fn remember_skipped(paths: &SyncPaths, skipped: Vec<SkippedKey>) {
-    if skipped.is_empty() { let _ = fs::remove_file(skipped_file(paths)); return; }
+    if skipped.is_empty() {
+        let _ = fs::remove_file(skipped_file(paths));
+        return;
+    }
     let _ = fs::create_dir_all(&paths.support);
     let _ = fs::write(skipped_file(paths), encode_sorted(&skipped));
 }
@@ -535,13 +782,15 @@ fn remember_skipped(paths: &SyncPaths, skipped: Vec<SkippedKey>) {
 /// Хосты с этими IdentityFile уже пришли — клиент показывает предупреждение. Список отдаётся один раз.
 #[uniffi::export]
 pub fn sync_take_skipped_keys(paths: SyncPaths) -> Vec<SkippedKey> {
-    let list = fs::read_to_string(skipped_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let list =
+        fs::read_to_string(skipped_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     let _ = fs::remove_file(skipped_file(&paths));
     list
 }
 
 fn remember_renamed(paths: &SyncPaths, mut renamed: Vec<RenamedKey>) {
-    let mut all: Vec<RenamedKey> = fs::read_to_string(warnings_file(paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let mut all: Vec<RenamedKey> =
+        fs::read_to_string(warnings_file(paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     all.append(&mut renamed);
     let _ = fs::create_dir_all(&paths.support);
     let _ = fs::write(warnings_file(paths), encode_sorted(&all));
@@ -551,7 +800,8 @@ fn remember_renamed(paths: &SyncPaths, mut renamed: Vec<RenamedKey>) {
 /// пользователю один раз: `id_ed25519` из синхронизации лежит как `id_ed25519.from-sync`.
 #[uniffi::export]
 pub fn sync_take_renamed_keys(paths: SyncPaths) -> Vec<RenamedKey> {
-    let list = fs::read_to_string(warnings_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let list =
+        fs::read_to_string(warnings_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     let _ = fs::remove_file(warnings_file(&paths));
     list
 }
@@ -569,30 +819,53 @@ pub struct AgentEscalation {
 
 /// Расширения прав агентов, ждущие подтверждения. Список остаётся до `sync_apply_agent_escalations`.
 #[uniffi::export]
-pub fn sync_take_agent_escalations(paths: SyncPaths) -> Vec<AgentEscalation> { agents::pending(&paths) }
+pub fn sync_take_agent_escalations(paths: SyncPaths) -> Vec<AgentEscalation> {
+    agents::pending(&paths)
+}
 
 /// Применить (`accept`) или отклонить все ждущие расширения. Отклонённые не спрашиваются снова, пока не изменятся.
 #[uniffi::export]
-pub fn sync_apply_agent_escalations(paths: SyncPaths, accept: bool) -> Result<(), CoreError> { agents::apply(&paths, accept) }
+pub fn sync_apply_agent_escalations(paths: SyncPaths, accept: bool) -> Result<(), CoreError> {
+    agents::apply(&paths, accept)
+}
 
 mod agents {
     use super::*;
     use crate::mcp::{McpMode, McpPolicy};
 
-    fn rank(m: McpMode) -> u8 { match m { McpMode::Off => 0, McpMode::ReadOnly => 1, McpMode::Confirm => 2, McpMode::Trusted => 3 } }
-    fn pending_file(p: &SyncPaths) -> PathBuf { p.support("sync-pending-agents.json") }
-    fn declined_file(p: &SyncPaths) -> PathBuf { p.support("sync-declined-agents.json") }
+    fn rank(m: McpMode) -> u8 {
+        match m {
+            McpMode::Off => 0,
+            McpMode::ReadOnly => 1,
+            McpMode::Confirm => 2,
+            McpMode::Trusted => 3,
+        }
+    }
+    fn pending_file(p: &SyncPaths) -> PathBuf {
+        p.support("sync-pending-agents.json")
+    }
+    fn declined_file(p: &SyncPaths) -> PathBuf {
+        p.support("sync-declined-agents.json")
+    }
 
     fn load(path: &Path) -> Vec<AgentEscalation> {
         fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
     }
-    pub(super) fn declined(p: &SyncPaths) -> Vec<AgentEscalation> { load(&declined_file(p)) }
-    pub(super) fn pending(p: &SyncPaths) -> Vec<AgentEscalation> { load(&pending_file(p)) }
+    pub(super) fn declined(p: &SyncPaths) -> Vec<AgentEscalation> {
+        load(&declined_file(p))
+    }
+    pub(super) fn pending(p: &SyncPaths) -> Vec<AgentEscalation> {
+        load(&pending_file(p))
+    }
 
     /// Делит пришедшую политику на безопасную часть и расширения прав относительно `local`.
     /// grants (временный доступ) сейчас не синхронизируются вовсе (mcp_policy_merge их не берёт). Если это изменится,
     /// новый или более длинный grant здесь обязан считаться расширением прав и идти на подтверждение.
-    pub(super) fn split(local: &McpPolicy, mut theirs: McpPolicy, declined: &[AgentEscalation]) -> (McpPolicy, Vec<AgentEscalation>) {
+    pub(super) fn split(
+        local: &McpPolicy,
+        mut theirs: McpPolicy,
+        declined: &[AgentEscalation],
+    ) -> (McpPolicy, Vec<AgentEscalation>) {
         let mut out = Vec::new();
         let mut hosts: Vec<_> = theirs.hosts.drain().collect();
         hosts.sort_by(|a, b| a.0.cmp(&b.0));
@@ -600,7 +873,9 @@ mod agents {
             let from = *local.hosts.get(&host).unwrap_or(&local.default_mode);
             if rank(to) > rank(from) {
                 let e = AgentEscalation { host: host.clone(), from: Some(from), to: Some(to), rule: None };
-                if !declined.contains(&e) { out.push(e); }
+                if !declined.contains(&e) {
+                    out.push(e);
+                }
             } else {
                 theirs.hosts.insert(host, to);
             }
@@ -612,7 +887,9 @@ mod agents {
                 let have = local.allow.as_ref().and_then(|m| m.get(&host)).cloned().unwrap_or_default();
                 for r in rules.into_iter().filter(|r| !have.contains(r)) {
                     let e = AgentEscalation { host: host.clone(), from: None, to: None, rule: Some(r) };
-                    if !declined.contains(&e) && !out.contains(&e) { out.push(e); }
+                    if !declined.contains(&e) && !out.contains(&e) {
+                        out.push(e);
+                    }
                 }
             }
         }
@@ -620,7 +897,10 @@ mod agents {
     }
 
     pub(super) fn store_pending(p: &SyncPaths, list: &[AgentEscalation]) -> Result<(), CoreError> {
-        if list.is_empty() { let _ = fs::remove_file(pending_file(p)); return Ok(()); }
+        if list.is_empty() {
+            let _ = fs::remove_file(pending_file(p));
+            return Ok(());
+        }
         fs::create_dir_all(&p.support)?;
         write_atomic(&pending_file(p), encode_sorted(&list).as_bytes())?;
         Ok(())
@@ -628,7 +908,9 @@ mod agents {
 
     pub(super) fn apply(p: &SyncPaths, accept: bool) -> Result<(), CoreError> {
         let list = pending(p);
-        if list.is_empty() { return Ok(()); }
+        if list.is_empty() {
+            return Ok(());
+        }
         if accept {
             let path = p.support("mcp.json");
             let mut policy: McpPolicy = match read(&path) {
@@ -636,10 +918,14 @@ mod agents {
                 None => McpPolicy { enabled: false, ..Default::default() },
             };
             for e in &list {
-                if let Some(to) = e.to { policy.hosts.insert(e.host.clone(), to); }
+                if let Some(to) = e.to {
+                    policy.hosts.insert(e.host.clone(), to);
+                }
                 if let Some(r) = &e.rule {
                     let rules = policy.allow.get_or_insert_with(Default::default).entry(e.host.clone()).or_default();
-                    if !rules.contains(r) { rules.push(r.clone()); }
+                    if !rules.contains(r) {
+                        rules.push(r.clone());
+                    }
                 }
             }
             write_atomic(&path, encode_sorted(&policy).as_bytes())?;
@@ -656,7 +942,11 @@ mod agents {
 // MARK: - Git
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct SyncConflict { pub path: String, pub mine: String, pub theirs: String }
+pub struct SyncConflict {
+    pub path: String,
+    pub mine: String,
+    pub theirs: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum SyncOutcome {
@@ -671,34 +961,69 @@ const BRANCH: &str = "main";
 /// на языке интерфейса.
 fn git_error(text: &str) -> String {
     let t = text.trim();
-    if t.is_empty() { "git".into() } else { t.to_string() }
+    if t.is_empty() {
+        "git".into()
+    } else {
+        t.to_string()
+    }
 }
 
-struct Git { repo: PathBuf }
+struct Git {
+    repo: PathBuf,
+}
 
 impl Git {
     fn run(&self, args: &[&str], allow_failure: bool) -> Result<std::process::Output, CoreError> {
         let out = crate::command("git")
             // S-GIT-1/3: транспорты ext:: и fd:: запускают команды, file — только по явному адресу пользователя;
             // защита от путей .git под HFS/NTFS и без символических ссылок из чужого репозитория.
-            .args(["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
-                   "-c", "protocol.ext.allow=never", "-c", "protocol.fd.allow=never", "-c", "protocol.file.allow=user",
-                   "-c", "core.protectHFS=true", "-c", "core.protectNTFS=true", "-c", "core.symlinks=false", "-C"])
-            .arg(&self.repo).args(args)
-            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=15").env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_AUTHOR_NAME", "Relaya").env("GIT_AUTHOR_EMAIL", "relaya@localhost")
-            .env("GIT_COMMITTER_NAME", "Relaya").env("GIT_COMMITTER_EMAIL", "relaya@localhost")
-            .output().map_err(|e| CoreError::Git(format!("git: {e}")))?;
+            .args([
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "protocol.ext.allow=never",
+                "-c",
+                "protocol.fd.allow=never",
+                "-c",
+                "protocol.file.allow=user",
+                "-c",
+                "core.protectHFS=true",
+                "-c",
+                "core.protectNTFS=true",
+                "-c",
+                "core.symlinks=false",
+                "-C",
+            ])
+            .arg(&self.repo)
+            .args(args)
+            .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=15")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_AUTHOR_NAME", "Relaya")
+            .env("GIT_AUTHOR_EMAIL", "relaya@localhost")
+            .env("GIT_COMMITTER_NAME", "Relaya")
+            .env("GIT_COMMITTER_EMAIL", "relaya@localhost")
+            .output()
+            .map_err(|e| CoreError::Git(format!("git: {e}")))?;
         if !out.status.success() && !allow_failure {
             let text = format!("{}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout));
             return Err(CoreError::Git(git_error(&text)));
         }
         Ok(out)
     }
-    fn ok(&self, args: &[&str]) -> bool { self.run(args, true).map(|o| o.status.success()).unwrap_or(false) }
-    fn stdout(&self, args: &[&str]) -> Result<String, CoreError> { Ok(String::from_utf8_lossy(&self.run(args, false)?.stdout).into_owned()) }
-    fn remote_has_branch(&self) -> bool { self.ok(&["rev-parse", "--verify", "-q", &format!("origin/{BRANCH}")]) }
-    fn in_merge(&self) -> bool { self.repo.join(".git/MERGE_HEAD").exists() }
+    fn ok(&self, args: &[&str]) -> bool {
+        self.run(args, true).map(|o| o.status.success()).unwrap_or(false)
+    }
+    fn stdout(&self, args: &[&str]) -> Result<String, CoreError> {
+        Ok(String::from_utf8_lossy(&self.run(args, false)?.stdout).into_owned())
+    }
+    fn remote_has_branch(&self) -> bool {
+        self.ok(&["rev-parse", "--verify", "-q", &format!("origin/{BRANCH}")])
+    }
+    fn in_merge(&self) -> bool {
+        self.repo.join(".git/MERGE_HEAD").exists()
+    }
 
     fn set_up(&self, remote: &str) -> Result<(), CoreError> {
         if self.repo.join(".git").exists() {
@@ -711,36 +1036,63 @@ impl Git {
             self.run(&["init", "-q", "-b", BRANCH], false)?;
             self.run(&["remote", "add", "--", "origin", remote], false)?;
             self.run(&["fetch", "-q", "origin"], false)?;
-            if self.remote_has_branch() { self.run(&["reset", "-q", "--hard", &format!("origin/{BRANCH}")], false)?; }
+            if self.remote_has_branch() {
+                self.run(&["reset", "-q", "--hard", &format!("origin/{BRANCH}")], false)?;
+            }
             Ok(())
         })();
         // Неудачный первый fetch не должен оставить .git со своим корнем — повтор начнёт с нуля.
-        if r.is_err() { let _ = fs::remove_dir_all(&self.repo); }
+        if r.is_err() {
+            let _ = fs::remove_dir_all(&self.repo);
+        }
         r
     }
 
-    fn head(&self) -> Option<String> { self.stdout(&["rev-parse", "HEAD"]).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) }
-    fn marker(&self) -> PathBuf { self.repo.join(".git").join("relaya-imported") }
+    fn head(&self) -> Option<String> {
+        self.stdout(&["rev-parse", "HEAD"]).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    }
+    fn marker(&self) -> PathBuf {
+        self.repo.join(".git").join("relaya-imported")
+    }
 
     /// Разнести репозиторий по локальным файлам, если с последнего удачного импорта HEAD другой:
     /// первый запуск (reset на origin) и упавший прошлый импорт тоже импортируются.
-    fn import_if_new(&self, profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>) -> Result<Vec<SyncItem>, CoreError> {
+    fn import_if_new(
+        &self,
+        profile: SyncProfile,
+        paths: SyncPaths,
+        passphrase: Option<String>,
+    ) -> Result<Vec<SyncItem>, CoreError> {
         let Some(head) = self.head() else { return Ok(vec![]) };
-        if fs::read_to_string(self.marker()).ok().map(|m| m.trim() == head).unwrap_or(false) { return Ok(vec![]); }
+        if fs::read_to_string(self.marker()).ok().map(|m| m.trim() == head).unwrap_or(false) {
+            return Ok(vec![]);
+        }
         let keys_pending = profile.effective_items().contains(&SyncItem::Keys) && passphrase.is_none();
         let imported = sync_import(profile, paths, passphrase, self.repo.to_string_lossy().into_owned())?;
         // Ключи без пароля синхронизации пропущены — импорт повторится, когда пароль появится.
-        if !keys_pending { let _ = fs::write(self.marker(), &head); }
+        if !keys_pending {
+            let _ = fs::write(self.marker(), &head);
+        }
         Ok(imported)
     }
 
     fn conflicts(&self) -> Result<Vec<SyncConflict>, CoreError> {
         let names = self.stdout(&["diff", "--name-only", "--diff-filter=U"])?;
-        Ok(names.lines().filter(|l| !l.is_empty()).map(|p| SyncConflict {
-            path: p.into(),
-            mine: self.run(&["show", &format!(":2:{p}")], true).map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default(),
-            theirs: self.run(&["show", &format!(":3:{p}")], true).map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default(),
-        }).collect())
+        Ok(names
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|p| SyncConflict {
+                path: p.into(),
+                mine: self
+                    .run(&["show", &format!(":2:{p}")], true)
+                    .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+                    .unwrap_or_default(),
+                theirs: self
+                    .run(&["show", &format!(":3:{p}")], true)
+                    .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+                    .unwrap_or_default(),
+            })
+            .collect())
     }
 }
 
@@ -752,31 +1104,51 @@ impl Git {
 pub fn sync_validate_remote(remote: String) -> Result<(), CoreError> {
     let r = remote.trim();
     let bad = || CoreError::Git(format!("Адрес репозитория не поддерживается: {r}"));
-    if r.is_empty() || r.starts_with('-') || r.chars().any(|c| c.is_control()) { return Err(bad()); }
+    if r.is_empty() || r.starts_with('-') || r.chars().any(|c| c.is_control()) {
+        return Err(bad());
+    }
     let lower = r.to_lowercase();
     // `ext::sh -c …`, `fd::…` — git запускает команду; схема с `::` — всегда транспорт-помощник.
-    if let Some(i) = lower.find("::") { if !lower[..i].contains('/') && !lower[..i].contains(':') { return Err(bad()); } }
+    if let Some(i) = lower.find("::") {
+        if !lower[..i].contains('/') && !lower[..i].contains(':') {
+            return Err(bad());
+        }
+    }
     if let Some(rest) = lower.strip_prefix("https://") {
         let authority = rest.split('/').next().unwrap_or("");
         if let Some((userinfo, _)) = authority.rsplit_once('@') {
             if userinfo.contains(':') {
-                return Err(CoreError::Git("В адресе репозитория пароль или токен — используйте ssh или credential helper".into()));
+                return Err(CoreError::Git(
+                    "В адресе репозитория пароль или токен — используйте ssh или credential helper".into(),
+                ));
             }
         }
         return if authority.is_empty() { Err(bad()) } else { Ok(()) };
     }
     for scheme in ["ssh://", "git://"] {
-        if let Some(rest) = lower.strip_prefix(scheme) { return if rest.split('/').next().unwrap_or("").is_empty() { Err(bad()) } else { Ok(()) }; }
+        if let Some(rest) = lower.strip_prefix(scheme) {
+            return if rest.split('/').next().unwrap_or("").is_empty() { Err(bad()) } else { Ok(()) };
+        }
     }
-    if let Some(rest) = r.strip_prefix("file://") { return if rest.starts_with('/') { Ok(()) } else { Err(bad()) }; }
-    if lower.contains("://") { return Err(bad()); }
+    if let Some(rest) = r.strip_prefix("file://") {
+        return if rest.starts_with('/') { Ok(()) } else { Err(bad()) };
+    }
+    if lower.contains("://") {
+        return Err(bad());
+    }
     // Абсолютный локальный путь: /…, C:\… или C:/…
     let b = r.as_bytes();
-    if r.starts_with('/') || (b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')) { return Ok(()); }
+    if r.starts_with('/')
+        || (b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/'))
+    {
+        return Ok(());
+    }
     // scp-форма [user@]host:path
     if let Some((host, path)) = r.split_once(':') {
         let host = host.rsplit_once('@').map(|(_, h)| h).unwrap_or(host);
-        if !host.is_empty() && !host.contains('/') && !path.is_empty() && !path.starts_with('-') { return Ok(()); }
+        if !host.is_empty() && !host.contains('/') && !path.is_empty() && !path.starts_with('-') {
+            return Ok(());
+        }
     }
     Err(bad())
 }
@@ -784,23 +1156,34 @@ pub fn sync_validate_remote(remote: String) -> Result<(), CoreError> {
 /// Один цикл для профиля: выгрузка → коммит → забрать с сервера (слияние) → разнести пришедшее → отправить.
 /// Работает синхронно (запускает git) — клиенты вызывают его не из главного потока.
 #[uniffi::export]
-pub fn git_sync(repo: String, remote: String, machine: String, profile: SyncProfile, paths: SyncPaths,
-                passphrase: Option<String>) -> Result<SyncOutcome, CoreError> {
+pub fn git_sync(
+    repo: String,
+    remote: String,
+    machine: String,
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+) -> Result<SyncOutcome, CoreError> {
     let git = Git { repo: PathBuf::from(&repo) };
     sync_validate_remote(remote.clone())?;
     git.set_up(remote.trim())?;
-    if git.in_merge() { return Ok(SyncOutcome::Conflict { conflicts: git.conflicts()? }); }
+    if git.in_merge() {
+        return Ok(SyncOutcome::Conflict { conflicts: git.conflicts()? });
+    }
     sync_export(profile.clone(), paths.clone(), passphrase.clone(), repo.clone())?;
     git.run(&["add", "-A"], false)?;
     let dirty = !git.stdout(&["status", "--porcelain"])?.trim().is_empty();
-    if dirty { git.run(&["commit", "-q", "-m", &format!("Relaya: {machine}")], false)?; }
+    if dirty {
+        git.run(&["commit", "-q", "-m", &format!("Relaya: {machine}")], false)?;
+    }
     git.run(&["fetch", "-q", "origin"], false)?;
     let mut pulled = false;
     if git.remote_has_branch() {
         let head = git.stdout(&["rev-parse", "HEAD"]).unwrap_or_default();
         let mut merge = git.run(&["merge", "-q", "--no-edit", &format!("origin/{BRANCH}")], true)?;
         if !merge.status.success() && String::from_utf8_lossy(&merge.stderr).contains("unrelated histories") {
-            merge = git.run(&["merge", "-q", "--no-edit", "--allow-unrelated-histories", &format!("origin/{BRANCH}")], true)?;
+            merge = git
+                .run(&["merge", "-q", "--no-edit", "--allow-unrelated-histories", &format!("origin/{BRANCH}")], true)?;
         }
         if !merge.status.success() {
             let mut c = git.conflicts()?;
@@ -811,25 +1194,45 @@ pub fn git_sync(repo: String, remote: String, machine: String, profile: SyncProf
                 fs::write(Path::new(&repo).join(tombstones::FILE), merged)?;
                 git.run(&["add", "--", tombstones::FILE], false)?;
                 c.remove(i);
-                if c.is_empty() { git.run(&["commit", "-q", "--no-edit"], false)?; resolved = true; }
+                if c.is_empty() {
+                    git.run(&["commit", "-q", "--no-edit"], false)?;
+                    resolved = true;
+                }
             }
-            if !c.is_empty() { return Ok(SyncOutcome::Conflict { conflicts: c }); }
-            if !resolved { return Err(CoreError::Git(String::from_utf8_lossy(&merge.stderr).trim().to_string())); }
+            if !c.is_empty() {
+                return Ok(SyncOutcome::Conflict { conflicts: c });
+            }
+            if !resolved {
+                return Err(CoreError::Git(String::from_utf8_lossy(&merge.stderr).trim().to_string()));
+            }
         }
         pulled = git.stdout(&["rev-parse", "HEAD"]).unwrap_or_default() != head;
     }
     let imported = git.import_if_new(profile, paths, passphrase)?;
-    let ahead = git.run(&["rev-list", "--count", &format!("origin/{BRANCH}..HEAD")], true)
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<i64>().unwrap_or(1)).unwrap_or(1);
+    let ahead = git
+        .run(&["rev-list", "--count", &format!("origin/{BRANCH}..HEAD")], true)
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<i64>().unwrap_or(1))
+        .unwrap_or(1);
     let needs_push = !git.remote_has_branch() || ahead > 0;
-    if needs_push && git.ok(&["rev-parse", "--verify", "-q", "HEAD"]) { git.run(&["push", "-q", "origin", &format!("HEAD:{BRANCH}")], false)?; }
-    Ok(if dirty || pulled || needs_push || !imported.is_empty() { SyncOutcome::Synced { pulled, imported } } else { SyncOutcome::UpToDate })
+    if needs_push && git.ok(&["rev-parse", "--verify", "-q", "HEAD"]) {
+        git.run(&["push", "-q", "origin", &format!("HEAD:{BRANCH}")], false)?;
+    }
+    Ok(if dirty || pulled || needs_push || !imported.is_empty() {
+        SyncOutcome::Synced { pulled, imported }
+    } else {
+        SyncOutcome::UpToDate
+    })
 }
 
 /// Разрешить конфликт (`keep_mine` по пути), закоммитить, разнести и отправить.
 #[uniffi::export]
-pub fn git_resolve(repo: String, keep_mine: std::collections::HashMap<String, bool>, profile: SyncProfile, paths: SyncPaths,
-                   passphrase: Option<String>) -> Result<Vec<SyncItem>, CoreError> {
+pub fn git_resolve(
+    repo: String,
+    keep_mine: std::collections::HashMap<String, bool>,
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+) -> Result<Vec<SyncItem>, CoreError> {
     let git = Git { repo: PathBuf::from(&repo) };
     for (path, mine) in &keep_mine {
         git.run(&["checkout", if *mine { "--ours" } else { "--theirs" }, "--", path], false)?;
@@ -849,7 +1252,12 @@ pub fn git_abort_merge(repo: String) {
 
 /// Папка (iCloud Drive): сначала влить пришедшее, потом выгрузить своё.
 #[uniffi::export]
-pub fn folder_sync(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, folder: String) -> Result<Vec<SyncItem>, CoreError> {
+pub fn folder_sync(
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+    folder: String,
+) -> Result<Vec<SyncItem>, CoreError> {
     fs::create_dir_all(&folder)?;
     let imported = sync_import(profile.clone(), paths.clone(), passphrase.clone(), folder.clone())?;
     sync_export(profile, paths, passphrase, folder)?;
@@ -864,11 +1272,19 @@ fn tree(dir: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
         let Ok(entries) = fs::read_dir(dir) else { return };
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if name.starts_with('.') { continue; }
+            if name.starts_with('.') {
+                continue;
+            }
             let p = e.path();
-            if p.is_dir() { walk(root, &p, out); continue; }
+            if p.is_dir() {
+                walk(root, &p, out);
+                continue;
+            }
             if let (Ok(rel), Ok(data)) = (p.strip_prefix(root), fs::read(&p)) {
-                out.insert(rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"), data);
+                out.insert(
+                    rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"),
+                    data,
+                );
             }
         }
     }
@@ -879,8 +1295,11 @@ fn tree(dir: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
 
 /// Записать через временный файл и rename: облачная папка не увидит половину файла.
 fn write_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
-    if let Some(parent) = dest.parent() { fs::create_dir_all(parent)?; }
-    let tmp = dest.with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let tmp = dest
+        .with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
     fs::write(&tmp, data)?;
     fs::rename(&tmp, dest)?;
     Ok(())
@@ -889,7 +1308,9 @@ fn write_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
 fn put_tree(dir: &Path, files: &std::collections::BTreeMap<String, Vec<u8>>) -> Result<(), CoreError> {
     for (rel, data) in files {
         let dest = dir.join(rel);
-        if read(&dest).as_deref() != Some(data.as_slice()) { write_atomic(&dest, data)?; }
+        if read(&dest).as_deref() != Some(data.as_slice()) {
+            write_atomic(&dest, data)?;
+        }
     }
     Ok(())
 }
@@ -900,8 +1321,13 @@ fn put_tree(dir: &Path, files: &std::collections::BTreeMap<String, Vec<u8>>) -> 
 /// обе и по-разному — конфликт в той же форме, что у `git_sync`. Повторный вызов с `keep_mine` по путям
 /// разрешает конфликты (true — своё, false — из папки); пока конфликт не разрешён, ничего не пишется.
 #[uniffi::export]
-pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Option<String>, folder: String,
-                         keep_mine: std::collections::HashMap<String, bool>) -> Result<SyncOutcome, CoreError> {
+pub fn folder_sync_merge(
+    profile: SyncProfile,
+    paths: SyncPaths,
+    passphrase: Option<String>,
+    folder: String,
+    keep_mine: std::collections::HashMap<String, bool>,
+) -> Result<SyncOutcome, CoreError> {
     let folder_p = Path::new(&folder);
     fs::create_dir_all(folder_p)?;
     let state = Path::new(&paths.support).join("sync").join(&profile.id);
@@ -917,7 +1343,10 @@ pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Opt
     // Надгробия из папки видны выгрузке сразу: свежая правка воскрешает удалённое другой машиной.
     if let Some(t) = theirs.get(tombstones::FILE) {
         let b = base.get(tombstones::FILE).map(|d| String::from_utf8_lossy(d).into_owned()).unwrap_or_default();
-        write_atomic(&stage.join(tombstones::FILE), tombstones::merge_text(&b, &String::from_utf8_lossy(t)).as_bytes())?;
+        write_atomic(
+            &stage.join(tombstones::FILE),
+            tombstones::merge_text(&b, &String::from_utf8_lossy(t)).as_bytes(),
+        )?;
     }
     sync_export(profile.clone(), paths.clone(), passphrase.clone(), stage.to_string_lossy().into_owned())?;
     let mine = tree(&stage);
@@ -929,7 +1358,11 @@ pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Opt
     for name in names {
         let (m, t, b) = (mine.get(name), theirs.get(name), base.get(name));
         let merged_tombs;
-        let pick = if m == t || t == b { m } else if m == b { t } else if name == tombstones::FILE {
+        let pick = if m == t || t == b {
+            m
+        } else if m == b {
+            t
+        } else if name == tombstones::FILE {
             let text = |d: Option<&Vec<u8>>| d.map(|d| String::from_utf8_lossy(d).into_owned()).unwrap_or_default();
             let _ = b;
             merged_tombs = tombstones::merge_text(&text(m), &text(t)).into_bytes();
@@ -939,15 +1372,20 @@ pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Opt
                 Some(true) => m,
                 Some(false) => t,
                 None => {
-                    let text = |d: Option<&Vec<u8>>| d.map(|d| String::from_utf8_lossy(d).into_owned()).unwrap_or_default();
+                    let text =
+                        |d: Option<&Vec<u8>>| d.map(|d| String::from_utf8_lossy(d).into_owned()).unwrap_or_default();
                     conflicts.push(SyncConflict { path: name.clone(), mine: text(m), theirs: text(t) });
                     continue;
                 }
             }
         };
-        if let Some(d) = pick { result.insert(name.clone(), d.clone()); }
+        if let Some(d) = pick {
+            result.insert(name.clone(), d.clone());
+        }
     }
-    if !conflicts.is_empty() { return Ok(SyncOutcome::Conflict { conflicts }); }
+    if !conflicts.is_empty() {
+        return Ok(SyncOutcome::Conflict { conflicts });
+    }
 
     let pushed = result.iter().any(|(k, v)| theirs.get(k) != Some(v));
     put_tree(folder_p, &result)?;
@@ -956,7 +1394,11 @@ pub fn folder_sync_merge(profile: SyncProfile, paths: SyncPaths, passphrase: Opt
     let pulled = !imported.is_empty() || result.iter().any(|(k, v)| mine.get(k) != Some(v));
     let _ = fs::remove_dir_all(&base_dir);
     put_tree(&base_dir, &result)?;
-    Ok(if pulled || pushed || !imported.is_empty() { SyncOutcome::Synced { pulled, imported } } else { SyncOutcome::UpToDate })
+    Ok(if pulled || pushed || !imported.is_empty() {
+        SyncOutcome::Synced { pulled, imported }
+    } else {
+        SyncOutcome::UpToDate
+    })
 }
 
 #[cfg(test)]
@@ -972,7 +1414,9 @@ mod git_error_tests {
 mod tests {
     use super::*;
 
-    fn paths(d: &Path) -> SyncPaths { SyncPaths { ssh: d.to_string_lossy().into(), support: d.to_string_lossy().into() } }
+    fn paths(d: &Path) -> SyncPaths {
+        SyncPaths { ssh: d.to_string_lossy().into(), support: d.to_string_lossy().into() }
+    }
     const CONFIG: &str = "# relaya: group=work\nHost web\n    HostName 10.0.0.1\n\n# relaya: group=home\nHost nas\n    HostName 192.168.1.5\n\nHost github.com\n    User git\n";
 
     #[test]
@@ -999,15 +1443,31 @@ mod tests {
     #[test]
     fn shared_blocks_split_on_export_and_import() {
         let shared = "# relaya: group=work\nHost a b\n    User x\n\nHost c\n    User y\n";
-        assert_eq!(config_extract(shared.into(), vec!["a".into(), "c".into()]), "# relaya: group=work\nHost a\n    User x\n\nHost c\n    User y\n");
-        assert_eq!(config_extract(shared.into(), vec!["a".into(), "b".into()]), "# relaya: group=work\nHost a b\n    User x\n");
+        assert_eq!(
+            config_extract(shared.into(), vec!["a".into(), "c".into()]),
+            "# relaya: group=work\nHost a\n    User x\n\nHost c\n    User y\n"
+        );
+        assert_eq!(
+            config_extract(shared.into(), vec!["a".into(), "b".into()]),
+            "# relaya: group=work\nHost a b\n    User x\n"
+        );
         // Пришёл `Host a` — локальный `b` остаётся со своими настройками.
-        assert_eq!(config_merge(shared.into(), "Host a\n    User new\n".into()),
-                   "# relaya: group=work\nHost b\n    User x\n\nHost a\n    User new\n\nHost c\n    User y\n");
+        assert_eq!(
+            config_merge(shared.into(), "Host a\n    User new\n".into()),
+            "# relaya: group=work\nHost b\n    User x\n\nHost a\n    User new\n\nHost c\n    User y\n"
+        );
         // Пришёл общий `Host a b` — заменяет и общий, и отдельные локальные блоки, без дублей.
-        assert_eq!(config_merge(shared.into(), "Host a b\n    User z\n".into()), "Host a b\n    User z\n\nHost c\n    User y\n");
-        assert_eq!(config_merge("Host a\n    User 1\n\nHost m\n    User m\n\nHost b\n    User 2\n".into(), "Host a b\n    User z\n".into()),
-                   "Host a b\n    User z\n\nHost m\n    User m\n");
+        assert_eq!(
+            config_merge(shared.into(), "Host a b\n    User z\n".into()),
+            "Host a b\n    User z\n\nHost c\n    User y\n"
+        );
+        assert_eq!(
+            config_merge(
+                "Host a\n    User 1\n\nHost m\n    User m\n\nHost b\n    User 2\n".into(),
+                "Host a b\n    User z\n".into()
+            ),
+            "Host a b\n    User z\n\nHost m\n    User m\n"
+        );
     }
 
     #[test]
@@ -1020,7 +1480,7 @@ mod tests {
         sync_export(p.clone(), paths(a.path()), None, repo.path().to_string_lossy().into()).unwrap();
         let exported = fs::read_to_string(repo.path().join("ssh/config")).unwrap();
         assert!(exported.contains("Host web") && !exported.contains("nas") && !exported.contains("github"));
-        assert!(fs::read_to_string(repo.path().join("relaya/tunnels.json")).unwrap().contains("\"T1\"") );
+        assert!(fs::read_to_string(repo.path().join("relaya/tunnels.json")).unwrap().contains("\"T1\""));
         fs::write(b.path().join("config"), "Host mine\n    HostName m\n").unwrap();
         let ch = sync_import(p.clone(), paths(b.path()), None, repo.path().to_string_lossy().into()).unwrap();
         assert!(ch.contains(&SyncItem::SshConfig) && ch.contains(&SyncItem::Tunnels));
@@ -1031,13 +1491,34 @@ mod tests {
 
     #[test]
     fn remote_validation() {
-        for ok in ["https://github.com/me/cfg.git", "https://git@github.com/me/cfg.git", "ssh://git@host:2222/srv/cfg.git",
-                   "git://host/cfg", "git@github.com:me/cfg.git", "host:cfg.git", "file:///srv/cfg.git", "/srv/cfg.git",
-                   "C:\\repos\\cfg", "C:/repos/cfg"] {
+        for ok in [
+            "https://github.com/me/cfg.git",
+            "https://git@github.com/me/cfg.git",
+            "ssh://git@host:2222/srv/cfg.git",
+            "git://host/cfg",
+            "git@github.com:me/cfg.git",
+            "host:cfg.git",
+            "file:///srv/cfg.git",
+            "/srv/cfg.git",
+            "C:\\repos\\cfg",
+            "C:/repos/cfg",
+        ] {
             assert!(sync_validate_remote(ok.into()).is_ok(), "{ok}");
         }
-        for bad in ["ext::sh -c touch% /tmp/pwned", "fd::17", "EXT::sh", "-uhelp", "--upload-pack=touch x", "http://host/cfg",
-                    "file://relative/path", "ftp://host/x", "", "relative/path", "host:-oProxyCommand=x", "\u{7}git@h:x"] {
+        for bad in [
+            "ext::sh -c touch% /tmp/pwned",
+            "fd::17",
+            "EXT::sh",
+            "-uhelp",
+            "--upload-pack=touch x",
+            "http://host/cfg",
+            "file://relative/path",
+            "ftp://host/x",
+            "",
+            "relative/path",
+            "host:-oProxyCommand=x",
+            "\u{7}git@h:x",
+        ] {
             assert!(sync_validate_remote(bad.into()).is_err(), "{bad}");
         }
         let token = sync_validate_remote("https://me:ghp_secret@github.com/me/cfg.git".into()).unwrap_err().to_string();
@@ -1049,26 +1530,50 @@ mod tests {
     #[test]
     fn git_two_machines_conflict() {
         let bare = tempfile::tempdir().unwrap();
-        assert!(std::process::Command::new("git").args(["init", "-q", "--bare", "-b", "main"]).arg(bare.path()).status().unwrap().success());
-        let (la, lb, ra, rb) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        let (ra, rb) = (ra.path().join("repo").to_string_lossy().to_string(), rb.path().join("repo").to_string_lossy().to_string());
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q", "--bare", "-b", "main"])
+            .arg(bare.path())
+            .status()
+            .unwrap()
+            .success());
+        let (la, lb, ra, rb) = (
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        );
+        let (ra, rb) = (
+            ra.path().join("repo").to_string_lossy().to_string(),
+            rb.path().join("repo").to_string_lossy().to_string(),
+        );
         let remote = bare.path().to_string_lossy().to_string();
         let p = sync_new_profile("all".into());
         fs::write(la.path().join("config"), "Host a\n    HostName 1\n").unwrap();
-        assert_eq!(git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap(),
-                   SyncOutcome::Synced { pulled: false, imported: vec![] });
+        assert_eq!(
+            git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap(),
+            SyncOutcome::Synced { pulled: false, imported: vec![] }
+        );
         // Вторая машина: подтягивает с сервера (setUp сбрасывает на origin) и разносит.
         let out = git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
-        assert!(matches!(&out, SyncOutcome::Synced { imported, .. } if imported.contains(&SyncItem::SshConfig)), "{out:?}");
-        assert!(fs::read_to_string(Path::new(&rb).join("ssh/config")).unwrap().contains("Host a"), "пустой Mac не должен обнулять общий файл");
+        assert!(
+            matches!(&out, SyncOutcome::Synced { imported, .. } if imported.contains(&SyncItem::SshConfig)),
+            "{out:?}"
+        );
+        assert!(
+            fs::read_to_string(Path::new(&rb).join("ssh/config")).unwrap().contains("Host a"),
+            "пустой Mac не должен обнулять общий файл"
+        );
         // Первое подключение разносит пришедшее само, без ручного sync_import.
         assert!(fs::read_to_string(lb.path().join("config")).unwrap().contains("Host a"));
 
         fs::write(la.path().join("config"), "Host a\n    HostName from-A\n").unwrap();
         git_sync(ra, remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
         fs::write(lb.path().join("config"), "Host a\n    HostName from-B\n").unwrap();
-        let SyncOutcome::Conflict { conflicts } = git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap()
-            else { panic!("expected conflict") };
+        let SyncOutcome::Conflict { conflicts } =
+            git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap()
+        else {
+            panic!("expected conflict")
+        };
         assert_eq!(conflicts[0].path, "ssh/config");
         assert!(conflicts[0].mine.contains("from-B") && conflicts[0].theirs.contains("from-A"));
         git_resolve(rb.clone(), [("ssh/config".to_string(), false)].into(), p.clone(), paths(lb.path()), None).unwrap();
@@ -1083,7 +1588,10 @@ mod tests {
         let p = sync_new_profile("all".into());
         let none = std::collections::HashMap::new();
         fs::write(a.path().join("config"), "Host web\n    HostName 1.1.1.1\n").unwrap();
-        assert!(matches!(folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap(), SyncOutcome::Synced { .. }));
+        assert!(matches!(
+            folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap(),
+            SyncOutcome::Synced { .. }
+        ));
         // Вторая машина получает чужое и добавляет своё.
         fs::write(b.path().join("config"), "Host nas\n    HostName 2.2.2.2\n").unwrap();
         let out = folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap();
@@ -1091,22 +1599,35 @@ mod tests {
         let cfg_b = fs::read_to_string(b.path().join("config")).unwrap();
         assert!(cfg_b.contains("1.1.1.1") && cfg_b.contains("2.2.2.2"), "{cfg_b}");
         // Без изменений — UpToDate.
-        assert_eq!(folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap(), SyncOutcome::UpToDate);
+        assert_eq!(
+            folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap(),
+            SyncOutcome::UpToDate
+        );
         // Обе машины поменяли web по-разному — конфликт, папка не тронута.
         let _ = folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap();
-        fs::write(a.path().join("config"), "Host web\n    HostName 9.9.9.9\n\nHost nas\n    HostName 2.2.2.2\n").unwrap();
-        assert!(matches!(folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap(), SyncOutcome::Synced { .. }));
+        fs::write(a.path().join("config"), "Host web\n    HostName 9.9.9.9\n\nHost nas\n    HostName 2.2.2.2\n")
+            .unwrap();
+        assert!(matches!(
+            folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap(),
+            SyncOutcome::Synced { .. }
+        ));
         fs::write(b.path().join("config"), cfg_b.replace("1.1.1.1", "5.5.5.5")).unwrap();
         let before = fs::read(folder.path().join("ssh/config")).unwrap();
-        let SyncOutcome::Conflict { conflicts } = folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap()
-            else { panic!("ожидался конфликт") };
+        let SyncOutcome::Conflict { conflicts } =
+            folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap()
+        else {
+            panic!("ожидался конфликт")
+        };
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].path, "ssh/config");
         assert!(conflicts[0].mine.contains("5.5.5.5") && conflicts[0].theirs.contains("9.9.9.9"));
         assert_eq!(fs::read(folder.path().join("ssh/config")).unwrap(), before);
         // Разрешение «из папки»: на b приходит 9.9.9.9.
         let keep: std::collections::HashMap<String, bool> = [("ssh/config".to_string(), false)].into();
-        assert!(matches!(folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), keep).unwrap(), SyncOutcome::Synced { .. }));
+        assert!(matches!(
+            folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), keep).unwrap(),
+            SyncOutcome::Synced { .. }
+        ));
         assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("9.9.9.9"));
     }
 
@@ -1130,7 +1651,8 @@ mod tests {
         let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         fs::create_dir_all(dir.path().join("ssh")).unwrap();
         fs::write(dir.path().join("ssh/config"), "Host m\n    IdentityFile ~/.ssh/k\n    UseKeychain yes\n").unwrap();
-        sync_import(sync_new_profile("all".into()), paths(a.path()), None, dir.path().to_string_lossy().into()).unwrap();
+        sync_import(sync_new_profile("all".into()), paths(a.path()), None, dir.path().to_string_lossy().into())
+            .unwrap();
         let cfg = fs::read_to_string(a.path().join("config")).unwrap();
         assert_eq!(cfg.starts_with("IgnoreUnknown UseKeychain\n"), !cfg!(target_os = "macos"), "{cfg}");
     }
@@ -1139,12 +1661,16 @@ mod tests {
     fn skipped_keys_are_reported() {
         let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         fs::create_dir_all(dir.path().join("keys")).unwrap();
-        fs::write(dir.path().join("keys/id_x.relaya-key"), key_encrypt(b"KEY".to_vec(), "right".into(), MIN_ROUNDS)).unwrap();
+        fs::write(dir.path().join("keys/id_x.relaya-key"), key_encrypt(b"KEY".to_vec(), "right".into(), MIN_ROUNDS))
+            .unwrap();
         let mut p = sync_new_profile("all".into());
         p.items.push(SyncItem::Keys);
         let d = dir.path().to_string_lossy().to_string();
         sync_import(p.clone(), paths(a.path()), None, d.clone()).unwrap();
-        assert_eq!(sync_take_skipped_keys(paths(a.path())), vec![SkippedKey { name: "id_x".into(), reason: KeySkipReason::NoPassphrase }]);
+        assert_eq!(
+            sync_take_skipped_keys(paths(a.path())),
+            vec![SkippedKey { name: "id_x".into(), reason: KeySkipReason::NoPassphrase }]
+        );
         assert!(sync_take_skipped_keys(paths(a.path())).is_empty(), "отдаётся один раз");
         // Неверный пароль не роняет импорт.
         sync_import(p.clone(), paths(a.path()), Some("wrong".into()), d.clone()).unwrap();
@@ -1157,13 +1683,31 @@ mod tests {
     #[test]
     fn deletions_travel_via_tombstones() {
         let bare = tempfile::tempdir().unwrap();
-        assert!(std::process::Command::new("git").args(["init", "-q", "--bare", "-b", "main"]).arg(bare.path()).status().unwrap().success());
-        let (la, lb, ra, rb) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        let (ra, rb) = (ra.path().join("repo").to_string_lossy().to_string(), rb.path().join("repo").to_string_lossy().to_string());
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q", "--bare", "-b", "main"])
+            .arg(bare.path())
+            .status()
+            .unwrap()
+            .success());
+        let (la, lb, ra, rb) = (
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        );
+        let (ra, rb) = (
+            ra.path().join("repo").to_string_lossy().to_string(),
+            rb.path().join("repo").to_string_lossy().to_string(),
+        );
         let remote = bare.path().to_string_lossy().to_string();
         let p = sync_new_profile("all".into());
-        fs::write(la.path().join("config"), "Host keep\n    HostName 1\n\nHost openwrt\n    HostName 192.168.1.1\n").unwrap();
-        fs::write(la.path().join("snippets.json"), r#"[{"command":"ls","id":"S1","name":"a","tags":[]},{"command":"df","id":"S2","name":"b","tags":[]}]"#).unwrap();
+        fs::write(la.path().join("config"), "Host keep\n    HostName 1\n\nHost openwrt\n    HostName 192.168.1.1\n")
+            .unwrap();
+        fs::write(
+            la.path().join("snippets.json"),
+            r#"[{"command":"ls","id":"S1","name":"a","tags":[]},{"command":"df","id":"S2","name":"b","tags":[]}]"#,
+        )
+        .unwrap();
         git_sync(ra.clone(), remote.clone(), "A".into(), p.clone(), paths(la.path()), None).unwrap();
         git_sync(rb.clone(), remote.clone(), "B".into(), p.clone(), paths(lb.path()), None).unwrap();
         assert!(fs::read_to_string(lb.path().join("config")).unwrap().contains("openwrt"));
@@ -1198,9 +1742,11 @@ mod tests {
     fn agent_policy_is_merged_not_replaced() {
         let (a, b, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let p = sync_new_profile("all".into());
-        let mut p = p; p.items.push(SyncItem::Agents);
+        let mut p = p;
+        p.items.push(SyncItem::Agents);
         fs::write(a.path().join("mcp.json"), r#"{"defaultMode":"trusted","enabled":true,"hosts":{"web":"confirm"},"grants":{"web":{"mode":"trusted","until":9e9}}}"#).unwrap();
-        fs::write(b.path().join("mcp.json"), r#"{"defaultMode":"readOnly","enabled":false,"hosts":{"nas":"off"}}"#).unwrap();
+        fs::write(b.path().join("mcp.json"), r#"{"defaultMode":"readOnly","enabled":false,"hosts":{"nas":"off"}}"#)
+            .unwrap();
         let d = dir.path().to_string_lossy().to_string();
         sync_export(p.clone(), paths(a.path()), None, d.clone()).unwrap();
         assert!(!fs::read_to_string(dir.path().join("relaya/mcp.json")).unwrap().contains("grants"));
@@ -1222,7 +1768,8 @@ mod tests {
     #[test]
     fn declined_agent_escalation_is_not_asked_again() {
         let (a, b, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        let mut p = sync_new_profile("all".into()); p.items.push(SyncItem::Agents);
+        let mut p = sync_new_profile("all".into());
+        p.items.push(SyncItem::Agents);
         fs::write(a.path().join("mcp.json"), r#"{"defaultMode":"confirm","enabled":true,"hosts":{"web":"trusted"},"allow":{"*":["systemctl restart *"]}}"#).unwrap();
         fs::write(b.path().join("mcp.json"), r#"{"defaultMode":"readOnly","enabled":true,"hosts":{}}"#).unwrap();
         let d = dir.path().to_string_lossy().to_string();
@@ -1246,20 +1793,36 @@ mod tests {
         sync_export(p.clone(), paths(a.path()), None, d.clone()).unwrap();
         sync_import(p.clone(), paths(a.path()), None, d.clone()).unwrap();
         // Подделка: удалить 5 хостов «из будущего».
-        let fake: Vec<Tombstone> = (0..5).map(|i| Tombstone { kind: "host".into(), key: format!("h{i}"),
-            deleted_at: "2099-01-01T00:00:00.000Z".into(), machine: "evil".into(), revived_at: None, raw_deleted_at: String::new() }).collect();
+        let fake: Vec<Tombstone> = (0..5)
+            .map(|i| Tombstone {
+                kind: "host".into(),
+                key: format!("h{i}"),
+                deleted_at: "2099-01-01T00:00:00.000Z".into(),
+                machine: "evil".into(),
+                revived_at: None,
+                raw_deleted_at: String::new(),
+            })
+            .collect();
         fs::create_dir_all(dir.path().join("relaya")).unwrap();
         fs::write(dir.path().join(tombstones::FILE), encode_sorted(&fake)).unwrap();
         assert!(tombstones::load(dir.path()).unwrap().iter().all(|t| t.deleted_at.as_str() < "2099"));
         sync_import(p.clone(), paths(a.path()), None, d.clone()).unwrap();
-        assert_eq!(fs::read_to_string(a.path().join("config")).unwrap().trim_end(), hosts.trim_end(), "ничего не удалено без подтверждения");
+        assert_eq!(
+            fs::read_to_string(a.path().join("config")).unwrap().trim_end(),
+            hosts.trim_end(),
+            "ничего не удалено без подтверждения"
+        );
         let pending = sync_take_pending_deletions(paths(a.path()));
         assert_eq!(pending.len(), 5);
         // Пользователь подтвердил одно удаление: удаляется только оно, с бэкапом; остальные больше не спрашиваются.
         sync_apply_deletions(paths(a.path()), vec![DeletionKey { kind: "host".into(), key: "h0".into() }]).unwrap();
         let cfg = fs::read_to_string(a.path().join("config")).unwrap();
         assert!(!cfg.contains("Host h0\n") && cfg.contains("Host h1\n"), "{cfg}");
-        assert!(fs::read_dir(a.path()).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("config.") && e.file_name().to_string_lossy().ends_with(".bak")));
+        assert!(fs::read_dir(a.path()).unwrap().flatten().any(|e| e
+            .file_name()
+            .to_string_lossy()
+            .starts_with("config.")
+            && e.file_name().to_string_lossy().ends_with(".bak")));
         sync_import(p, paths(a.path()), None, d).unwrap();
         assert!(sync_take_pending_deletions(paths(a.path())).is_empty());
         assert!(fs::read_to_string(a.path().join("config")).unwrap().contains("Host h1\n"));
@@ -1279,25 +1842,46 @@ mod tests {
         fs::write(a.path().join("config"), "Host y\n    HostName 2\n").unwrap();
         folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap();
         fs::write(b.path().join("config"), "Host x\n    HostName 9\n\nHost y\n    HostName 2\n").unwrap();
-        let SyncOutcome::Conflict { conflicts } = folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap()
-            else { panic!("ожидался конфликт") };
-        assert_eq!(conflicts.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(), ["ssh/config"], "deleted.json сливается сам");
+        let SyncOutcome::Conflict { conflicts } =
+            folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap()
+        else {
+            panic!("ожидался конфликт")
+        };
+        assert_eq!(
+            conflicts.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(),
+            ["ssh/config"],
+            "deleted.json сливается сам"
+        );
         let keep: std::collections::HashMap<String, bool> = [("ssh/config".to_string(), true)].into();
         folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), keep).unwrap();
         assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("HostName 9"));
         folder_sync_merge(p.clone(), paths(a.path()), None, f.clone(), none.clone()).unwrap();
         assert!(fs::read_to_string(a.path().join("config")).unwrap().contains("HostName 9"));
         folder_sync_merge(p.clone(), paths(b.path()), None, f.clone(), none.clone()).unwrap();
-        assert!(fs::read_to_string(b.path().join("config")).unwrap().contains("HostName 9"), "воскрешённое не удаляется снова");
+        assert!(
+            fs::read_to_string(b.path().join("config")).unwrap().contains("HostName 9"),
+            "воскрешённое не удаляется снова"
+        );
 
-        let t = |k: &str, at: &str, rev: Option<&str>| Tombstone { kind: "host".into(), key: k.into(), deleted_at: at.into(),
-                                                                  machine: "m".into(), revived_at: rev.map(Into::into), raw_deleted_at: at.into() };
+        let t = |k: &str, at: &str, rev: Option<&str>| Tombstone {
+            kind: "host".into(),
+            key: k.into(),
+            deleted_at: at.into(),
+            machine: "m".into(),
+            revived_at: rev.map(Into::into),
+            raw_deleted_at: at.into(),
+        };
         let enc = |v: Vec<Tombstone>| encode_sorted(&v);
-        let merged = tombstones::merge_text(&enc(vec![t("a", "2026-01-01T00:00:00Z", None)]), &enc(vec![t("b", "2026-01-02T00:00:00Z", None)]));
+        let merged = tombstones::merge_text(
+            &enc(vec![t("a", "2026-01-01T00:00:00Z", None)]),
+            &enc(vec![t("b", "2026-01-02T00:00:00Z", None)]),
+        );
         assert!(merged.contains("\"a\"") && merged.contains("\"b\""));
         // Позднее событие побеждает: воскрешение после удаления сохраняется при слиянии.
-        let m = tombstones::merge_text(&enc(vec![t("a", "2026-01-01T00:00:00Z", Some("2026-01-03T00:00:00Z"))]),
-                                       &enc(vec![t("a", "2026-01-01T00:00:00Z", None)]));
+        let m = tombstones::merge_text(
+            &enc(vec![t("a", "2026-01-01T00:00:00Z", Some("2026-01-03T00:00:00Z"))]),
+            &enc(vec![t("a", "2026-01-01T00:00:00Z", None)]),
+        );
         assert!(m.contains("revivedAt"));
     }
 }
@@ -1316,18 +1900,26 @@ fn local_items(profile: &SyncProfile, paths: &SyncPaths) -> Result<Items, CoreEr
     let items = profile.effective_items();
     let mut out = Items::new();
     let text = fs::read_to_string(paths.config()).unwrap_or_default();
-    let hosts: Vec<_> = parse_config(text.clone()).into_iter().filter(|h| profile.contains(h) && !h.is_git_service()).collect();
+    let hosts: Vec<_> =
+        parse_config(text.clone()).into_iter().filter(|h| profile.contains(h) && !h.is_git_service()).collect();
     let aliases_set: HashSet<String> = hosts.iter().map(|h| h.alias.clone()).collect();
     if items.contains(&SyncItem::SshConfig) {
         let doc = Document::new(&text);
-        for h in &hosts { out.insert(("host".into(), h.alias.clone()), digest(&doc.current_lines(&h.alias).join("\n"))); }
+        for h in &hosts {
+            out.insert(("host".into(), h.alias.clone()), digest(&doc.current_lines(&h.alias).join("\n")));
+        }
     }
     let read_list = |name: &str| -> Result<Vec<serde_json::Value>, CoreError> {
-        match fs::read_to_string(paths.support(name)) { Ok(j) => try_decode_list(&j).map_err(|e| broken(name, e)), Err(_) => Ok(vec![]) }
+        match fs::read_to_string(paths.support(name)) {
+            Ok(j) => try_decode_list(&j).map_err(|e| broken(name, e)),
+            Err(_) => Ok(vec![]),
+        }
     };
     let id = |v: &serde_json::Value| v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
     if items.contains(&SyncItem::Snippets) {
-        for v in read_list("snippets.json")? { out.insert(("snippet".into(), id(&v)), digest(&encode_sorted(&v))); }
+        for v in read_list("snippets.json")? {
+            out.insert(("snippet".into(), id(&v)), digest(&encode_sorted(&v)));
+        }
     }
     if items.contains(&SyncItem::Tunnels) {
         for v in read_list("tunnels.json")? {
@@ -1339,9 +1931,14 @@ fn local_items(profile: &SyncProfile, paths: &SyncPaths) -> Result<Items, CoreEr
     if items.contains(&SyncItem::Desktops) {
         for v in read_list("desktops.json")? {
             let ok = profile.scope.all_hosts
-                || v.get("group").and_then(|x| x.as_str()).map(|g| profile.scope.groups.iter().any(|x| x == g)).unwrap_or(false)
+                || v.get("group")
+                    .and_then(|x| x.as_str())
+                    .map(|g| profile.scope.groups.iter().any(|x| x == g))
+                    .unwrap_or(false)
                 || v.get("viaSSHHost").and_then(|x| x.as_str()).map(|a| aliases_set.contains(a)).unwrap_or(false);
-            if ok { out.insert(("desktop".into(), id(&v)), digest(&encode_sorted(&v))); }
+            if ok {
+                out.insert(("desktop".into(), id(&v)), digest(&encode_sorted(&v)));
+            }
         }
     }
     Ok(out)
@@ -1362,12 +1959,17 @@ pub struct PendingDeletion {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct DeletionKey { pub kind: String, pub key: String }
+pub struct DeletionKey {
+    pub kind: String,
+    pub key: String,
+}
 
 /// Удаления, отложенные до подтверждения (последний импорт хотел удалить слишком много сразу).
 /// Список остаётся, пока клиент не вызовет `sync_apply_deletions`.
 #[uniffi::export]
-pub fn sync_take_pending_deletions(paths: SyncPaths) -> Vec<PendingDeletion> { tombstones::take_pending(&paths) }
+pub fn sync_take_pending_deletions(paths: SyncPaths) -> Vec<PendingDeletion> {
+    tombstones::take_pending(&paths)
+}
 
 /// Применить подтверждённые пользователем удаления (пустой список — отклонить все). Отклонённые не спрашиваются
 /// снова, пока другая машина не удалит элемент заново. Перед удалением — бэкап файлов с датой.
@@ -1393,9 +1995,13 @@ pub(crate) struct Tombstone {
 }
 
 impl Tombstone {
-    fn dead(&self) -> bool { self.revived_at.as_deref().map(|r| r < self.deleted_at.as_str()).unwrap_or(true) }
+    fn dead(&self) -> bool {
+        self.revived_at.as_deref().map(|r| r < self.deleted_at.as_str()).unwrap_or(true)
+    }
     /// Последнее событие записи: удаление или воскрешение.
-    fn last(&self) -> &str { self.revived_at.as_deref().filter(|r| *r > self.deleted_at.as_str()).unwrap_or(&self.deleted_at) }
+    fn last(&self) -> &str {
+        self.revived_at.as_deref().filter(|r| *r > self.deleted_at.as_str()).unwrap_or(&self.deleted_at)
+    }
 }
 
 pub(crate) mod tombstones {
@@ -1409,7 +2015,9 @@ pub(crate) mod tombstones {
     type Snapshot = std::collections::BTreeMap<(String, String), (String, String)>;
 
     /// ISO 8601 в UTC с миллисекундами: строки сравниваются по времени.
-    fn now() -> String { chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string() }
+    fn now() -> String {
+        chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    }
 
     fn machine() -> String {
         std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "unknown".into())
@@ -1420,23 +2028,40 @@ pub(crate) mod tombstones {
     }
 
     fn load_snapshot(profile: &SyncProfile, paths: &SyncPaths) -> Snapshot {
-        let list: Vec<(String, String, String, String)> = fs::read_to_string(snapshot_file(profile, paths)).ok()
-            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let list: Vec<(String, String, String, String)> = fs::read_to_string(snapshot_file(profile, paths))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
         list.into_iter().map(|(k, key, h, at)| ((k, key), (h, at))).collect()
     }
 
     /// Запомнить локальное состояние; `keep` — ключи, которые остаются в снимке до импорта (свежие удаления).
-    pub(crate) fn save_snapshot(profile: &SyncProfile, paths: &SyncPaths, local: &Items, keep: &[Tombstone]) -> Result<(), CoreError> {
+    pub(crate) fn save_snapshot(
+        profile: &SyncProfile,
+        paths: &SyncPaths,
+        local: &Items,
+        keep: &[Tombstone],
+    ) -> Result<(), CoreError> {
         let old = load_snapshot(profile, paths);
         let t = now();
-        let mut snap: Snapshot = local.iter().map(|(k, h)| {
-            let at = old.get(k).filter(|(oh, _)| oh == h).map(|(_, at)| at.clone()).unwrap_or_else(|| t.clone());
-            (k.clone(), (h.clone(), at))
-        }).collect();
-        for (k, v) in old { if !snap.contains_key(&k) && keep.iter().any(|x| x.dead() && x.kind == k.0 && x.key == k.1) { snap.insert(k, v); } }
+        let mut snap: Snapshot = local
+            .iter()
+            .map(|(k, h)| {
+                let at = old.get(k).filter(|(oh, _)| oh == h).map(|(_, at)| at.clone()).unwrap_or_else(|| t.clone());
+                (k.clone(), (h.clone(), at))
+            })
+            .collect();
+        for (k, v) in old {
+            if !snap.contains_key(&k) && keep.iter().any(|x| x.dead() && x.kind == k.0 && x.key == k.1) {
+                snap.insert(k, v);
+            }
+        }
         let f = snapshot_file(profile, paths);
-        if let Some(d) = f.parent() { fs::create_dir_all(d)?; }
-        let list: Vec<(&String, &String, &String, &String)> = snap.iter().map(|((k, key), (h, at))| (k, key, h, at)).collect();
+        if let Some(d) = f.parent() {
+            fs::create_dir_all(d)?;
+        }
+        let list: Vec<(&String, &String, &String, &String)> =
+            snap.iter().map(|((k, key), (h, at))| (k, key, h, at)).collect();
         fs::write(f, serde_json::to_string(&list)?)?;
         Ok(())
     }
@@ -1451,8 +2076,12 @@ pub(crate) mod tombstones {
         let t = now();
         for x in &mut tombs {
             x.raw_deleted_at = x.deleted_at.clone();
-            if x.deleted_at > limit { x.deleted_at = t.clone(); }
-            if x.revived_at.as_deref().map(|r| r > limit.as_str()).unwrap_or(false) { x.revived_at = Some(t.clone()); }
+            if x.deleted_at > limit {
+                x.deleted_at = t.clone();
+            }
+            if x.revived_at.as_deref().map(|r| r > limit.as_str()).unwrap_or(false) {
+                x.revived_at = Some(t.clone());
+            }
         }
         Ok(tombs)
     }
@@ -1462,7 +2091,12 @@ pub(crate) mod tombstones {
         let mut m: std::collections::BTreeMap<(String, String), Tombstone> = Default::default();
         for t in a.into_iter().chain(b) {
             let k = (t.kind.clone(), t.key.clone());
-            match m.get(&k) { Some(o) if o.last() >= t.last() => {}, _ => { m.insert(k, t); } }
+            match m.get(&k) {
+                Some(o) if o.last() >= t.last() => {}
+                _ => {
+                    m.insert(k, t);
+                }
+            }
         }
         m.into_values().collect()
     }
@@ -1475,53 +2109,96 @@ pub(crate) mod tombstones {
 
     /// Записи для выгрузки: новые удаления (было в снимке, исчезло локально) и воскрешения (элемент здесь правили
     /// после удаления на другой машине — правка побеждает). Пустая машина ничего не хоронит.
-    pub(crate) fn prepare(profile: &SyncProfile, paths: &SyncPaths, dir: &Path, local: &Items) -> Result<Vec<Tombstone>, CoreError> {
+    pub(crate) fn prepare(
+        profile: &SyncProfile,
+        paths: &SyncPaths,
+        dir: &Path,
+        local: &Items,
+    ) -> Result<Vec<Tombstone>, CoreError> {
         let known = load_snapshot(profile, paths);
         let mut tombs = load(dir)?;
         let t = now();
         for ((kind, key), _) in known.iter().filter(|(k, _)| !local.contains_key(*k)) {
             // Пропали разом все элементы вида — скорее пустой или сломанный файл, чем удаление.
-            if !local.keys().any(|(k, _)| k == kind) { continue; }
+            if !local.keys().any(|(k, _)| k == kind) {
+                continue;
+            }
             match tombs.iter_mut().find(|x| &x.kind == kind && &x.key == key) {
                 Some(x) if x.dead() => {}
-                Some(x) => { x.deleted_at = t.clone(); x.revived_at = None; x.machine = machine(); }
-                None => tombs.push(Tombstone { kind: kind.clone(), key: key.clone(), deleted_at: t.clone(), machine: machine(), revived_at: None,
-                                               raw_deleted_at: t.clone() }),
+                Some(x) => {
+                    x.deleted_at = t.clone();
+                    x.revived_at = None;
+                    x.machine = machine();
+                }
+                None => tombs.push(Tombstone {
+                    kind: kind.clone(),
+                    key: key.clone(),
+                    deleted_at: t.clone(),
+                    machine: machine(),
+                    revived_at: None,
+                    raw_deleted_at: t.clone(),
+                }),
             }
         }
         for x in tombs.iter_mut().filter(|x| x.dead()) {
             let k = (x.kind.clone(), x.key.clone());
             let Some(h) = local.get(&k) else { continue };
             // Изменилось после удаления (или пришло позже) — воскрешаем.
-            let changed_at = match known.get(&k) { Some((kh, at)) if kh == h => at.clone(), _ => t.clone() };
+            let changed_at = match known.get(&k) {
+                Some((kh, at)) if kh == h => at.clone(),
+                _ => t.clone(),
+            };
             // Правка в ту же миллисекунду, что и удаление, считается более поздней: правка побеждает.
-            if changed_at >= x.deleted_at { x.revived_at = Some(t.clone()); }
+            if changed_at >= x.deleted_at {
+                x.revived_at = Some(t.clone());
+            }
         }
-        let cutoff = (chrono::Utc::now() - chrono::Duration::days(KEEP_DAYS)).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        let cutoff =
+            (chrono::Utc::now() - chrono::Duration::days(KEEP_DAYS)).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         tombs.retain(|x| x.last() >= cutoff.as_str());
         Ok(tombs)
     }
 
     /// Убрать похороненное из общих файлов и записать `deleted.json`.
-    pub(crate) fn strip_shared(dir: &Path, tombs: &mut Vec<Tombstone>, changed: &mut Vec<String>) -> Result<(), CoreError> {
-        if tombs.is_empty() && !dir.join(FILE).exists() { return Ok(()); }
+    pub(crate) fn strip_shared(
+        dir: &Path,
+        tombs: &mut Vec<Tombstone>,
+        changed: &mut Vec<String>,
+    ) -> Result<(), CoreError> {
+        if tombs.is_empty() && !dir.join(FILE).exists() {
+            return Ok(());
+        }
         let gone = |kind: &str, key: &str| tombs.iter().any(|t| t.dead() && t.kind == kind && t.key == key);
         if let Ok(text) = fs::read_to_string(dir.join("ssh/config")) {
             let mut doc = Document::new(&text);
             let mut cut = false;
             for a in parse_config(text.clone()).into_iter().map(|h| h.alias).filter(|a| gone("host", a)) {
-                while take_alias(&mut doc, &a).is_some() { cut = true; }
+                while take_alias(&mut doc, &a).is_some() {
+                    cut = true;
+                }
             }
             if cut {
-                while doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) { doc.lines.pop(); }
+                while doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) {
+                    doc.lines.pop();
+                }
                 write_if_changed(dir, "ssh/config", doc.text().as_bytes(), changed)?;
             }
         }
-        for (kind, rel) in [("snippet", "relaya/snippets.json"), ("tunnel", "relaya/tunnels.json"), ("desktop", "relaya/desktops.json")] {
+        for (kind, rel) in [
+            ("snippet", "relaya/snippets.json"),
+            ("tunnel", "relaya/tunnels.json"),
+            ("desktop", "relaya/desktops.json"),
+        ] {
             let Ok(j) = fs::read_to_string(dir.join(rel)) else { continue };
             let list: Vec<serde_json::Value> = try_decode_list(&j).map_err(|e| broken(rel, e))?;
-            let kept: Vec<serde_json::Value> = list.iter().filter(|v| !gone(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or(""))).cloned().collect();
-            if kept.len() != list.len() { write_if_changed(dir, rel, encode_sorted(&kept).as_bytes(), changed)?; }
+            let kept: Vec<serde_json::Value> = list
+                .iter()
+                .filter(|v| !gone(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or("")))
+                .cloned()
+                .collect();
+            if kept.len() != list.len() {
+                write_if_changed(dir, rel, encode_sorted(&kept).as_bytes(), changed)?;
+            }
         }
         tombs.sort_by(|a, b| (&a.kind, &a.key).cmp(&(&b.kind, &b.key)));
         write_if_changed(dir, FILE, encode_sorted(&tombs).as_bytes(), changed)?;
@@ -1532,18 +2209,30 @@ pub(crate) mod tombstones {
     const MAX_SILENT: usize = 3;
     const MAX_SILENT_SHARE: f64 = 0.2;
 
-    fn pending_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-pending-deletions.json") }
-    fn dismissed_file(paths: &SyncPaths) -> PathBuf { paths.support("sync-dismissed-deletions.json") }
+    fn pending_file(paths: &SyncPaths) -> PathBuf {
+        paths.support("sync-pending-deletions.json")
+    }
+    fn dismissed_file(paths: &SyncPaths) -> PathBuf {
+        paths.support("sync-dismissed-deletions.json")
+    }
 
     /// Удалить локально то, что похоронено и не менялось здесь после удаления. Массовое удаление не применяется,
     /// а ждёт подтверждения: `sync_take_pending_deletions` / `sync_apply_deletions`.
-    pub(crate) fn apply_locally(profile: &SyncProfile, paths: &SyncPaths, dir: &Path) -> Result<Vec<SyncItem>, CoreError> {
+    pub(crate) fn apply_locally(
+        profile: &SyncProfile,
+        paths: &SyncPaths,
+        dir: &Path,
+    ) -> Result<Vec<SyncItem>, CoreError> {
         let tombs = load(dir)?;
-        if !tombs.iter().any(|t| t.dead()) { return Ok(vec![]); }
+        if !tombs.iter().any(|t| t.dead()) {
+            return Ok(vec![]);
+        }
         let known = load_snapshot(profile, paths);
         let local = local_items(profile, paths)?;
-        let dismissed: Vec<(String, String, String)> = fs::read_to_string(dismissed_file(paths)).ok()
-            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let dismissed: Vec<(String, String, String)> = fs::read_to_string(dismissed_file(paths))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
         let mut doomed: Vec<&Tombstone> = Vec::new();
         for t in tombs.iter().filter(|t| t.dead()) {
             let k = (t.kind.clone(), t.key.clone());
@@ -1552,10 +2241,15 @@ pub(crate) mod tombstones {
                 _ => false,
             };
             // Пользователь уже отказался от этого удаления — не спрашивать снова, пока его не повторят.
-            let refused = dismissed.iter().any(|(kind, key, at)| kind == &t.kind && key == &t.key && at == &t.raw_deleted_at);
-            if unchanged && !refused { doomed.push(t); }
+            let refused =
+                dismissed.iter().any(|(kind, key, at)| kind == &t.kind && key == &t.key && at == &t.raw_deleted_at);
+            if unchanged && !refused {
+                doomed.push(t);
+            }
         }
-        if doomed.is_empty() { return Ok(vec![]); }
+        if doomed.is_empty() {
+            return Ok(vec![]);
+        }
         let mass = ["host", "snippet", "tunnel", "desktop"].iter().any(|kind| {
             let n = doomed.iter().filter(|t| t.kind == *kind).count();
             let total = local.keys().filter(|(k, _)| k == kind).count().max(1);
@@ -1563,10 +2257,16 @@ pub(crate) mod tombstones {
         });
         if mass {
             let names = display_names(paths);
-            let pending: Vec<PendingDeletion> = doomed.iter().map(|t| PendingDeletion {
-                kind: t.kind.clone(), key: t.key.clone(), deleted_at: t.raw_deleted_at.clone(), machine: t.machine.clone(),
-                name: names.get(&(t.kind.clone(), t.key.clone())).cloned().unwrap_or_else(|| t.key.clone()),
-            }).collect();
+            let pending: Vec<PendingDeletion> = doomed
+                .iter()
+                .map(|t| PendingDeletion {
+                    kind: t.kind.clone(),
+                    key: t.key.clone(),
+                    deleted_at: t.raw_deleted_at.clone(),
+                    machine: t.machine.clone(),
+                    name: names.get(&(t.kind.clone(), t.key.clone())).cloned().unwrap_or_else(|| t.key.clone()),
+                })
+                .collect();
             fs::create_dir_all(&paths.support)?;
             fs::write(pending_file(paths), encode_sorted(&pending))?;
             return Ok(vec![]);
@@ -1581,7 +2281,9 @@ pub(crate) mod tombstones {
         for (kind, name) in [("snippet", "snippets.json"), ("tunnel", "tunnels.json"), ("desktop", "desktops.json")] {
             let Ok(j) = fs::read_to_string(paths.support(name)) else { continue };
             for v in try_decode_list::<serde_json::Value>(&j).unwrap_or_default() {
-                if let (Some(id), Some(n)) = (v.get("id").and_then(|x| x.as_str()), v.get("name").and_then(|x| x.as_str())) {
+                if let (Some(id), Some(n)) =
+                    (v.get("id").and_then(|x| x.as_str()), v.get("name").and_then(|x| x.as_str()))
+                {
                     out.insert((kind.to_string(), id.to_string()), n.to_string());
                 }
             }
@@ -1591,18 +2293,34 @@ pub(crate) mod tombstones {
 
     /// Копия файла с датой перед удалением из него; хранится 10 последних.
     fn dated_backup(path: &Path) -> Result<(), CoreError> {
-        if !path.exists() { return Ok(()); }
+        if !path.exists() {
+            return Ok(());
+        }
         let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let bak = path.with_file_name(format!("{name}.{stamp}.bak"));
         fs::copy(path, &bak).map_err(|e| CoreError::Io(format!("{}: {e}", bak.display())))?;
         set_private(&bak);
         if let Some(dir) = path.parent() {
-            let mut old: Vec<PathBuf> = fs::read_dir(dir).map(|r| r.flatten().map(|e| e.path())
-                .filter(|p| p.file_name().map(|n| { let n = n.to_string_lossy(); n.starts_with(&format!("{name}.")) && n.ends_with(".bak") }).unwrap_or(false))
-                .collect()).unwrap_or_default();
+            let mut old: Vec<PathBuf> = fs::read_dir(dir)
+                .map(|r| {
+                    r.flatten()
+                        .map(|e| e.path())
+                        .filter(|p| {
+                            p.file_name()
+                                .map(|n| {
+                                    let n = n.to_string_lossy();
+                                    n.starts_with(&format!("{name}.")) && n.ends_with(".bak")
+                                })
+                                .unwrap_or(false)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             old.sort();
-            while old.len() > 10 { let _ = fs::remove_file(old.remove(0)); }
+            while old.len() > 10 {
+                let _ = fs::remove_file(old.remove(0));
+            }
         }
         Ok(())
     }
@@ -1615,10 +2333,16 @@ pub(crate) mod tombstones {
             let mut doc = Document::new(&text);
             let mut cut = false;
             for h in parse_config(text.clone()) {
-                if gone("host", &h.alias) { while take_alias(&mut doc, &h.alias).is_some() { cut = true; } }
+                if gone("host", &h.alias) {
+                    while take_alias(&mut doc, &h.alias).is_some() {
+                        cut = true;
+                    }
+                }
             }
             if cut {
-                while doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) { doc.lines.pop(); }
+                while doc.lines.last().map(|l| l.trim().is_empty()).unwrap_or(false) {
+                    doc.lines.pop();
+                }
                 let bak = Path::new(&paths.ssh).join("config.bak");
                 fs::copy(paths.config(), &bak).map_err(|e| CoreError::Io(format!("config.bak: {e}")))?;
                 set_private(&bak);
@@ -1627,11 +2351,18 @@ pub(crate) mod tombstones {
                 changed.push(SyncItem::SshConfig);
             }
         }
-        for (kind, name, item) in [("snippet", "snippets.json", SyncItem::Snippets), ("tunnel", "tunnels.json", SyncItem::Tunnels),
-                                   ("desktop", "desktops.json", SyncItem::Desktops)] {
+        for (kind, name, item) in [
+            ("snippet", "snippets.json", SyncItem::Snippets),
+            ("tunnel", "tunnels.json", SyncItem::Tunnels),
+            ("desktop", "desktops.json", SyncItem::Desktops),
+        ] {
             let Ok(j) = fs::read_to_string(paths.support(name)) else { continue };
             let list: Vec<serde_json::Value> = try_decode_list(&j).map_err(|e| broken(name, e))?;
-            let kept: Vec<serde_json::Value> = list.iter().filter(|v| !gone(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or(""))).cloned().collect();
+            let kept: Vec<serde_json::Value> = list
+                .iter()
+                .filter(|v| !gone(kind, v.get("id").and_then(|x| x.as_str()).unwrap_or("")))
+                .cloned()
+                .collect();
             if kept.len() != list.len() {
                 dated_backup(&paths.support(name))?;
                 write_atomic(&paths.support(name), encode_sorted(&kept).as_bytes())?;
@@ -1649,10 +2380,14 @@ pub(crate) mod tombstones {
     pub(crate) fn apply_confirmed(paths: &SyncPaths, confirmed: &[DeletionKey]) -> Result<Vec<SyncItem>, CoreError> {
         let pending = take_pending(paths);
         let ok = |p: &PendingDeletion| confirmed.iter().any(|c| c.kind == p.kind && c.key == p.key);
-        let set: HashSet<(String, String)> = pending.iter().filter(|p| ok(p)).map(|p| (p.kind.clone(), p.key.clone())).collect();
-        let mut dismissed: Vec<(String, String, String)> = fs::read_to_string(dismissed_file(paths)).ok()
-            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        dismissed.extend(pending.iter().filter(|p| !ok(p)).map(|p| (p.kind.clone(), p.key.clone(), p.deleted_at.clone())));
+        let set: HashSet<(String, String)> =
+            pending.iter().filter(|p| ok(p)).map(|p| (p.kind.clone(), p.key.clone())).collect();
+        let mut dismissed: Vec<(String, String, String)> = fs::read_to_string(dismissed_file(paths))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        dismissed
+            .extend(pending.iter().filter(|p| !ok(p)).map(|p| (p.kind.clone(), p.key.clone(), p.deleted_at.clone())));
         fs::create_dir_all(&paths.support)?;
         fs::write(dismissed_file(paths), serde_json::to_string(&dismissed)?)?;
         let _ = fs::remove_file(pending_file(paths));

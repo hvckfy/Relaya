@@ -5,10 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Новый идентификатор в том же виде, что у Swift `UUID().uuidString` (верхний регистр).
-pub fn new_id() -> String { uuid::Uuid::new_v4().to_string().to_uppercase() }
+pub fn new_id() -> String {
+    uuid::Uuid::new_v4().to_string().to_uppercase()
+}
 
 #[uniffi::export]
-pub fn core_new_id() -> String { new_id() }
+pub fn core_new_id() -> String {
+    new_id()
+}
 
 // MARK: - Сниппеты
 
@@ -20,30 +24,40 @@ pub struct Snippet {
     pub tags: Vec<String>,
 }
 
-fn variable_regex() -> Regex { Regex::new(r"\{\{\s*([\p{L}_][^{}\s]*)\s*\}\}").unwrap() }
+fn variable_regex() -> Regex {
+    Regex::new(r"\{\{\s*([\p{L}_][^{}\s]*)\s*\}\}").unwrap()
+}
 
 /// Имена переменных `{{имя}}` в порядке появления, без повторов.
 #[uniffi::export]
 pub fn snippet_variables(command: String) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
-    variable_regex().captures_iter(&command)
-        .filter_map(|c| { let n = c[1].to_string(); seen.insert(n.clone()).then_some(n) })
+    variable_regex()
+        .captures_iter(&command)
+        .filter_map(|c| {
+            let n = c[1].to_string();
+            seen.insert(n.clone()).then_some(n)
+        })
         .collect()
 }
 
 /// Команда с подставленными значениями; незаполненные переменные остаются как есть.
 #[uniffi::export]
 pub fn snippet_filled(command: String, values: HashMap<String, String>) -> String {
-    variable_regex().replace_all(&command, |c: &regex::Captures| {
-        values.get(&c[1]).cloned().unwrap_or_else(|| c[0].to_string())
-    }).into_owned()
+    variable_regex()
+        .replace_all(&command, |c: &regex::Captures| values.get(&c[1]).cloned().unwrap_or_else(|| c[0].to_string()))
+        .into_owned()
 }
 
 // MARK: - Туннели
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "lowercase")]
-pub enum TunnelKind { Local, Remote, Dynamic }
+pub enum TunnelKind {
+    Local,
+    Remote,
+    Dynamic,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
@@ -59,35 +73,66 @@ pub struct Tunnel {
 }
 
 /// Только по паролю: без перебора ключей агента (иначе «Too many authentication failures»).
-pub const PASSWORD_ONLY_OPTIONS: &[&str] = &["-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no"];
+pub const PASSWORD_ONLY_OPTIONS: &[&str] =
+    &["-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no"];
 
 /// `8080:localhost:80` или `1080`.
 #[uniffi::export]
 pub fn tunnel_spec(t: Tunnel) -> String {
-    if t.kind == TunnelKind::Dynamic { t.listen_port.to_string() } else { format!("{}:{}:{}", t.listen_port, t.target_host, t.target_port) }
+    if t.kind == TunnelKind::Dynamic {
+        t.listen_port.to_string()
+    } else {
+        format!("{}:{}:{}", t.listen_port, t.target_host, t.target_port)
+    }
 }
 
 /// Аргументы `ssh -N` без секретов; пароль, если нужен, — через askpass клиента.
 #[uniffi::export]
 pub fn tunnel_ssh_arguments(t: Tunnel, password_only: bool) -> Vec<String> {
-    let mut a: Vec<String> = ["-N", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=30",
-                              "-o", "ServerAliveCountMax=3", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"]
-        .iter().map(|s| s.to_string()).collect();
-    if password_only { a.extend(PASSWORD_ONLY_OPTIONS.iter().map(|s| s.to_string())) } else { a.extend(["-o".into(), "BatchMode=yes".into()]) }
-    let flag = match t.kind { TunnelKind::Local => "-L", TunnelKind::Remote => "-R", TunnelKind::Dynamic => "-D" };
+    let mut a: Vec<String> = [
+        "-N",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ConnectTimeout=15",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    if password_only {
+        a.extend(PASSWORD_ONLY_OPTIONS.iter().map(|s| s.to_string()))
+    } else {
+        a.extend(["-o".into(), "BatchMode=yes".into()])
+    }
+    let flag = match t.kind {
+        TunnelKind::Local => "-L",
+        TunnelKind::Remote => "-R",
+        TunnelKind::Dynamic => "-D",
+    };
     let alias = t.host_alias.clone();
     a.extend([flag.to_string(), tunnel_spec(t), alias]);
     a
 }
 
 #[uniffi::export]
-pub fn password_only_options() -> Vec<String> { PASSWORD_ONLY_OPTIONS.iter().map(|s| s.to_string()).collect() }
+pub fn password_only_options() -> Vec<String> {
+    PASSWORD_ONLY_OPTIONS.iter().map(|s| s.to_string()).collect()
+}
 
 // MARK: - Удалённые столы
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "lowercase")]
-pub enum DesktopKind { Vnc, Rdp }
+pub enum DesktopKind {
+    Vnc,
+    Rdp,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
@@ -130,10 +175,15 @@ pub fn desktop_rdp_file(d: RemoteDesktop, host: String, port: i64) -> String {
     let mut lines = vec![
         format!("full address:s:{host}:{port}"),
         format!("screen mode id:i:{}", if d.full_screen { 2 } else { 1 }),
-        "prompt for credentials:i:1".into(), "redirectclipboard:i:1".into(), "audiomode:i:0".into(),
-        "use multimon:i:0".into(), "dynamic resolution:i:1".into(),
+        "prompt for credentials:i:1".into(),
+        "redirectclipboard:i:1".into(),
+        "audiomode:i:0".into(),
+        "use multimon:i:0".into(),
+        "dynamic resolution:i:1".into(),
     ];
-    if !d.user.is_empty() { lines.push(format!("username:s:{}", d.user)); }
+    if !d.user.is_empty() {
+        lines.push(format!("username:s:{}", d.user));
+    }
     // RD Gateway для mstsc: шлюз всегда, учётные данные шлюза — свои или те же, что у сервера.
     if let Some(g) = d.gateway_host.as_deref().filter(|g| !g.is_empty()) {
         lines.push(format!("gatewayhostname:s:{g}"));
@@ -141,7 +191,10 @@ pub fn desktop_rdp_file(d: RemoteDesktop, host: String, port: i64) -> String {
         lines.push("gatewayprofileusagemethod:i:1".into());
         lines.push(format!("promptcredentialonce:i:{}", if d.gateway_user.is_none() { 1 } else { 0 }));
         if let Some(u) = d.gateway_user.as_deref().filter(|u| !u.is_empty()) {
-            let full = match d.gateway_domain.as_deref().filter(|x| !x.is_empty()) { Some(dom) => format!("{dom}\\{u}"), None => u.to_string() };
+            let full = match d.gateway_domain.as_deref().filter(|x| !x.is_empty()) {
+                Some(dom) => format!("{dom}\\{u}"),
+                None => u.to_string(),
+            };
             lines.push(format!("gatewayusername:s:{full}"));
         }
     }
@@ -150,11 +203,15 @@ pub fn desktop_rdp_file(d: RemoteDesktop, host: String, port: i64) -> String {
 
 // MARK: - JSON-файлы
 
-pub fn decode_list<T: for<'de> Deserialize<'de>>(json: &str) -> Vec<T> { serde_json::from_str(json).unwrap_or_default() }
+pub fn decode_list<T: for<'de> Deserialize<'de>>(json: &str) -> Vec<T> {
+    serde_json::from_str(json).unwrap_or_default()
+}
 
 /// Пустой текст — пустой список; нечитаемый — ошибка, а не `[]`: иначе следующая запись затёрла бы файл пользователя.
 pub fn try_decode_list<T: for<'de> Deserialize<'de>>(json: &str) -> Result<Vec<T>, crate::error::CoreError> {
-    if json.trim().is_empty() { return Ok(Vec::new()); }
+    if json.trim().is_empty() {
+        return Ok(Vec::new());
+    }
     Ok(serde_json::from_str(json)?)
 }
 
@@ -163,7 +220,9 @@ pub fn encode_sorted<T: Serialize>(value: &T) -> String {
     let v = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
     let mut out = Vec::new();
     let mut ser = serde_json::Serializer::with_formatter(&mut out, SwiftPretty::default());
-    if sort_keys(v).serialize(&mut ser).is_err() { return String::new(); }
+    if sort_keys(v).serialize(&mut ser).is_err() {
+        return String::new();
+    }
     String::from_utf8(out).unwrap_or_default()
 }
 
@@ -172,15 +231,33 @@ pub fn encode_sorted<T: Serialize>(value: &T) -> String {
 struct SwiftPretty<'a>(serde_json::ser::PrettyFormatter<'a>);
 
 impl serde_json::ser::Formatter for SwiftPretty<'_> {
-    fn begin_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.begin_array(w) }
-    fn end_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_array(w) }
-    fn begin_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W, first: bool) -> std::io::Result<()> { self.0.begin_array_value(w, first) }
-    fn end_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_array_value(w) }
-    fn begin_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.begin_object(w) }
-    fn end_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_object(w) }
-    fn begin_object_key<W: ?Sized + std::io::Write>(&mut self, w: &mut W, first: bool) -> std::io::Result<()> { self.0.begin_object_key(w, first) }
-    fn begin_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { w.write_all(b" : ") }
-    fn end_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> { self.0.end_object_value(w) }
+    fn begin_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        self.0.begin_array(w)
+    }
+    fn end_array<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        self.0.end_array(w)
+    }
+    fn begin_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W, first: bool) -> std::io::Result<()> {
+        self.0.begin_array_value(w, first)
+    }
+    fn end_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        self.0.end_array_value(w)
+    }
+    fn begin_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        self.0.begin_object(w)
+    }
+    fn end_object<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        self.0.end_object(w)
+    }
+    fn begin_object_key<W: ?Sized + std::io::Write>(&mut self, w: &mut W, first: bool) -> std::io::Result<()> {
+        self.0.begin_object_key(w, first)
+    }
+    fn begin_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        w.write_all(b" : ")
+    }
+    fn end_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        self.0.end_object_value(w)
+    }
 }
 
 fn sort_keys(v: serde_json::Value) -> serde_json::Value {
@@ -196,23 +273,41 @@ fn sort_keys(v: serde_json::Value) -> serde_json::Value {
 }
 
 #[uniffi::export]
-pub fn snippets_decode(json: String) -> Vec<Snippet> { decode_list(&json) }
+pub fn snippets_decode(json: String) -> Vec<Snippet> {
+    decode_list(&json)
+}
 #[uniffi::export]
-pub fn snippets_encode(list: Vec<Snippet>) -> String { encode_sorted(&list) }
+pub fn snippets_encode(list: Vec<Snippet>) -> String {
+    encode_sorted(&list)
+}
 #[uniffi::export]
-pub fn tunnels_decode(json: String) -> Vec<Tunnel> { decode_list(&json) }
+pub fn tunnels_decode(json: String) -> Vec<Tunnel> {
+    decode_list(&json)
+}
 #[uniffi::export]
-pub fn tunnels_encode(list: Vec<Tunnel>) -> String { encode_sorted(&list) }
+pub fn tunnels_encode(list: Vec<Tunnel>) -> String {
+    encode_sorted(&list)
+}
 #[uniffi::export]
-pub fn desktops_decode(json: String) -> Vec<RemoteDesktop> { decode_list(&json) }
+pub fn desktops_decode(json: String) -> Vec<RemoteDesktop> {
+    decode_list(&json)
+}
 #[uniffi::export]
-pub fn snippets_decode_checked(json: String) -> Result<Vec<Snippet>, crate::error::CoreError> { try_decode_list(&json) }
+pub fn snippets_decode_checked(json: String) -> Result<Vec<Snippet>, crate::error::CoreError> {
+    try_decode_list(&json)
+}
 #[uniffi::export]
-pub fn tunnels_decode_checked(json: String) -> Result<Vec<Tunnel>, crate::error::CoreError> { try_decode_list(&json) }
+pub fn tunnels_decode_checked(json: String) -> Result<Vec<Tunnel>, crate::error::CoreError> {
+    try_decode_list(&json)
+}
 #[uniffi::export]
-pub fn desktops_decode_checked(json: String) -> Result<Vec<RemoteDesktop>, crate::error::CoreError> { try_decode_list(&json) }
+pub fn desktops_decode_checked(json: String) -> Result<Vec<RemoteDesktop>, crate::error::CoreError> {
+    try_decode_list(&json)
+}
 #[uniffi::export]
-pub fn desktops_encode(list: Vec<RemoteDesktop>) -> String { encode_sorted(&list) }
+pub fn desktops_encode(list: Vec<RemoteDesktop>) -> String {
+    encode_sorted(&list)
+}
 
 #[cfg(test)]
 mod tests {
@@ -270,17 +365,34 @@ pub struct RemoteFile {
 #[uniffi::export]
 pub fn sftp_parse_listing(output: String) -> Vec<RemoteFile> {
     let re = Regex::new(r"^([-dlcbps]\S*)\s+\S+\s+\S+\s+\S+\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s(.+)$").unwrap();
-    let mut files: Vec<RemoteFile> = output.lines().filter_map(|line| {
-        let c = re.captures(line)?;
-        let perms = c[1].to_string();
-        let mut name = c[6].to_string();
-        let first = perms.chars().next()?;
-        if first == 'l' { if let Some(i) = name.find(" -> ") { name.truncate(i); } }
-        if name == "." || name == ".." { return None; }
-        Some(RemoteFile { name, is_directory: first == 'd', is_link: first == 'l', size: c[2].parse().unwrap_or(0),
-                          permissions: perms, modified: format!("{} {} {}", &c[3], &c[4], &c[5]) })
-    }).collect();
-    files.sort_by(|a, b| b.is_directory.cmp(&a.is_directory).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    let mut files: Vec<RemoteFile> = output
+        .lines()
+        .filter_map(|line| {
+            let c = re.captures(line)?;
+            let perms = c[1].to_string();
+            let mut name = c[6].to_string();
+            let first = perms.chars().next()?;
+            if first == 'l' {
+                if let Some(i) = name.find(" -> ") {
+                    name.truncate(i);
+                }
+            }
+            if name == "." || name == ".." {
+                return None;
+            }
+            Some(RemoteFile {
+                name,
+                is_directory: first == 'd',
+                is_link: first == 'l',
+                size: c[2].parse().unwrap_or(0),
+                permissions: perms,
+                modified: format!("{} {} {}", &c[3], &c[4], &c[5]),
+            })
+        })
+        .collect();
+    files.sort_by(|a, b| {
+        b.is_directory.cmp(&a.is_directory).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
     files
 }
 

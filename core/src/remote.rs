@@ -10,8 +10,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ironrdp::cliprdr::backend::CliprdrBackend;
-use ironrdp::cliprdr::pdu::{ClipboardFormat, ClipboardFormatId, ClipboardGeneralCapabilityFlags, FileContentsRequest,
-                            FileContentsResponse, FormatDataRequest, FormatDataResponse, LockDataId, OwnedFormatDataResponse};
+use ironrdp::cliprdr::pdu::{
+    ClipboardFormat, ClipboardFormatId, ClipboardGeneralCapabilityFlags, FileContentsRequest, FileContentsResponse,
+    FormatDataRequest, FormatDataResponse, LockDataId, OwnedFormatDataResponse,
+};
 use ironrdp::cliprdr::CliprdrClient;
 use ironrdp::connector::connection_activation::ConnectionActivationState;
 use ironrdp::connector::{self, ConnectorErrorKind, Credentials, Sequence as _};
@@ -67,13 +69,29 @@ pub struct RdpConfig {
 
 /// Изменившийся прямоугольник экрана, пиксели BGRA построчно без отступов.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct FrameRect { pub x: u16, pub y: u16, pub width: u16, pub height: u16, pub bgra: Vec<u8> }
+pub struct FrameRect {
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    pub height: u16,
+    pub bgra: Vec<u8>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum RemoteCloseKind { AuthFailed, Network, ServerClosed, CertRejected, Protocol, ClosedByUser }
+pub enum RemoteCloseKind {
+    AuthFailed,
+    Network,
+    ServerClosed,
+    CertRejected,
+    Protocol,
+    ClosedByUser,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct RemoteClose { pub kind: RemoteCloseKind, pub message: String }
+pub struct RemoteClose {
+    pub kind: RemoteCloseKind,
+    pub message: String,
+}
 
 /// События сессии — из потока сессии; клиент переносит их в UI-поток сам.
 #[uniffi::export(with_foreign)]
@@ -97,7 +115,11 @@ pub trait RemoteClipboardListener: Send + Sync {
 
 /// PCM-формат звука: всегда несжатый little-endian, сервер получает в предложении только PCM.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
-pub struct AudioFormat { pub sample_rate: u32, pub channels: u16, pub bits_per_sample: u16 }
+pub struct AudioFormat {
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub bits_per_sample: u16,
+}
 
 /// Звук удалённой машины (RDPSND). Необязательный слушатель: `RemoteSession::set_audio_listener` до `connect`;
 /// без него звук сервер не присылает. Воспроизведение, громкость и отключение — на стороне клиента.
@@ -123,33 +145,55 @@ struct Audio {
 /// `Arc<dyn RemoteAudioListener>` без Debug — обёртка для требований IronRDP.
 struct ListenerBox(Arc<dyn RemoteAudioListener>);
 impl std::fmt::Debug for ListenerBox {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str("RemoteAudioListener") }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RemoteAudioListener")
+    }
 }
 
 impl Audio {
     fn new(listener: Arc<dyn RemoteAudioListener>) -> Self {
-        let formats = PCM_OFFER.iter().map(|&(rate, ch)| {
-            let block = ch * 2;
-            ironrdp::rdpsnd::pdu::AudioFormat {
-                format: ironrdp::rdpsnd::pdu::WaveFormat::PCM, n_channels: ch, n_samples_per_sec: rate,
-                n_avg_bytes_per_sec: rate * u32::from(block), n_block_align: block, bits_per_sample: 16, data: None,
-            }
-        }).collect();
+        let formats = PCM_OFFER
+            .iter()
+            .map(|&(rate, ch)| {
+                let block = ch * 2;
+                ironrdp::rdpsnd::pdu::AudioFormat {
+                    format: ironrdp::rdpsnd::pdu::WaveFormat::PCM,
+                    n_channels: ch,
+                    n_samples_per_sec: rate,
+                    n_avg_bytes_per_sec: rate * u32::from(block),
+                    n_block_align: block,
+                    bits_per_sample: 16,
+                    data: None,
+                }
+            })
+            .collect();
         Audio { formats, listener: ListenerBox(listener) }
     }
 }
 
 impl ironrdp::rdpsnd::client::RdpsndClientHandler for Audio {
-    fn get_formats(&self) -> &[ironrdp::rdpsnd::pdu::AudioFormat] { &self.formats }
+    fn get_formats(&self) -> &[ironrdp::rdpsnd::pdu::AudioFormat] {
+        &self.formats
+    }
     fn wave(&mut self, format_no: usize, ts: u32, data: std::borrow::Cow<'_, [u8]>) {
         let Some(f) = self.formats.get(format_no) else { return };
-        if f.format != ironrdp::rdpsnd::pdu::WaveFormat::PCM { return; }
-        let format = AudioFormat { sample_rate: f.n_samples_per_sec, channels: f.n_channels, bits_per_sample: f.bits_per_sample };
+        if f.format != ironrdp::rdpsnd::pdu::WaveFormat::PCM {
+            return;
+        }
+        let format = AudioFormat {
+            sample_rate: f.n_samples_per_sec,
+            channels: f.n_channels,
+            bits_per_sample: f.bits_per_sample,
+        };
         self.listener.0.on_audio(format, ts, data.into_owned());
     }
-    fn set_volume(&mut self, v: ironrdp::rdpsnd::pdu::VolumePdu) { self.listener.0.on_audio_volume(v.volume_left, v.volume_right); }
+    fn set_volume(&mut self, v: ironrdp::rdpsnd::pdu::VolumePdu) {
+        self.listener.0.on_audio_volume(v.volume_left, v.volume_right);
+    }
     fn set_pitch(&mut self, _: ironrdp::rdpsnd::pdu::PitchPdu) {}
-    fn close(&mut self) { self.listener.0.on_audio_closed(); }
+    fn close(&mut self) {
+        self.listener.0.on_audio_closed();
+    }
 }
 
 enum Cmd {
@@ -173,25 +217,43 @@ enum Clip {
 }
 
 #[derive(Debug)]
-struct TextClipboard { events: Sender<Clip> }
+struct TextClipboard {
+    events: Sender<Clip>,
+}
 
 impl ironrdp::core::AsAny for TextClipboard {
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 impl CliprdrBackend for TextClipboard {
-    fn temporary_directory(&self) -> &str { "" }
-    fn client_capabilities(&self) -> ClipboardGeneralCapabilityFlags { ClipboardGeneralCapabilityFlags::empty() }
-    fn on_ready(&mut self) { let _ = self.events.send(Clip::Advertise); }
-    fn on_request_format_list(&mut self) { let _ = self.events.send(Clip::Advertise); }
+    fn temporary_directory(&self) -> &str {
+        ""
+    }
+    fn client_capabilities(&self) -> ClipboardGeneralCapabilityFlags {
+        ClipboardGeneralCapabilityFlags::empty()
+    }
+    fn on_ready(&mut self) {
+        let _ = self.events.send(Clip::Advertise);
+    }
+    fn on_request_format_list(&mut self) {
+        let _ = self.events.send(Clip::Advertise);
+    }
     fn on_process_negotiated_capabilities(&mut self, _: ClipboardGeneralCapabilityFlags) {}
     fn on_remote_copy(&mut self, formats: &[ClipboardFormat]) {
         let _ = self.events.send(Clip::RemoteCopy(formats.iter().any(|f| f.id == ClipboardFormatId::CF_UNICODETEXT)));
     }
-    fn on_format_data_request(&mut self, request: FormatDataRequest) { let _ = self.events.send(Clip::DataRequest(request.format)); }
+    fn on_format_data_request(&mut self, request: FormatDataRequest) {
+        let _ = self.events.send(Clip::DataRequest(request.format));
+    }
     fn on_format_data_response(&mut self, response: FormatDataResponse<'_>) {
-        if let Ok(text) = response.to_unicode_string() { let _ = self.events.send(Clip::Data(text)); }
+        if let Ok(text) = response.to_unicode_string() {
+            let _ = self.events.send(Clip::Data(text));
+        }
     }
     // Файлы через буфер обмена — не на этом этапе.
     fn on_file_contents_request(&mut self, _: FileContentsRequest) {}
@@ -217,37 +279,61 @@ pub struct RemoteSession {
 impl RemoteSession {
     #[uniffi::constructor]
     pub fn rdp(config: RdpConfig, listener: Arc<dyn RemoteListener>) -> Arc<Self> {
-        Arc::new(RemoteSession { config, listener, commands: Mutex::new(None), cert_answer: Mutex::new(None), clipboard: Mutex::new(None), audio: Mutex::new(None),
-                                 #[cfg(feature = "rdp-freerdp")] native: Mutex::new(None) })
+        Arc::new(RemoteSession {
+            config,
+            listener,
+            commands: Mutex::new(None),
+            cert_answer: Mutex::new(None),
+            clipboard: Mutex::new(None),
+            audio: Mutex::new(None),
+            #[cfg(feature = "rdp-freerdp")]
+            native: Mutex::new(None),
+        })
     }
 
     /// Запустить сессию в своём потоке. Повторный вызов ничего не делает.
     pub fn connect(self: Arc<Self>) {
         #[cfg(feature = "rdp-freerdp")]
-        { crate::remote_freerdp::connect(self); return; }
+        {
+            crate::remote_freerdp::connect(self);
+            return;
+        }
         #[allow(unreachable_code)]
         let mut slot = self.commands.lock().unwrap();
-        if slot.is_some() { return; }
+        if slot.is_some() {
+            return;
+        }
         let (tx, rx) = mpsc::channel();
         *slot = Some(tx);
         drop(slot);
         let me = self.clone();
-        std::thread::Builder::new().name("relaya-rdp".into()).spawn(move || {
-            let close = me.run(rx).err().unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
-            me.listener.on_closed(close);
-        }).ok();
+        std::thread::Builder::new()
+            .name("relaya-rdp".into())
+            .spawn(move || {
+                let close = me
+                    .run(rx)
+                    .err()
+                    .unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
+                me.listener.on_closed(close);
+            })
+            .ok();
     }
 
     /// Ответ на `on_cert`.
     pub fn accept_cert(&self, accept: bool) {
-        if let Some(tx) = self.cert_answer.lock().unwrap().take() { let _ = tx.send(accept); }
+        if let Some(tx) = self.cert_answer.lock().unwrap().take() {
+            let _ = tx.send(accept);
+        }
     }
 
     /// Клавиша по scancode набора 1; расширенные — с префиксом 0xE0 (например 0xE04B — стрелка влево).
     pub fn key(&self, scancode: u16, down: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.key(scancode, down); return; }
-       
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.key(scancode, down);
+            return;
+        }
+
         let s = Scancode::from_u16(scancode);
         self.send(Cmd::Input(vec![if down { Operation::KeyPressed(s) } else { Operation::KeyReleased(s) }]));
     }
@@ -255,32 +341,63 @@ impl RemoteSession {
     /// Символ, которого нет в раскладке сервера (IME, эмодзи).
     pub fn unicode(&self, codepoint: u32, down: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.unicode(codepoint, down); return; }
-       
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.unicode(codepoint, down);
+            return;
+        }
+
         let Some(c) = char::from_u32(codepoint) else { return };
-        self.send(Cmd::Input(vec![if down { Operation::UnicodeKeyPressed(c) } else { Operation::UnicodeKeyReleased(c) }]));
+        self.send(Cmd::Input(vec![if down {
+            Operation::UnicodeKeyPressed(c)
+        } else {
+            Operation::UnicodeKeyReleased(c)
+        }]));
     }
 
     pub fn pointer(&self, x: u16, y: u16) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.pointer(x, y); return; }
-        self.send(Cmd::Input(vec![Operation::MouseMove(MousePosition { x, y })])); }
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.pointer(x, y);
+            return;
+        }
+        self.send(Cmd::Input(vec![Operation::MouseMove(MousePosition { x, y })]));
+    }
 
     /// Кнопка мыши: 0 — левая, 1 — средняя, 2 — правая, 3 и 4 — «назад» и «вперёд».
     pub fn button(&self, button: u8, down: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.button(button, down); return; }
-       
-        let b = match button { 0 => MouseButton::Left, 1 => MouseButton::Middle, 2 => MouseButton::Right, 3 => MouseButton::X1, 4 => MouseButton::X2, _ => return };
-        self.send(Cmd::Input(vec![if down { Operation::MouseButtonPressed(b) } else { Operation::MouseButtonReleased(b) }]));
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.button(button, down);
+            return;
+        }
+
+        let b = match button {
+            0 => MouseButton::Left,
+            1 => MouseButton::Middle,
+            2 => MouseButton::Right,
+            3 => MouseButton::X1,
+            4 => MouseButton::X2,
+            _ => return,
+        };
+        self.send(Cmd::Input(vec![if down {
+            Operation::MouseButtonPressed(b)
+        } else {
+            Operation::MouseButtonReleased(b)
+        }]));
     }
 
     /// Колесо: `units` — как WHEEL_DELTA (120 на щелчок), положительное — вверх/вправо.
     pub fn wheel(&self, units: i16, vertical: bool) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.wheel(units, vertical); return; }
-       
-        self.send(Cmd::Input(vec![Operation::WheelRotations(WheelRotations { is_vertical: vertical, rotation_units: units })]));
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.wheel(units, vertical);
+            return;
+        }
+
+        self.send(Cmd::Input(vec![Operation::WheelRotations(WheelRotations {
+            is_vertical: vertical,
+            rotation_units: units,
+        })]));
     }
 
     /// Получать текст, скопированный на удалённой машине. Без слушателя буфер обмена только отдаётся серверу.
@@ -296,24 +413,36 @@ impl RemoteSession {
     /// Текст из локального буфера обмена: станет доступен для вставки на удалённой машине.
     pub fn set_clipboard(&self, text: String) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.set_clipboard(&text); return; }
-        self.send(Cmd::Clipboard(text)); }
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.set_clipboard(&text);
+            return;
+        }
+        self.send(Cmd::Clipboard(text));
+    }
 
     /// Новый размер окна: через Display Control, если сервер его поддерживает.
     pub fn resize(&self, width: u16, height: u16) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.resize(width, height); return; }
-        self.send(Cmd::Resize(width, height)); }
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.resize(width, height);
+            return;
+        }
+        self.send(Cmd::Resize(width, height));
+    }
 
     pub fn disconnect(&self) {
         #[cfg(feature = "rdp-freerdp")]
-        if let Some(n) = self.native.lock().unwrap().as_ref() { n.disconnect(); }
+        if let Some(n) = self.native.lock().unwrap().as_ref() {
+            n.disconnect();
+        }
         self.send(Cmd::Disconnect);
         self.accept_cert(false);
     }
 }
 
-fn close(kind: RemoteCloseKind, message: impl ToString) -> RemoteClose { RemoteClose { kind, message: message.to_string() } }
+fn close(kind: RemoteCloseKind, message: impl ToString) -> RemoteClose {
+    RemoteClose { kind, message: message.to_string() }
+}
 
 fn connector_close(e: connector::ConnectorError) -> RemoteClose {
     let kind = match e.kind() {
@@ -345,14 +474,21 @@ fn crop(image: &DecodedImage, r: &InclusiveRectangle) -> FrameRect {
 }
 
 fn full(image: &DecodedImage) -> InclusiveRectangle {
-    InclusiveRectangle { left: 0, top: 0, right: image.width().saturating_sub(1), bottom: image.height().saturating_sub(1) }
+    InclusiveRectangle {
+        left: 0,
+        top: 0,
+        right: image.width().saturating_sub(1),
+        bottom: image.height().saturating_sub(1),
+    }
 }
 
 /// Объединить пересекающиеся и соседние прямоугольники, чтобы не гонять через FFI сотни мелких.
 pub(crate) fn coalesce(mut rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRectangle> {
     let touches = |a: &InclusiveRectangle, b: &InclusiveRectangle| {
-        a.left <= b.right.saturating_add(1) && b.left <= a.right.saturating_add(1)
-            && a.top <= b.bottom.saturating_add(1) && b.top <= a.bottom.saturating_add(1)
+        a.left <= b.right.saturating_add(1)
+            && b.left <= a.right.saturating_add(1)
+            && a.top <= b.bottom.saturating_add(1)
+            && b.top <= a.bottom.saturating_add(1)
     };
     let mut out: Vec<InclusiveRectangle> = Vec::new();
     while let Some(mut r) = rects.pop() {
@@ -361,7 +497,12 @@ pub(crate) fn coalesce(mut rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRecta
             merged = false;
             if let Some(i) = out.iter().position(|o| touches(o, &r)) {
                 let o = out.swap_remove(i);
-                r = InclusiveRectangle { left: r.left.min(o.left), top: r.top.min(o.top), right: r.right.max(o.right), bottom: r.bottom.max(o.bottom) };
+                r = InclusiveRectangle {
+                    left: r.left.min(o.left),
+                    top: r.top.min(o.top),
+                    right: r.right.max(o.right),
+                    bottom: r.bottom.max(o.bottom),
+                };
                 merged = true;
             }
         }
@@ -373,8 +514,14 @@ pub(crate) fn coalesce(mut rects: Vec<InclusiveRectangle>) -> Vec<InclusiveRecta
 /// CredSSP без Kerberos: NTLM не ходит в сеть, а KDC мы не настраиваем.
 struct NoNetwork;
 impl ironrdp::connector::sspi::network_client::NetworkClient for NoNetwork {
-    fn send(&self, _: &ironrdp::connector::sspi::generator::NetworkRequest) -> ironrdp::connector::sspi::Result<Vec<u8>> {
-        Err(ironrdp::connector::sspi::Error::new(ironrdp::connector::sspi::ErrorKind::NoAuthenticatingAuthority, "Kerberos KDC is not configured"))
+    fn send(
+        &self,
+        _: &ironrdp::connector::sspi::generator::NetworkRequest,
+    ) -> ironrdp::connector::sspi::Result<Vec<u8>> {
+        Err(ironrdp::connector::sspi::Error::new(
+            ironrdp::connector::sspi::ErrorKind::NoAuthenticatingAuthority,
+            "Kerberos KDC is not configured",
+        ))
     }
 }
 
@@ -382,20 +529,32 @@ impl RemoteSession {
     /// Доверять ли сертификату: совпал с сохранённым отпечатком — да; иначе спросить клиента и ждать `accept_cert`.
     /// Ждёт поток сессии, а не поток FFI.
     pub(crate) fn ask_cert(&self, sha256: String, subject: String) -> bool {
-        if self.config.trusted_cert_sha256.as_deref().map(|t| t.eq_ignore_ascii_case(&sha256)) == Some(true) { return true; }
+        if self.config.trusted_cert_sha256.as_deref().map(|t| t.eq_ignore_ascii_case(&sha256)) == Some(true) {
+            return true;
+        }
         let (tx, rx) = mpsc::channel();
         *self.cert_answer.lock().unwrap() = Some(tx);
         self.listener.on_cert(sha256, subject);
         matches!(rx.recv_timeout(CERT_TIMEOUT), Ok(true))
     }
 
-    pub(crate) fn config(&self) -> &RdpConfig { &self.config }
-    pub(crate) fn listener(&self) -> &Arc<dyn RemoteListener> { &self.listener }
-    pub(crate) fn clipboard_listener(&self) -> Option<Arc<dyn RemoteClipboardListener>> { self.clipboard.lock().unwrap().clone() }
-    pub(crate) fn audio_listener(&self) -> Option<Arc<dyn RemoteAudioListener>> { self.audio.lock().unwrap().clone() }
+    pub(crate) fn config(&self) -> &RdpConfig {
+        &self.config
+    }
+    pub(crate) fn listener(&self) -> &Arc<dyn RemoteListener> {
+        &self.listener
+    }
+    pub(crate) fn clipboard_listener(&self) -> Option<Arc<dyn RemoteClipboardListener>> {
+        self.clipboard.lock().unwrap().clone()
+    }
+    pub(crate) fn audio_listener(&self) -> Option<Arc<dyn RemoteAudioListener>> {
+        self.audio.lock().unwrap().clone()
+    }
 
     fn send(&self, cmd: Cmd) {
-        if let Some(tx) = self.commands.lock().unwrap().as_ref() { let _ = tx.send(cmd); }
+        if let Some(tx) = self.commands.lock().unwrap().as_ref() {
+            let _ = tx.send(cmd);
+        }
     }
 
     fn connector_config(&self) -> connector::Config {
@@ -443,23 +602,35 @@ impl RemoteSession {
     fn tls(&self, stream: TcpStream) -> Result<(Tls, Vec<u8>), RemoteClose> {
         let provider = Arc::new(rustls::crypto::ring::default_provider());
         let mut config = rustls::ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions().map_err(|e| close(RemoteCloseKind::Protocol, e))?
-            .dangerous().with_custom_certificate_verifier(Arc::new(danger::AcceptAny))
+            .with_safe_default_protocol_versions()
+            .map_err(|e| close(RemoteCloseKind::Protocol, e))?
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(danger::AcceptAny))
             .with_no_client_auth();
         // CredSSP не поддерживает возобновление TLS-сессии.
         config.resumption = rustls::client::Resumption::disabled();
         let name = rustls::pki_types::ServerName::try_from(self.config.host.clone())
             .map_err(|e| close(RemoteCloseKind::Network, e))?;
-        let conn = rustls::ClientConnection::new(Arc::new(config), name).map_err(|e| close(RemoteCloseKind::Protocol, e))?;
+        let conn =
+            rustls::ClientConnection::new(Arc::new(config), name).map_err(|e| close(RemoteCloseKind::Protocol, e))?;
         let mut tls = rustls::StreamOwned::new(conn, stream);
         tls.flush().map_err(|e| close(RemoteCloseKind::Network, e))?;
-        let cert = tls.conn.peer_certificates().and_then(|c| c.first()).map(|c| c.as_ref().to_vec())
+        let cert = tls
+            .conn
+            .peer_certificates()
+            .and_then(|c| c.first())
+            .map(|c| c.as_ref().to_vec())
             .ok_or_else(|| close(RemoteCloseKind::Protocol, "server sent no certificate"))?;
 
         use x509_cert::der::Decode as _;
         let parsed = x509_cert::Certificate::from_der(&cert).map_err(|e| close(RemoteCloseKind::Protocol, e))?;
-        let public_key = parsed.tbs_certificate.subject_public_key_info.subject_public_key.as_bytes()
-            .ok_or_else(|| close(RemoteCloseKind::Protocol, "bad server public key"))?.to_vec();
+        let public_key = parsed
+            .tbs_certificate
+            .subject_public_key_info
+            .subject_public_key
+            .as_bytes()
+            .ok_or_else(|| close(RemoteCloseKind::Protocol, "bad server public key"))?
+            .to_vec();
 
         if !self.ask_cert(sha256_hex(&cert), parsed.tbs_certificate.subject.to_string()) {
             return Err(close(RemoteCloseKind::CertRejected, "certificate not accepted"));
@@ -470,9 +641,13 @@ impl RemoteSession {
     fn run(&self, commands: Receiver<Cmd>) -> Result<(), RemoteClose> {
         use std::net::ToSocketAddrs as _;
         let c = &self.config;
-        let addr = (c.host.as_str(), c.port).to_socket_addrs().map_err(|e| close(RemoteCloseKind::Network, e))?
-            .next().ok_or_else(|| close(RemoteCloseKind::Network, "address not found"))?;
-        let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(15)).map_err(|e| close(RemoteCloseKind::Network, e))?;
+        let addr = (c.host.as_str(), c.port)
+            .to_socket_addrs()
+            .map_err(|e| close(RemoteCloseKind::Network, e))?
+            .next()
+            .ok_or_else(|| close(RemoteCloseKind::Network, "address not found"))?;
+        let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(15))
+            .map_err(|e| close(RemoteCloseKind::Network, e))?;
         tcp.set_read_timeout(Some(Duration::from_secs(30))).ok();
         let client_addr = tcp.local_addr().map_err(|e| close(RemoteCloseKind::Network, e))?;
 
@@ -491,8 +666,16 @@ impl RemoteSession {
         let (tls, public_key) = self.tls(framed.into_inner_no_leftover())?;
         let upgraded = ironrdp_blocking::mark_as_upgraded(should_upgrade, &mut connector);
         let mut framed = ironrdp_blocking::Framed::new(tls);
-        let result = ironrdp_blocking::connect_finalize(upgraded, connector, &mut framed, &mut NoNetwork,
-                                                        c.host.clone().into(), public_key, None).map_err(connector_close)?;
+        let result = ironrdp_blocking::connect_finalize(
+            upgraded,
+            connector,
+            &mut framed,
+            &mut NoNetwork,
+            c.host.clone().into(),
+            public_key,
+            None,
+        )
+        .map_err(connector_close)?;
 
         let mut image = DecodedImage::new(PixelFormat::BgrA32, result.desktop_size.width, result.desktop_size.height);
         let activation = result.activation_factory;
@@ -505,7 +688,8 @@ impl RemoteSession {
             compression_type: result.compression_type,
             enable_server_pointer: result.enable_server_pointer,
             pointer_software_rendering: result.pointer_software_rendering,
-        }.build();
+        }
+        .build();
         self.listener.on_connected(image.width(), image.height());
         self.listener.on_frame(vec![crop(&image, &full(&image))]);
 
@@ -526,24 +710,35 @@ impl RemoteSession {
                         outputs.extend(stage.process_fastpath_input(&mut image, &events).map_err(proto)?);
                     }
                     Cmd::Resize(w, h) => {
-                        let (w, h) = ironrdp::displaycontrol::pdu::MonitorLayoutEntry::adjust_display_size(u32::from(w), u32::from(h));
+                        let (w, h) = ironrdp::displaycontrol::pdu::MonitorLayoutEntry::adjust_display_size(
+                            u32::from(w),
+                            u32::from(h),
+                        );
                         let scale = (c.scale_percent > 100).then_some(c.scale_percent);
-                        if let Some(frame) = stage.encode_resize(w, h, scale, None) { framed.write_all(&frame.map_err(proto)?).map_err(net)?; }
+                        if let Some(frame) = stage.encode_resize(w, h, scale, None) {
+                            framed.write_all(&frame.map_err(proto)?).map_err(net)?;
+                        }
                     }
                     Cmd::Clipboard(text) => {
                         local_text = Some(text);
-                        if let Some(f) = self.advertise(&mut stage).map_err(proto)? { framed.write_all(&f).map_err(net)?; }
+                        if let Some(f) = self.advertise(&mut stage).map_err(proto)? {
+                            framed.write_all(&f).map_err(net)?;
+                        }
                     }
                     Cmd::Disconnect => {
                         for out in stage.graceful_shutdown().map_err(proto)? {
-                            if let ActiveStageOutput::ResponseFrame(f) = out { let _ = framed.write_all(&f); }
+                            if let ActiveStageOutput::ResponseFrame(f) = out {
+                                let _ = framed.write_all(&f);
+                            }
                         }
                         return Ok(());
                     }
                 }
             }
             while let Ok(ev) = clip_rx.try_recv() {
-                if let Some(f) = self.clip_event(&mut stage, ev, local_text.as_deref()).map_err(proto)? { framed.write_all(&f).map_err(net)?; }
+                if let Some(f) = self.clip_event(&mut stage, ev, local_text.as_deref()).map_err(proto)? {
+                    framed.write_all(&f).map_err(net)?;
+                }
             }
             match framed.read_pdu() {
                 Ok((action, payload)) => outputs.extend(stage.process(&mut image, action, &payload).map_err(proto)?),
@@ -554,7 +749,9 @@ impl RemoteSession {
                 match out {
                     ActiveStageOutput::ResponseFrame(f) => framed.write_all(&f).map_err(net)?,
                     ActiveStageOutput::GraphicsUpdate(r) => dirty.push(r),
-                    ActiveStageOutput::Terminate(reason) => return Err(close(RemoteCloseKind::ServerClosed, reason.description())),
+                    ActiveStageOutput::Terminate(reason) => {
+                        return Err(close(RemoteCloseKind::ServerClosed, reason.description()))
+                    }
                     ActiveStageOutput::DeactivateAll => {
                         self.reactivate(&mut framed, &activation, &mut stage, &mut image)?;
                         dirty.clear();
@@ -574,57 +771,87 @@ impl RemoteSession {
     /// Объявить серверу, что у нас в буфере обмена есть текст.
     fn advertise(&self, stage: &mut ActiveStage) -> ironrdp::session::SessionResult<Option<Vec<u8>>> {
         let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { return Ok(None) };
-        let msgs = c.initiate_copy(&[ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)])
+        let msgs = c
+            .initiate_copy(&[ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)])
             .map_err(ironrdp::session::SessionError::pdu)?;
         stage.process_svc_processor_messages(msgs).map(Some)
     }
 
-    fn clip_event(&self, stage: &mut ActiveStage, ev: Clip, local: Option<&str>) -> ironrdp::session::SessionResult<Option<Vec<u8>>> {
+    fn clip_event(
+        &self,
+        stage: &mut ActiveStage,
+        ev: Clip,
+        local: Option<&str>,
+    ) -> ironrdp::session::SessionResult<Option<Vec<u8>>> {
         match ev {
-            Clip::Advertise => if local.is_some() { self.advertise(stage) } else { Ok(None) },
+            Clip::Advertise => {
+                if local.is_some() {
+                    self.advertise(stage)
+                } else {
+                    Ok(None)
+                }
+            }
             Clip::RemoteCopy(has_text) => {
                 // Текст забираем сразу, только если клиент его ждёт.
-                if !has_text || self.clipboard.lock().unwrap().is_none() { return Ok(None); }
+                if !has_text || self.clipboard.lock().unwrap().is_none() {
+                    return Ok(None);
+                }
                 let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { return Ok(None) };
-                let msgs = c.initiate_paste(ClipboardFormatId::CF_UNICODETEXT)
-                    .map_err(ironrdp::session::SessionError::pdu)?;
+                let msgs =
+                    c.initiate_paste(ClipboardFormatId::CF_UNICODETEXT).map_err(ironrdp::session::SessionError::pdu)?;
                 stage.process_svc_processor_messages(msgs).map(Some)
             }
             Clip::DataRequest(format) => {
                 let Some(c) = stage.get_svc_processor_mut::<CliprdrClient>() else { return Ok(None) };
                 let response: OwnedFormatDataResponse = match (format, local) {
-                    (ClipboardFormatId::CF_UNICODETEXT, Some(t)) => FormatDataResponse::new_unicode_string(t).into_owned(),
+                    (ClipboardFormatId::CF_UNICODETEXT, Some(t)) => {
+                        FormatDataResponse::new_unicode_string(t).into_owned()
+                    }
                     _ => FormatDataResponse::new_error(),
                 };
                 let msgs = c.submit_format_data(response).map_err(ironrdp::session::SessionError::pdu)?;
                 stage.process_svc_processor_messages(msgs).map(Some)
             }
             Clip::Data(text) => {
-                if let Some(l) = self.clipboard.lock().unwrap().clone() { l.on_remote_clipboard(text.trim_end_matches('\0').to_string()); }
+                if let Some(l) = self.clipboard.lock().unwrap().clone() {
+                    l.on_remote_clipboard(text.trim_end_matches('\0').to_string());
+                }
                 Ok(None)
             }
         }
     }
 
     /// Server Deactivate All: заново пройти активацию и пересоздать буфер под новый размер.
-    fn reactivate(&self, framed: &mut Framed, factory: &connector::connection_activation::ConnectionActivationFactory, stage: &mut ActiveStage,
-                  image: &mut DecodedImage) -> Result<(), RemoteClose> {
+    fn reactivate(
+        &self,
+        framed: &mut Framed,
+        factory: &connector::connection_activation::ConnectionActivationFactory,
+        stage: &mut ActiveStage,
+        image: &mut DecodedImage,
+    ) -> Result<(), RemoteClose> {
         let mut seq = factory.create();
         let mut buf = WriteBuf::new();
         let net = |e: std::io::Error| close(RemoteCloseKind::Network, e);
         loop {
-            if let ConnectionActivationState::Finalized { desktop_size, share_id, enable_server_pointer, pointer_software_rendering } =
-                seq.connection_activation_state()
+            if let ConnectionActivationState::Finalized {
+                desktop_size,
+                share_id,
+                enable_server_pointer,
+                pointer_software_rendering,
+            } = seq.connection_activation_state()
             {
                 *image = DecodedImage::new(PixelFormat::BgrA32, desktop_size.width, desktop_size.height);
-                stage.set_fastpath_processor(fast_path::ProcessorBuilder {
-                    io_channel_id: seq.io_channel_id(),
-                    user_channel_id: seq.user_channel_id(),
-                    share_id,
-                    enable_server_pointer,
-                    pointer_software_rendering,
-                    bulk_decompressor: None,
-                }.build());
+                stage.set_fastpath_processor(
+                    fast_path::ProcessorBuilder {
+                        io_channel_id: seq.io_channel_id(),
+                        user_channel_id: seq.user_channel_id(),
+                        share_id,
+                        enable_server_pointer,
+                        pointer_software_rendering,
+                        bulk_decompressor: None,
+                    }
+                    .build(),
+                );
                 stage.set_share_id(share_id);
                 stage.set_enable_server_pointer(enable_server_pointer);
                 self.listener.on_resize(image.width(), image.height());
@@ -636,7 +863,14 @@ impl RemoteSession {
                     let pdu = loop {
                         match framed.read_by_hint(hint) {
                             Ok(p) => break p,
-                            Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => continue,
+                            Err(e)
+                                if matches!(
+                                    e.kind(),
+                                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                                ) =>
+                            {
+                                continue
+                            }
                             Err(e) => return Err(net(e)),
                         }
                     };
@@ -644,7 +878,9 @@ impl RemoteSession {
                 }
                 None => seq.step_no_input(&mut buf).map_err(connector_close)?,
             };
-            if let Some(n) = written.size() { framed.write_all(&buf[..n]).map_err(net)?; }
+            if let Some(n) = written.size() {
+                framed.write_all(&buf[..n]).map_err(net)?;
+            }
         }
     }
 }
@@ -658,14 +894,32 @@ mod danger {
     pub(super) struct AcceptAny;
 
     impl ServerCertVerifier for AcceptAny {
-        fn verify_server_cert(&self, _: &pki_types::CertificateDer<'_>, _: &[pki_types::CertificateDer<'_>],
-                              _: &pki_types::ServerName<'_>, _: &[u8], _: pki_types::UnixTime) -> Result<ServerCertVerified, Error> {
+        fn verify_server_cert(
+            &self,
+            _: &pki_types::CertificateDer<'_>,
+            _: &[pki_types::CertificateDer<'_>],
+            _: &pki_types::ServerName<'_>,
+            _: &[u8],
+            _: pki_types::UnixTime,
+        ) -> Result<ServerCertVerified, Error> {
             Ok(ServerCertVerified::assertion())
         }
-        fn verify_tls12_signature(&self, _: &[u8], _: &pki_types::CertificateDer<'_>, _: &DigitallySignedStruct)
-            -> Result<HandshakeSignatureValid, Error> { Ok(HandshakeSignatureValid::assertion()) }
-        fn verify_tls13_signature(&self, _: &[u8], _: &pki_types::CertificateDer<'_>, _: &DigitallySignedStruct)
-            -> Result<HandshakeSignatureValid, Error> { Ok(HandshakeSignatureValid::assertion()) }
+        fn verify_tls12_signature(
+            &self,
+            _: &[u8],
+            _: &pki_types::CertificateDer<'_>,
+            _: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+        fn verify_tls13_signature(
+            &self,
+            _: &[u8],
+            _: &pki_types::CertificateDer<'_>,
+            _: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
         fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
             rustls::crypto::ring::default_provider().signature_verification_algorithms.supported_schemes()
         }
@@ -676,7 +930,9 @@ mod danger {
 mod tests {
     use super::*;
 
-    fn r(l: u16, t: u16, rt: u16, b: u16) -> InclusiveRectangle { InclusiveRectangle { left: l, top: t, right: rt, bottom: b } }
+    fn r(l: u16, t: u16, rt: u16, b: u16) -> InclusiveRectangle {
+        InclusiveRectangle { left: l, top: t, right: rt, bottom: b }
+    }
 
     #[test]
     fn coalesces_touching_rects_only() {
@@ -701,17 +957,25 @@ mod tests {
         use ironrdp::rdpsnd::client::RdpsndClientHandler as _;
         struct A(Mutex<Vec<(AudioFormat, usize)>>);
         impl RemoteAudioListener for A {
-            fn on_audio(&self, f: AudioFormat, _: u32, pcm: Vec<u8>) { self.0.lock().unwrap().push((f, pcm.len())); }
+            fn on_audio(&self, f: AudioFormat, _: u32, pcm: Vec<u8>) {
+                self.0.lock().unwrap().push((f, pcm.len()));
+            }
             fn on_audio_volume(&self, _: u16, _: u16) {}
             fn on_audio_closed(&self) {}
         }
         let l = Arc::new(A(Mutex::new(vec![])));
         let mut a = Audio::new(l.clone());
-        assert!(a.get_formats().iter().all(|f| f.format == ironrdp::rdpsnd::pdu::WaveFormat::PCM && f.bits_per_sample == 16));
+        assert!(a
+            .get_formats()
+            .iter()
+            .all(|f| f.format == ironrdp::rdpsnd::pdu::WaveFormat::PCM && f.bits_per_sample == 16));
         assert_eq!(a.get_formats()[0].n_block_align, 4);
         a.wave(1, 0, std::borrow::Cow::Borrowed(&[0u8; 8]));
         a.wave(99, 0, std::borrow::Cow::Borrowed(&[0u8; 8]));
-        assert_eq!(l.0.lock().unwrap().as_slice(), &[(AudioFormat { sample_rate: 44_100, channels: 2, bits_per_sample: 16 }, 8)]);
+        assert_eq!(
+            l.0.lock().unwrap().as_slice(),
+            &[(AudioFormat { sample_rate: 44_100, channels: 2, bits_per_sample: 16 }, 8)]
+        );
     }
 
     #[test]
@@ -722,16 +986,32 @@ mod tests {
             fn on_frame(&self, _: Vec<FrameRect>) {}
             fn on_resize(&self, _: u16, _: u16) {}
             fn on_cert(&self, _: String, _: String) {}
-            fn on_closed(&self, c: RemoteClose) { *self.0.lock().unwrap() = Some(c); }
+            fn on_closed(&self, c: RemoteClose) {
+                *self.0.lock().unwrap() = Some(c);
+            }
         }
         let l = Arc::new(L(Mutex::new(None)));
-        let cfg = RdpConfig { host: "127.0.0.1".into(), port: 1, user: "u".into(), password: "p".into(), domain: None,
-                              width: 800, height: 600, scale_percent: 100, trusted_cert_sha256: None,
-                              gateway_host: None, gateway_user: None, gateway_password: None, gateway_domain: None,
-                              h264_library_path: None };
+        let cfg = RdpConfig {
+            host: "127.0.0.1".into(),
+            port: 1,
+            user: "u".into(),
+            password: "p".into(),
+            domain: None,
+            width: 800,
+            height: 600,
+            scale_percent: 100,
+            trusted_cert_sha256: None,
+            gateway_host: None,
+            gateway_user: None,
+            gateway_password: None,
+            gateway_domain: None,
+            h264_library_path: None,
+        };
         RemoteSession::rdp(cfg, l.clone()).connect();
         let start = Instant::now();
-        while l.0.lock().unwrap().is_none() && start.elapsed() < Duration::from_secs(20) { std::thread::sleep(Duration::from_millis(50)); }
+        while l.0.lock().unwrap().is_none() && start.elapsed() < Duration::from_secs(20) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
         assert_eq!(l.0.lock().unwrap().as_ref().map(|c| c.kind), Some(RemoteCloseKind::Network));
     }
 }

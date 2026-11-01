@@ -21,22 +21,44 @@ fn expand(text: &str, ssh_dir: &Path, depth: u32, out: &mut Vec<String>) -> bool
     let mut ok = true;
     for raw in text.split(['\n', '\r']) {
         let (key, value) = split_key_value(raw.trim());
-        if key != "include" || raw.trim_start().starts_with('#') { out.push(raw.to_string()); continue; }
-        if depth >= MAX_DEPTH { return false; }
+        if key != "include" || raw.trim_start().starts_with('#') {
+            out.push(raw.to_string());
+            continue;
+        }
+        if depth >= MAX_DEPTH {
+            return false;
+        }
         for p in value.split_whitespace().map(|p| p.trim_matches('"')) {
-            if p.contains("**") { return false; }
+            if p.contains("**") {
+                return false;
+            }
             let full = if let Some(rest) = p.strip_prefix("~/") {
                 ssh_dir.parent().unwrap_or(ssh_dir).join(rest)
-            } else if Path::new(p).is_absolute() { PathBuf::from(p) } else { ssh_dir.join(p) };
+            } else if Path::new(p).is_absolute() {
+                PathBuf::from(p)
+            } else {
+                ssh_dir.join(p)
+            };
             // Нет подходящих файлов — как у ssh, ничего; ошибка шаблона или чтения — неизвестно.
             let Ok(paths) = glob::glob(&full.to_string_lossy()) else { return false };
             let mut files = Vec::new();
-            for f in paths { match f { Ok(f) => files.push(f), Err(_) => return false } }
+            for f in paths {
+                match f {
+                    Ok(f) => files.push(f),
+                    Err(_) => return false,
+                }
+            }
             files.sort();
             for f in files {
-                if f.is_dir() { continue; }
+                if f.is_dir() {
+                    continue;
+                }
                 match std::fs::read_to_string(&f) {
-                    Ok(t) => if !expand(&t, ssh_dir, depth + 1, out) { ok = false; },
+                    Ok(t) => {
+                        if !expand(&t, ssh_dir, depth + 1, out) {
+                            ok = false;
+                        }
+                    }
                     Err(_) => return false,
                 }
             }
@@ -47,15 +69,22 @@ fn expand(text: &str, ssh_dir: &Path, depth: u32, out: &mut Vec<String>) -> bool
 
 /// `*` и `?` как в ssh_config, без учёта регистра.
 fn wildcard(pattern: &str, name: &str) -> bool {
-    glob::Pattern::new(&pattern.to_lowercase().replace('[', "[[]")).map(|g| g.matches(&name.to_lowercase())).unwrap_or(false)
+    glob::Pattern::new(&pattern.to_lowercase().replace('[', "[[]"))
+        .map(|g| g.matches(&name.to_lowercase()))
+        .unwrap_or(false)
 }
 
 /// `Host a *.lan !db.lan`: хоть один положительный шаблон совпал и ни один `!` не совпал.
 fn host_matches(patterns: &str, alias: &str) -> bool {
     let mut hit = false;
     for p in patterns.split_whitespace() {
-        if let Some(neg) = p.strip_prefix('!') { if wildcard(neg, alias) { return false; } }
-        else if wildcard(p, alias) { hit = true; }
+        if let Some(neg) = p.strip_prefix('!') {
+            if wildcard(neg, alias) {
+                return false;
+            }
+        } else if wildcard(p, alias) {
+            hit = true;
+        }
     }
     hit
 }
@@ -66,7 +95,9 @@ fn host_matches(patterns: &str, alias: &str) -> bool {
 #[uniffi::export]
 pub fn config_runs_commands_in(text: String, alias: String, ssh_dir: String) -> bool {
     let mut lines = Vec::new();
-    if !expand(&text, Path::new(&ssh_dir), 0, &mut lines) { return true; }
+    if !expand(&text, Path::new(&ssh_dir), 0, &mut lines) {
+        return true;
+    }
     // CanonicalizeHostname: во втором проходе ssh сверяет каноническое имя (alias + CanonicalDomains), которого мы не
     // знаем, — тогда рискованная директива в любом блоке Host считается действующей.
     let canonical = lines.iter().any(|l| {
@@ -78,25 +109,41 @@ pub fn config_runs_commands_in(text: String, alias: String, ssh_dir: String) -> 
     let mut first: std::collections::HashMap<String, String> = Default::default();
     for raw in &lines {
         let t = raw.trim();
-        if t.is_empty() || t.starts_with('#') { continue; }
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
         let (key, value) = split_key_value(t);
         match key.as_str() {
-            "host" => { in_match = false; applies = host_matches(&value, &alias); }
+            "host" => {
+                in_match = false;
+                applies = host_matches(&value, &alias);
+            }
             "match" => {
                 in_match = true;
-                if value.split_whitespace().any(|w| w.eq_ignore_ascii_case("exec")) { return true; }
+                if value.split_whitespace().any(|w| w.eq_ignore_ascii_case("exec")) {
+                    return true;
+                }
             }
             k if RISKY.contains(&k) => {
-                let active = !value.eq_ignore_ascii_case("none") && !value.eq_ignore_ascii_case("no") && !value.trim().is_empty();
-                if in_match || (canonical && active && key != "permitlocalcommand") { return true; }
-                if applies { first.entry(key.clone()).or_insert(value); }
+                let active = !value.eq_ignore_ascii_case("none")
+                    && !value.eq_ignore_ascii_case("no")
+                    && !value.trim().is_empty();
+                if in_match || (canonical && active && key != "permitlocalcommand") {
+                    return true;
+                }
+                if applies {
+                    first.entry(key.clone()).or_insert(value);
+                }
             }
             _ => {}
         }
     }
     let on = |k: &str| first.get(k).map(|v| !v.eq_ignore_ascii_case("none") && !v.trim().is_empty()).unwrap_or(false);
     let yes = |k: &str| first.get(k).map(|v| v.eq_ignore_ascii_case("yes")).unwrap_or(false);
-    on("proxycommand") || on("knownhostscommand") || yes("proxyusefdpass") || (on("localcommand") && yes("permitlocalcommand"))
+    on("proxycommand")
+        || on("knownhostscommand")
+        || yes("proxyusefdpass")
+        || (on("localcommand") && yes("permitlocalcommand"))
 }
 
 /// То же для домашней `~/.ssh` (HOME, на Windows USERPROFILE).
@@ -109,7 +156,9 @@ pub fn config_runs_commands(text: String, alias: String) -> bool {
 mod tests {
     use super::*;
 
-    fn runs(text: &str, alias: &str) -> bool { config_runs_commands_in(text.into(), alias.into(), "/nonexistent/.ssh".into()) }
+    fn runs(text: &str, alias: &str) -> bool {
+        config_runs_commands_in(text.into(), alias.into(), "/nonexistent/.ssh".into())
+    }
 
     #[test]
     fn direct_wildcard_and_order() {
@@ -130,7 +179,10 @@ mod tests {
     fn local_command_needs_permit() {
         assert!(!runs("Host web\n    LocalCommand touch x\n", "web"));
         assert!(runs("Host web\n    LocalCommand touch x\n    PermitLocalCommand yes\n", "web"));
-        assert!(!runs("Host web\n    PermitLocalCommand no\n    LocalCommand x\n\nHost *\n    PermitLocalCommand yes\n", "web"));
+        assert!(!runs(
+            "Host web\n    PermitLocalCommand no\n    LocalCommand x\n\nHost *\n    PermitLocalCommand yes\n",
+            "web"
+        ));
     }
 
     #[test]
@@ -148,7 +200,11 @@ mod tests {
         std::fs::write(ssh.join("config.d/10-evil.conf"), "Host *\n    ProxyCommand evil\n").unwrap();
         std::fs::write(ssh.join("deep.conf"), "Include deep.conf\n").unwrap();
         let s = ssh.to_string_lossy().to_string();
-        assert!(config_runs_commands_in("Include config.d/*.conf\nHost web\n    User x\n".into(), "web".into(), s.clone()));
+        assert!(config_runs_commands_in(
+            "Include config.d/*.conf\nHost web\n    User x\n".into(),
+            "web".into(),
+            s.clone()
+        ));
         assert!(config_runs_commands_in("Include ~/.ssh/config.d/*\n".into(), "web".into(), s.clone()));
         assert!(!config_runs_commands_in("Include missing/*\nHost web\n    User x\n".into(), "web".into(), s.clone()));
         // Цикл Include глубже 16 — неизвестно, значит рискованно; `**` и нечитаемый файл — тоже.
@@ -172,7 +228,8 @@ mod tests {
 
     #[test]
     fn canonicalize_hostname_checks_every_host_block() {
-        let cfg = "CanonicalizeHostname yes\nCanonicalDomains example.com\nHost web.example.com\n    ProxyCommand evil\n";
+        let cfg =
+            "CanonicalizeHostname yes\nCanonicalDomains example.com\nHost web.example.com\n    ProxyCommand evil\n";
         assert!(runs(cfg, "web"));
         assert!(runs(&cfg.replace("yes", "always"), "web"));
         assert!(!runs(&cfg.replace("CanonicalizeHostname yes", "CanonicalizeHostname no"), "web"));

@@ -40,7 +40,9 @@ struct Callbacks {
 }
 
 #[repr(C)]
-struct RawRdp { _private: [u8; 0] }
+struct RawRdp {
+    _private: [u8; 0],
+}
 
 extern "C" {
     fn relaya_rdp_new(config: *const Config, callbacks: *const Callbacks) -> *mut RawRdp;
@@ -62,22 +64,36 @@ unsafe impl Send for Native {}
 unsafe impl Sync for Native {}
 
 impl Native {
-    pub(crate) fn key(&self, scancode: u16, down: bool) { unsafe { relaya_rdp_key(self.0, scancode, down.into()) } }
+    pub(crate) fn key(&self, scancode: u16, down: bool) {
+        unsafe { relaya_rdp_key(self.0, scancode, down.into()) }
+    }
     /// Символы вне BMP уходят суррогатной парой UTF-16.
     pub(crate) fn unicode(&self, codepoint: u32, down: bool) {
         let Some(c) = char::from_u32(codepoint) else { return };
         let mut buf = [0u16; 2];
-        for unit in c.encode_utf16(&mut buf) { unsafe { relaya_rdp_unicode(self.0, *unit, down.into()) } }
+        for unit in c.encode_utf16(&mut buf) {
+            unsafe { relaya_rdp_unicode(self.0, *unit, down.into()) }
+        }
     }
-    pub(crate) fn pointer(&self, x: u16, y: u16) { unsafe { relaya_rdp_pointer(self.0, x, y) } }
-    pub(crate) fn button(&self, button: u8, down: bool) { unsafe { relaya_rdp_button(self.0, button, down.into()) } }
-    pub(crate) fn wheel(&self, units: i16, vertical: bool) { unsafe { relaya_rdp_wheel(self.0, units, vertical.into()) } }
-    pub(crate) fn resize(&self, width: u16, height: u16) { unsafe { relaya_rdp_resize(self.0, width.into(), height.into()) } }
+    pub(crate) fn pointer(&self, x: u16, y: u16) {
+        unsafe { relaya_rdp_pointer(self.0, x, y) }
+    }
+    pub(crate) fn button(&self, button: u8, down: bool) {
+        unsafe { relaya_rdp_button(self.0, button, down.into()) }
+    }
+    pub(crate) fn wheel(&self, units: i16, vertical: bool) {
+        unsafe { relaya_rdp_wheel(self.0, units, vertical.into()) }
+    }
+    pub(crate) fn resize(&self, width: u16, height: u16) {
+        unsafe { relaya_rdp_resize(self.0, width.into(), height.into()) }
+    }
     pub(crate) fn set_clipboard(&self, text: &str) {
         let Ok(c) = CString::new(text.replace('\0', "")) else { return };
         unsafe { relaya_rdp_set_clipboard(self.0, c.as_ptr()) }
     }
-    pub(crate) fn disconnect(&self) { unsafe { relaya_rdp_disconnect(self.0) } }
+    pub(crate) fn disconnect(&self) {
+        unsafe { relaya_rdp_disconnect(self.0) }
+    }
 }
 
 /// Состояние колбэков одной сессии: копит прямоугольники кадра до `on_frame_end`.
@@ -87,30 +103,51 @@ struct Ctx {
     closed: Mutex<Option<RemoteClose>>,
 }
 
-fn ctx<'a>(user: *mut c_void) -> &'a Ctx { unsafe { &*(user as *const Ctx) } }
-fn text(p: *const c_char) -> String { if p.is_null() { String::new() } else { unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned() } }
+fn ctx<'a>(user: *mut c_void) -> &'a Ctx {
+    unsafe { &*(user as *const Ctx) }
+}
+fn text(p: *const c_char) -> String {
+    if p.is_null() {
+        String::new()
+    } else {
+        unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()
+    }
+}
 
 extern "C" fn on_connected(user: *mut c_void, w: u32, h: u32) {
     ctx(user).session.listener().on_connected(w.min(u16::MAX as u32) as u16, h.min(u16::MAX as u32) as u16);
 }
 
 extern "C" fn on_rect(user: *mut c_void, buffer: *const u8, len: usize, stride: u32, x: u32, y: u32, w: u32, h: u32) {
-    if buffer.is_null() || w == 0 || h == 0 { return; }
+    if buffer.is_null() || w == 0 || h == 0 {
+        return;
+    }
     let (stride, row) = (stride as usize, w as usize * 4);
     // W-RDP-5: прямоугольник целиком внутри буфера, иначе не копируем (не читаем чужую память).
-    let end = (y as usize + h as usize - 1).checked_mul(stride).and_then(|v| v.checked_add((x as usize + w as usize) * 4));
-    if end.map(|e| e > len).unwrap_or(true) || row > stride { return; }
+    let end =
+        (y as usize + h as usize - 1).checked_mul(stride).and_then(|v| v.checked_add((x as usize + w as usize) * 4));
+    if end.map(|e| e > len).unwrap_or(true) || row > stride {
+        return;
+    }
     let mut bgra = Vec::with_capacity(row * h as usize);
     for line in y..y + h {
         let start = line as usize * stride + x as usize * 4;
         bgra.extend_from_slice(unsafe { std::slice::from_raw_parts(buffer.add(start), row) });
     }
-    ctx(user).rects.lock().unwrap().push(FrameRect { x: x as u16, y: y as u16, width: w as u16, height: h as u16, bgra });
+    ctx(user).rects.lock().unwrap().push(FrameRect {
+        x: x as u16,
+        y: y as u16,
+        width: w as u16,
+        height: h as u16,
+        bgra,
+    });
 }
 
 extern "C" fn on_frame_end(user: *mut c_void) {
     let rects = std::mem::take(&mut *ctx(user).rects.lock().unwrap());
-    if !rects.is_empty() { ctx(user).session.listener().on_frame(rects); }
+    if !rects.is_empty() {
+        ctx(user).session.listener().on_frame(rects);
+    }
 }
 
 extern "C" fn on_resize(user: *mut c_void, w: u32, h: u32) {
@@ -122,11 +159,15 @@ extern "C" fn on_cert(user: *mut c_void, sha256: *const c_char, subject: *const 
 }
 
 extern "C" fn on_clipboard(user: *mut c_void, utf8: *const c_char) {
-    if let Some(l) = ctx(user).session.clipboard_listener() { l.on_remote_clipboard(text(utf8).trim_end_matches('\0').to_string()); }
+    if let Some(l) = ctx(user).session.clipboard_listener() {
+        l.on_remote_clipboard(text(utf8).trim_end_matches('\0').to_string());
+    }
 }
 
 extern "C" fn on_audio(user: *mut c_void, rate: u32, channels: u16, bits: u16, ts: u32, pcm: *const u8, size: usize) {
-    if pcm.is_null() { return; }
+    if pcm.is_null() {
+        return;
+    }
     if let Some(l) = ctx(user).session.audio_listener() {
         let data = unsafe { std::slice::from_raw_parts(pcm, size) }.to_vec();
         l.on_audio(AudioFormat { sample_rate: rate, channels, bits_per_sample: bits }, ts, data);
@@ -134,11 +175,15 @@ extern "C" fn on_audio(user: *mut c_void, rate: u32, channels: u16, bits: u16, t
 }
 
 extern "C" fn on_audio_volume(user: *mut c_void, left: u16, right: u16) {
-    if let Some(l) = ctx(user).session.audio_listener() { l.on_audio_volume(left, right); }
+    if let Some(l) = ctx(user).session.audio_listener() {
+        l.on_audio_volume(left, right);
+    }
 }
 
 extern "C" fn on_audio_closed(user: *mut c_void) {
-    if let Some(l) = ctx(user).session.audio_listener() { l.on_audio_closed(); }
+    if let Some(l) = ctx(user).session.audio_listener() {
+        l.on_audio_closed();
+    }
 }
 
 extern "C" fn on_closed(user: *mut c_void, kind: c_int, message: *const c_char) {
@@ -153,47 +198,90 @@ extern "C" fn on_closed(user: *mut c_void, kind: c_int, message: *const c_char) 
     *ctx(user).closed.lock().unwrap() = Some(RemoteClose { kind, message: text(message) });
 }
 
-fn cstr(s: &str) -> CString { CString::new(s.replace('\0', "")).unwrap_or_default() }
-fn opt(s: &Option<String>) -> Option<CString> { s.as_deref().filter(|v| !v.is_empty()).map(cstr) }
-fn ptr(s: &Option<CString>) -> *const c_char { s.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null()) }
+fn cstr(s: &str) -> CString {
+    CString::new(s.replace('\0', "")).unwrap_or_default()
+}
+fn opt(s: &Option<String>) -> Option<CString> {
+    s.as_deref().filter(|v| !v.is_empty()).map(cstr)
+}
+fn ptr(s: &Option<CString>) -> *const c_char {
+    s.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null())
+}
 
 /// Запустить сессию FreeRDP в своём потоке. Повторный вызов ничего не делает.
 pub(crate) fn connect(session: Arc<RemoteSession>) {
-    if session.native.lock().unwrap().is_some() { return; }
+    if session.native.lock().unwrap().is_some() {
+        return;
+    }
     let c = session.config().clone();
     let (host, user, password) = (cstr(&c.host), cstr(&c.user), cstr(&c.password));
     let (domain, gw_host, gw_user, gw_password, gw_domain) =
         (opt(&c.domain), opt(&c.gateway_host), opt(&c.gateway_user), opt(&c.gateway_password), opt(&c.gateway_domain));
     let config = Config {
-        host: host.as_ptr(), port: c.port, user: user.as_ptr(), password: password.as_ptr(), domain: ptr(&domain),
-        width: c.width.into(), height: c.height.into(), scale_percent: c.scale_percent,
-        gateway_host: ptr(&gw_host), gateway_user: ptr(&gw_user), gateway_password: ptr(&gw_password), gateway_domain: ptr(&gw_domain),
+        host: host.as_ptr(),
+        port: c.port,
+        user: user.as_ptr(),
+        password: password.as_ptr(),
+        domain: ptr(&domain),
+        width: c.width.into(),
+        height: c.height.into(),
+        scale_percent: c.scale_percent,
+        gateway_host: ptr(&gw_host),
+        gateway_user: ptr(&gw_user),
+        gateway_password: ptr(&gw_password),
+        gateway_domain: ptr(&gw_domain),
         audio: session.audio_listener().is_some().into(),
     };
-    let ctx = Box::into_raw(Box::new(Ctx { session: session.clone(), rects: Mutex::new(Vec::new()), closed: Mutex::new(None) }));
+    let ctx = Box::into_raw(Box::new(Ctx {
+        session: session.clone(),
+        rects: Mutex::new(Vec::new()),
+        closed: Mutex::new(None),
+    }));
     let callbacks = Callbacks {
-        user: ctx as *mut c_void, on_connected, on_rect, on_frame_end, on_resize, on_cert,
+        user: ctx as *mut c_void,
+        on_connected,
+        on_rect,
+        on_frame_end,
+        on_resize,
+        on_cert,
         // W-RDP-2: без слушателя буфера обмена к моменту connect текст с сервера не запрашивается.
-        on_clipboard: session.clipboard_listener().is_some().then_some(on_clipboard as extern "C" fn(*mut c_void, *const c_char)),
-        on_audio, on_audio_volume, on_audio_closed, on_closed,
+        on_clipboard: session
+            .clipboard_listener()
+            .is_some()
+            .then_some(on_clipboard as extern "C" fn(*mut c_void, *const c_char)),
+        on_audio,
+        on_audio_volume,
+        on_audio_closed,
+        on_closed,
     };
     // Прослойка копирует строки конфигурации сама.
     let raw = unsafe { relaya_rdp_new(&config, &callbacks) };
     if raw.is_null() {
         drop(unsafe { Box::from_raw(ctx) });
-        session.listener().on_closed(RemoteClose { kind: RemoteCloseKind::Protocol, message: "relaya_rdp_new failed".into() });
+        session
+            .listener()
+            .on_closed(RemoteClose { kind: RemoteCloseKind::Protocol, message: "relaya_rdp_new failed".into() });
         return;
     }
     *session.native.lock().unwrap() = Some(Native(raw));
     let (ctx_addr, raw_addr) = (ctx as usize, raw as usize);
-    std::thread::Builder::new().name("relaya-freerdp".into()).spawn(move || {
-        unsafe { relaya_rdp_run(raw_addr as *mut RawRdp) };
-        let ctx = unsafe { Box::from_raw(ctx_addr as *mut Ctx) };
-        let close = ctx.closed.lock().unwrap().take()
-            .unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
-        // Сначала убрать указатель, чтобы команды после закрытия не ушли в освобождённую сессию.
-        let native = ctx.session.native.lock().unwrap().take();
-        if let Some(Native(p)) = native { unsafe { relaya_rdp_free(p) } }
-        ctx.session.listener().on_closed(close);
-    }).ok();
+    std::thread::Builder::new()
+        .name("relaya-freerdp".into())
+        .spawn(move || {
+            unsafe { relaya_rdp_run(raw_addr as *mut RawRdp) };
+            let ctx = unsafe { Box::from_raw(ctx_addr as *mut Ctx) };
+            let close = ctx
+                .closed
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
+            // Сначала убрать указатель, чтобы команды после закрытия не ушли в освобождённую сессию.
+            let native = ctx.session.native.lock().unwrap().take();
+            if let Some(Native(p)) = native {
+                unsafe { relaya_rdp_free(p) }
+            }
+            ctx.session.listener().on_closed(close);
+        })
+        .ok();
 }

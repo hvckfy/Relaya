@@ -64,11 +64,18 @@ pub struct TermCursor {
 
 /// Строка экрана целиком.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
-pub struct TermRow { pub row: u32, pub cells: Vec<TermCell> }
+pub struct TermRow {
+    pub row: u32,
+    pub cells: Vec<TermCell>,
+}
 
 /// Что изменилось с прошлого `damage()`: все строки (`full`) или только перечисленные; курсор — всегда.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
-pub struct TermDamage { pub full: bool, pub lines: Vec<TermRow>, pub cursor: TermCursor }
+pub struct TermDamage {
+    pub full: bool,
+    pub lines: Vec<TermRow>,
+    pub cursor: TermCursor,
+}
 
 #[derive(Default)]
 struct Listener {
@@ -91,12 +98,21 @@ impl EventListener for Listen {
     }
 }
 
-struct Size { cols: usize, rows: usize }
+struct Size {
+    cols: usize,
+    rows: usize,
+}
 
 impl Dimensions for Size {
-    fn total_lines(&self) -> usize { self.rows }
-    fn screen_lines(&self) -> usize { self.rows }
-    fn columns(&self) -> usize { self.cols }
+    fn total_lines(&self) -> usize {
+        self.rows
+    }
+    fn screen_lines(&self) -> usize {
+        self.rows
+    }
+    fn columns(&self) -> usize {
+        self.cols
+    }
 }
 
 struct Inner {
@@ -172,7 +188,9 @@ impl TerminalEmulator {
         let screen = g.term.grid().screen_lines() as i32;
         let line = index as i32 - history;
         g.term.scroll_display(Scroll::Bottom);
-        if line >= 0 { return line as u32; }
+        if line >= 0 {
+            return line as u32;
+        }
         let offset = (-line).min(history);
         g.term.scroll_display(Scroll::Delta(offset));
         (line + offset).clamp(0, screen - 1) as u32
@@ -181,7 +199,8 @@ impl TerminalEmulator {
     /// Строки экрана как текст (без хвостовых пробелов) — для копирования и тестов.
     pub fn screen_text(&self) -> Vec<String> {
         let snap = self.snapshot();
-        snap.cells.chunks(snap.cols as usize)
+        snap.cells
+            .chunks(snap.cols as usize)
             .map(|row| row.iter().map(|c| c.ch.as_str()).collect::<String>().trim_end().to_string())
             .collect()
     }
@@ -209,7 +228,10 @@ impl TerminalEmulator {
                 let mut list = list.clone();
                 list.sort_unstable();
                 list.dedup();
-                list.into_iter().filter(|r| *r < rows).map(|r| TermRow { row: r as u32, cells: row_cells(term, r) }).collect()
+                list.into_iter()
+                    .filter(|r| *r < rows)
+                    .map(|r| TermRow { row: r as u32, cells: row_cells(term, r) })
+                    .collect()
             }
         };
         TermDamage { full: rows_dirty.is_none(), lines, cursor: cursor_of(term, &self.listener) }
@@ -233,14 +255,27 @@ impl TerminalEmulator {
                 let cell = &grid[Point::new(Line(r as i32 - offset), Column(c))];
                 let f = cell.flags;
                 let mut flags = 0u16;
-                for (bit, flag) in [(1, Flags::BOLD), (2, Flags::ITALIC), (4, Flags::UNDERLINE), (8, Flags::INVERSE),
-                                    (16, Flags::DIM), (32, Flags::STRIKEOUT), (64, Flags::WIDE_CHAR),
-                                    (128, Flags::WIDE_CHAR_SPACER)] {
-                    if f.contains(flag) { flags |= bit; }
+                for (bit, flag) in [
+                    (1, Flags::BOLD),
+                    (2, Flags::ITALIC),
+                    (4, Flags::UNDERLINE),
+                    (8, Flags::INVERSE),
+                    (16, Flags::DIM),
+                    (32, Flags::STRIKEOUT),
+                    (64, Flags::WIDE_CHAR),
+                    (128, Flags::WIDE_CHAR_SPACER),
+                ] {
+                    if f.contains(flag) {
+                        flags |= bit;
+                    }
                 }
-                let ch = if f.contains(Flags::WIDE_CHAR_SPACER) { String::new() } else {
+                let ch = if f.contains(Flags::WIDE_CHAR_SPACER) {
+                    String::new()
+                } else {
                     let mut s = cell.c.to_string();
-                    if let Some(extra) = cell.zerowidth() { s.extend(extra); }
+                    if let Some(extra) = cell.zerowidth() {
+                        s.extend(extra);
+                    }
                     s
                 };
                 cells.push(TermCell { ch, fg: encode(cell.fg), bg: encode(cell.bg), flags });
@@ -269,21 +304,37 @@ impl TerminalEmulator {
 fn row_cells(term: &Term<Listen>, r: usize) -> Vec<TermCell> {
     let grid = term.grid();
     let offset = grid.display_offset() as i32;
-    (0..grid.columns()).map(|c| {
-        let cell = &grid[Point::new(Line(r as i32 - offset), Column(c))];
-        let f = cell.flags;
-        let mut flags = 0u16;
-        for (bit, flag) in [(1, Flags::BOLD), (2, Flags::ITALIC), (4, Flags::UNDERLINE), (8, Flags::INVERSE),
-                            (16, Flags::DIM), (32, Flags::STRIKEOUT), (64, Flags::WIDE_CHAR), (128, Flags::WIDE_CHAR_SPACER)] {
-            if f.contains(flag) { flags |= bit; }
-        }
-        let ch = if f.contains(Flags::WIDE_CHAR_SPACER) { String::new() } else {
-            let mut s = cell.c.to_string();
-            if let Some(extra) = cell.zerowidth() { s.extend(extra); }
-            s
-        };
-        TermCell { ch, fg: encode(cell.fg), bg: encode(cell.bg), flags }
-    }).collect()
+    (0..grid.columns())
+        .map(|c| {
+            let cell = &grid[Point::new(Line(r as i32 - offset), Column(c))];
+            let f = cell.flags;
+            let mut flags = 0u16;
+            for (bit, flag) in [
+                (1, Flags::BOLD),
+                (2, Flags::ITALIC),
+                (4, Flags::UNDERLINE),
+                (8, Flags::INVERSE),
+                (16, Flags::DIM),
+                (32, Flags::STRIKEOUT),
+                (64, Flags::WIDE_CHAR),
+                (128, Flags::WIDE_CHAR_SPACER),
+            ] {
+                if f.contains(flag) {
+                    flags |= bit;
+                }
+            }
+            let ch = if f.contains(Flags::WIDE_CHAR_SPACER) {
+                String::new()
+            } else {
+                let mut s = cell.c.to_string();
+                if let Some(extra) = cell.zerowidth() {
+                    s.extend(extra);
+                }
+                s
+            };
+            TermCell { ch, fg: encode(cell.fg), bg: encode(cell.bg), flags }
+        })
+        .collect()
 }
 
 fn cursor_of(term: &Term<Listen>, listener: &Listener) -> TermCursor {
@@ -312,8 +363,11 @@ fn encode(color: Color) -> u32 {
         Color::Spec(rgb) => 0x0100_0000 | (rgb.r as u32) << 16 | (rgb.g as u32) << 8 | rgb.b as u32,
         Color::Indexed(i) => 0x0200_0000 | i as u32,
         Color::Named(n) => match n {
-            NamedColor::Foreground | NamedColor::Background | NamedColor::BrightForeground
-            | NamedColor::DimForeground | NamedColor::Cursor => COLOR_DEFAULT,
+            NamedColor::Foreground
+            | NamedColor::Background
+            | NamedColor::BrightForeground
+            | NamedColor::DimForeground
+            | NamedColor::Cursor => COLOR_DEFAULT,
             n if (n as usize) < 16 => 0x0200_0000 | n as u32,
             // Тусклые варианты базовых цветов → обычные.
             n => 0x0200_0000 | ((n as u32).saturating_sub(NamedColor::DimBlack as u32) & 7),
@@ -429,29 +483,56 @@ mod tests {
 /// или подтверждения ключа сервера. Клиенты начальную команду сами не вводят: по `true` предлагают кнопку «Вставить».
 #[uniffi::export]
 pub fn terminal_login_ready(lines: Vec<String>, cursor_row: u32, cursor_col: u32, alt_screen: bool) -> bool {
-    if alt_screen { return false; }
+    if alt_screen {
+        return false;
+    }
     let Some((row, line)) = lines.iter().enumerate().rev().find(|(_, l)| !l.trim().is_empty()) else { return false };
-    if row as u32 != cursor_row { return false; }
+    if row as u32 != cursor_row {
+        return false;
+    }
     let text = line.trim_end();
-    if (cursor_col as usize) < text.chars().count() { return false; }
+    if (cursor_col as usize) < text.chars().count() {
+        return false;
+    }
     let lower = text.to_lowercase();
-    const ASKING: &[&str] = &["password", "passphrase", "пароль", "verification code", "one-time", "otp", "(yes/no",
-                              "[y/n]", "fingerprint", "token", "login:", "username:"];
-    if ASKING.iter().any(|a| lower.contains(a)) { return false; }
+    const ASKING: &[&str] = &[
+        "password",
+        "passphrase",
+        "пароль",
+        "verification code",
+        "one-time",
+        "otp",
+        "(yes/no",
+        "[y/n]",
+        "fingerprint",
+        "token",
+        "login:",
+        "username:",
+    ];
+    if ASKING.iter().any(|a| lower.contains(a)) {
+        return false;
+    }
     text.ends_with(['$', '#', '>', '%', '❯', '»', '➜']) || text.ends_with("$ ") || text.ends_with("# ")
 }
 
 #[cfg(test)]
 mod login_tests {
     use super::*;
-    fn screen(l: &[&str]) -> Vec<String> { l.iter().map(|s| s.to_string()).collect() }
+    fn screen(l: &[&str]) -> Vec<String> {
+        l.iter().map(|s| s.to_string()).collect()
+    }
 
     #[test]
     fn detects_prompt_after_login() {
         assert!(terminal_login_ready(screen(&["Welcome to Ubuntu", "root@web:~#", ""]), 1, 12, false));
         assert!(terminal_login_ready(screen(&["me@mac ~ %"]), 0, 11, false));
         assert!(!terminal_login_ready(screen(&["root@web's password:"]), 0, 20, false));
-        assert!(!terminal_login_ready(screen(&["Are you sure you want to continue connecting (yes/no/[fingerprint])?"]), 0, 70, false));
+        assert!(!terminal_login_ready(
+            screen(&["Are you sure you want to continue connecting (yes/no/[fingerprint])?"]),
+            0,
+            70,
+            false
+        ));
         assert!(!terminal_login_ready(screen(&["Enter passphrase for key '/x':"]), 0, 30, false));
         assert!(!terminal_login_ready(screen(&["root@web:~#", "loading..."]), 1, 10, false));
         assert!(!terminal_login_ready(screen(&["root@web:~#"]), 0, 3, false));

@@ -44,7 +44,9 @@ pub fn core_error_localized(message: String) -> LocalizedText {
 
 /// Ключ имени клиента MCP по умолчанию — чтобы клиенты сравнивали и переводили его, а не держали литерал.
 #[uniffi::export]
-pub fn mcp_unknown_client_key() -> String { MCP_UNKNOWN_CLIENT.into() }
+pub fn mcp_unknown_client_key() -> String {
+    MCP_UNKNOWN_CLIENT.into()
+}
 
 #[cfg(test)]
 mod tests {
@@ -56,13 +58,17 @@ mod tests {
         let l = core_error_localized(CoreError::AliasTaken("web".into()).to_string());
         assert_eq!(l, LocalizedText { key: "Хост «%@» уже есть в ~/.ssh/config".into(), args: vec!["web".into()] });
         assert_eq!(core_error_localized(CoreError::Decrypt.to_string()).args, Vec::<String>::new());
-        let shared = core_error_localized("tunnels.json в папке синхронизации повреждён, синхронизация остановлена: EOF at 1".into());
+        let shared = core_error_localized(
+            "tunnels.json в папке синхронизации повреждён, синхронизация остановлена: EOF at 1".into(),
+        );
         assert_eq!(shared.key, "%@ в папке синхронизации повреждён, синхронизация остановлена: %@");
         assert_eq!(shared.args, vec!["tunnels.json", "EOF at 1"]);
         let local = core_error_localized("snippets.json повреждён, синхронизация остановлена: x".into());
         assert_eq!(local.args, vec!["snippets.json", "x"]);
         let other = core_error_localized("fatal: something".into());
         assert_eq!((other.key.as_str(), other.args.len()), ("fatal: something", 0));
-        for t in TEMPLATES { assert!(regex_for(t).is_match(&t.replace("%@", "x")), "{t}"); }
+        for t in TEMPLATES {
+            assert!(regex_for(t).is_match(&t.replace("%@", "x")), "{t}");
+        }
     }
 }

@@ -12,18 +12,30 @@ pub struct DavRequest {
 }
 
 impl DavRequest {
-    pub fn header(&self, name: &str) -> Option<&String> { self.headers.get(&name.to_lowercase()) }
-    pub fn depth(&self) -> u8 { if self.header("depth").map(|d| d == "0").unwrap_or(false) { 0 } else { 1 } }
+    pub fn header(&self, name: &str) -> Option<&String> {
+        self.headers.get(&name.to_lowercase())
+    }
+    pub fn depth(&self) -> u8 {
+        if self.header("depth").map(|d| d == "0").unwrap_or(false) {
+            0
+        } else {
+            1
+        }
+    }
 }
 
 #[uniffi::export]
-pub fn dav_depth(req: DavRequest) -> u8 { req.depth() }
+pub fn dav_depth(req: DavRequest) -> u8 {
+    req.depth()
+}
 
 fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
     hay.get(from..)?.windows(needle.len()).position(|w| w == needle).map(|p| p + from)
 }
 
-fn hex(b: u8) -> Option<u8> { (b as char).to_digit(16).map(|d| d as u8) }
+fn hex(b: u8) -> Option<u8> {
+    (b as char).to_digit(16).map(|d| d as u8)
+}
 
 /// По байтам: срез строки после `%` мог прийтись на середину символа UTF-8 и уронить разбор.
 fn percent_decode(s: &str) -> String {
@@ -32,7 +44,11 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%' && i + 2 < b.len() {
-            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) { out.push(h * 16 + l); i += 3; continue; }
+            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) {
+                out.push(h * 16 + l);
+                i += 3;
+                continue;
+            }
         }
         out.push(b[i]);
         i += 1;
@@ -42,18 +58,24 @@ fn percent_decode(s: &str) -> String {
 
 /// Пошаговый разбор: копит байты, отдаёт готовые запросы (Content-Length и chunked).
 #[derive(Default, uniffi::Object)]
-pub struct DavParser { buffer: std::sync::Mutex<Vec<u8>> }
+pub struct DavParser {
+    buffer: std::sync::Mutex<Vec<u8>>,
+}
 
 #[uniffi::export]
 impl DavParser {
     #[uniffi::constructor]
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn feed(&self, data: Vec<u8>) -> Vec<DavRequest> {
         let mut buf = self.buffer.lock().unwrap();
         buf.extend(data);
         let mut out = Vec::new();
-        while let Some(r) = next(&mut buf) { out.push(r); }
+        while let Some(r) = next(&mut buf) {
+            out.push(r);
+        }
         out
     }
 }
@@ -71,52 +93,78 @@ fn next(buf: &mut Vec<u8>) -> Option<DavRequest> {
     let Some(head_end) = find(buf, b"\r\n\r\n", 0) else {
         return if buf.len() > MAX_HEAD { bad(buf) } else { None };
     };
-    if head_end > MAX_HEAD { return bad(buf); }
+    if head_end > MAX_HEAD {
+        return bad(buf);
+    }
     let head = String::from_utf8_lossy(&buf[..head_end]).to_string();
     let mut lines = head.split("\r\n");
     let first: Vec<&str> = lines.next()?.split(' ').collect();
-    if first.len() < 2 { buf.clear(); return None; }
+    if first.len() < 2 {
+        buf.clear();
+        return None;
+    }
     let mut headers = HashMap::new();
     for l in lines {
-        if let Some((k, v)) = l.split_once(':') { headers.insert(k.to_lowercase(), v.trim().to_string()); }
+        if let Some((k, v)) = l.split_once(':') {
+            headers.insert(k.to_lowercase(), v.trim().to_string());
+        }
     }
     let body_start = head_end + 4;
-    let (body, consumed) = if headers.get("transfer-encoding").map(|v| v.to_lowercase().contains("chunked")).unwrap_or(false) {
-        match dechunk(buf, body_start) {
-            Chunked::Done(body, consumed) => (body, consumed),
-            Chunked::More => return None,
-            Chunked::Bad => return bad(buf),
-        }
-    } else {
-        let len: usize = match headers.get("content-length").map(|v| v.trim().parse::<usize>()) {
-            None => 0,
-            Some(Ok(l)) if l <= MAX_BODY => l,
-            Some(_) => return bad(buf),
+    let (body, consumed) =
+        if headers.get("transfer-encoding").map(|v| v.to_lowercase().contains("chunked")).unwrap_or(false) {
+            match dechunk(buf, body_start) {
+                Chunked::Done(body, consumed) => (body, consumed),
+                Chunked::More => return None,
+                Chunked::Bad => return bad(buf),
+            }
+        } else {
+            let len: usize = match headers.get("content-length").map(|v| v.trim().parse::<usize>()) {
+                None => 0,
+                Some(Ok(l)) if l <= MAX_BODY => l,
+                Some(_) => return bad(buf),
+            };
+            if buf.len() - body_start < len {
+                return None;
+            }
+            (buf[body_start..body_start + len].to_vec(), body_start + len)
         };
-        if buf.len() - body_start < len { return None; }
-        (buf[body_start..body_start + len].to_vec(), body_start + len)
-    };
     buf.drain(..consumed);
     let raw_path = first[1].split('?').next().unwrap_or("");
     Some(DavRequest { method: first[0].to_uppercase(), path: percent_decode(raw_path), headers, body })
 }
 
-enum Chunked { Done(Vec<u8>, usize), More, Bad }
+enum Chunked {
+    Done(Vec<u8>, usize),
+    More,
+    Bad,
+}
 
 fn dechunk(data: &[u8], start: usize) -> Chunked {
     let mut out = Vec::new();
     let mut i = start;
     loop {
-        let Some(line_end) = find(data, b"\r\n", i) else { return if data.len() - i > 1024 { Chunked::Bad } else { Chunked::More } };
+        let Some(line_end) = find(data, b"\r\n", i) else {
+            return if data.len() - i > 1024 { Chunked::Bad } else { Chunked::More };
+        };
         let size_line = String::from_utf8_lossy(&data[i..line_end]).to_string();
-        let Ok(size) = usize::from_str_radix(size_line.split(';').next().unwrap_or("").trim(), 16) else { return Chunked::Bad };
+        let Ok(size) = usize::from_str_radix(size_line.split(';').next().unwrap_or("").trim(), 16) else {
+            return Chunked::Bad;
+        };
         // `ffffffffffffffff` переполнял сложение; размер тела ограничен.
         let chunk_start = line_end + 2;
-        let Some(chunk_end) = chunk_start.checked_add(size).filter(|_| out.len().saturating_add(size) <= MAX_BODY) else { return Chunked::Bad };
+        let Some(chunk_end) = chunk_start.checked_add(size).filter(|_| out.len().saturating_add(size) <= MAX_BODY)
+        else {
+            return Chunked::Bad;
+        };
         let Some(after) = chunk_end.checked_add(2) else { return Chunked::Bad };
-        if data.len() < after { return Chunked::More; }
+        if data.len() < after {
+            return Chunked::More;
+        }
         if size == 0 {
-            return match find(data, b"\r\n", chunk_start) { Some(e) => Chunked::Done(out, e + 2), None => Chunked::More };
+            return match find(data, b"\r\n", chunk_start) {
+                Some(e) => Chunked::Done(out, e + 2),
+                None => Chunked::More,
+            };
         }
         out.extend_from_slice(&data[chunk_start..chunk_end]);
         i = after;
@@ -133,18 +181,45 @@ pub struct DavEntry {
     pub modified: f64,
 }
 
-fn escape(s: &str) -> String { s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;") }
-
-fn encode_path(p: &str) -> String {
-    p.bytes().map(|b| match b {
-        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' | b'!' | b'$' | b'&' | b'\'' | b'(' | b')'
-        | b'*' | b'+' | b',' | b';' | b'=' | b':' | b'@' => (b as char).to_string(),
-        _ => format!("%{b:02X}"),
-    }).collect()
+fn escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-fn ts(t: f64) -> DateTime<Utc> { Utc.timestamp_opt(t as i64, 0).single().unwrap_or_default() }
-fn http_date(t: f64) -> String { ts(t).format("%a, %d %b %Y %H:%M:%S GMT").to_string() }
+fn encode_path(p: &str) -> String {
+    p.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'~'
+            | b'/'
+            | b'!'
+            | b'$'
+            | b'&'
+            | b'\''
+            | b'('
+            | b')'
+            | b'*'
+            | b'+'
+            | b','
+            | b';'
+            | b'='
+            | b':'
+            | b'@' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+fn ts(t: f64) -> DateTime<Utc> {
+    Utc.timestamp_opt(t as i64, 0).single().unwrap_or_default()
+}
+fn http_date(t: f64) -> String {
+    ts(t).format("%a, %d %b %Y %H:%M:%S GMT").to_string()
+}
 
 #[uniffi::export]
 pub fn dav_multistatus(entries: Vec<DavEntry>) -> Vec<u8> {
@@ -174,7 +249,11 @@ pub fn dav_lock_response(token: String, path: String) -> Vec<u8> {
 
 /// Ответ на LOCK: один токен и в заголовке `Lock-Token`, и в теле. Продление (`If: (<token>)`) возвращает тот же токен.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct DavLock { pub token: String, pub lock_token_header: String, pub body: Vec<u8> }
+pub struct DavLock {
+    pub token: String,
+    pub lock_token_header: String,
+    pub body: Vec<u8>,
+}
 
 #[uniffi::export]
 pub fn dav_lock(path: String, if_header: Option<String>) -> DavLock {
@@ -191,12 +270,16 @@ pub fn dav_lock(path: String, if_header: Option<String>) -> DavLock {
 pub fn dav_response(status: u16, reason: String, headers: HashMap<String, String>, body: Vec<u8>) -> Vec<u8> {
     let mut all: Vec<(String, String)> = headers.into_iter().collect();
     // HEAD передаёт свой Content-Length (размер файла) с пустым телом — второй заголовок не добавляем.
-    if !all.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-length")) { all.push(("Content-Length".into(), body.len().to_string())); }
+    if !all.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-length")) {
+        all.push(("Content-Length".into(), body.len().to_string()));
+    }
     all.push(("DAV".into(), "1, 2".into()));
     all.push(("MS-Author-Via".into(), "DAV".into()));
     all.sort();
     let mut h = format!("HTTP/1.1 {status} {reason}\r\n");
-    for (k, v) in all { h += &format!("{k}: {v}\r\n"); }
+    for (k, v) in all {
+        h += &format!("{k}: {v}\r\n");
+    }
     h += "\r\n";
     let mut out = h.into_bytes();
     out.extend(body);
@@ -222,8 +305,12 @@ pub fn dav_is_finder_junk(name: String) -> bool {
 #[uniffi::export]
 pub fn dav_date_from_listing(s: String, now: f64) -> f64 {
     let parts: Vec<&str> = s.split_whitespace().collect();
-    if parts.len() != 3 { return now; }
-    let month = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].iter().position(|m| *m == parts[0]);
+    if parts.len() != 3 {
+        return now;
+    }
+    let month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        .iter()
+        .position(|m| *m == parts[0]);
     let (Some(month), Ok(day)) = (month, parts[1].parse::<u32>()) else { return now };
     let now_dt = ts(now);
     if let Some((h, m)) = parts[2].split_once(':') {
@@ -231,12 +318,18 @@ pub fn dav_date_from_listing(s: String, now: f64) -> f64 {
         let mk = |y: i32| NaiveDate::from_ymd_opt(y, month as u32 + 1, day).and_then(|d| d.and_hms_opt(h, m, 0));
         let Some(d) = mk(now_dt.year()) else { return now };
         let t = Utc.from_utc_datetime(&d).timestamp() as f64;
-        if t > now + 86400.0 { return mk(now_dt.year() - 1).map(|d: NaiveDateTime| Utc.from_utc_datetime(&d).timestamp() as f64).unwrap_or(t); }
+        if t > now + 86400.0 {
+            return mk(now_dt.year() - 1)
+                .map(|d: NaiveDateTime| Utc.from_utc_datetime(&d).timestamp() as f64)
+                .unwrap_or(t);
+        }
         return t;
     }
     let Ok(year) = parts[2].parse::<i32>() else { return now };
-    NaiveDate::from_ymd_opt(year, month as u32 + 1, day).and_then(|d| d.and_hms_opt(0, 0, 0))
-        .map(|d| Utc.from_utc_datetime(&d).timestamp() as f64).unwrap_or(now)
+    NaiveDate::from_ymd_opt(year, month as u32 + 1, day)
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+        .map(|d| Utc.from_utc_datetime(&d).timestamp() as f64)
+        .unwrap_or(now)
 }
 
 #[cfg(test)]
@@ -249,11 +342,18 @@ mod tests {
         let mut r = p.feed(raw[..40].to_vec());
         r.extend(p.feed(raw[40..].to_vec()));
         assert_eq!(r.len(), 2);
-        assert_eq!((r[0].method.as_str(), r[0].path.as_str(), r[0].body.as_slice()), ("PUT", "/t/web/a b.txt", &b"hello"[..]));
+        assert_eq!(
+            (r[0].method.as_str(), r[0].path.as_str(), r[0].body.as_slice()),
+            ("PUT", "/t/web/a b.txt", &b"hello"[..])
+        );
         assert_eq!(r[1].depth(), 0);
-        let c = DavParser::new().feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n".to_vec());
+        let c = DavParser::new().feed(
+            b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n".to_vec(),
+        );
         assert_eq!(c[0].body, b"hello world");
-        assert!(DavParser::new().feed(b"PUT /g HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nab".to_vec()).is_empty());
+        assert!(DavParser::new()
+            .feed(b"PUT /g HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nab".to_vec())
+            .is_empty());
     }
 
     #[test]
@@ -261,10 +361,18 @@ mod tests {
         // `%` перед многобайтным символом и обрывок `%`.
         let r = DavParser::new().feed("GET /a%ж%2 HTTP/1.1\r\n\r\n".as_bytes().to_vec());
         assert_eq!(r[0].path, "/a%ж%2");
-        let huge = DavParser::new().feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nffffffffffffffff\r\nx".to_vec());
+        let huge = DavParser::new()
+            .feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nffffffffffffffff\r\nx".to_vec());
         assert_eq!(huge[0].method, "BAD");
-        assert_eq!(DavParser::new().feed(b"PUT /f HTTP/1.1\r\nContent-Length: 99999999999999999999\r\n\r\n".to_vec())[0].method, "BAD");
-        assert_eq!(DavParser::new().feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\n".to_vec())[0].method, "BAD");
+        assert_eq!(
+            DavParser::new().feed(b"PUT /f HTTP/1.1\r\nContent-Length: 99999999999999999999\r\n\r\n".to_vec())[0]
+                .method,
+            "BAD"
+        );
+        assert_eq!(
+            DavParser::new().feed(b"PUT /f HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\n".to_vec())[0].method,
+            "BAD"
+        );
         assert_eq!(DavParser::new().feed(vec![b'a'; MAX_HEAD + 1])[0].method, "BAD");
         // После BAD разбор продолжается со следующего запроса.
         let p = DavParser::new();
@@ -274,7 +382,13 @@ mod tests {
 
     #[test]
     fn head_and_lock_headers() {
-        let head = String::from_utf8(dav_response(200, "OK".into(), HashMap::from([("Content-Length".into(), "42".into())]), vec![])).unwrap();
+        let head = String::from_utf8(dav_response(
+            200,
+            "OK".into(),
+            HashMap::from([("Content-Length".into(), "42".into())]),
+            vec![],
+        ))
+        .unwrap();
         assert_eq!(head.matches("Content-Length").count(), 1);
         assert!(head.contains("Content-Length: 42"));
         let l = dav_lock("/t/a".into(), None);
@@ -288,12 +402,22 @@ mod tests {
     fn xml_and_helpers() {
         let x = String::from_utf8(dav_multistatus(vec![
             DavEntry { href: "/t/web/".into(), name: "web".into(), is_directory: true, size: 0, modified: 0.0 },
-            DavEntry { href: "/t/web/a & b.txt".into(), name: "a & b.txt".into(), is_directory: false, size: 12, modified: 0.0 },
-        ])).unwrap();
+            DavEntry {
+                href: "/t/web/a & b.txt".into(),
+                name: "a & b.txt".into(),
+                is_directory: false,
+                size: 12,
+                modified: 0.0,
+            },
+        ]))
+        .unwrap();
         assert!(x.contains("<D:collection/>") && x.contains("<D:getcontentlength>12</D:getcontentlength>"));
         assert!(x.contains("Thu, 01 Jan 1970 00:00:00 GMT"));
         assert!(x.contains("a%20&amp;%20b.txt"));
-        assert_eq!(dav_destination_path(Some("http://127.0.0.1:5000/t/web/new%20name".into())).as_deref(), Some("/t/web/new name"));
+        assert_eq!(
+            dav_destination_path(Some("http://127.0.0.1:5000/t/web/new%20name".into())).as_deref(),
+            Some("/t/web/new name")
+        );
         assert!(dav_is_finder_junk("._photo.jpg".into()) && !dav_is_finder_junk("notes.txt".into()));
         let now = 1_793_448_000.0; // 2026-10-31
         assert!(dav_date_from_listing("Oct 29 12:00".into(), now) < now);

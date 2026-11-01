@@ -12,10 +12,20 @@ pub enum TileLayout {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum Edge { Left, Right, Top, Bottom }
+pub enum Edge {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
-pub struct Rect { pub x: f64, pub y: f64, pub w: f64, pub h: f64 }
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
 
 impl TileLayout {
     pub fn ids(&self) -> Vec<String> {
@@ -41,8 +51,12 @@ impl TileLayout {
             TileLayout::Column(rows) => {
                 let mut rows = rows.clone();
                 match rows.last().cloned() {
-                    Some(TileLayout::Leaf(last)) => { *rows.last_mut().unwrap() = TileLayout::Row(vec![TileLayout::Leaf(last), leaf]); }
-                    Some(TileLayout::Row(r)) if r.len() < 2 => { *rows.last_mut().unwrap() = TileLayout::Row(r.into_iter().chain([leaf]).collect()); }
+                    Some(TileLayout::Leaf(last)) => {
+                        *rows.last_mut().unwrap() = TileLayout::Row(vec![TileLayout::Leaf(last), leaf]);
+                    }
+                    Some(TileLayout::Row(r)) if r.len() < 2 => {
+                        *rows.last_mut().unwrap() = TileLayout::Row(r.into_iter().chain([leaf]).collect());
+                    }
                     _ => rows.push(leaf),
                 }
                 TileLayout::Column(rows)
@@ -52,7 +66,13 @@ impl TileLayout {
 
     pub fn removing(&self, id: &str) -> Option<TileLayout> {
         match self {
-            TileLayout::Leaf(x) => if x == id { None } else { Some(self.clone()) },
+            TileLayout::Leaf(x) => {
+                if x == id {
+                    None
+                } else {
+                    Some(self.clone())
+                }
+            }
             TileLayout::Row(c) => make(true, c.iter().filter_map(|x| x.removing(id)).collect()),
             TileLayout::Column(c) => make(false, c.iter().filter_map(|x| x.removing(id)).collect()),
         }
@@ -60,7 +80,9 @@ impl TileLayout {
 
     pub fn inserting(&self, id: &str, edge: Edge, target: Option<&str>) -> TileLayout {
         let base = self.removing(id).unwrap_or_else(|| TileLayout::Leaf(id.into()));
-        if base.ids() == [id.to_string()] { return base; }
+        if base.ids() == [id.to_string()] {
+            return base;
+        }
         let row = matches!(edge, Edge::Left | Edge::Right);
         let before = matches!(edge, Edge::Left | Edge::Top);
         let leaf = TileLayout::Leaf(id.into());
@@ -72,7 +94,13 @@ impl TileLayout {
 
     pub fn swapping(&self, a: &str, b: &str) -> TileLayout {
         match self {
-            TileLayout::Leaf(x) => TileLayout::Leaf(if x == a { b.into() } else if x == b { a.into() } else { x.clone() }),
+            TileLayout::Leaf(x) => TileLayout::Leaf(if x == a {
+                b.into()
+            } else if x == b {
+                a.into()
+            } else {
+                x.clone()
+            }),
             TileLayout::Row(c) => TileLayout::Row(c.iter().map(|x| x.swapping(a, b)).collect()),
             TileLayout::Column(c) => TileLayout::Column(c.iter().map(|x| x.swapping(a, b)).collect()),
         }
@@ -80,7 +108,11 @@ impl TileLayout {
 
     pub fn synced(&self, ids: &[String]) -> Option<TileLayout> {
         let mut layout = Some(self.clone());
-        for id in self.ids() { if !ids.contains(&id) { layout = layout.and_then(|l| l.removing(&id)); } }
+        for id in self.ids() {
+            if !ids.contains(&id) {
+                layout = layout.and_then(|l| l.removing(&id));
+            }
+        }
         for id in ids {
             if !layout.as_ref().map(|l| l.ids().contains(id)).unwrap_or(false) {
                 layout = Some(layout.map(|l| l.appending(id)).unwrap_or(TileLayout::Leaf(id.clone())));
@@ -92,14 +124,20 @@ impl TileLayout {
     pub fn frames(&self, r: Rect) -> HashMap<String, Rect> {
         let mut out = HashMap::new();
         match self {
-            TileLayout::Leaf(id) => { out.insert(id.clone(), r); }
+            TileLayout::Leaf(id) => {
+                out.insert(id.clone(), r);
+            }
             TileLayout::Row(c) => {
                 let w = r.w / c.len() as f64;
-                for (i, x) in c.iter().enumerate() { out.extend(x.frames(Rect { x: r.x + w * i as f64, y: r.y, w, h: r.h })); }
+                for (i, x) in c.iter().enumerate() {
+                    out.extend(x.frames(Rect { x: r.x + w * i as f64, y: r.y, w, h: r.h }));
+                }
             }
             TileLayout::Column(c) => {
                 let h = r.h / c.len() as f64;
-                for (i, x) in c.iter().enumerate() { out.extend(x.frames(Rect { x: r.x, y: r.y + h * i as f64, w: r.w, h })); }
+                for (i, x) in c.iter().enumerate() {
+                    out.extend(x.frames(Rect { x: r.x, y: r.y + h * i as f64, w: r.w, h }));
+                }
             }
         }
         out
@@ -110,26 +148,38 @@ impl TileLayout {
         let me = *f.get(id)?;
         let eps = 1e-9;
         let (mx, my) = (me.x + me.w / 2.0, me.y + me.h / 2.0);
-        f.iter().filter(|(o, r)| {
-            *o != id && match edge {
-                Edge::Left => r.x + r.w <= me.x + eps && r.y + r.h > me.y && r.y < me.y + me.h,
-                Edge::Right => r.x >= me.x + me.w - eps && r.y + r.h > me.y && r.y < me.y + me.h,
-                Edge::Top => r.y + r.h <= me.y + eps && r.x + r.w > me.x && r.x < me.x + me.w,
-                Edge::Bottom => r.y >= me.y + me.h - eps && r.x + r.w > me.x && r.x < me.x + me.w,
-            }
-        })
-        .min_by(|a, b| {
-            let d = |r: &Rect| (r.x + r.w / 2.0 - mx).powi(2) + (r.y + r.h / 2.0 - my).powi(2);
-            d(a.1).partial_cmp(&d(b.1)).unwrap()
-        })
-        .map(|(k, _)| k.clone())
+        f.iter()
+            .filter(|(o, r)| {
+                *o != id
+                    && match edge {
+                        Edge::Left => r.x + r.w <= me.x + eps && r.y + r.h > me.y && r.y < me.y + me.h,
+                        Edge::Right => r.x >= me.x + me.w - eps && r.y + r.h > me.y && r.y < me.y + me.h,
+                        Edge::Top => r.y + r.h <= me.y + eps && r.x + r.w > me.x && r.x < me.x + me.w,
+                        Edge::Bottom => r.y >= me.y + me.h - eps && r.x + r.w > me.x && r.x < me.x + me.w,
+                    }
+            })
+            .min_by(|a, b| {
+                let d = |r: &Rect| (r.x + r.w / 2.0 - mx).powi(2) + (r.y + r.h / 2.0 - my).powi(2);
+                d(a.1).partial_cmp(&d(b.1)).unwrap()
+            })
+            .map(|(k, _)| k.clone())
     }
 
     fn replacing_leaf(&self, target: &str, f: &dyn Fn(TileLayout) -> TileLayout) -> TileLayout {
         match self {
-            TileLayout::Leaf(x) => if x == target { f(self.clone()) } else { self.clone() },
-            TileLayout::Row(c) => make(true, c.iter().map(|x| x.replacing_leaf(target, f)).collect()).unwrap_or_else(|| self.clone()),
-            TileLayout::Column(c) => make(false, c.iter().map(|x| x.replacing_leaf(target, f)).collect()).unwrap_or_else(|| self.clone()),
+            TileLayout::Leaf(x) => {
+                if x == target {
+                    f(self.clone())
+                } else {
+                    self.clone()
+                }
+            }
+            TileLayout::Row(c) => {
+                make(true, c.iter().map(|x| x.replacing_leaf(target, f)).collect()).unwrap_or_else(|| self.clone())
+            }
+            TileLayout::Column(c) => {
+                make(false, c.iter().map(|x| x.replacing_leaf(target, f)).collect()).unwrap_or_else(|| self.clone())
+            }
         }
     }
 }
@@ -157,23 +207,37 @@ fn make(row: bool, children: Vec<TileLayout>) -> Option<TileLayout> {
 
 // MARK: - FFI (JSON)
 
-fn from_json(s: &str) -> Option<TileLayout> { serde_json::from_str(s).ok() }
-fn to_json(l: Option<TileLayout>) -> Option<String> { l.map(|l| serde_json::to_string(&l).unwrap()) }
+fn from_json(s: &str) -> Option<TileLayout> {
+    serde_json::from_str(s).ok()
+}
+fn to_json(l: Option<TileLayout>) -> Option<String> {
+    l.map(|l| serde_json::to_string(&l).unwrap())
+}
 
 #[uniffi::export]
-pub fn tiles_automatic(ids: Vec<String>) -> Option<String> { to_json(TileLayout::automatic(&ids)) }
+pub fn tiles_automatic(ids: Vec<String>) -> Option<String> {
+    to_json(TileLayout::automatic(&ids))
+}
 #[uniffi::export]
-pub fn tiles_ids(layout: String) -> Vec<String> { from_json(&layout).map(|l| l.ids()).unwrap_or_default() }
+pub fn tiles_ids(layout: String) -> Vec<String> {
+    from_json(&layout).map(|l| l.ids()).unwrap_or_default()
+}
 #[uniffi::export]
-pub fn tiles_appending(layout: String, id: String) -> Option<String> { to_json(from_json(&layout).map(|l| l.appending(&id))) }
+pub fn tiles_appending(layout: String, id: String) -> Option<String> {
+    to_json(from_json(&layout).map(|l| l.appending(&id)))
+}
 #[uniffi::export]
-pub fn tiles_removing(layout: String, id: String) -> Option<String> { to_json(from_json(&layout).and_then(|l| l.removing(&id))) }
+pub fn tiles_removing(layout: String, id: String) -> Option<String> {
+    to_json(from_json(&layout).and_then(|l| l.removing(&id)))
+}
 #[uniffi::export]
 pub fn tiles_inserting(layout: String, id: String, edge: Edge, target: Option<String>) -> Option<String> {
     to_json(from_json(&layout).map(|l| l.inserting(&id, edge, target.as_deref())))
 }
 #[uniffi::export]
-pub fn tiles_swapping(layout: String, a: String, b: String) -> Option<String> { to_json(from_json(&layout).map(|l| l.swapping(&a, &b))) }
+pub fn tiles_swapping(layout: String, a: String, b: String) -> Option<String> {
+    to_json(from_json(&layout).map(|l| l.swapping(&a, &b)))
+}
 #[uniffi::export]
 pub fn tiles_synced(layout: Option<String>, ids: Vec<String>) -> Option<String> {
     match layout.and_then(|l| from_json(&l)) {
@@ -182,18 +246,27 @@ pub fn tiles_synced(layout: Option<String>, ids: Vec<String>) -> Option<String> 
     }
 }
 #[uniffi::export]
-pub fn tiles_neighbor(layout: String, id: String, edge: Edge) -> Option<String> { from_json(&layout)?.neighbor(&id, edge) }
+pub fn tiles_neighbor(layout: String, id: String, edge: Edge) -> Option<String> {
+    from_json(&layout)?.neighbor(&id, edge)
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use TileLayout::*;
-    fn l(s: &str) -> TileLayout { Leaf(s.into()) }
-    fn ids(v: &[&str]) -> Vec<String> { v.iter().map(|s| s.to_string()).collect() }
+    fn l(s: &str) -> TileLayout {
+        Leaf(s.into())
+    }
+    fn ids(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
 
     #[test]
     fn automatic_and_insert() {
-        assert_eq!(TileLayout::automatic(&ids(&["1", "2", "3"])), Some(Column(vec![Row(vec![l("1"), l("2")]), l("3")])));
+        assert_eq!(
+            TileLayout::automatic(&ids(&["1", "2", "3"])),
+            Some(Column(vec![Row(vec![l("1"), l("2")]), l("3")]))
+        );
         let r = Row(vec![l("1"), l("2")]);
         assert_eq!(r.inserting("3", Edge::Bottom, Some("2")), Row(vec![l("1"), Column(vec![l("2"), l("3")])]));
         assert_eq!(r.inserting("3", Edge::Left, Some("2")), Row(vec![l("1"), l("3"), l("2")]));

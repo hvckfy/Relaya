@@ -34,12 +34,22 @@ pub struct SshHost {
 
 /// Для какой системы пишется конфиг: UseKeychain понимает только ssh на macOS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum ConfigPlatform { Macos, Windows, Linux }
+pub enum ConfigPlatform {
+    Macos,
+    Windows,
+    Linux,
+}
 
 impl ConfigPlatform {
     /// Система, на которой работает ядро (Linux — и для прочих Unix, кроме macOS).
     pub fn current() -> Self {
-        if cfg!(target_os = "macos") { ConfigPlatform::Macos } else if cfg!(windows) { ConfigPlatform::Windows } else { ConfigPlatform::Linux }
+        if cfg!(target_os = "macos") {
+            ConfigPlatform::Macos
+        } else if cfg!(windows) {
+            ConfigPlatform::Windows
+        } else {
+            ConfigPlatform::Linux
+        }
     }
 }
 
@@ -51,8 +61,18 @@ impl SshHost {
     /// Запись для git-хостинга, а не сервер.
     pub fn is_git_service(&self) -> bool {
         let name = self.host_name.as_deref().unwrap_or(&self.alias).to_lowercase();
-        const KNOWN: &[&str] = &["github.com", "gitlab.com", "bitbucket.org", "ssh.dev.azure.com", "vs-ssh.visualstudio.com",
-                                   "codeberg.org", "gitea.com", "ssh.github.com", "altssh.gitlab.com", "altssh.bitbucket.org"];
+        const KNOWN: &[&str] = &[
+            "github.com",
+            "gitlab.com",
+            "bitbucket.org",
+            "ssh.dev.azure.com",
+            "vs-ssh.visualstudio.com",
+            "codeberg.org",
+            "gitea.com",
+            "ssh.github.com",
+            "altssh.gitlab.com",
+            "altssh.bitbucket.org",
+        ];
         // `git@host` в имени — git-сервер, введённый как адрес клона (старые записи «Новый хост»).
         let typed_as_git = self.alias.to_lowercase().starts_with("git@") || name.starts_with("git@");
         self.user.as_deref() == Some("git") || typed_as_git || KNOWN.contains(&name.as_str())
@@ -61,14 +81,22 @@ impl SshHost {
     /// `user@hostname:port`.
     pub fn subtitle(&self) -> String {
         let mut s = self.host_name.clone().unwrap_or_else(|| self.alias.clone());
-        if let Some(u) = &self.user { s = format!("{u}@{s}"); }
-        if let Some(p) = self.port { if p != 22 { s = format!("{s}:{p}"); } }
+        if let Some(u) = &self.user {
+            s = format!("{u}@{s}");
+        }
+        if let Some(p) = self.port {
+            if p != 22 {
+                s = format!("{s}:{p}");
+            }
+        }
         s
     }
 }
 
 #[uniffi::export]
-pub fn host_is_git_service(host: SshHost) -> bool { host.is_git_service() }
+pub fn host_is_git_service(host: SshHost) -> bool {
+    host.is_git_service()
+}
 
 /// Разобранный ввод адреса `user@host:port`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -104,7 +132,9 @@ pub fn parse_destination(input: String) -> Destination {
 }
 
 #[uniffi::export]
-pub fn host_subtitle(host: SshHost) -> String { host.subtitle() }
+pub fn host_subtitle(host: SshHost) -> String {
+    host.subtitle()
+}
 
 #[derive(Default)]
 pub(crate) struct Meta {
@@ -160,7 +190,9 @@ pub(crate) fn split_key_value(line: &str) -> (String, String) {
 /// `# relaya: group="мои сервера" tags=prod,db color=orange`.
 pub(crate) fn parse_meta(line: &str) -> Option<Meta> {
     let body = line.trim_start_matches('#').trim();
-    if !body.to_lowercase().starts_with("relaya:") { return None; }
+    if !body.to_lowercase().starts_with("relaya:") {
+        return None;
+    }
     let mut meta = Meta::default();
     for pair in meta_tokens(&body["relaya:".len()..]) {
         let Some((k, v)) = pair.split_once('=') else { continue };
@@ -186,12 +218,16 @@ fn meta_tokens(s: &str) -> Vec<String> {
         if ch == '"' {
             quoted = !quoted;
         } else if ch.is_whitespace() && !quoted {
-            if !current.is_empty() { tokens.push(std::mem::take(&mut current)); }
+            if !current.is_empty() {
+                tokens.push(std::mem::take(&mut current));
+            }
         } else {
             current.push(ch);
         }
     }
-    if !current.is_empty() { tokens.push(current); }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
     tokens
 }
 
@@ -199,42 +235,76 @@ fn meta_tokens(s: &str) -> Vec<String> {
 #[uniffi::export]
 pub fn split_tags(s: String) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
-    s.split(',').map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty() && seen.insert(t.to_lowercase()))
-        .collect()
+    s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty() && seen.insert(t.to_lowercase())).collect()
 }
 
 /// Значение для `# relaya:`: в кавычках, если есть пробелы.
 pub(crate) fn meta_value(s: &str) -> String {
     let clean = s.replace('"', "");
-    if clean.chars().any(char::is_whitespace) { format!("\"{clean}\"") } else { clean }
+    if clean.chars().any(char::is_whitespace) {
+        format!("\"{clean}\"")
+    } else {
+        clean
+    }
 }
 
 /// Значение директивы: с пробелами — в кавычках (ssh иначе прочтёт только первое слово).
 fn quote_value(v: &str) -> String {
     let clean = v.trim_matches('"');
-    if clean.chars().any(char::is_whitespace) { format!("\"{clean}\"") } else { clean.to_string() }
+    if clean.chars().any(char::is_whitespace) {
+        format!("\"{clean}\"")
+    } else {
+        clean.to_string()
+    }
 }
 
 /// Перевод строки в любом значении дописал бы в конфиг свою директиву.
 fn check_host(h: &SshHost) -> Result<(), CoreError> {
-    let all = [Some(&h.alias), h.host_name.as_ref(), h.user.as_ref(), h.identity_file.as_ref(), h.proxy_jump.as_ref(),
-               h.group.as_ref(), h.color.as_ref(), h.forward_agent_value.as_ref(), h.compression_value.as_ref()];
+    let all = [
+        Some(&h.alias),
+        h.host_name.as_ref(),
+        h.user.as_ref(),
+        h.identity_file.as_ref(),
+        h.proxy_jump.as_ref(),
+        h.group.as_ref(),
+        h.color.as_ref(),
+        h.forward_agent_value.as_ref(),
+        h.compression_value.as_ref(),
+    ];
     for v in all.into_iter().flatten().chain(h.identity_files.iter()).chain(h.tags.iter()) {
-        if v.contains(['\n', '\r']) { return Err(CoreError::InvalidValue(v.clone())); }
+        if v.contains(['\n', '\r']) {
+            return Err(CoreError::InvalidValue(v.clone()));
+        }
     }
     Ok(())
 }
 
 /// Строка `# relaya: …` или `None`, если метаданных нет; `extra` — незнакомые пары старой строки, как были.
-fn meta_line(group: Option<&str>, tags: &[String], color: Option<&str>, os: Option<ServerOs>, tmux: bool, extra: &[String]) -> Option<String> {
+fn meta_line(
+    group: Option<&str>,
+    tags: &[String],
+    color: Option<&str>,
+    os: Option<ServerOs>,
+    tmux: bool,
+    extra: &[String],
+) -> Option<String> {
     let mut meta = Vec::new();
-    if let Some(g) = group.filter(|g| !g.is_empty()) { meta.push(format!("group={}", meta_value(g))); }
+    if let Some(g) = group.filter(|g| !g.is_empty()) {
+        meta.push(format!("group={}", meta_value(g)));
+    }
     let tags = split_tags(tags.join(","));
-    if !tags.is_empty() { meta.push(format!("tags={}", meta_value(&tags.join(",")))); }
-    if let Some(c) = color.filter(|c| !c.is_empty()) { meta.push(format!("color={}", meta_value(c))); }
-    if let Some(os) = os { meta.push(format!("os={}", os.raw())); }
-    if tmux { meta.push("tmux=on".into()); }
+    if !tags.is_empty() {
+        meta.push(format!("tags={}", meta_value(&tags.join(","))));
+    }
+    if let Some(c) = color.filter(|c| !c.is_empty()) {
+        meta.push(format!("color={}", meta_value(c)));
+    }
+    if let Some(os) = os {
+        meta.push(format!("os={}", os.raw()));
+    }
+    if tmux {
+        meta.push("tmux=on".into());
+    }
     meta.extend(extra.iter().cloned());
     (!meta.is_empty()).then(|| format!("# relaya: {}", meta.join(" ")))
 }
@@ -248,7 +318,9 @@ fn apply(key: &str, value: &str, host: &mut SshHost) {
         "user" if host.user.is_none() => host.user = Some(value.to_string()),
         "port" if host.port.is_none() => host.port = value.parse().ok(),
         "identityfile" => {
-            if host.identity_file.is_none() { host.identity_file = Some(value.to_string()); }
+            if host.identity_file.is_none() {
+                host.identity_file = Some(value.to_string());
+            }
             host.identity_files.push(value.to_string());
         }
         "proxyjump" if host.proxy_jump.is_none() => host.proxy_jump = Some(value.to_string()),
@@ -256,7 +328,9 @@ fn apply(key: &str, value: &str, host: &mut SshHost) {
             host.forward_agent = Some(value.eq_ignore_ascii_case("yes"));
             host.forward_agent_value = Some(value.to_string());
         }
-        "serveraliveinterval" if host.server_alive_interval.is_none() => host.server_alive_interval = value.parse().ok(),
+        "serveraliveinterval" if host.server_alive_interval.is_none() => {
+            host.server_alive_interval = value.parse().ok()
+        }
         "compression" if host.compression.is_none() => {
             host.compression = Some(value.eq_ignore_ascii_case("yes"));
             host.compression_value = Some(value.to_string());
@@ -278,9 +352,13 @@ pub fn parse_config(text: String) -> Vec<SshHost> {
     let mut in_match = false;
     for raw in lines_of(&text) {
         let line = raw.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         if line.starts_with('#') {
-            if let Some(m) = parse_meta(line) { pending = m; }
+            if let Some(m) = parse_meta(line) {
+                pending = m;
+            }
             continue;
         }
         let (key, value) = split_key_value(line);
@@ -289,16 +367,29 @@ pub fn parse_config(text: String) -> Vec<SshHost> {
                 hosts.append(&mut current);
                 in_match = false;
                 let meta = std::mem::take(&mut pending);
-                current = aliases(&value).into_iter().filter(|a| !is_pattern(a.clone())).map(|a| SshHost {
-                    alias: a, group: meta.group.clone(), tags: meta.tags.clone(), color: meta.color.clone(),
-                    os: meta.os, tmux: meta.tmux, ..Default::default()
-                }).collect();
+                current = aliases(&value)
+                    .into_iter()
+                    .filter(|a| !is_pattern(a.clone()))
+                    .map(|a| SshHost {
+                        alias: a,
+                        group: meta.group.clone(),
+                        tags: meta.tags.clone(),
+                        color: meta.color.clone(),
+                        os: meta.os,
+                        tmux: meta.tmux,
+                        ..Default::default()
+                    })
+                    .collect();
             }
             "match" => {
                 hosts.append(&mut current);
                 in_match = true;
             }
-            _ if !in_match => for h in current.iter_mut() { apply(&key, &value, h) },
+            _ if !in_match => {
+                for h in current.iter_mut() {
+                    apply(&key, &value, h)
+                }
+            }
             _ => {}
         }
     }
@@ -310,8 +401,8 @@ pub fn parse_config(text: String) -> Vec<SshHost> {
 
 /// Директивы, которыми управляет редактор; остальные строки блока не трогаются.
 // UseKeychain и AddKeysToAgent сюда не входят: уже стоящие в блоке остаются как были.
-const MANAGED: &[&str] = &["hostname", "user", "port", "identityfile", "proxyjump", "forwardagent",
-                             "serveraliveinterval", "compression"];
+const MANAGED: &[&str] =
+    &["hostname", "user", "port", "identityfile", "proxyjump", "forwardagent", "serveraliveinterval", "compression"];
 
 /// Где лежит блок хоста.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -334,33 +425,51 @@ pub struct Document {
 impl Document {
     pub fn new(text: &str) -> Self {
         let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
-        if lines.last().map(|l| l.is_empty()).unwrap_or(false) { lines.pop(); }
+        if lines.last().map(|l| l.is_empty()).unwrap_or(false) {
+            lines.pop();
+        }
         Document { lines }
     }
 
     pub fn text(&self) -> String {
-        if self.lines.is_empty() { String::new() } else { self.lines.join("\n") + "\n" }
+        if self.lines.is_empty() {
+            String::new()
+        } else {
+            self.lines.join("\n") + "\n"
+        }
     }
 
     pub fn block(&self, alias: &str) -> Option<Block> {
         for (i, raw) in self.lines.iter().enumerate() {
             let (key, value) = split_key_value(raw.trim());
-            if key != "host" { continue; }
+            if key != "host" {
+                continue;
+            }
             let al = aliases(&value);
-            if !al.iter().any(|a| a == alias) { continue; }
+            if !al.iter().any(|a| a == alias) {
+                continue;
+            }
             let mut end = i + 1;
             while end < self.lines.len() {
                 let (k, _) = split_key_value(self.lines[end].trim());
-                if k == "host" || k == "match" { break; }
+                if k == "host" || k == "match" {
+                    break;
+                }
                 end += 1;
             }
             // Хвостовые пустые строки и мета следующего блока к этому хосту не относятся.
             while end > i + 1 {
                 let t = self.lines[end - 1].trim();
-                if t.is_empty() || parse_meta(t).is_some() { end -= 1 } else { break }
+                if t.is_empty() || parse_meta(t).is_some() {
+                    end -= 1
+                } else {
+                    break;
+                }
             }
             let mut start = i;
-            if i > 0 && parse_meta(self.lines[i - 1].trim()).is_some() { start = i - 1; }
+            if i > 0 && parse_meta(self.lines[i - 1].trim()).is_some() {
+                start = i - 1;
+            }
             return Some(Block { start: start as u32, end: end as u32, host_line: i as u32, is_shared: al.len() > 1 });
         }
         None
@@ -376,39 +485,68 @@ impl Document {
     }
 
     /// Строки блока для `platform`: значения с пробелами — в кавычках, UseKeychain — только для macOS.
-    pub fn rendered_lines_for(&self, host: &SshHost, original_alias: Option<&str>, platform: ConfigPlatform) -> Vec<String> {
+    pub fn rendered_lines_for(
+        &self,
+        host: &SshHost,
+        original_alias: Option<&str>,
+        platform: ConfigPlatform,
+    ) -> Vec<String> {
         let mut out = Vec::new();
         out.extend(meta_line(host.group.as_deref(), &host.tags, host.color.as_deref(), host.os, host.tmux, &[]));
 
         out.push(format!("Host {}", host.alias));
         let mut add = |k: &str, v: Option<String>| {
-            if let Some(v) = v.filter(|v| !v.is_empty()) { out.push(format!("    {k} {}", quote_value(&v))); }
+            if let Some(v) = v.filter(|v| !v.is_empty()) {
+                out.push(format!("    {k} {}", quote_value(&v)));
+            }
         };
         add("HostName", host.host_name.clone());
         add("User", host.user.clone());
         add("Port", host.port.map(|p| p.to_string()));
-        let keys: Vec<String> = if host.identity_files.is_empty() { host.identity_file.clone().into_iter().collect() }
-                                else { host.identity_files.clone() };
-        for k in &keys { add("IdentityFile", Some(k.clone())); }
-        let old_body: Vec<String> = original_alias.and_then(|a| self.block(a))
-            .map(|b| self.lines[(b.host_line as usize + 1)..b.end as usize].to_vec()).unwrap_or_default();
-        let has = |name: &str| old_body.iter().any(|l| { let t = l.trim(); !t.starts_with('#') && split_key_value(t).0 == name });
+        let keys: Vec<String> = if host.identity_files.is_empty() {
+            host.identity_file.clone().into_iter().collect()
+        } else {
+            host.identity_files.clone()
+        };
+        for k in &keys {
+            add("IdentityFile", Some(k.clone()));
+        }
+        let old_body: Vec<String> = original_alias
+            .and_then(|a| self.block(a))
+            .map(|b| self.lines[(b.host_line as usize + 1)..b.end as usize].to_vec())
+            .unwrap_or_default();
+        let has = |name: &str| {
+            old_body.iter().any(|l| {
+                let t = l.trim();
+                !t.starts_with('#') && split_key_value(t).0 == name
+            })
+        };
         if keys.iter().any(|k| !k.is_empty()) {
-            if platform == ConfigPlatform::Macos && !has("usekeychain") { add("UseKeychain", Some("yes".into())); }
-            if !has("addkeystoagent") { add("AddKeysToAgent", Some("yes".into())); }
+            if platform == ConfigPlatform::Macos && !has("usekeychain") {
+                add("UseKeychain", Some("yes".into()));
+            }
+            if !has("addkeystoagent") {
+                add("AddKeysToAgent", Some("yes".into()));
+            }
         }
         add("ProxyJump", host.proxy_jump.clone());
         // Явный выбор в редакторе (bool) важнее сырого значения из конфига; без выбора остаётся как в конфиге.
-        let tri = |raw: &Option<String>, flag: Option<bool>| flag.map(|b| if b { "yes" } else { "no" }.to_string()).or_else(|| raw.clone());
+        let tri = |raw: &Option<String>, flag: Option<bool>| {
+            flag.map(|b| if b { "yes" } else { "no" }.to_string()).or_else(|| raw.clone())
+        };
         add("ForwardAgent", tri(&host.forward_agent_value, host.forward_agent));
         add("ServerAliveInterval", host.server_alive_interval.map(|p| p.to_string()));
         add("Compression", tri(&host.compression_value, host.compression));
 
         for raw in &old_body {
             let t = raw.trim();
-            if t.is_empty() { continue; }
+            if t.is_empty() {
+                continue;
+            }
             let (key, _) = split_key_value(t);
-            if t.starts_with('#') || !MANAGED.contains(&key.as_str()) { out.push(raw.clone()); }
+            if t.starts_with('#') || !MANAGED.contains(&key.as_str()) {
+                out.push(raw.clone());
+            }
         }
         out
     }
@@ -418,7 +556,12 @@ impl Document {
         self.upsert_for(host, original_alias, ConfigPlatform::Macos)
     }
 
-    pub fn upsert_for(&mut self, host: &SshHost, original_alias: Option<&str>, platform: ConfigPlatform) -> Result<(), CoreError> {
+    pub fn upsert_for(
+        &mut self,
+        host: &SshHost,
+        original_alias: Option<&str>,
+        platform: ConfigPlatform,
+    ) -> Result<(), CoreError> {
         check_host(host)?;
         if Some(host.alias.as_str()) != original_alias && self.block(&host.alias).is_some() {
             return Err(CoreError::AliasTaken(host.alias.clone()));
@@ -427,11 +570,15 @@ impl Document {
         match original_alias {
             Some(orig) => {
                 let b = self.block(orig).ok_or_else(|| CoreError::NotFound(orig.to_string()))?;
-                if b.is_shared { return Err(CoreError::SharedBlock(orig.to_string())); }
+                if b.is_shared {
+                    return Err(CoreError::SharedBlock(orig.to_string()));
+                }
                 self.lines.splice(b.start as usize..b.end as usize, rendered);
             }
             None => {
-                if self.lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) { self.lines.push(String::new()); }
+                if self.lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) {
+                    self.lines.push(String::new());
+                }
                 self.lines.extend(rendered);
             }
         }
@@ -440,10 +587,14 @@ impl Document {
 
     pub fn remove(&mut self, alias: &str) -> Result<(), CoreError> {
         let b = self.block(alias).ok_or_else(|| CoreError::NotFound(alias.to_string()))?;
-        if b.is_shared { return Err(CoreError::SharedBlock(alias.to_string())); }
+        if b.is_shared {
+            return Err(CoreError::SharedBlock(alias.to_string()));
+        }
         let mut end = b.end as usize;
         // И пустая строка-разделитель после блока.
-        if end < self.lines.len() && self.lines[end].trim().is_empty() { end += 1; }
+        if end < self.lines.len() && self.lines[end].trim().is_empty() {
+            end += 1;
+        }
         self.lines.drain(b.start as usize..end);
         Ok(())
     }
@@ -451,9 +602,13 @@ impl Document {
     /// Заменить блок готовыми строками или добавить в конец (синхронизация).
     pub fn replace_or_append(&mut self, alias: &str, block: Vec<String>) {
         match self.block(alias) {
-            Some(b) => { self.lines.splice(b.start as usize..b.end as usize, block); }
+            Some(b) => {
+                self.lines.splice(b.start as usize..b.end as usize, block);
+            }
             None => {
-                if self.lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) { self.lines.push(String::new()); }
+                if self.lines.last().map(|l| !l.trim().is_empty()).unwrap_or(false) {
+                    self.lines.push(String::new());
+                }
                 self.lines.extend(block);
             }
         }
@@ -465,31 +620,50 @@ impl Document {
 /// Поменять только строку `# relaya:` над блоком `alias`; сам блок и незнакомые ключи метаданных не трогаются.
 /// Нет метаданных — строка убирается. Общий блок `Host a b` разрешён: метаданные у блока одни.
 #[uniffi::export]
-pub fn config_set_meta(text: String, alias: String, group: Option<String>, tags: Vec<String>, color: Option<String>,
-                       os: Option<ServerOs>, tmux: bool) -> Result<String, CoreError> {
+pub fn config_set_meta(
+    text: String,
+    alias: String,
+    group: Option<String>,
+    tags: Vec<String>,
+    color: Option<String>,
+    os: Option<ServerOs>,
+    tmux: bool,
+) -> Result<String, CoreError> {
     for v in group.iter().chain(color.iter()).chain(tags.iter()) {
-        if v.contains(['\n', '\r']) { return Err(CoreError::InvalidValue(v.clone())); }
+        if v.contains(['\n', '\r']) {
+            return Err(CoreError::InvalidValue(v.clone()));
+        }
     }
     let mut d = Document::new(&text);
     let b = d.block(&alias).ok_or_else(|| CoreError::NotFound(alias.clone()))?;
     let (start, host_line) = (b.start as usize, b.host_line as usize);
     let extra: Vec<String> = if start < host_line {
         let body = d.lines[start].trim().trim_start_matches('#').trim();
-        meta_tokens(&body["relaya:".len()..]).into_iter()
+        meta_tokens(&body["relaya:".len()..])
+            .into_iter()
             .filter(|p| p.split_once('=').map(|(k, _)| !META_KEYS.contains(&k.to_lowercase().as_str())).unwrap_or(true))
-            .map(|p| match p.split_once('=') { Some((k, v)) => format!("{k}={}", meta_value(v)), None => p })
+            .map(|p| match p.split_once('=') {
+                Some((k, v)) => format!("{k}={}", meta_value(v)),
+                None => p,
+            })
             .collect()
-    } else { Vec::new() };
+    } else {
+        Vec::new()
+    };
     let line = meta_line(group.as_deref(), &tags, color.as_deref(), os, tmux, &extra);
     d.lines.splice(start..host_line, line);
     Ok(d.text())
 }
 
 #[uniffi::export]
-pub fn config_block(text: String, alias: String) -> Option<Block> { Document::new(&text).block(&alias) }
+pub fn config_block(text: String, alias: String) -> Option<Block> {
+    Document::new(&text).block(&alias)
+}
 
 #[uniffi::export]
-pub fn config_current_lines(text: String, alias: String) -> Vec<String> { Document::new(&text).current_lines(&alias) }
+pub fn config_current_lines(text: String, alias: String) -> Vec<String> {
+    Document::new(&text).current_lines(&alias)
+}
 
 #[uniffi::export]
 pub fn config_rendered_lines(text: String, host: SshHost, original_alias: Option<String>) -> Vec<String> {
@@ -498,15 +672,24 @@ pub fn config_rendered_lines(text: String, host: SshHost, original_alias: Option
 
 /// То же, что `config_rendered_lines`, но с проверкой значений и для своей платформы.
 #[uniffi::export]
-pub fn config_rendered_lines_checked(text: String, host: SshHost, original_alias: Option<String>, platform: ConfigPlatform)
-    -> Result<Vec<String>, CoreError> {
+pub fn config_rendered_lines_checked(
+    text: String,
+    host: SshHost,
+    original_alias: Option<String>,
+    platform: ConfigPlatform,
+) -> Result<Vec<String>, CoreError> {
     check_host(&host)?;
     Ok(Document::new(&text).rendered_lines_for(&host, original_alias.as_deref(), platform))
 }
 
 /// `config_upsert` для платформы: на Windows и Linux новые блоки без UseKeychain.
 #[uniffi::export]
-pub fn config_upsert_for(text: String, host: SshHost, original_alias: Option<String>, platform: ConfigPlatform) -> Result<String, CoreError> {
+pub fn config_upsert_for(
+    text: String,
+    host: SshHost,
+    original_alias: Option<String>,
+    platform: ConfigPlatform,
+) -> Result<String, CoreError> {
     let mut d = Document::new(&text);
     d.upsert_for(&host, original_alias.as_deref(), platform)?;
     Ok(d.text())
@@ -516,15 +699,29 @@ pub fn config_upsert_for(text: String, host: SshHost, original_alias: Option<Str
 /// (или UseKeychain дописывается в уже стоящий глобальный IgnoreUnknown). Иначе ssh отказывается читать конфиг.
 #[uniffi::export]
 pub fn config_for_platform(text: String, platform: ConfigPlatform) -> String {
-    if platform == ConfigPlatform::Macos { return text; }
+    if platform == ConfigPlatform::Macos {
+        return text;
+    }
     let mut d = Document::new(&text);
-    let directive = |l: &str| { let t = l.trim(); if t.starts_with('#') { String::new() } else { split_key_value(t).0 } };
-    if !d.lines.iter().any(|l| directive(l) == "usekeychain") { return text; }
-    let global_end = d.lines.iter().position(|l| matches!(directive(l).as_str(), "host" | "match")).unwrap_or(d.lines.len());
+    let directive = |l: &str| {
+        let t = l.trim();
+        if t.starts_with('#') {
+            String::new()
+        } else {
+            split_key_value(t).0
+        }
+    };
+    if !d.lines.iter().any(|l| directive(l) == "usekeychain") {
+        return text;
+    }
+    let global_end =
+        d.lines.iter().position(|l| matches!(directive(l).as_str(), "host" | "match")).unwrap_or(d.lines.len());
     match d.lines[..global_end].iter().position(|l| directive(l) == "ignoreunknown") {
         Some(i) => {
             let (_, v) = split_key_value(d.lines[i].trim());
-            if v.split(',').any(|x| x.trim().eq_ignore_ascii_case("usekeychain")) { return text; }
+            if v.split(',').any(|x| x.trim().eq_ignore_ascii_case("usekeychain")) {
+                return text;
+            }
             let indent: String = d.lines[i].chars().take_while(|c| c.is_whitespace()).collect();
             d.lines[i] = format!("{indent}IgnoreUnknown {v},UseKeychain");
         }
@@ -548,7 +745,9 @@ pub fn config_remove(text: String, alias: String) -> Result<String, CoreError> {
 }
 
 #[uniffi::export]
-pub fn config_lines(text: String) -> Vec<String> { Document::new(&text).lines }
+pub fn config_lines(text: String) -> Vec<String> {
+    Document::new(&text).lines
+}
 
 #[cfg(test)]
 mod tests {
@@ -611,7 +810,8 @@ mod tests {
 
     #[test]
     fn parses_destinations() {
-        let d = |u: Option<&str>, h: &str, p: Option<i64>| Destination { user: u.map(Into::into), host: h.into(), port: p };
+        let d =
+            |u: Option<&str>, h: &str, p: Option<i64>| Destination { user: u.map(Into::into), host: h.into(), port: p };
         assert_eq!(parse_destination("git@a.b".into()), d(Some("git"), "a.b", None));
         assert_eq!(parse_destination("a.b".into()), d(None, "a.b", None));
         assert_eq!(parse_destination("root@1.2.3.4:2222".into()), d(Some("root"), "1.2.3.4", Some(2222)));
@@ -626,7 +826,10 @@ mod tests {
 
     #[test]
     fn trailing_comments_are_not_values() {
-        let h = parse_config("Host web # production\n    HostName x.example # note\n    IdentityFile \"~/.ssh/a #1\"\n    User a#b\n".into());
+        let h = parse_config(
+            "Host web # production\n    HostName x.example # note\n    IdentityFile \"~/.ssh/a #1\"\n    User a#b\n"
+                .into(),
+        );
         assert_eq!(h.len(), 1);
         assert_eq!(h[0].alias, "web");
         assert_eq!(h[0].host_name.as_deref(), Some("x.example"));
@@ -637,16 +840,40 @@ mod tests {
 
     #[test]
     fn set_meta_touches_only_the_meta_line() {
-        let cfg = "Host a\n    User x\n\n# relaya: group=old future=\"k v\" tmux=on\nHost b c\n    HostName b.example\n";
-        let out = config_set_meta(cfg.into(), "c".into(), Some("мои сервера".into()), vec!["prod".into(), "db".into()],
-                                  Some("orange".into()), None, false).unwrap();
+        let cfg =
+            "Host a\n    User x\n\n# relaya: group=old future=\"k v\" tmux=on\nHost b c\n    HostName b.example\n";
+        let out = config_set_meta(
+            cfg.into(),
+            "c".into(),
+            Some("мои сервера".into()),
+            vec!["prod".into(), "db".into()],
+            Some("orange".into()),
+            None,
+            false,
+        )
+        .unwrap();
         assert_eq!(out, "Host a\n    User x\n\n# relaya: group=\"мои сервера\" tags=prod,db color=orange future=\"k v\"\nHost b c\n    HostName b.example\n");
         let added = config_set_meta(cfg.into(), "a".into(), None, vec![], None, None, true).unwrap();
         assert!(added.starts_with("# relaya: tmux=on\nHost a\n    User x\n\n# relaya: group=old"), "{added}");
-        let cleared = config_set_meta("# relaya: tags=x\nHost a\n    User x\n".into(), "a".into(), None, vec![], None, None, false).unwrap();
+        let cleared = config_set_meta(
+            "# relaya: tags=x\nHost a\n    User x\n".into(),
+            "a".into(),
+            None,
+            vec![],
+            None,
+            None,
+            false,
+        )
+        .unwrap();
         assert_eq!(cleared, "Host a\n    User x\n");
-        assert_eq!(config_set_meta(cfg.into(), "zz".into(), None, vec![], None, None, false), Err(CoreError::NotFound("zz".into())));
-        assert!(matches!(config_set_meta(cfg.into(), "a".into(), Some("x\nHost evil".into()), vec![], None, None, false), Err(CoreError::InvalidValue(_))));
+        assert_eq!(
+            config_set_meta(cfg.into(), "zz".into(), None, vec![], None, None, false),
+            Err(CoreError::NotFound("zz".into()))
+        );
+        assert!(matches!(
+            config_set_meta(cfg.into(), "a".into(), Some("x\nHost evil".into()), vec![], None, None, false),
+            Err(CoreError::InvalidValue(_))
+        ));
     }
 
     #[test]
@@ -662,15 +889,20 @@ mod tests {
         let mut bad = h.clone();
         bad.user = Some("x\nProxyCommand evil".into());
         assert!(matches!(config_upsert(text.into(), bad.clone(), Some("web".into())), Err(CoreError::InvalidValue(_))));
-        assert!(matches!(config_rendered_lines_checked(text.into(), bad, None, ConfigPlatform::Macos), Err(CoreError::InvalidValue(_))));
+        assert!(matches!(
+            config_rendered_lines_checked(text.into(), bad, None, ConfigPlatform::Macos),
+            Err(CoreError::InvalidValue(_))
+        ));
         // Старые поля без новых — как раньше; на Windows без UseKeychain.
         let mut n = SshHost::new("n");
         n.identity_file = Some("C:\\Users\\My Name\\.ssh\\id".into());
         n.forward_agent = Some(true);
         assert_eq!(config_upsert("".into(), n.clone(), None).unwrap(),
                    "Host n\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\id\"\n    UseKeychain yes\n    AddKeysToAgent yes\n    ForwardAgent yes\n");
-        assert_eq!(config_upsert_for("".into(), n, None, ConfigPlatform::Windows).unwrap(),
-                   "Host n\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\id\"\n    AddKeysToAgent yes\n    ForwardAgent yes\n");
+        assert_eq!(
+            config_upsert_for("".into(), n, None, ConfigPlatform::Windows).unwrap(),
+            "Host n\n    IdentityFile \"C:\\Users\\My Name\\.ssh\\id\"\n    AddKeysToAgent yes\n    ForwardAgent yes\n"
+        );
     }
 
     #[test]
@@ -691,9 +923,17 @@ mod tests {
     fn config_for_platform_adds_ignore_unknown() {
         let mac = "Host a\n    UseKeychain yes\n";
         assert_eq!(config_for_platform(mac.into(), ConfigPlatform::Macos), mac);
-        assert_eq!(config_for_platform(mac.into(), ConfigPlatform::Windows), "IgnoreUnknown UseKeychain\nHost a\n    UseKeychain yes\n");
-        assert_eq!(config_for_platform("IgnoreUnknown AddKeysToAgent\n\nHost a\n    UseKeychain yes\n".into(), ConfigPlatform::Linux),
-                   "IgnoreUnknown AddKeysToAgent,UseKeychain\n\nHost a\n    UseKeychain yes\n");
+        assert_eq!(
+            config_for_platform(mac.into(), ConfigPlatform::Windows),
+            "IgnoreUnknown UseKeychain\nHost a\n    UseKeychain yes\n"
+        );
+        assert_eq!(
+            config_for_platform(
+                "IgnoreUnknown AddKeysToAgent\n\nHost a\n    UseKeychain yes\n".into(),
+                ConfigPlatform::Linux
+            ),
+            "IgnoreUnknown AddKeysToAgent,UseKeychain\n\nHost a\n    UseKeychain yes\n"
+        );
         let done = config_for_platform(mac.into(), ConfigPlatform::Linux);
         assert_eq!(config_for_platform(done.clone(), ConfigPlatform::Linux), done);
         assert_eq!(config_for_platform("Host a\n".into(), ConfigPlatform::Windows), "Host a\n");
@@ -702,7 +942,9 @@ mod tests {
     /// Конфиг с Mac проходит `ssh -G` на этой машине (в CI — windows-latest и ubuntu). Без ssh тест пропускается.
     #[test]
     fn mac_config_passes_ssh_g_here() {
-        if cfg!(target_os = "macos") { return; }
+        if cfg!(target_os = "macos") {
+            return;
+        }
         let platform = if cfg!(windows) { ConfigPlatform::Windows } else { ConfigPlatform::Linux };
         let mut h = SshHost::new("web");
         h.host_name = Some("10.0.0.1".into());
@@ -711,7 +953,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("config");
         std::fs::write(&file, config_for_platform(mac.clone(), platform)).unwrap();
-        let Ok(out) = std::process::Command::new("ssh").arg("-G").arg("-F").arg(&file).arg("web").output() else { return };
+        let Ok(out) = std::process::Command::new("ssh").arg("-G").arg("-F").arg(&file).arg("web").output() else {
+            return;
+        };
         assert!(out.status.success(), "ssh -G: {}", String::from_utf8_lossy(&out.stderr));
         assert!(String::from_utf8_lossy(&out.stdout).to_lowercase().contains("hostname 10.0.0.1"));
         // И без IgnoreUnknown ssh действительно падает — тест проверяет то, что нужно.

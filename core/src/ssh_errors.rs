@@ -87,7 +87,10 @@ pub fn ssh_explain(output: String) -> Option<SshProblem> {
 
 /// Протокол удалённого рабочего стола для `remote_explain`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum RemoteProtocol { Rdp, Vnc }
+pub enum RemoteProtocol {
+    Rdp,
+    Vnc,
+}
 
 /// RDP: тексты RDPKit (Mac), IronRDP (`RemoteClose`) и коды Windows. Порядок важен: частные правила раньше общих.
 const RDP_RULES: &[(&[&str], &str, &str)] = &[
@@ -173,15 +176,22 @@ fn explain_with(rules: &[(&[&str], &str, &str)], output: &str) -> Option<SshProb
 /// Как и у `ssh_explain`, `title` и `hint` — ключи локализации.
 #[uniffi::export]
 pub fn remote_explain(protocol: RemoteProtocol, message: String) -> Option<SshProblem> {
-    match protocol { RemoteProtocol::Rdp => explain_with(RDP_RULES, &message), RemoteProtocol::Vnc => explain_with(VNC_RULES, &message) }
+    match protocol {
+        RemoteProtocol::Rdp => explain_with(RDP_RULES, &message),
+        RemoteProtocol::Vnc => explain_with(VNC_RULES, &message),
+    }
 }
 
 /// Главная строка ошибки, если объяснения нет: fatal:/error: важнее последней строки.
 #[uniffi::export]
 pub fn ssh_error_line(output: String) -> String {
     let lines: Vec<&str> = output.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-    lines.iter().find(|l| l.starts_with("fatal:") || l.starts_with("error:")).or(lines.last())
-        .map(|l| l.to_string()).unwrap_or_default()
+    lines
+        .iter()
+        .find(|l| l.starts_with("fatal:") || l.starts_with("error:"))
+        .or(lines.last())
+        .map(|l| l.to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -194,19 +204,39 @@ mod tests {
         let p = ssh_explain(git.into()).unwrap();
         assert!(p.title.contains("слишком много ключей"));
         assert!(p.detail.contains("Too many authentication failures"));
-        assert!(ssh_explain("ssh: Could not resolve hostname foo: nodename nor servname provided".into()).unwrap().title.contains("не найден"));
+        assert!(ssh_explain("ssh: Could not resolve hostname foo: nodename nor servname provided".into())
+            .unwrap()
+            .title
+            .contains("не найден"));
         assert!(ssh_explain("git@x: Permission denied (publickey).".into()).unwrap().title.contains("ни один ключ"));
-        assert!(ssh_explain("@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@".into()).unwrap().title.contains("не совпадает"));
+        assert!(ssh_explain("@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@".into())
+            .unwrap()
+            .title
+            .contains("не совпадает"));
         assert!(ssh_explain("all fine".into()).is_none());
         let ru = "git@gitlab.com: Permission denied (publickey).\nfatal: Не удалось прочитать из внешнего репозитория.\n\nУдостоверьтесь, что у вас есть необходимые права доступа\nи репозиторий существует.";
         assert!(ssh_explain(ru.into()).unwrap().title.contains("ни один ключ"));
-        assert!(ssh_explain("fatal: Не удалось прочитать из внешнего репозитория.".into()).unwrap().title.contains("к репозиторию"));
-        assert!(ssh_explain("ssh: Could not resolve hostname x: Этот хост неизвестен.".into()).unwrap().title.contains("не найден"));
+        assert!(ssh_explain("fatal: Не удалось прочитать из внешнего репозитория.".into())
+            .unwrap()
+            .title
+            .contains("к репозиторию"));
+        assert!(ssh_explain("ssh: Could not resolve hostname x: Этот хост неизвестен.".into())
+            .unwrap()
+            .title
+            .contains("не найден"));
         assert!(ssh_explain("connect to host x port 22: Подключение не установлено, т.к. конечный компьютер отверг запрос на подключение.".into()).unwrap().title.contains("отказал в подключении"));
-        assert!(ssh_explain("\"ssh\" не является внутренней или внешней командой".into()).unwrap().title.contains("программа"));
+        assert!(ssh_explain("\"ssh\" не является внутренней или внешней командой".into())
+            .unwrap()
+            .title
+            .contains("программа"));
         assert!(ssh_explain("fatal: «x» не похоже на git репозиторий".into()).unwrap().title.contains("не найден"));
-        assert!(ssh_explain("Couldn't stat remote file: No such file or directory".into()).unwrap().title.contains("Файла на сервере нет"));
-        assert!(ssh_explain("Warning: Identity file ~/.ssh/x not accessible: No such file or directory.".into()).is_none());
+        assert!(ssh_explain("Couldn't stat remote file: No such file or directory".into())
+            .unwrap()
+            .title
+            .contains("Файла на сервере нет"));
+        assert!(
+            ssh_explain("Warning: Identity file ~/.ssh/x not accessible: No such file or directory.".into()).is_none()
+        );
         assert!(ssh_explain("rm: cannot remove 'a': No such file or directory".into()).is_none());
         assert!(ssh_explain("zsh: command not found: ssh".into()).unwrap().title.contains("программа"));
         let unknown = "No ED25519 host key is known for git.lan and you have requested strict checking.\nHost key verification failed.\nfatal: Could not read from remote repository.";
@@ -223,16 +253,32 @@ mod tests {
         assert_eq!(rdp("CredSSP: SEC_E_LOGON_DENIED").as_deref(), Some("Неверный логин или пароль"));
         assert_eq!(rdp("STATUS_PASSWORD_EXPIRED").as_deref(), Some("Пароль истёк — сервер требует сменить его"));
         assert_eq!(rdp("STATUS_ACCOUNT_LOCKED_OUT").as_deref(), Some("Учётная запись заблокирована или отключена"));
-        assert_eq!(rdp("negotiation failure: HYBRID_REQUIRED_BY_SERVER").as_deref(), Some("Сервер требует проверку подлинности на уровне сети (NLA)"));
-        assert_eq!(rdp("SSL_NOT_ALLOWED_BY_SERVER").as_deref(), Some("Сервер не принимает проверку подлинности на уровне сети (NLA)"));
+        assert_eq!(
+            rdp("negotiation failure: HYBRID_REQUIRED_BY_SERVER").as_deref(),
+            Some("Сервер требует проверку подлинности на уровне сети (NLA)")
+        );
+        assert_eq!(
+            rdp("SSL_NOT_ALLOWED_BY_SERVER").as_deref(),
+            Some("Сервер не принимает проверку подлинности на уровне сети (NLA)")
+        );
         assert_eq!(rdp("certificate not accepted").as_deref(), Some("Сертификат сервера изменился или не принят"));
-        assert!(rdp("The remote session was disconnected because there are no Remote Desktop License Servers available").unwrap().contains("лицензии"));
+        assert!(rdp(
+            "The remote session was disconnected because there are no Remote Desktop License Servers available"
+        )
+        .unwrap()
+        .contains("лицензии"));
         assert_eq!(rdp("Connection refused (os error 61)").as_deref(), Some("Сервер отказал в подключении"));
         assert_eq!(rdp("connection timed out").as_deref(), Some("Сервер RDP не отвечает"));
         assert_eq!(vnc("Authentication failed").as_deref(), Some("Неверный пароль VNC"));
         assert_eq!(vnc("Too many authentication failures").as_deref(), Some("Сервер VNC временно блокирует вход"));
-        assert_eq!(vnc("Unsupported security type: VeNCrypt").as_deref(), Some("Неподдерживаемый тип аутентификации или шифрования"));
-        assert_eq!(vnc("Server requires Apple Remote Desktop authentication").as_deref(), Some("Нужен логин и пароль пользователя macOS"));
+        assert_eq!(
+            vnc("Unsupported security type: VeNCrypt").as_deref(),
+            Some("Неподдерживаемый тип аутентификации или шифрования")
+        );
+        assert_eq!(
+            vnc("Server requires Apple Remote Desktop authentication").as_deref(),
+            Some("Нужен логин и пароль пользователя macOS")
+        );
         assert!(vnc("all fine").is_none());
         assert!(rdp("").is_none());
     }

@@ -1,7 +1,11 @@
 //! Построчный diff (LCS) для превью изменений конфига.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum DiffKind { Same, Added, Removed }
+pub enum DiffKind {
+    Same,
+    Added,
+    Removed,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DiffLine {
@@ -22,11 +26,15 @@ pub fn line_diff(old: Vec<String>, new: Vec<String>) -> Vec<DiffLine> {
     let (mut i, mut j) = (0, 0);
     while i < n || j < m {
         if i < n && j < m && old[i] == new[j] {
-            out.push(DiffLine { kind: DiffKind::Same, text: old[i].clone() }); i += 1; j += 1;
+            out.push(DiffLine { kind: DiffKind::Same, text: old[i].clone() });
+            i += 1;
+            j += 1;
         } else if j < m && (i == n || lcs[i][j + 1] >= lcs[i + 1][j]) {
-            out.push(DiffLine { kind: DiffKind::Added, text: new[j].clone() }); j += 1;
+            out.push(DiffLine { kind: DiffKind::Added, text: new[j].clone() });
+            j += 1;
         } else {
-            out.push(DiffLine { kind: DiffKind::Removed, text: old[i].clone() }); i += 1;
+            out.push(DiffLine { kind: DiffKind::Removed, text: old[i].clone() });
+            i += 1;
         }
     }
     out

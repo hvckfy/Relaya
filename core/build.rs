@@ -9,7 +9,8 @@ fn freerdp() {
     println!("cargo:rerun-if-env-changed=FREERDP_DIR");
     println!("cargo:rerun-if-changed=native/relaya_rdp.c");
     println!("cargo:rerun-if-changed=native/relaya_rdp.h");
-    let dir = std::env::var("FREERDP_DIR").expect("FREERDP_DIR: каталог FreeRDP 3 с include/ и lib/ (артефакт freerdp.yml)");
+    let dir =
+        std::env::var("FREERDP_DIR").expect("FREERDP_DIR: каталог FreeRDP 3 с include/ и lib/ (артефакт freerdp.yml)");
     cc::Build::new()
         .file("native/relaya_rdp.c")
         .include("native")
