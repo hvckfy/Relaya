@@ -1263,3 +1263,5 @@
 "Создан %@" = "Created %@";
 "в ssh-agent" = "in ssh-agent";
 "не в агенте" = "not in the agent";
+"Название группы" = "Group name";
+"Не удалось сохранить" = "Couldn’t save";

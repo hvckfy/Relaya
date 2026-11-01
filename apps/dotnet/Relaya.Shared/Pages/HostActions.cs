@@ -28,6 +28,22 @@ internal static class HostActions
         var groups = new MenuFlyoutSubItem { Text = L("Переместить в группу"), Icon = new FontIcon { Glyph = "" } };
         groups.Items.Add(GroupItem(h, null, L("Без группы")));
         foreach (var g in AppState.Groups()) groups.Items.Add(GroupItem(h, g, g));
+        // Новая группа прямо из меню (1.6): имя — и хост сразу в ней.
+        groups.Items.Add(new MenuFlyoutSeparator());
+        var newGroup = new MenuFlyoutItem { Text = L("Новая группа…") };
+        newGroup.Click += async (_, _) =>
+        {
+            var name = new TextBox { Header = L("Название группы") };
+            var d = new ContentDialog
+            {
+                Title = L("Новая группа"), Content = name, PrimaryButtonText = L("Создать"), CloseButtonText = L("Отмена"),
+                DefaultButton = ContentDialogButton.Primary, XamlRoot = anchor.XamlRoot,
+            };
+            if (await d.ShowAsync() != ContentDialogResult.Primary || name.Text.Trim().Length == 0) return;
+            try { AppState.SetMeta(h with { group = name.Text.Trim() }); }
+            catch (Exception e) { await Ui.ShowError(anchor.XamlRoot, L("Не удалось сохранить"), e.Message); }
+        };
+        groups.Items.Add(newGroup);
         menu.Items.Add(groups);
         menu.Items.Add(Item(L("Пароль…"), "\ue8d7", async () => await HostEditor.AskPassword(anchor.XamlRoot, h.alias)));
         if (Platform.CredentialStore.Has(h.alias))
