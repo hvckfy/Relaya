@@ -681,6 +681,9 @@ pub struct RenamedKey {
     pub saved_as: String,
 }
 
+/// Итог импорта ключей: добавленные, переименованные (одноимённый другой ключ) и пропущенные.
+type KeysImport = (Vec<String>, Vec<RenamedKey>, Vec<SkippedKey>);
+
 /// Почему ключ из синхронизации не попал в ~/.ssh.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "camelCase")]
@@ -701,7 +704,7 @@ fn keys_import(
     pass: Option<&str>,
     dir: &Path,
     only: Option<&HashSet<String>>,
-) -> Result<(Vec<String>, Vec<RenamedKey>, Vec<SkippedKey>), CoreError> {
+) -> Result<KeysImport, CoreError> {
     let keys_dir = dir.join("keys");
     let (mut added, mut renamed, mut skipped) = (Vec::new(), Vec::new(), Vec::new());
     let Ok(entries) = fs::read_dir(&keys_dir) else { return Ok((added, renamed, skipped)) };

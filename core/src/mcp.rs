@@ -830,6 +830,8 @@ impl McpServer {
 }
 
 impl McpServer {
+    // Одна запись журнала — все её поля; структура-обёртка только переложила бы их.
+    #[allow(clippy::too_many_arguments)]
     fn record(
         &self,
         tool: &str,
@@ -1045,17 +1047,17 @@ mod tests {
         assert!(!m.enabled && m.default_mode == McpMode::ReadOnly, "глобальные переключатели — свои");
         assert_eq!((m.hosts["web"], m.hosts["nas"]), (McpMode::Confirm, McpMode::Off));
         assert_eq!(m.allow.unwrap()["web"], vec!["uptime".to_string(), "df -h".to_string()]);
-        assert!(m.grants.unwrap().get("web").is_none(), "временный доступ с другой машины не приходит");
+        assert!(!m.grants.unwrap().contains_key("web"), "временный доступ с другой машины не приходит");
     }
 
     /// Регресс (аудит безопасности): синхронизация не снимает локальный deny и не принимает чужие grants.
     #[test]
     fn merge_keeps_local_deny_and_ignores_incoming_grants() {
-        let mut local = McpPolicy::default();
-        local.deny =
-            Some(HashMap::from([("web".into(), vec!["rm -rf *".into()]), ("*".into(), vec!["reboot".into()])]));
-        let mut theirs = McpPolicy::default();
-        theirs.deny = Some(HashMap::from([("web".into(), vec![])]));
+        let local = McpPolicy {
+            deny: Some(HashMap::from([("web".into(), vec!["rm -rf *".into()]), ("*".into(), vec!["reboot".into()])])),
+            ..Default::default()
+        };
+        let mut theirs = McpPolicy { deny: Some(HashMap::from([("web".into(), vec![])])), ..Default::default() };
         theirs.grants = Some(HashMap::from([
             ("web".into(), McpGrant { mode: McpMode::Trusted, until: 9e9 }),
             ("db".into(), McpGrant { mode: McpMode::Trusted, until: 9e9 }),
@@ -1173,9 +1175,11 @@ mod tests {
         assert_eq!(call(&s, "run_command", json!({"host": "web", "command": "uptime"}))["isError"], false);
         assert_eq!(f.ran.lock().unwrap().as_slice(), ["uptime"]);
 
-        let mut c = McpPolicy::default();
-        c.allow = Some(HashMap::from([("web".into(), vec!["systemctl restart *".into()])]));
-        c.deny = Some(HashMap::from([("*".into(), vec!["rm -rf *".into()])]));
+        let c = McpPolicy {
+            allow: Some(HashMap::from([("web".into(), vec!["systemctl restart *".into()])])),
+            deny: Some(HashMap::from([("*".into(), vec!["rm -rf *".into()])])),
+            ..Default::default()
+        };
         assert!(
             c.is_allowed("systemctl restart nginx", "web") && !c.is_allowed("systemctl restart nginx; rm -rf /", "web")
         );

@@ -30,11 +30,14 @@ pub enum TmuxEvent {
     },
 }
 
+/// Открытый ответ tmux: «время номер» из `%begin` и его строки.
+type OpenReply = Option<(String, Vec<String>)>;
+
 /// Пошаговый разбор: держит хвост строки и незавершённый ответ между вызовами.
 #[derive(Default, uniffi::Object)]
 pub struct TmuxParser {
     /// Хвост строки и открытый ответ: «время номер» из `%begin` и его строки.
-    state: std::sync::Mutex<(Vec<u8>, Option<(String, Vec<String>)>)>,
+    state: std::sync::Mutex<(Vec<u8>, OpenReply)>,
 }
 
 #[uniffi::export]
@@ -74,7 +77,7 @@ fn guard(line: &str) -> Option<String> {
     (f.len() >= 3).then(|| format!("{} {}", f[1], f[2]))
 }
 
-fn parse_line(bytes: &[u8], reply: &mut Option<(String, Vec<String>)>) -> Option<TmuxEvent> {
+fn parse_line(bytes: &[u8], reply: &mut OpenReply) -> Option<TmuxEvent> {
     let line = String::from_utf8_lossy(bytes).to_string();
     if let Some((id, r)) = reply.as_mut() {
         let closes =

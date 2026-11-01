@@ -39,14 +39,12 @@ jobs:
           git config --global user.email ci@localhost
       - name: Test
         run: cargo test
-      # Т3/Т5: пока как предупреждение — шаг жёлтый, прогон не падает; станут обязательными после чистки.
-      - name: Clippy (warning only)
+      # Т3/Т5: clippy и rustfmt обязательны.
+      - name: Clippy
         if: runner.os == 'Linux'
-        continue-on-error: true
         run: cargo clippy --all-targets --features remote-desktop -- -D warnings
-      - name: Rustfmt (warning only)
+      - name: Rustfmt
         if: runner.os == 'Linux'
-        continue-on-error: true
         run: cargo fmt --check
       # Встроенный RDP/VNC: Windows и Linux сейчас, Mac — позже; проверяем, что собирается и на darwin.
       # Mac-сборка приложения (build-core-macos.sh, ci.yml) фичу не включает.

@@ -538,15 +538,19 @@ impl RemoteSession {
         matches!(rx.recv_timeout(CERT_TIMEOUT), Ok(true))
     }
 
+    #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужны движку FreeRDP
     pub(crate) fn config(&self) -> &RdpConfig {
         &self.config
     }
+    #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужны движку FreeRDP
     pub(crate) fn listener(&self) -> &Arc<dyn RemoteListener> {
         &self.listener
     }
+    #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужны движку FreeRDP
     pub(crate) fn clipboard_listener(&self) -> Option<Arc<dyn RemoteClipboardListener>> {
         self.clipboard.lock().unwrap().clone()
     }
+    #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужны движку FreeRDP
     pub(crate) fn audio_listener(&self) -> Option<Arc<dyn RemoteAudioListener>> {
         self.audio.lock().unwrap().clone()
     }
