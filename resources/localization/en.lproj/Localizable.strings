@@ -1234,3 +1234,12 @@
 "Переподключить, вкладка по номеру" = "Reconnect, tab by number";
 "Keepalive, секунд (ServerAliveInterval)" = "Keepalive, seconds (ServerAliveInterval)";
 "Keepalive — число секунд от 0 до 86400" = "Keepalive must be 0–86400 seconds";
+"H.264 для удалённых столов (OpenH264 от Cisco)" = "H.264 for remote desktops (OpenH264 by Cisco)";
+"Чётче и быстрее на медленном канале. Кодек скачивается с сервера Cisco и проверяется по отпечатку." = "Sharper and faster on slow links. The codec is downloaded from Cisco and checked against its fingerprint.";
+"Скачать OpenH264 от Cisco?" = "Download OpenH264 from Cisco?";
+"Скачать и включить" = "Download and Turn On";
+"Для этой платформы кодека нет." = "There is no codec for this platform.";
+"Архив кодека не прошёл проверку — не устанавливаю." = "The codec archive failed verification — not installed.";
+"Библиотека кодека не прошла проверку — не устанавливаю." = "The codec library failed verification — not installed.";
+"Не удалось распаковать кодек." = "Couldn't unpack the codec.";
+"Завершить все сессии tmux на %@?" = "End all tmux sessions on %@?";

@@ -81,7 +81,16 @@ internal sealed class HostPage : UserControl
         body.Children.Add(stats);
         body.Children.Add(Header(L("Docker"), () => _ = LoadDocker()));
         body.Children.Add(docker);
-        body.Children.Add(Header(L("Сессии tmux"), () => _ = LoadTmux()));
+        // «Завершить все» сессии Relaya на хосте (3.7), с подтверждением.
+        body.Children.Add(Header(L("Сессии tmux"), () => _ = LoadTmux(), Ui.Button(L("Завершить все"), async () =>
+        {
+            var names = RelayaCoreMethods.TmuxParse((await AppState.RunOnHost(host.alias, RelayaCoreMethods.TmuxListCommand())).Stdout)
+                .Where(t => RelayaCoreMethods.TmuxIsHostSession(host.alias, t.name)).Select(t => t.name).ToList();
+            if (names.Count == 0) return;
+            if (!await Ui.Confirm(XamlRoot, L("Завершить все сессии tmux на %@?", host.alias), string.Join("\n", names), L("Завершить"))) return;
+            await AppState.RunOnHost(host.alias, RelayaCoreMethods.TmuxKillCommand(names));
+            await LoadTmux();
+        })));
         body.Children.Add(tmux);
         body.Children.Add(Header(L("Службы и порты"), () => _ = LoadServices()));
         body.Children.Add(services);
@@ -94,13 +103,16 @@ internal sealed class HostPage : UserControl
         if (AppState.Host(host.alias) is { } h) MainWindow.Current?.ShowPage(new HostPage(h));
     }
 
-    private static Grid Header(string title, Action reload)
+    private static Grid Header(string title, Action reload, UIElement? extra = null)
     {
         var g = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } }, Margin = new Thickness(0, 16, 0, 4) };
         g.Children.Add(new TextBlock { Text = title, Style = Ui.Style("BodyStrongTextBlockStyle"), VerticalAlignment = VerticalAlignment.Center });
         var b = Ui.IconButton("", L("Обновить"), reload);
-        Grid.SetColumn(b, 1);
-        g.Children.Add(b);
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        if (extra != null) tools.Children.Add(extra);
+        tools.Children.Add(b);
+        Grid.SetColumn(tools, 1);
+        g.Children.Add(tools);
         return g;
     }
 
