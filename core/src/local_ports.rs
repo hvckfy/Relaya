@@ -1,10 +1,15 @@
 //! `localhost:3000`, `127.0.0.1:8080`, `0.0.0.0:5173`, `[::1]:9000` в выводе — порты на сервере.
 
 use regex::Regex;
+use std::sync::OnceLock;
 
 #[uniffi::export]
 pub fn local_ports_find(text: String) -> Vec<i64> {
-    let re = Regex::new(r"(?i)(?:https?://)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{2,5})\b").unwrap();
+    // Вызывается на каждый кусок вывода терминала — регулярка компилируется один раз (AGENTS.md).
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        Regex::new(r"(?i)(?:https?://)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{2,5})\b").expect("постоянный шаблон")
+    });
     let mut seen = std::collections::HashSet::new();
     re.captures_iter(&text)
         .filter_map(|c| c[1].parse::<i64>().ok())
