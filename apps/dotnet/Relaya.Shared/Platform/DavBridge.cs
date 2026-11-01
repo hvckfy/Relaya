@@ -75,7 +75,8 @@ internal sealed partial class DavBridge
     {
         List<DavBridge> all;
         lock (bridges) { all = bridges.Values.ToList(); bridges.Clear(); }
-        try { Task.WaitAll(all.Select(b => UnmountVolumeAsync(b.Url)).ToArray(), TimeSpan.FromSeconds(2)); }
+        // Ждём в пуле: продолжения AppState.Run иначе встали бы в очередь заблокированного UI-потока.
+        try { Task.Run(() => Task.WhenAll(all.Select(b => UnmountVolumeAsync(b.Url)))).Wait(TimeSpan.FromSeconds(2)); }
         catch (Exception e) { Terminal.TerminalView.Trace("dav unmount: " + e.Message); }
         foreach (var b in all) b.listener?.Stop();
         // Файлы удаляются после каждого запроса; пустой каталог процесса — при выходе.
