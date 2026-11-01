@@ -1304,3 +1304,7 @@
 "Сбрасывать доверие к сохранённым паролям при блокировке экрана." = "Reset trust in saved passwords when the screen locks.";
 "Блокировка экрана не сбрасывает подтверждение" = "Locking the screen doesn't reset the confirmation";
 "Нет gdbus — установите его в «Компонентах». Пока окно доверия закроется только по истечении срока." = "gdbus is missing — install it in Components. Until then the grace window ends only when it expires.";
+"Подключить как диск…" = "Mount as Volume…";
+"Не найден gio (пакет libglib2.0-bin)." = "gio not found (libglib2.0-bin package).";
+"Не удалось подключить диск: %@" = "Couldn't mount the volume: %@";
+"Не удалось отключить диск: %@" = "Couldn't eject the volume: %@";
