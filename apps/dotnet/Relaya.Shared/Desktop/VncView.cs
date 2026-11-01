@@ -296,7 +296,7 @@ internal sealed class VncView : UserControl, IDisposable
         public void OnConnected(ushort width, ushort height) => view.OnConnectedCore(width, height);
         public void OnFrame(List<FrameRect> rects) => view.screen.Update(rects);
         public void OnResize(ushort width, ushort height) => view.screen.Reset(width, height);
-        public void OnCert(string sha256, string subject) { } // у VNC сертификата нет; шифрование — SSH-туннель
+        public void OnCert(string sha256, string subject, CertNode node) { } // у VNC сертификата нет; шифрование — SSH-туннель
         public void OnClosed(RemoteClose close) => view.OnClosedCore(close);
     }
 
