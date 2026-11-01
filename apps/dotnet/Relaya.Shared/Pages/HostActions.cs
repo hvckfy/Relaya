@@ -24,19 +24,8 @@ internal static class HostActions
         // Файлы хоста как диск (6.7), как «Открыть в Finder» на Mac: WebDAV-мост на 127.0.0.1.
         if (Platform.DavBridge.Supported)
             menu.Items.Add(Platform.DavBridge.IsMounted(h.alias)
-                ? Item(L("Отключить диск"), "\uEDA2", async () => await DiskAsync(anchor.XamlRoot, () => Platform.DavBridge.UnmountAsync(h.alias)))
-                : Item(L("Подключить как диск…"), "\uEDA2", async () =>
-                {
-                    var folder = new TextBox { Text = "~" };
-                    var d = new ContentDialog
-                    {
-                        Title = L("Подключить как диск…"), XamlRoot = anchor.XamlRoot,
-                        Content = new StackPanel { Spacing = 8, Children = { new TextBlock { Text = L("Какую папку на %@ подключить как диск? / — весь сервер, ~ — домашняя папка.", h.alias), TextWrapping = TextWrapping.Wrap }, folder } },
-                        PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary,
-                    };
-                    if (await d.ShowAsync() != ContentDialogResult.Primary) return;
-                    await DiskAsync(anchor.XamlRoot, () => Platform.DavBridge.MountAsync(h.alias, folder.Text));
-                }));
+                ? Item(L("Отключить диск"), "\uEDA2", () => _ = DiskAsync(anchor.XamlRoot, () => Platform.DavBridge.UnmountAsync(h.alias)))
+                : Item(L("Подключить как диск…"), "\uEDA2", () => _ = MountDiskAsync(anchor.XamlRoot, h.alias)));
         // tmux control mode (4.17): окна сессии tmux хоста — вкладками Relaya, как на Mac.
         menu.Items.Add(Item(L("Окна tmux как вкладки"), "\uE8A1", () => _ = Terminal.TmuxControlClient.OpenAsync(h.alias, anchor.XamlRoot)));
         menu.Items.Add(new MenuFlyoutSeparator());
@@ -82,6 +71,18 @@ internal static class HostActions
         // Только строка `# relaya:` — остальной блок хоста (комментарии, Match, порядок) не переписывается.
         i.Click += (_, _) => AppState.SetMeta(h with { group = group });
         return i;
+    }
+
+    private static async System.Threading.Tasks.Task MountDiskAsync(XamlRoot root, string alias)
+    {
+        var folder = new TextBox { Header = L("Папка на сервере"), Text = "~", Description = L("/ — весь сервер, ~ — домашняя папка") };
+        var d = new ContentDialog
+        {
+            Title = L("Подключить как диск"), XamlRoot = root, Content = folder,
+            PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await d.ShowAsync() != ContentDialogResult.Primary) return;
+        await DiskAsync(root, () => Platform.DavBridge.MountAsync(alias, folder.Text));
     }
 
     private static async System.Threading.Tasks.Task DiskAsync(XamlRoot root, Func<System.Threading.Tasks.Task> action)

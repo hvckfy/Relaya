@@ -10,7 +10,7 @@ internal sealed partial class DavBridge
 {
     private static partial async Task MountVolumeAsync(string url, string user, string password)
     {
-        if (Dialogs.Which("gio") == null) throw new System.IO.IOException(L("Не найден gio (пакет libglib2.0-bin)."));
+        if (Dialogs.Which("gio") == null) throw new System.IO.IOException(L("Нет gio — установите его в «Компонентах»."));
         var r = await AppState.Run("gio", new[] { "mount", url }, null, password + "\n", 30);
         if (r.Status != 0) throw new System.IO.IOException(L("Не удалось подключить диск: %@", r.Stderr.Trim()));
     }

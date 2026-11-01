@@ -1301,10 +1301,14 @@
 "После подтверждения сохранённый пароль какое-то время выдаётся без нового вопроса" = "After you confirm, the saved password is handed out without asking again for a while";
 "Значок туннелей в области уведомлений" = "Tunnels icon in the notification area";
 "Показывается, когда есть туннели" = "Shown when there are tunnels";
-"Сбрасывать доверие к сохранённым паролям при блокировке экрана." = "Reset trust in saved passwords when the screen locks.";
 "Блокировка экрана не сбрасывает подтверждение" = "Locking the screen doesn't reset the confirmation";
 "Нет gdbus — установите его в «Компонентах». Пока окно доверия закроется только по истечении срока." = "gdbus is missing — install it in Components. Until then the grace window ends only when it expires.";
 "Подключить как диск…" = "Mount as Volume…";
-"Не найден gio (пакет libglib2.0-bin)." = "gio not found (libglib2.0-bin package).";
 "Не удалось подключить диск: %@" = "Couldn't mount the volume: %@";
 "Не удалось отключить диск: %@" = "Couldn't eject the volume: %@";
+"Нет gio — установите его в «Компонентах»." = "gio is missing — install it in Components.";
+"Файлы хоста как диск и сброс доверия к сохранённым паролям при блокировке экрана." = "Host files as a volume, and resetting trust in saved passwords when the screen locks.";
+"Подключение файлов хоста как диска в файловом менеджере." = "Mounting host files as a volume in the file manager.";
+"Папка на сервере" = "Folder on the server";
+"/ — весь сервер, ~ — домашняя папка" = "/ is the whole server, ~ is the home folder";
+"Подключить как диск" = "Mount as Volume";
