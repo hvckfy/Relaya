@@ -13,19 +13,17 @@ using static Relaya.Strings;
 namespace Relaya.Platform;
 
 /// «Файлы хоста как диск» (чек-лист 6.7), как WebDAVBridge на Mac: WebDAV-сервер на 127.0.0.1 со случайным портом,
-/// секретным путём и Basic-паролем этого подключения превращает запросы файлового менеджера в sftp/ssh. Разбор HTTP
-/// и ответы — в ядре (webdav.rs); подключение диска — у платформы (Linux — gio/gvfs).
+/// секретным путём и Basic-паролем этого подключения превращает запросы файлового менеджера в sftp/ssh. Разбор HTTP,
+/// ответы и все правила (пути, коды, команды) — в ядре (webdav.rs, webdav_policy.rs); здесь только выполнение решений
+/// через sftp/ssh. Подключение диска — у платформы (Linux — gio/gvfs, Windows — WebClient).
 internal sealed partial class DavBridge
 {
     private static readonly Dictionary<string, DavBridge> bridges = new();
 
-    public const string User = "relaya";
-
     private readonly string alias;
     private readonly string requestedRoot;
     private readonly string volumeName;
-    private readonly string password = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
-    private readonly string prefix;
+    private readonly DavSecrets secrets;
     private readonly object gate = new();
     // Служебные файлы Finder (`._*`, `.DS_Store`) живут только в памяти моста.
     private readonly Dictionary<string, byte[]> junk = new();
@@ -39,8 +37,8 @@ internal sealed partial class DavBridge
     {
         this.alias = alias;
         this.requestedRoot = requestedRoot;
-        volumeName = VolumeName(alias, requestedRoot);
-        prefix = $"/{Guid.NewGuid():N}/{volumeName}";
+        volumeName = RelayaCoreMethods.DavVolumeName(alias, requestedRoot);
+        secrets = RelayaCoreMethods.DavNewSecrets(volumeName);
     }
 
     /// Умеет ли платформа подключать диск; без этого пункт меню скрыт. Shared не знает ОС — решает partial платформы.
@@ -54,7 +52,7 @@ internal sealed partial class DavBridge
         var bridge = new DavBridge(alias, remoteRoot);
         await bridge.PrepareAsync();
         bridge.Listen();
-        try { await MountVolumeAsync(bridge.Url, User, bridge.password); }
+        try { await MountVolumeAsync(bridge.Url, bridge.secrets.user, bridge.secrets.password); }
         catch { bridge.listener?.Stop(); throw; }
         lock (bridges) bridges[alias] = bridge;
         OpenVolume(bridge.Url);
@@ -80,9 +78,8 @@ internal sealed partial class DavBridge
         catch (Exception e) { Terminal.TerminalView.Trace("dav unmount: " + e.Message); }
         foreach (var b in all) b.listener?.Stop();
         // Файлы удаляются после каждого запроса; пустой каталог процесса — при выходе.
-        if (tempDir.IsValueCreated)
-            try { Directory.Delete(tempDir.Value, true); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Terminal.TerminalView.Trace("dav temp: " + e.Message); }
+        try { RelayaCoreMethods.DavTempCleanup(); }
+        catch (CoreException e) { Terminal.TerminalView.Trace("dav temp: " + e.Message); }
     }
 
     // Платформа: подключить WebDAV-адрес как диск (пароль — не в аргументах), отключить, открыть.
@@ -93,21 +90,12 @@ internal sealed partial class DavBridge
     /// Требовать ли Basic-пароль. Mac и Linux — всегда; Windows — нет (см. DavBridge.Windows.cs, решение аудита безопасности).
     private static partial bool RequiresBasic();
 
-    /// Имя диска: хост, а для вложенной папки — «хост · папка».
-    private static string VolumeName(string alias, string path)
-    {
-        var last = path.TrimEnd('/').Split('/').LastOrDefault() ?? "";
-        var name = path is "/" or "" || last.Length == 0 ? alias : path == "~" ? $"{alias} · ~" : $"{alias} · {last}";
-        return name.Replace("/", "-");
-    }
-
-    /// `~` и пустое — домашняя, `~/x` — внутри домашней; несуществующая папка — ошибка.
+    /// Корень диска по правилам ядра (`~`, `~/x`, абсолютный; `.`/`..` — ошибка); несуществующая папка — ошибка листинга.
     private async Task PrepareAsync()
     {
-        var r = requestedRoot.Trim();
-        if (r.Length == 0 || r == "~") root = await HomeAsync();
-        else if (r.StartsWith("~/")) root = Join(await HomeAsync(), r[2..]);
-        else root = r.StartsWith('/') ? r : "/" + r;
+        var home = RelayaCoreMethods.DavRootNeedsHome(requestedRoot) ? await HomeAsync() : "/";
+        try { root = RelayaCoreMethods.DavResolveRoot(requestedRoot, home); }
+        catch (CoreException) { throw new IOException(L("Не удалось подключить диск: %@", requestedRoot)); }
         await ListAsync(root);
     }
 
@@ -117,7 +105,7 @@ internal sealed partial class DavBridge
         l.Start();
         listener = l;
         var port = ((IPEndPoint)l.LocalEndpoint).Port;
-        Url = $"dav://{User}@127.0.0.1:{port}" + string.Join("/", prefix.Split('/').Select(Uri.EscapeDataString));
+        Url = $"dav://{secrets.user}@127.0.0.1:{port}" + string.Join("/", secrets.prefix.Split('/').Select(Uri.EscapeDataString));
         _ = Task.Run(async () =>
         {
             try
@@ -157,102 +145,95 @@ internal sealed partial class DavBridge
 
     private static Dictionary<string, string> Xml => new() { ["Content-Type"] = "application/xml; charset=utf-8" };
 
-    /// Путь запроса → путь на сервере. Только внутри префикса (с границей `/`) и без `.`/`..`, чтобы ни запрос,
-    /// ни Destination у MOVE/COPY не вышли за корень диска.
-    private string? RemotePath(string path)
-    {
-        if (path != prefix && !path.StartsWith(prefix + "/")) return null;
-        var parts = path[prefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Any(p => p is "." or "..")) return null;
-        return parts.Length == 0 ? root : Join(root, string.Join("/", parts));
-    }
-
     private const string DavAllow = "OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, MOVE, COPY, PROPFIND, PROPPATCH, LOCK, UNLOCK";
 
     private async Task<byte[]> HandleAsync(DavRequest req)
     {
-        var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{User}:{password}"));
-        if (RequiresBasic() && Header(req, "authorization") != expected)
+        // Windows: Basic не проверяем — WebClient не шлёт его по http (решение пользователя и аудита безопасности).
+        if (RequiresBasic() && !RelayaCoreMethods.DavAuthorized(Header(req, "authorization"), secrets.password))
             return Response(401, "Unauthorized", new() { ["WWW-Authenticate"] = "Basic realm=\"Relaya\"" });
-        // OPTIONS ничего не раскрывает; редиректор WebClient на Windows спрашивает его у корня сервера, а не по секретному
-        // пути, и без ответа не подключает диск.
+        // OPTIONS ничего не раскрывает; WebClient спрашивает его у корня сервера, а не по секретному пути.
         if (req.method == "OPTIONS") return Response(200, "OK", new() { ["Allow"] = DavAllow, ["DAV"] = "1, 2" });
-        if (RemotePath(req.path) is not { } remote) return Response(404, "Not Found");
-        if (remote == root && req.method is "DELETE" or "MOVE") return Response(403, "Forbidden");
-        var name = remote.Split('/').Last();
-        var isJunk = RelayaCoreMethods.DavIsFinderJunk(name);
+        var action = RelayaCoreMethods.DavDecide(req.method, req.path, Header(req, "destination"), Header(req, "overwrite"), secrets.prefix, root);
         try
         {
-            switch (req.method)
+            switch (action)
             {
-                case "PROPFIND":
-                    return await PropfindAsync(req, remote);
-                case "PROPPATCH":
+                case DavAction.Reply r:
+                    return Response(r.status, r.reason);
+                case DavAction.Options:
+                    return Response(200, "OK", new() { ["Allow"] = DavAllow, ["DAV"] = "1, 2" });
+                case DavAction.Propfind p:
+                    return await PropfindAsync(req, p.remote, p.junk);
+                case DavAction.Proppatch:
                     return Response(207, "Multi-Status", Xml, RelayaCoreMethods.DavMultistatus(new()));
-                case "LOCK":
+                case DavAction.Lock:
                     var lk = RelayaCoreMethods.DavLock(req.path, Header(req, "if"));
                     var lockHeaders = Xml;
                     lockHeaders["Lock-Token"] = lk.lockTokenHeader;
                     return Response(200, "OK", lockHeaders, lk.body);
-                case "UNLOCK":
+                case DavAction.Unlock:
                     return Response(204, "No Content");
-                case "GET" or "HEAD":
-                    if (isJunk)
-                    {
-                        byte[]? d;
-                        lock (gate) junk.TryGetValue(remote, out d);
-                        return d == null ? Response(404, "Not Found") : Response(200, "OK", null, req.method == "HEAD" ? null : d);
-                    }
-                    if (req.method == "HEAD")
-                        return await StatAsync(remote) is { } f ? Response(200, "OK", new() { ["Content-Length"] = f.size.ToString() }) : Response(404, "Not Found");
-                    var down = TempFile();
+                case DavAction.Head { junk: true } h:
+                    return Junk(h.remote) is { } hd ? Response(200, "OK", new() { ["Content-Length"] = hd.Length.ToString() }) : Response(404, "Not Found");
+                case DavAction.Head h:
+                    return await StatAsync(h.remote) is { } f ? Response(200, "OK", new() { ["Content-Length"] = f.size.ToString() }) : Response(404, "Not Found");
+                case DavAction.Get { junk: true } g:
+                    return Junk(g.remote) is { } gd ? Response(200, "OK", null, gd) : Response(404, "Not Found");
+                case DavAction.Get g:
+                    var down = RelayaCoreMethods.DavTempFile();
                     try
                     {
-                        await SftpAsync($"get {Q(remote)} {Q(down)}");
+                        await SftpAsync($"get {Q(g.remote)} {Q(down)}");
                         return Response(200, "OK", new() { ["Content-Type"] = "application/octet-stream" }, await File.ReadAllBytesAsync(down));
                     }
                     finally { File.Delete(down); }
-                case "PUT":
-                    if (isJunk) { lock (gate) junk[remote] = req.body; return Response(201, "Created"); }
-                    var up = TempFile();
+                case DavAction.Put { junk: true } pj:
+                    lock (gate) junk[pj.remote] = req.body;
+                    return Response(201, "Created");
+                case DavAction.Put put:
+                    var up = RelayaCoreMethods.DavTempFile();
                     try
                     {
                         await File.WriteAllBytesAsync(up, req.body);
-                        await SftpAsync($"put {Q(up)} {Q(remote)}");
+                        await SftpAsync($"put {Q(up)} {Q(put.remote)}");
                     }
                     finally { File.Delete(up); }
-                    Invalidate(remote);
+                    Invalidate(put.remote);
                     return Response(201, "Created");
-                case "MKCOL":
-                    await SftpAsync($"mkdir {Q(remote)}");
-                    Invalidate(remote);
+                case DavAction.Mkcol m:
+                    await SftpAsync($"mkdir {Q(m.remote)}");
+                    Invalidate(m.remote);
                     return Response(201, "Created");
-                case "DELETE":
-                    if (isJunk) { lock (gate) junk.Remove(remote); return Response(204, "No Content"); }
-                    // Файловый менеджер сам спрашивает подтверждение — папки удаляются целиком, как на любом сетевом диске.
-                    await ShellAsync("rm -rf -- " + RelayaCoreMethods.CoreShellQuote(remote));
-                    Invalidate(remote);
+                case DavAction.Delete { junk: true } dj:
+                    lock (gate) junk.Remove(dj.remote);
                     return Response(204, "No Content");
-                case "MOVE" or "COPY":
-                    if (RelayaCoreMethods.DavDestinationPath(Header(req, "destination")) is not { } destPath || RemotePath(destPath) is not { } dest)
-                        return Response(400, "Bad Request");
-                    if (isJunk)
+                case DavAction.Delete d:
+                    await ShellAsync(RelayaCoreMethods.DavDeleteCommand(d.remote));
+                    Invalidate(d.remote);
+                    return Response(204, "No Content");
+                case DavAction.Transfer { junk: true } tj:
+                    lock (gate)
                     {
-                        lock (gate)
-                        {
-                            if (junk.TryGetValue(remote, out var d)) junk[dest] = d;
-                            if (req.method == "MOVE") junk.Remove(remote);
-                        }
-                        return Response(201, "Created");
+                        if (junk.TryGetValue(tj.source, out var data)) junk[tj.destination] = data;
+                        if (tj.isMove) junk.Remove(tj.source);
                     }
-                    var overwrite = Header(req, "overwrite")?.ToUpperInvariant() != "F";
-                    // Без перезаписи и цель есть — 412: gvfs превращает его в «уже существует», а `mv -n` молча вышел бы с 0.
-                    if (!overwrite && await StatAsync(dest) != null) return Response(412, "Precondition Failed");
-                    var tool = req.method == "MOVE" ? "mv" : "cp -a";
-                    await ShellAsync($"{tool} {(overwrite ? "" : "-n ")}-- {RelayaCoreMethods.CoreShellQuote(remote)} {RelayaCoreMethods.CoreShellQuote(dest)}");
-                    Invalidate(remote);
-                    Invalidate(dest);
                     return Response(201, "Created");
+                case DavAction.Transfer t:
+                    // Есть ли цель — командой ядра (код 0/1), а не по листингу.
+                    var exists = await AppState.RunOnHost(alias, RelayaCoreMethods.DavExistsCommand(t.destination), 60);
+                    if (exists.Status is not (0 or 1)) throw new IOException(exists.Stderr.Trim().Length > 0 ? exists.Stderr.Trim() : "ssh: " + exists.Status);
+                    switch (RelayaCoreMethods.DavTransferPlan(t.source, t.destination, t.isMove, t.overwrite, exists.Status == 0))
+                    {
+                        case DavTransferPlan.Reply pr:
+                            return Response(pr.status, pr.reason);
+                        case DavTransferPlan.Run run:
+                            await ShellAsync(run.command);
+                            Invalidate(t.source);
+                            Invalidate(t.destination);
+                            return Response(run.status, run.reason);
+                    }
+                    return Response(500, "Internal Server Error");
                 default:
                     return Response(405, "Method Not Allowed");
             }
@@ -263,7 +244,12 @@ internal sealed partial class DavBridge
         }
     }
 
-    private async Task<byte[]> PropfindAsync(DavRequest req, string remote)
+    private byte[]? Junk(string remote)
+    {
+        lock (gate) return junk.TryGetValue(remote, out var d) ? d : null;
+    }
+
+    private async Task<byte[]> PropfindAsync(DavRequest req, string remote, bool isJunk)
     {
         var href = req.path;
         DavEntry self;
@@ -272,7 +258,7 @@ internal sealed partial class DavBridge
         else
         {
             var name = remote.Split('/').Last();
-            if (RelayaCoreMethods.DavIsFinderJunk(name))
+            if (isJunk)
             {
                 byte[]? d;
                 lock (gate) junk.TryGetValue(remote, out d);
@@ -344,17 +330,8 @@ internal sealed partial class DavBridge
         if (r.Status != 0) throw new IOException(r.Stderr.Trim().Length > 0 ? r.Stderr.Trim() : "ssh: " + r.Status);
     }
 
-    // Содержимое чужих файлов — в своём каталоге 0700 (CreateTempSubdirectory): и sftp get, и наша запись создают
-    // файлы по umask, а без XDG_RUNTIME_DIR база — общий /tmp.
-    private static readonly Lazy<string> tempDir = new(() =>
-        Directory.CreateTempSubdirectory("relaya-dav-").FullName);
-
-    private static string TempFile() => Path.Combine(tempDir.Value, Guid.NewGuid().ToString("N"));
-
     // Аргумент команды sftp -b: в кавычках, с экранированием, как в SftpPage.
     private static string Q(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-
-    private static string Join(string a, string b) => a.TrimEnd('/') + "/" + b.TrimStart('/');
 
     private static string Parent(string path)
     {
