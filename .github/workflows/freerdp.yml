@@ -31,13 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: FreeRDP
+        id: freerdp
         uses: ./.github/actions/freerdp
         with:
           triplet: ${{ matrix.triplet }}
       - name: Show what was built
         shell: pwsh
         run: |
-          $root = "core/native/vcpkg_installed/${{ matrix.triplet }}"
+          $root = "${{ steps.freerdp.outputs.dir }}"
           $libs = if ($IsWindows) { Get-ChildItem "$root/bin" -Filter *.dll } else { Get-ChildItem "$root/lib" -Include *.dylib, *.so* -Recurse -Depth 0 | Where-Object { -not $_.LinkType } }
           $libs | ForEach-Object { "{0,10:N0}  {1}" -f $_.Length, $_.Name }
           Get-ChildItem "$root/include" -Directory | Select-Object -ExpandProperty Name
@@ -45,10 +46,10 @@ jobs:
         with:
           name: freerdp-${{ matrix.triplet }}
           path: |
-            core/native/vcpkg_installed/${{ matrix.triplet }}/bin
-            core/native/vcpkg_installed/${{ matrix.triplet }}/lib
-            core/native/vcpkg_installed/${{ matrix.triplet }}/include
-            core/native/vcpkg_installed/${{ matrix.triplet }}/share/freerdp*
+            ${{ steps.freerdp.outputs.dir }}/bin
+            ${{ steps.freerdp.outputs.dir }}/lib
+            ${{ steps.freerdp.outputs.dir }}/include
+            ${{ steps.freerdp.outputs.dir }}/share/freerdp*
           retention-days: 90
 
   # Ядро для Mac с движками FreeRDP и RoyalVNC: обе архитектуры, universal-библиотеки FreeRDP и RoyalVNCKit. Swift-сборку не трогает.
