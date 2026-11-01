@@ -40,7 +40,7 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 ## Features
 
 **Hosts**
-- Add, edit, duplicate and delete hosts directly in `~/.ssh/config`. Every change is shown as a diff first and backed up to `config.bak`; comments and directives Relaya doesn't manage are preserved.
+- Add, edit, duplicate and delete hosts directly in `~/.ssh/config`. Every change you make is shown as a diff first, and the previous file is kept as `~/.ssh/config.bak` (background metadata updates don't overwrite it); comments and directives Relaya doesn't manage are preserved.
 - Groups and free-form tags, stored as a comment above the host (`# relaya: group=work tags=prod,db`) — ssh ignores it.
 - A Finder-style sidebar: Hosts, Remote Desktops and Tools sections with collapsible groups, search and a tag filter. Git-hosting entries (GitHub, GitLab, `User git`…) are kept out of the host list.
 - A **Host** menu in the menu bar with every action for the selected host.
@@ -142,7 +142,7 @@ macOS (on Windows: Ctrl+Shift+C/V copy/paste, Ctrl+Shift+F find, Ctrl+Shift+D/W 
 | Switch tab | ⌘1 … ⌘9 |
 | Reconnect | ⌘R |
 | Find in terminal | ⌘F |
-| Edit / duplicate host | ⌘E / ⌘D |
+| Edit host | ⌘E |
 | Open files (SFTP) | ⇧⌘O |
 | Command palette | ⌘K |
 | Split right / down | ⌘D / ⇧⌘D |
@@ -172,7 +172,7 @@ apps/dotnet/          .NET clients: Relaya.Shared (pages, terminal, sync — com
 resources/            shared assets: localization (ru/en strings), app icon sources
 scripts/              build-core-macos.sh, bundle-macos.sh [version] [ru|en], build-core-windows.ps1, build-core-linux.sh
 docs/                 UI spec, design notes, screenshots
-.github/workflows/    ci (macOS), core (Rust on 3 OSes), windows, linux, freerdp, freerdp-watch, release
+.github/workflows/    ci (macOS), core (Rust on 3 OSes), windows, linux, l10n, freerdp, freerdp-watch, openh264-pin, vnc-poc, release
 ```
 
 ## Building from source
