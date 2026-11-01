@@ -271,7 +271,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
     private bool certOpen;
 
     // Диалоги сертификата — по одному (W-RDP-7); любая ошибка показа — отказ, а не зависшее подключение.
-    private async void AskCert(string sha256, string subject)
+    private async Task AskCertAsync(string sha256, string subject)
     {
         if (certOpen) { session?.AcceptCert(false); return; }
         certOpen = true;
@@ -498,7 +498,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
         public void OnConnected(ushort width, ushort height) => view.OnConnectedCore(width, height);
         public void OnFrame(List<FrameRect> rects) => view.OnFrameCore(rects);
         public void OnResize(ushort width, ushort height) => view.OnConnectedCore(width, height);
-        public void OnCert(string sha256, string subject) => view.ui.TryEnqueue(() => view.AskCert(sha256, subject));
+        public void OnCert(string sha256, string subject) => view.ui.TryEnqueue(() => _ = view.AskCertAsync(sha256, subject));
         public void OnClosed(RemoteClose close) => view.OnClosedCore(close);
     }
 

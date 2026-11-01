@@ -240,7 +240,7 @@ internal sealed class TileHost : UserControl, IDisposable
             if (started) return;
             started = true;
             session.Start();
-            if (initialInput != null) TypeWhenReady(view, initialInput, pending);
+            if (initialInput != null) _ = TypeWhenReadyAsync(view, initialInput, pending);
             view.Focus(FocusState.Programmatic);
         };
         panes.Add(pane);
@@ -275,7 +275,7 @@ internal sealed class TileHost : UserControl, IDisposable
 
     // Команда для новой сессии (сниппет, логи Docker, tmux attach) — когда ядро говорит, что вход выполнен (C23).
     // Не дождались за 10 с — команду не вводим, а показываем InfoBar «Вставить».
-    private static async void TypeWhenReady(TerminalView view, string text, InfoBar pending)
+    private static async System.Threading.Tasks.Task TypeWhenReadyAsync(TerminalView view, string text, InfoBar pending)
     {
         for (var i = 0; i < 40; i++)
         {

@@ -74,7 +74,7 @@ internal sealed class DesktopsPage : UserControl
         };
         // Форма на всю страницу вместо ContentDialog (UI-W3): «Отмена» и «Сохранить» в заголовке.
         var error = new TextBlock { Foreground = Ui.Brush("SystemFillColorCriticalBrush"), TextWrapping = TextWrapping.Wrap };
-        async void Save()
+        async Task SaveAsync()
         {
             if (address.Text.Trim().Length == 0) { error.Text = L("Укажите адрес"); return; }
             var item = new RemoteDesktop(d?.id ?? RelayaCoreMethods.CoreNewId(),
@@ -95,7 +95,7 @@ internal sealed class DesktopsPage : UserControl
             Build();
         }
         var (page, body) = Ui.Scaffold(d == null ? L("Новый удалённый стол") : L("Изменить стол"),
-            Ui.Button(L("Отмена"), Build), Ui.Button(L("Сохранить"), Save, accent: true));
+            Ui.Button(L("Отмена"), Build), Ui.Button(L("Сохранить"), () => _ = SaveAsync(), accent: true));
         body.Children.Add(new StackPanel
         {
             Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
