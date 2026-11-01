@@ -292,9 +292,10 @@ public sealed partial class MainWindow : Window
     internal static Terminal.TileHost? DraggedTiles;
 
     /// Плитки вкладки переехали в другую — закрыть опустевшую вкладку.
-    internal void CloseTabOf(Terminal.TileHost tiles)
+    /// Закрыть вкладку с этим содержимым (плитки, переехавшие в другую вкладку; окно tmux, закрытое на сервере).
+    internal void CloseTabOf(UIElement content)
     {
-        if (Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(t => (t.Tag as Tab)?.Content == tiles) is { } tab) CloseTab(tab);
+        if (Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(t => (t.Tag as Tab)?.Content == content) is { } tab) CloseTab(tab);
     }
 
     public void OpenSftp(string alias)

@@ -21,6 +21,8 @@ internal static class HostActions
         }
         menu.Items.Add(Item(L("Подключить"), "", () => MainWindow.Current?.OpenSession(h.alias)));
         menu.Items.Add(Item(L("Открыть файлы (SFTP)"), "", () => MainWindow.Current?.OpenSftp(h.alias)));
+        // tmux control mode (4.17): окна сессии tmux хоста — вкладками Relaya, как на Mac.
+        menu.Items.Add(Item(L("Окна tmux как вкладки"), "\uE8A1", () => _ = Terminal.TmuxControlClient.OpenAsync(h.alias, anchor.XamlRoot)));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item(L("Изменить…"), "", async () => await HostEditor.Show(anchor.XamlRoot, h, false)));
         menu.Items.Add(Item(L("Настроить вход по ключу…"), "\uE8D7", () => MainWindow.Current?.ShowPage(new KeyWizardPage(h))));
