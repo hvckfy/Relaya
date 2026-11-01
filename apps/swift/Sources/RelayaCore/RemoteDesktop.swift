@@ -35,6 +35,12 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
     public var rdpRetina: Bool?
     /// Группа в боковой панели (nil — «Без группы»).
     public var group: String?
+    /// RDP через RD Gateway: `host` или `host:port`. Поля общие с Windows и Linux — без них Mac при сохранении
+    /// терял бы шлюз, заданный на другой машине. Пароль шлюза — в Keychain (`gatewayKeychainAccount`), не в JSON.
+    public var gatewayHost: String?
+    /// Пусто — те же учётные данные, что для сервера.
+    public var gatewayUser: String?
+    public var gatewayDomain: String?
 
     /// Готовые разрешения для меню.
     public static let rdpResolutionPresets: [(Int, Int)] = [(1280, 720), (1440, 900), (1920, 1080), (2560, 1440), (3840, 2160)]
@@ -153,6 +159,9 @@ public struct RemoteDesktopStore: Sendable {
 }
 
 extension RemoteDesktop {
+    /// Запись Keychain для пароля RD Gateway — по id стола, как `desktop-gateway:<id>` на Windows.
+    public var gatewayKeychainAccount: String { "gateway:\(id.uuidString)" }
+
     /// Запись Keychain: пользователь, адрес, порт и шлюз — у столов за разными SSH-хостами
     /// с одинаковым внутренним адресом (192.168.1.10:3389) пароли не смешиваются.
     public var keychainAccount: String {

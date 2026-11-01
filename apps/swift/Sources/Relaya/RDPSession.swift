@@ -251,7 +251,11 @@ final class RDPSession {
         certificate = trusted
         let engine = RDPEngine(config: .init(host: target.host, port: target.port, user: name, password: password,
                                              domain: domain?.trimmingCharacters(in: .whitespaces), width: size.0, height: size.1,
-                                             scalePercent: scalePercent, trustedCertificate: trusted),
+                                             scalePercent: scalePercent, trustedCertificate: trusted,
+                                             gatewayHost: desktop.gatewayHost.flatMap { $0.isEmpty ? nil : $0 },
+                                             gatewayUser: desktop.gatewayUser.flatMap { $0.isEmpty ? nil : $0 },
+                                             gatewayPassword: try? keychain.password(for: desktop.gatewayKeychainAccount),
+                                             gatewayDomain: desktop.gatewayDomain.flatMap { $0.isEmpty ? nil : $0 }),
                                events: events)
         self.engine = engine
         canvas.engine = engine

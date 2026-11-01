@@ -16,12 +16,21 @@ public final class RDPEngine: @unchecked Sendable {
         public var scalePercent: Int
         /// SHA-256 сертификата, которому пользователь уже доверился.
         public var trustedCertificate: String?
+        /// RD Gateway; nil — напрямую. Пустые учётные данные шлюза — те же, что для сервера.
+        public var gatewayHost: String?
+        public var gatewayUser: String?
+        public var gatewayPassword: String?
+        public var gatewayDomain: String?
 
         public init(host: String, port: Int, user: String, password: String, domain: String?,
-                    width: Int, height: Int, scalePercent: Int, trustedCertificate: String?) {
+                    width: Int, height: Int, scalePercent: Int, trustedCertificate: String?,
+                    gatewayHost: String? = nil, gatewayUser: String? = nil, gatewayPassword: String? = nil,
+                    gatewayDomain: String? = nil) {
             self.host = host; self.port = port; self.user = user; self.password = password; self.domain = domain
             self.width = width; self.height = height; self.scalePercent = scalePercent
             self.trustedCertificate = trustedCertificate
+            self.gatewayHost = gatewayHost; self.gatewayUser = gatewayUser
+            self.gatewayPassword = gatewayPassword; self.gatewayDomain = gatewayDomain
         }
     }
 
@@ -59,7 +68,8 @@ public final class RDPEngine: @unchecked Sendable {
             config: RdpConfig(host: c.host, port: UInt16(clamping: c.port), user: c.user, password: c.password, domain: c.domain,
                               width: UInt16(clamping: c.width), height: UInt16(clamping: c.height),
                               scalePercent: UInt32(clamping: c.scalePercent), trustedCertSha256: c.trustedCertificate,
-                              gatewayHost: nil, gatewayUser: nil, gatewayPassword: nil, gatewayDomain: nil,
+                              gatewayHost: c.gatewayHost, gatewayUser: c.gatewayUser, gatewayPassword: c.gatewayPassword,
+                              gatewayDomain: c.gatewayDomain,
                               h264LibraryPath: nil),
             listener: listener)
         // Звук и буфер обмена — до connect: иначе сервер не предложит каналы.

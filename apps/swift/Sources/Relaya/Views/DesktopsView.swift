@@ -84,6 +84,8 @@ struct DesktopEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State var desktop: RemoteDesktop
     @State private var portText = ""
+    @State private var showGateway = false
+    @State private var gatewayPassword = ""
     @State private var useSSH = false
 
     var body: some View {
@@ -143,6 +145,13 @@ struct DesktopEditor: View {
                     }
                     Toggle(L("Во весь экран"), isOn: $desktop.fullScreen)
                         .help(L("Только для открытия во внешнем Windows App"))
+                    // Редкая настройка — в раскрывающейся группе, как дополнительные параметры в настройках macOS.
+                    DisclosureGroup(L("RD Gateway"), isExpanded: $showGateway) {
+                        TextField(L("Шлюз"), text: optional(\.gatewayHost), prompt: Text("gateway.example.com:443"))
+                        TextField(L("Пользователь шлюза"), text: optional(\.gatewayUser), prompt: Text(L("как у сервера")))
+                        TextField(L("Домен шлюза"), text: optional(\.gatewayDomain), prompt: Text(L("необязательно")))
+                        SecureField(L("Пароль шлюза"), text: $gatewayPassword, prompt: Text(L("как у сервера")))
+                    }
                 } else {
                     Picker(L("Масштаб"), selection: Binding(get: { desktop.scaleToFit ?? true }, set: { desktop.scaleToFit = $0 })) {
                         Text(L("По размеру окна")).tag(true)
@@ -161,6 +170,10 @@ struct DesktopEditor: View {
                 Button(L("Отмена")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
                 Button(L("Сохранить")) {
                     let d = result
+                    // Пароль шлюза — в Keychain по id стола; пустое поле — запись не трогаем.
+                    if !gatewayPassword.isEmpty {
+                        try? KeychainStore(service: "app.relaya.rdp-password").setPassword(gatewayPassword, for: d.gatewayKeychainAccount)
+                    }
                     if let i = model.desktops.firstIndex(where: { $0.id == d.id }) { model.desktops[i] = d } else { model.desktops.append(d) }
                     dismiss()
                 }
@@ -172,6 +185,7 @@ struct DesktopEditor: View {
         .frame(width: 500)
         .background(Theme.bg)
         .onAppear {
+            showGateway = desktop.gatewayHost?.isEmpty == false
             portText = String(desktop.port)
             useSSH = desktop.viaSSHHost != nil
             if useSSH, desktop.viaSSHHost?.isEmpty != false { desktop.viaSSHHost = model.hosts.first?.alias }
@@ -180,6 +194,11 @@ struct DesktopEditor: View {
             desktop.viaSSHHost = on ? (desktop.viaSSHHost ?? model.hosts.first?.alias) : nil
             if on, desktop.address.isEmpty { desktop.address = "localhost" }
         }
+    }
+
+    private func optional(_ key: WritableKeyPath<RemoteDesktop, String?>) -> Binding<String> {
+        Binding(get: { desktop[keyPath: key] ?? "" },
+                set: { desktop[keyPath: key] = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 })
     }
 
     private var result: RemoteDesktop {
