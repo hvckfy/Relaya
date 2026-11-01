@@ -208,6 +208,23 @@ fn session_store() -> Option<std::path::PathBuf> {
     crate::webdav_policy::create_private_dir(&dir).ok().map(|_| dir)
 }
 
+/// Удалить каталог хранилища сессии; ошибку дописать к тексту закрытия, а не потерять.
+fn with_cleanup_error(message: &mut String, store: &Option<std::path::PathBuf>) {
+    let Some(dir) = store else { return };
+    match std::fs::remove_dir_all(dir) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            let line = format!("{}: {e}", dir.display());
+            if message.is_empty() {
+                *message = line;
+            } else {
+                message.push('\n');
+                message.push_str(&line);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn opt(s: &Option<String>) -> Option<CString> {
     s.as_deref().filter(|v| !v.is_empty()).map(cstr)
 }
@@ -304,7 +321,7 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
     let spawned = std::thread::Builder::new().name("relaya-freerdp".into()).spawn(move || {
         unsafe { relaya_rdp_run(raw_addr as *mut RawRdp) };
         let ctx = unsafe { Box::from_raw(ctx_addr as *mut Ctx) };
-        let close = ctx
+        let mut close = ctx
             .closed
             .locked()
             .take()
@@ -314,21 +331,40 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
         if let Some(Native(p)) = native {
             unsafe { relaya_rdp_free(p) }
         }
-        if let Some(dir) = &store {
-            let _ = std::fs::remove_dir_all(dir);
-        }
+        with_cleanup_error(&mut close.message, &store);
         ctx.session.listener().on_closed(close);
     });
     if let Err(e) = spawned {
-        if let Some(dir) = &store_left {
-            let _ = std::fs::remove_dir_all(dir);
-        }
         // Поток не создан: освободить сессию и контекст, иначе клиент навсегда останется в «Подключение…».
         let native = session.native.locked().take();
         if let Some(Native(p)) = native {
             unsafe { relaya_rdp_free(p) }
         }
         drop(unsafe { Box::from_raw(ctx_addr as *mut Ctx) });
-        session.listener().on_closed(RemoteClose { kind: RemoteCloseKind::Protocol, message: e.to_string() });
+        let mut message = e.to_string();
+        with_cleanup_error(&mut message, &store_left);
+        session.listener().on_closed(RemoteClose { kind: RemoteCloseKind::Protocol, message });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn store_cleanup_reports_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("s");
+        std::fs::create_dir(&store).unwrap();
+        let mut message = String::new();
+        with_cleanup_error(&mut message, &Some(store.clone()));
+        assert!(message.is_empty() && !store.exists());
+        with_cleanup_error(&mut message, &Some(store.clone()));
+        assert!(message.is_empty(), "уже удалённый каталог — не ошибка");
+        // Файл вместо каталога: remove_dir_all падает, текст дописывается к сообщению.
+        std::fs::write(&store, b"x").unwrap();
+        let mut message = "closed".to_string();
+        with_cleanup_error(&mut message, &Some(store.clone()));
+        assert!(message.starts_with("closed\n") && message.contains("/s") || message.contains("\\s"), "{message}");
     }
 }
