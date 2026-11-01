@@ -9,8 +9,8 @@ using Relaya.Data;
 
 namespace Relaya.Platform;
 
-/// Windows: OpenSSH для Windows не умеет ControlMaster, поэтому SFTP и диск WebDAV идут через один долгоживущий
-/// `sftp -b -` на хост. Команды одного вызова пишутся в его stdin, конец вывода отмечает служебная команда
+/// Windows: OpenSSH для Windows не умеет ControlMaster, поэтому короткие команды SFTP и диска WebDAV (ls, cd, mkdir,
+/// rm, rename) идут через один долгоживущий `sftp -b -` на хост; get и put — отдельным разовым sftp. Команды одного вызова пишутся в его stdin, конец вывода отмечает служебная команда
 /// с уникальной меткой. Простой 5 минут, выход, блокировка и сон закрывают процесс. Статистика и карточка хоста —
 /// отдельными ssh, как раньше.
 internal static partial class SshMux

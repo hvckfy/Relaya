@@ -25,8 +25,13 @@ internal static partial class SshMux
     public static IEnumerable<string> SshOptions(string alias) => Allowed(alias) ? PlatformSshOptions(alias) : Array.Empty<string>();
 
     /// Команды `sftp -b -` (пути — только через sftp_batch_path) с выводом как у отдельного запуска sftp.
-    public static Task<AppState.Result> Sftp(string alias, string commands, int timeoutSeconds, CancellationToken cancel = default) =>
-        Allowed(alias) ? PlatformSftp(alias, commands, timeoutSeconds, cancel) : RunSftp(alias, Array.Empty<string>(), commands, timeoutSeconds, cancel);
+    /// `transfer` — get/put: отдельный разовый sftp, чтобы копирование не задерживало навигацию по тому же хосту
+    /// (на Linux он всё равно идёт через master хоста).
+    public static Task<AppState.Result> Sftp(string alias, string commands, int timeoutSeconds, CancellationToken cancel = default, bool transfer = false)
+    {
+        if (!Allowed(alias)) return RunSftp(alias, Array.Empty<string>(), commands, timeoutSeconds, cancel);
+        return transfer ? RunSftp(alias, PlatformSshOptions(alias), commands, timeoutSeconds, cancel) : PlatformSftp(alias, commands, timeoutSeconds, cancel);
+    }
 
     /// Закрыть все общие соединения: выход, блокировка сеанса, сон.
     public static void CloseAll()
