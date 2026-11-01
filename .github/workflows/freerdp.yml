@@ -6,7 +6,7 @@ name: FreeRDP
 on:
   push:
     branches: ["**"]
-    paths: ["core/native/**", ".github/workflows/freerdp.yml"]
+    paths: ["core/native/**", ".github/workflows/freerdp.yml", ".github/actions/freerdp/**", "scripts/build-core-macos.sh"]
   workflow_dispatch:
 
 concurrency:
@@ -21,6 +21,10 @@ jobs:
         include:
           - os: windows-latest
             triplet: x64-windows
+          - os: macos-15
+            triplet: arm64-osx-dynamic
+          - os: macos-15
+            triplet: x64-osx-dynamic
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +36,8 @@ jobs:
         shell: pwsh
         run: |
           $root = "core/native/vcpkg_installed/${{ matrix.triplet }}"
-          Get-ChildItem "$root/bin" -Filter *.dll | ForEach-Object { "{0,10:N0}  {1}" -f $_.Length, $_.Name }
+          $libs = if ($IsWindows) { Get-ChildItem "$root/bin" -Filter *.dll } else { Get-ChildItem "$root/lib" -Filter *.dylib | Where-Object { -not $_.LinkType } }
+          $libs | ForEach-Object { "{0,10:N0}  {1}" -f $_.Length, $_.Name }
           Get-ChildItem "$root/include" -Directory | Select-Object -ExpandProperty Name
       - uses: actions/upload-artifact@v4
         with:
@@ -43,3 +48,28 @@ jobs:
             core/native/vcpkg_installed/${{ matrix.triplet }}/include
             core/native/vcpkg_installed/${{ matrix.triplet }}/share/freerdp*
           retention-days: 90
+
+  # Ядро для Mac с движком FreeRDP: обе архитектуры, universal-библиотеки FreeRDP. Swift-сборку не трогает.
+  core-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: FreeRDP arm64
+        id: arm
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: arm64-osx-dynamic
+      - name: FreeRDP x86_64
+        id: x64
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: x64-osx-dynamic
+      - name: Build core with rdp-freerdp
+        env:
+          FREERDP_DIR_ARM64: ${{ steps.arm.outputs.dir }}
+          FREERDP_DIR_X64: ${{ steps.x64.outputs.dir }}
+        run: |
+          scripts/build-core-macos.sh
+          ls -la core/build/freerdp
+          lipo -info core/build/librelaya_core.a
+          grep -c "class RemoteSession\|func rdp(" apps/swift/Sources/RelayaRust/relaya_core.swift

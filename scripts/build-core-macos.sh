@@ -13,10 +13,33 @@ cd "$CORE"
 TARGETS=(aarch64-apple-darwin x86_64-apple-darwin)
 if command -v rustup >/dev/null; then rustup target add "${TARGETS[@]}" >/dev/null; fi
 export MACOSX_DEPLOYMENT_TARGET=14.0
-for T in "${TARGETS[@]}"; do cargo build --release --lib --target "$T"; done
+# Встроенный RDP (FreeRDP 3): с FREERDP_DIR_ARM64 и FREERDP_DIR_X64 (каталоги vcpkg arm64-osx-dynamic и
+# x64-osx-dynamic, см. .github/actions/freerdp) ядро собирается с rdp-freerdp, а dylib FreeRDP/OpenSSL склеиваются
+# в universal и кладутся в $OUT/freerdp — их линкует и встраивает в .app Swift-сборка. Без них — как раньше.
+if [[ -n "${FREERDP_DIR_ARM64:-}" && -n "${FREERDP_DIR_X64:-}" ]]; then
+  FREERDP_FOR_aarch64_apple_darwin="$FREERDP_DIR_ARM64"
+  FREERDP_FOR_x86_64_apple_darwin="$FREERDP_DIR_X64"
+  for T in "${TARGETS[@]}"; do
+    var="FREERDP_FOR_${T//-/_}"
+    FREERDP_DIR="${!var}" cargo build --release --lib --target "$T" --features rdp-freerdp
+  done
+  FREERDP_UNIVERSAL=1
+else
+  for T in "${TARGETS[@]}"; do cargo build --release --lib --target "$T"; done
+  FREERDP_UNIVERSAL=0
+fi
 
 rm -rf "$OUT" && mkdir -p "$OUT/headers" "$MAC/Sources/RelayaRust" "$MAC/Frameworks"
 lipo -create $(for T in "${TARGETS[@]}"; do echo "target/$T/release/librelaya_core.a"; done) -output "$OUT/librelaya_core.a"
+if [[ "$FREERDP_UNIVERSAL" == 1 ]]; then
+  mkdir -p "$OUT/freerdp"
+  for lib in "$FREERDP_DIR_ARM64"/lib/*.dylib; do
+    name="$(basename "$lib")"
+    [[ -L "$lib" ]] && { cp -P "$lib" "$OUT/freerdp/"; continue; }
+    lipo -create "$lib" "$FREERDP_DIR_X64/lib/$name" -output "$OUT/freerdp/$name"
+  done
+  echo "freerdp: $OUT/freerdp ($(ls "$OUT/freerdp" | wc -l | tr -d ' ') files)"
+fi
 
 # Обёртки из метаданных собранной библиотеки (library mode).
 cargo run --release --quiet --features bindgen --bin uniffi-bindgen -- generate \
