@@ -91,6 +91,9 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("\uE8A1", L("tmux: закрывать брошенные сессии через, мин"),
             L("Для хостов с tmux: сессия без подключений живёт на сервере столько минут"), idle));
 
+        // H.264 для встроенного RDP (9.12): только где ядро на FreeRDP и не Windows (там Media Foundation).
+        if (Platform.OpenH264.Available) list.Children.Add(H264Row());
+
         list.Children.Add(Ui.Section(L("Безопасность")));
         var confirm = new ToggleSwitch { IsOn = Platform.Settings.Get("security.confirmPassword", "0") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         confirm.Toggled += (_, _) => Platform.Settings.Set("security.confirmPassword", confirm.IsOn ? "1" : "0");
@@ -118,6 +121,45 @@ internal sealed class SettingsPage : UserControl
         })
             list.Children.Add(Ui.Row(null, k, d));
         return page;
+    }
+
+    // Включение — после согласия с условиями Cisco (по умолчанию «Отмена»), выключение удаляет библиотеку.
+    private static UIElement H264Row()
+    {
+        var toggle = new ToggleSwitch { IsOn = Platform.OpenH264.IsInstalled, OnContent = "", OffContent = "", MinWidth = 0 };
+        var status = Ui.Secondary("");
+        var text = new StackPanel { Children = { status } };
+        var busy = false;
+        toggle.Toggled += async (_, _) =>
+        {
+            if (busy || toggle.IsOn == Platform.OpenH264.IsInstalled) return;
+            busy = true;
+            status.Text = "";
+            try
+            {
+                if (!toggle.IsOn) { Platform.OpenH264.Remove(); return; }
+                var dialog = new ContentDialog
+                {
+                    Title = L("Скачать OpenH264 от Cisco?"),
+                    Content = new ScrollViewer { Content = new TextBlock { Text = Platform.OpenH264.Info?.notice ?? "", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }, MaxHeight = 360 },
+                    PrimaryButtonText = L("Скачать и включить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = toggle.XamlRoot,
+                };
+                if (await dialog.ShowAsync() != ContentDialogResult.Primary) { toggle.IsOn = false; return; }
+                toggle.IsEnabled = false;
+                await Platform.OpenH264.InstallAsync();
+            }
+            catch (Exception e) { status.Text = e.Message; }
+            finally
+            {
+                toggle.IsOn = Platform.OpenH264.IsInstalled;
+                toggle.IsEnabled = true;
+                busy = false;
+            }
+        };
+        return Ui.Row("\uE714", L("H.264 для удалённых столов (OpenH264 от Cisco)"),
+            L("Чётче и быстрее на медленном канале. Кодек скачивается с сервера Cisco и проверяется по отпечатку."),
+            new StackPanel { Spacing = 4, Children = { toggle, text } });
     }
 
     private static UIElement About()

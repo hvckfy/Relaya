@@ -188,7 +188,8 @@ internal sealed partial class RdpView : UserControl, IDisposable
         var (w, h) = PhysicalSize();
         var (user, domain) = SplitUser(desktop.user);
         var config = new RdpConfig(host, (ushort)port, user, password, domain, w, h, (uint)Math.Round(scale * 100),
-            TrustedCert(), desktop.gatewayHost, GatewayUser(), CredentialStore.Read("desktop-gateway:" + desktop.id), GatewayDomain(), null);
+            TrustedCert(), desktop.gatewayHost, GatewayUser(), CredentialStore.Read("desktop-gateway:" + desktop.id), GatewayDomain(),
+            OpenH264.LibraryPath); // H.264 — только включённый и проверенный кодек (9.12)
         var s = RemoteSession.Rdp(config, new Listener(this));
         s.SetClipboardListener(new ClipListener(this));
         s.SetAudioListener(audio);
