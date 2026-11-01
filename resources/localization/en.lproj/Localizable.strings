@@ -1292,3 +1292,5 @@
 "gio trash не ответил за 10 секунд." = "gio trash did not respond within 10 seconds.";
 "Сохранённый пароль не подставляется (ProxyCommand)" = "The saved password is not filled in (ProxyCommand)";
 "Ввести…" = "Enter…";
+"«Без подтверждения» и «Запрещено всегда» для любого хоста — шаблоны команд, как в shell." = "“Without confirmation” and “Always denied” for any host — command patterns, like in a shell.";
+"По одному шаблону в строке, как в shell: systemctl restart *, docker logs *. Запрет сильнее разрешения." = "One pattern per line, like in a shell: systemctl restart *, docker logs *. A deny rule beats an allow rule.";

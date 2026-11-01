@@ -48,13 +48,31 @@ internal sealed class AgentsPage : UserControl
         foreach (var h in AppState.Hosts)
         {
             var mode = policy.hosts.TryGetValue(h.alias, out var m) ? m : policy.defaultMode;
-            body.Children.Add(Ui.Row(OsIcon.Glyph(h.os), h.alias, RelayaCoreMethods.HostSubtitle(h), ModeBox(mode, value =>
+            var box = ModeBox(mode, value =>
             {
                 var p = McpHost.LoadPolicy();
                 var hosts = new Dictionary<string, McpMode>(p.hosts) { [h.alias] = value };
                 Save(p with { hosts = hosts });
-            })));
+            });
+            // Правила и временный доступ по хосту (10.2, 10.3) — как на Mac: колонки справа, режим последним.
+            var trailing = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+            if (RelayaCoreMethods.McpGrant(policy, h.alias, NowRef()) is { } g)
+            {
+                trailing.Children.Add(new TextBlock
+                {
+                    Text = L("%@ до %@", L(Modes[(int)g.mode]), Platform.Format.Time(FromRef(g.until))),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
+                });
+                trailing.Children.Add(Ui.Button(L("Отозвать"), () => { Revoke(h.alias); Build(); }));
+            }
+            trailing.Children.Add(RulesButton(h.alias, policy));
+            trailing.Children.Add(GrantButton(h.alias));
+            trailing.Children.Add(box);
+            body.Children.Add(Ui.Row(OsIcon.Glyph(h.os), h.alias, RelayaCoreMethods.HostSubtitle(h), trailing));
         }
+        body.Children.Add(Ui.Row("", L("Правила для всех хостов"),
+            L("«Без подтверждения» и «Запрещено всегда» для любого хоста — шаблоны команд, как в shell."), RulesButton("*", policy)));
 
         body.Children.Add(Ui.Section(L("Подключение к Claude")));
         var exe = Environment.ProcessPath ?? "Relaya.exe";
@@ -67,8 +85,21 @@ internal sealed class AgentsPage : UserControl
         connect.Children.Add(Ui.Button(L("Скопировать конфиг"), () => Ui.Copy(snippet)));
         body.Children.Add(Ui.Row("", "Claude Desktop / Claude Code", L("Сервер: %@ --mcp", exe), connect));
 
-        body.Children.Add(Ui.Section(L("Журнал")));
         var log = McpHost.Log(500);
+        // «Что изменили агенты» (10.5): выполненные изменяющие команды по сессиям агента — правило ядра.
+        var summaries = RelayaCoreMethods.McpSummaries(log);
+        if (summaries.Count > 0)
+        {
+            body.Children.Add(Ui.Section(L("Что изменили агенты")));
+            foreach (var sm in summaries.Take(10))
+            {
+                var lines = string.Join("\n", sm.changes.Select(c => $"{c.host}: {c.detail}" + (c.exitCode is { } x and not 0 ? $" · exit {x}" : "")));
+                body.Children.Add(Ui.Row("", $"{sm.client} · {string.Join(", ", sm.hosts)}",
+                    Platform.Format.Date(sm.started) + "\n" + lines));
+            }
+        }
+
+        body.Children.Add(Ui.Section(L("Журнал")));
         if (log.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("Агенты ещё ничего не выполняли."))));
         else
         {
@@ -111,6 +142,91 @@ internal sealed class AgentsPage : UserControl
     }
 
     private static void Save(McpPolicy p) => McpHost.SavePolicy(p);
+
+    // Время политики — секунды от 2001-01-01, как в mcp.json (общий формат с Mac).
+    private const double ReferenceEpoch = 978_307_200;
+    private static double NowRef() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0 - ReferenceEpoch;
+    private static DateTimeOffset FromRef(double r) => DateTimeOffset.FromUnixTimeMilliseconds((long)((r + ReferenceEpoch) * 1000)).ToLocalTime();
+
+    private static void Revoke(string alias)
+    {
+        var p = McpHost.LoadPolicy();
+        if (p.grants == null) return;
+        var grants = new Dictionary<string, McpGrant>(p.grants);
+        grants.Remove(alias);
+        Save(p with { grants = grants.Count > 0 ? grants : null });
+    }
+
+    /// Временный доступ «Доверенный» на 30 минут / 2 часа / 8 часов — потом вернётся обычный режим (10.3).
+    private DropDownButton GrantButton(string alias)
+    {
+        var menu = new MenuFlyout();
+        foreach (var (minutes, title) in new[] { (30, L("на 30 минут")), (120, L("на 2 часа")), (480, L("на 8 часов")) })
+        {
+            var item = new MenuFlyoutItem { Text = L("Доверенный %@", title) };
+            item.Click += (_, _) =>
+            {
+                var p = McpHost.LoadPolicy();
+                var grants = p.grants != null ? new Dictionary<string, McpGrant>(p.grants) : new Dictionary<string, McpGrant>();
+                grants[alias] = new McpGrant(McpMode.Trusted, NowRef() + minutes * 60);
+                Save(p with { grants = grants });
+                Build();
+            };
+            menu.Items.Add(item);
+        }
+        var button = new DropDownButton { Content = new FontIcon { Glyph = "\uE823", FontSize = 16 }, Flyout = menu };
+        ToolTipService.SetToolTip(button, L("Временный доступ: потом вернётся обычный режим"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, L("Временный доступ"));
+        return button;
+    }
+
+    /// «Правила (N)»: шаблоны «без подтверждения» и «запрещено всегда» для хоста или «*» — все хосты (10.2).
+    private Button RulesButton(string alias, McpPolicy policy)
+    {
+        var count = Patterns(policy.allow, alias).Count + Patterns(policy.deny, alias).Count;
+        return Ui.Button(count > 0 ? L("Правила (%@)", count.ToString()) : L("Правила"), async () => await EditRules(alias));
+    }
+
+    private static List<string> Patterns(Dictionary<string, List<string>>? map, string alias) =>
+        map != null && map.TryGetValue(alias, out var list) ? list : new List<string>();
+
+    private async System.Threading.Tasks.Task EditRules(string alias)
+    {
+        var p = McpHost.LoadPolicy();
+        TextBox Box(string header, List<string> lines) => new()
+        {
+            Header = header, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, MinHeight = 120,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"),
+            Text = string.Join("\n", lines),
+        };
+        var allow = Box(L("Без подтверждения"), Patterns(p.allow, alias));
+        var deny = Box(L("Запрещено всегда"), Patterns(p.deny, alias));
+        var dialog = new ContentDialog
+        {
+            Title = alias == "*" ? L("Правила для всех хостов") : L("Правила для %@", alias),
+            Content = new StackPanel
+            {
+                Spacing = 12, MinWidth = 420,
+                Children =
+                {
+                    Ui.Secondary(L("По одному шаблону в строке, как в shell: systemctl restart *, docker logs *. Запрет сильнее разрешения.")),
+                    allow, deny,
+                },
+            },
+            PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        static List<string> Lines(TextBox b) => b.Text.Split('\r', '\n').Select(l => l.Trim()).Where(l => l.Length > 0).Distinct().ToList();
+        static Dictionary<string, List<string>>? Put(Dictionary<string, List<string>>? map, string key, List<string> list)
+        {
+            var m = map != null ? new Dictionary<string, List<string>>(map) : new Dictionary<string, List<string>>();
+            if (list.Count > 0) m[key] = list; else m.Remove(key);
+            return m.Count > 0 ? m : null;
+        }
+        var fresh = McpHost.LoadPolicy();
+        Save(fresh with { allow = Put(fresh.allow, alias, Lines(allow)), deny = Put(fresh.deny, alias, Lines(deny)) });
+        Build();
+    }
 
     // Сливает сервер relaya в %APPDATA%\Claude\claude_desktop_config.json, не трогая остальные серверы.
     private static string AddToClaude(string exe)

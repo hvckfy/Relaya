@@ -18,4 +18,7 @@ internal static class Format
     public static string Date(string iso) =>
         System.DateTimeOffset.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var t)
             ? t.ToLocalTime().ToString("g") : iso;
+
+    /// Время суток в формате языка интерфейса (до какого времени действует временный доступ агента).
+    public static string Time(System.DateTimeOffset t) => t.ToString("t");
 }
