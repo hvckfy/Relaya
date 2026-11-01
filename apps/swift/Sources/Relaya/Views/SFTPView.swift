@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import RelayaCore
 
 /// Файлы на сервере по SFTP: навигация, скачивание, загрузка (в т.ч. из Finder).
@@ -357,8 +358,26 @@ struct SFTPView: View {
                 }
             }
             edits.append(session)
-            NSWorkspace.shared.open(local)
+            Self.openForEditing(local)
         }
+    }
+
+    /// Расширения, которые macOS по умолчанию запускает, а не показывает: такие открываем в текстовом редакторе.
+    private static let runnable: Set<String> = [
+        "command", "tool", "sh", "bash", "zsh", "csh", "ksh", "app", "pkg", "mpkg", "terminal", "workflow", "action",
+        "scpt", "scptd", "applescript", "jar", "dmg", "webloc", "inetloc", "fileloc", "prefpane", "kext", "plugin",
+    ]
+
+    /// «Открыть в редакторе» не должно запускать присланный сервером файл (находка аудита по 6.6): исполняемый
+    /// бит снимается, запускаемые типы открываются текстовым редактором по умолчанию, остальные — своим приложением.
+    static func openForEditing(_ local: URL) {
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: local.path)
+        guard runnable.contains(local.pathExtension.lowercased()),
+              let editor = NSWorkspace.shared.urlForApplication(toOpen: .plainText) else {
+            NSWorkspace.shared.open(local)
+            return
+        }
+        NSWorkspace.shared.open([local], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration())
     }
 }
 
