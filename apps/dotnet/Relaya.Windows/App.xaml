@@ -6,6 +6,30 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Акцентные кисти Fluent своими объектами (Accent.Apply меняет у них Color на лету): кисти
+                 XamlControlsResources берут SystemAccentColor только при создании словаря, свой цвет до них не доходит. -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#005A9E" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#005A9E" Opacity="0.9" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#005A9E" Opacity="0.8" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#004275" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#002642" />
+                    <SolidColorBrush x:Key="AccentTextFillColorTertiaryBrush" Color="#005A9E" />
+                    <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#0078D4" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#76B9ED" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#76B9ED" Opacity="0.9" />
+                    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#76B9ED" Opacity="0.8" />
+                    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#99EBFF" />
+                    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#99EBFF" />
+                    <SolidColorBrush x:Key="AccentTextFillColorTertiaryBrush" Color="#76B9ED" />
+                    <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#0078D4" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
