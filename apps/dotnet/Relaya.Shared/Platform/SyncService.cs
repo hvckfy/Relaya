@@ -237,6 +237,14 @@ internal sealed class SyncService
             ? Strings.L("Не найден git. Установите Git for Windows (git-scm.com) и перезапустите Relaya.")
             : SshErrors.Describe(message);
 
+    /// П4: в репозитории (git) или папке профиля есть зашифрованные ключи `keys/` с другой машины.
+    public static bool RemoteHasKeys(SyncProfile p)
+    {
+        var dir = p.backend == SyncBackend.Git ? RepoDir(p) : p.remote;
+        try { return dir.Length > 0 && Directory.Exists(Path.Combine(dir, "keys")) && Directory.EnumerateFiles(Path.Combine(dir, "keys")).Any(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
+    }
+
     private static string RepoDir(SyncProfile p) => Path.Combine(Support, "sync", p.id);
 
     private void Set(SyncProfile p, State state, string? message)

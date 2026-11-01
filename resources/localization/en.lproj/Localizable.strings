@@ -1363,3 +1363,7 @@
 "ключ из агента или пароль" = "agent key or password";
 "Не удалось установить соединение с сервером RDP" = "Could not establish a connection to the RDP server";
 "Соединение оборвалось до входа: проверьте, что туннель SSH запущен и порт верный, а на сервере включён удалённый рабочий стол; если сервер требует TLS 1.0 — обновите его." = "The connection dropped before sign-in: check that the SSH tunnel is running and the port is right, and that Remote Desktop is enabled on the server; if the server requires TLS 1.0, update it.";
+"В профиле %@ есть SSH-ключи с другой машины" = "Profile %@ has SSH keys from another machine";
+"Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине." = "“SSH keys” is off, so the keys aren't loaded. Turn it on and set the same encryption password as on the other machine.";
+"Пароль шифрования ключей не задан — ключи не загружаются. Задайте тот же пароль, что на другой машине." = "The key encryption password isn't set, so the keys aren't loaded. Set the same password as on the other machine.";
+"Включить" = "Turn On";
