@@ -27,8 +27,8 @@ public enum OpenH264 {
         guard let info, let platform = openh264CurrentPlatform(), let dest = libraryURL else {
             throw Failure(errorDescription: L("Для этой платформы кодека нет."))
         }
-        // Сервер Cisco отдаёт и https — канал шифруем (S4), целостность держит закреплённый sha256.
-        let url = URL(string: info.url.replacingOccurrences(of: "http://", with: "https://"))!
+        // Адрес из ядра уже https (S4), целостность держит закреплённый sha256.
+        guard let url = URL(string: info.url) else { throw Failure(errorDescription: L("Для этой платформы кодека нет.")) }
         let (archive, response) = try await URLSession.shared.download(from: url)
         defer { try? FileManager.default.removeItem(at: archive) }
         guard (response as? HTTPURLResponse)?.statusCode == 200, openh264VerifyArchive(path: archive.path, platform: platform) else {

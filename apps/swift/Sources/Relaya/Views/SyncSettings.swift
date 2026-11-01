@@ -151,6 +151,10 @@ private struct ProfileForm: View {
                             .help(L("Взять хост из ~/.ssh/config"))
                         }
                     }
+                    // Проверка адреса ядром сразу при вводе (S-GIT): неподдерживаемый адрес видно до синхронизации.
+                    if let e = Sync.remoteError(profile.remote) {
+                        Text(e).font(.caption).foregroundStyle(.red)
+                    }
                     Text(L("Любой git: свой сервер по SSH-ключу (`git init --bare relaya.git`), Gitea, GitLab или GitHub. Доступ — вашими ключами из ~/.ssh."))
                         .font(.caption).foregroundStyle(.secondary)
                 } else {

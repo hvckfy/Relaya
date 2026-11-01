@@ -340,6 +340,13 @@ extension Sync {
         try syncApplyAgentEscalations(paths: paths.rust, accept: accept)
     }
 
+    /// Адрес репозитория допустим (ядро: ssh, https без пароля в адресе, file; не ext::, fd::, git://, http://).
+    /// nil — всё в порядке, иначе текст ошибки для формы.
+    public static func remoteError(_ remote: String) -> String? {
+        guard !remote.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        do { try syncValidateRemote(remote: remote); return nil } catch { return error.localizedDescription }
+    }
+
     /// Ключи из синхронизации, которые не загружены: нет пароля шифрования ключей или он неверный.
     /// Ядро отдаёт результат последнего импорта один раз.
     public static func takeSkippedKeys(paths: Paths = Paths()) -> (noPassphrase: [String], wrongPassphrase: [String]) {
