@@ -14,6 +14,13 @@ internal sealed class DesktopsPage : UserControl
 {
     public DesktopsPage() => Build();
 
+    /// Сразу редактор стола (из контекстного меню боковой панели).
+    public DesktopsPage(string editId)
+    {
+        Build();
+        if (AppState.Desktops.FirstOrDefault(x => x.id == editId) is { } d) _ = Edit(d);
+    }
+
     private void Build()
     {
         var (page, body) = Ui.Scaffold(L("Удалённые столы"), Ui.Button(L("Новый стол"), async () => await Edit(null), accent: true, glyph: ""));
@@ -56,6 +63,8 @@ internal sealed class DesktopsPage : UserControl
         via.Items.Add(L("Напрямую"));
         foreach (var h in AppState.Hosts) via.Items.Add(h.alias);
         via.SelectedItem = d?.viaSshHost is { Length: > 0 } v ? v : via.Items[0];
+        // Группа стола (9.1): столы с одной группой собираются в папку в боковой панели.
+        var group = new TextBox { Header = L("Группа"), Text = d?.group ?? "", PlaceholderText = L("необязательно") };
         var full = new ToggleSwitch { Header = L("Во весь экран"), IsOn = d?.fullScreen == true };
         // RD Gateway (RDP): адрес, пользователь и домен — в desktops.json, пароль — в хранилище учётных данных.
         var gwHost = new TextBox { Header = L("Шлюз (host или host:port)"), Text = d?.gatewayHost ?? "", PlaceholderText = L("пусто — без шлюза") };
@@ -94,7 +103,7 @@ internal sealed class DesktopsPage : UserControl
             var item = new RemoteDesktop(d?.id ?? RelayaCoreMethods.CoreNewId(),
                 name.Text.Trim().Length > 0 ? name.Text.Trim() : address.Text.Trim(), kind.SelectedIndex == 0 ? DesktopKind.Rdp : DesktopKind.Vnc,
                 address.Text.Trim(), (long)port.Value, user.Text.Trim(), via.SelectedIndex > 0 ? via.SelectedItem as string : null, full.IsOn,
-                d?.scaleToFit, d?.rdpWidth, d?.rdpHeight, d?.rdpRetina, d?.group,
+                d?.scaleToFit, d?.rdpWidth, d?.rdpHeight, d?.rdpRetina, group.Text.Trim() is { Length: > 0 } grp ? grp : null,
                 gatewayHost: gwHost.Text.Trim() is { Length: > 0 } gh ? gh : null,
                 gatewayUser: gwUser.Text.Trim() is { Length: > 0 } gu ? gu : null,
                 gatewayDomain: gwDomain.Text.Trim() is { Length: > 0 } gd ? gd : null);
@@ -113,7 +122,7 @@ internal sealed class DesktopsPage : UserControl
         body.Children.Add(new StackPanel
         {
             Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
-            Children = { name, kind, address, port, user, via, vncWarning, full, gateway, trust, error },
+            Children = { name, kind, address, port, user, via, vncWarning, group, full, gateway, trust, error },
         });
         Content = page;
     }

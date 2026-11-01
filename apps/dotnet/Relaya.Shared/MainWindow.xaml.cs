@@ -178,11 +178,27 @@ public sealed partial class MainWindow : Window
         if (desktops.Count > 0)
         {
             Nav.MenuItems.Add(new NavigationViewItemHeader { Content = L("Удалённые столы") });
-            foreach (var d in desktops)
-                Nav.MenuItems.Add(new NavigationViewItem
-                {
-                    Content = d.name, Tag = d, Icon = new FontIcon { Glyph = d.kind == DesktopKind.Rdp ? "" : "" },
-                });
+            // Группы столов и контекстное меню (Е.13): подключить, внешний клиент, изменить, удалить.
+            NavigationViewItem DesktopItem(RemoteDesktop d)
+            {
+                var item = new NavigationViewItem { Content = d.name, Tag = d, Icon = new FontIcon { Glyph = d.kind == DesktopKind.Rdp ? "" : "" } };
+                var menu = new MenuFlyout();
+                void Add(string text, Action act) { var mi = new MenuFlyoutItem { Text = text }; mi.Click += (_, _) => act(); menu.Items.Add(mi); }
+                Add(L("Подключить"), () => Platform.DesktopLauncher.Open(d, Content.XamlRoot));
+                Add(d.kind == DesktopKind.Rdp ? Platform.PlatformText.ExternalRdp() : Platform.PlatformText.ExternalVnc(),
+                    () => _ = Platform.DesktopLauncher.OpenExternal(d, Content.XamlRoot));
+                menu.Items.Add(new MenuFlyoutSeparator());
+                Add(L("Изменить…"), () => ShowPage(new Pages.DesktopsPage(d.id)));
+                item.ContextFlyout = menu;
+                return item;
+            }
+            foreach (var group in desktops.GroupBy(d => d.group ?? "").OrderBy(g => g.Key.Length == 0 ? "" : "~" + g.Key))
+            {
+                if (group.Key.Length == 0) { foreach (var d in group) Nav.MenuItems.Add(DesktopItem(d)); continue; }
+                var folder = new NavigationViewItem { Content = group.Key, Icon = new FontIcon { Glyph = "\uE8B7" }, SelectsOnInvoked = false, IsExpanded = true };
+                foreach (var d in group) folder.MenuItems.Add(DesktopItem(d));
+                Nav.MenuItems.Add(folder);
+            }
         }
         Nav.MenuItems.Add(new NavigationViewItemHeader { Content = L("Инструменты") });
         Nav.MenuItems.Add(Tool("keys", L("Ключи"), ""));
