@@ -500,7 +500,8 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     private (int Color, bool Bold)?[]? LineHighlights(Screen s, int row)
     {
         var text = new StringBuilder((int)s.cols);
-        for (var c = 0; c < s.cols; c++) text.Append(s.cells[row * (int)s.cols + c]?.ch is { Length: > 0 } ch ? ch[0] : ' ');
+        // Символ на ячейку: позиции совпадений = столбцы; вне BMP и пустые — пробел.
+        for (var c = 0; c < s.cols; c++) text.Append(s.chars[row * (int)s.cols + c] is var ch and > 0 and < 0x10000 ? (char)ch : ' ');
         var line = text.ToString();
         if (string.IsNullOrWhiteSpace(line)) return null;
         if (highlightCache.TryGetValue(line, out var cached)) return cached;
@@ -587,30 +588,53 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         public uint cols, rows, cursorRow, cursorCol;
         public bool cursorVisible, altScreen;
-        public TermCell[] cells = Array.Empty<TermCell>();
+        // П-5: экран — массивы по ячейкам из damage_compact, без объекта на ячейку. chars — кодпойнт (0 — пусто
+        // или хвост широкого символа); extras — полный текст ячеек с комбинируемыми знаками, по индексу ячейки.
+        public uint[] chars = Array.Empty<uint>(), fg = Array.Empty<uint>(), bg = Array.Empty<uint>();
+        public ushort[] flags = Array.Empty<ushort>();
+        public readonly System.Collections.Generic.Dictionary<int, string> extras = new();
+
+        /// Текст ячейки для отрисовки: составной из extras, иначе кодпойнт; пустая и неверный кодпойнт — "".
+        public string Text(int i) =>
+            extras.TryGetValue(i, out var t) ? t : chars[i] is var ch && ch != 0 && Rune.IsValid(ch) ? char.ConvertFromUtf32((int)ch) : "";
     }
 
     private readonly Screen screen = new();
 
     private Screen CurrentScreen()
     {
-        var d = Emulator.Damage();
+        var d = Emulator.DamageCompact();
         var c = d.cursor;
         if (d.full || screen.cols != c.cols || screen.rows != c.rows)
         {
             screen.cols = c.cols;
             screen.rows = c.rows;
-            screen.cells = new TermCell[c.cols * c.rows];
+            var n = (int)(c.cols * c.rows);
+            screen.chars = new uint[n];
+            screen.fg = new uint[n];
+            screen.bg = new uint[n];
+            screen.flags = new ushort[n];
+            screen.extras.Clear();
             Array.Fill(rowDirty, true);
             fullFrame = true;
         }
+        var cols = (int)screen.cols;
         foreach (var line in d.lines)
         {
             if (line.row >= screen.rows) continue;
             if (line.row < rowDirty.Length) rowDirty[line.row] = true;
             if (line.row < drawDirty.Length) drawDirty[line.row] = true;
-            var n = Math.Min(line.cells.Count, (int)screen.cols);
-            for (var i = 0; i < n; i++) screen.cells[line.row * screen.cols + i] = line.cells[i];
+            var start = (int)line.row * cols;
+            // Длины массивов строки — от ядра; берём не больше ширины экрана.
+            var n = Math.Min(Math.Min(line.chars.Count, line.fg.Count), Math.Min(Math.Min(line.bg.Count, line.flags.Count), cols));
+            for (var i = 0; i < cols; i++)
+            {
+                if (screen.extras.Count > 0) screen.extras.Remove(start + i);
+                if (i < n) { screen.chars[start + i] = line.chars[i]; screen.fg[start + i] = line.fg[i]; screen.bg[start + i] = line.bg[i]; screen.flags[start + i] = line.flags[i]; }
+                else { screen.chars[start + i] = 0; screen.fg[start + i] = 0; screen.bg[start + i] = 0; screen.flags[start + i] = 0; }
+            }
+            foreach (var e in line.extras)
+                if (e.col < cols) screen.extras[start + (int)e.col] = e.text;
         }
         screen.cursorRow = c.row;
         screen.cursorCol = c.col;
@@ -651,28 +675,27 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             }
             for (var c = 0; c < s.cols; c++)
             {
-                var cell = s.cells[r * (int)s.cols + c];
-                if (cell == null) continue;
-                var inverse = (cell.flags & 8) != 0;
-                uint cellFg = cell.fg, flags = cell.flags;
+                var i = r * (int)s.cols + c;
+                uint cellFg = s.fg[i], cellBg = s.bg[i], flags = s.flags[i], ch = s.chars[i];
+                var inverse = (flags & 8) != 0;
                 // Подсветка (как на Mac) — только текста цвета по умолчанию: раскрашенное сервером не трогаем.
                 // Без копии ячейки (П-2): меняются локальные цвет и флаги.
                 if (marks?[c] is { } mark && cellFg == 0 && !inverse) { cellFg = 0x0200_0000u | (uint)mark.Color; if (mark.Bold) flags |= 1; }
-                var fg = theme.Resolve(inverse ? cell.bg : cellFg, !inverse, (flags & 1) != 0);
+                var fg = theme.Resolve(inverse ? cellBg : cellFg, !inverse, (flags & 1) != 0);
                 var x = Pad + c * cellW;
                 var width = (flags & 64) != 0 ? cellW * 2 : cellW;
-                if (cell.bg != 0 || inverse) ds.Fill(x, y, width, cellH, theme.Resolve(inverse ? cellFg : cell.bg, inverse, false));
+                if (cellBg != 0 || inverse) ds.Fill(x, y, width, cellH, theme.Resolve(inverse ? cellFg : cellBg, inverse, false));
                 if (Selected(r, c)) ds.Fill(x, y, cellW, cellH, theme.Selection);
                 if ((flags & 16) != 0) fg.A = 160;
                 bool bold = (flags & 1) != 0, italic = (flags & 2) != 0;
-                var ascii = cell.ch.Length == 1 && cell.ch[0] is >= ' ' and < (char)127 && (flags & 64) == 0;
-                if (ascii && run.Length > 0 && fg == runFg && bold == runBold && italic == runItalic) run.Append(cell.ch[0]);
+                var ascii = ch is >= ' ' and < 127 && (flags & 64) == 0 && !s.extras.ContainsKey(i);
+                if (ascii && run.Length > 0 && fg == runFg && bold == runBold && italic == runItalic) run.Append((char)ch);
                 else
                 {
                     Flush();
-                    if (cell.ch.Length == 0 || cell.ch == " ") { }
-                    else if (ascii) { run.Append(cell.ch[0]); runX = x; runFg = fg; runBold = bold; runItalic = italic; }
-                    else ds.Text(cell.ch, x, y, fg, bold, italic);
+                    if (ch is 0 or ' ' && !s.extras.ContainsKey(i)) { }
+                    else if (ascii) { run.Append((char)ch); runX = x; runFg = fg; runBold = bold; runItalic = italic; }
+                    else if (s.Text(i) is { Length: > 0 } text) ds.Text(text, x, y, fg, bold, italic);
                 }
                 if ((flags & 4) != 0) ds.Line(x, y + cellH - 1, x + width, y + cellH - 1, fg);
                 if ((flags & 32) != 0) ds.Line(x, y + cellH / 2, x + width, y + cellH / 2, fg);
