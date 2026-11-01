@@ -1348,3 +1348,7 @@
 "Разрешить вход по паролю на «%@»?" = "Allow password login on “%@”?";
 "Это слабее, чем вход только по ключу: пароль можно подобрать. Откроется вкладка и выполнит команду на сервере." = "This is weaker than key-only login: a password can be guessed. A tab opens and runs the command on the server.";
 "Нагрузка, память и диск в карточке хоста" = "Load, memory and disk on the host card";
+"Выберите один файл" = "Select one file";
+"Сохранено на сервере: %@" = "Saved to the server: %@";
+"Изменения в %@ сохраняются на сервер, пока открыта эта вкладка" = "Changes to %@ are saved to the server while this tab is open";
+"Не удалось открыть файл" = "Could not open the file";

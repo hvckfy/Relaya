@@ -13,6 +13,13 @@ internal static partial class Shell
         catch (System.Exception e) { Trace.WriteLine($"Shell.OpenFolder: {e.Message}"); }
     }
 
+    public static partial void OpenFile(string path)
+    {
+        // ShellExecute с путём файла: приложение по ассоциации, без командной строки.
+        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+        catch (System.Exception e) { throw new System.IO.IOException(e.Message, e); }
+    }
+
     public static partial void Reveal(string path)
     {
         var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };

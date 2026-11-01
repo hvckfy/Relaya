@@ -47,6 +47,7 @@ internal sealed class SftpPage : UserControl
                 Ui.Button(L("Скачать"), () => _ = Download(), glyph: ""),
                 Ui.Button(L("Загрузить"), () => _ = Upload(), glyph: ""),
                 Ui.IconButton("", L("Новая папка"), () => _ = NewFolder()),
+                Ui.IconButton("\uE70F", L("Открыть в редакторе"), () => _ = Edit()),
                 Ui.IconButton("", L("Переименовать"), () => _ = Rename()),
                 Ui.IconButton("", L("Удалить"), () => _ = Delete()),
             },
@@ -98,6 +99,7 @@ internal sealed class SftpPage : UserControl
             await Put(items.Select(i => i.Path));
         };
         Loaded += async (_, _) => await Open(".");
+        Unloaded += (_, _) => { foreach (var w in edits) w.Dispose(); edits.Clear(); };
     }
 
     private List<RemoteFile> Selected() => list.SelectedItems.OfType<ListViewItem>().Select(i => (RemoteFile)i.Tag).ToList();
@@ -222,6 +224,39 @@ internal sealed class SftpPage : UserControl
         var total = items.Sum(l => System.IO.File.Exists(l) ? new System.IO.FileInfo(l).Length : 0);
         var r = await Transfer(items.Select(l => $"put -r {Q(l)} {Q(path)}").ToArray(), total, null);
         if (r.Status == 0) await Open(path);
+    }
+
+    // 6.6, как на Mac: файл скачивается в личную папку Relaya (не в общий /tmp), открывается приложением по умолчанию,
+    // каждое сохранение уходит обратно в ту же папку на сервере. Слежка — пока открыта страница файлов.
+    private readonly List<System.IO.FileSystemWatcher> edits = new();
+
+    private async Task Edit()
+    {
+        if (Selected() is not [{ isDirectory: false } f]) { status.Text = L("Выберите один файл"); return; }
+        var remoteDir = path;
+        var dir = System.IO.Path.Combine(AppState.Support, "edit", Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        var local = System.IO.Path.Combine(dir, f.name);
+        long? Done() => new System.IO.FileInfo(local) is { Exists: true } fi ? fi.Length : 0;
+        var r = await Transfer(new[] { $"get {Q(Join(f.name))} {Q(local)}" }, f.size, Done);
+        if (r.Status != 0) return;
+        var watcher = new System.IO.FileSystemWatcher(dir, f.name) { NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.Size };
+        var ui = DispatcherQueue;
+        var pending = false;
+        // Редакторы пишут файл несколькими событиями подряд — загружаем раз, через секунду после первого.
+        watcher.Changed += (_, _) => ui.TryEnqueue(async () =>
+        {
+            if (pending) return;
+            pending = true;
+            await Task.Delay(1000);
+            pending = false;
+            var up = await Run(TransferTimeout, new[] { $"put {Q(local)} {Q(remoteDir)}" });
+            if (up.Status == 0) status.Text = L("Сохранено на сервере: %@", f.name);
+        });
+        watcher.EnableRaisingEvents = true;
+        edits.Add(watcher);
+        try { Platform.Shell.OpenFile(local); status.Text = L("Изменения в %@ сохраняются на сервер, пока открыта эта вкладка", f.name); }
+        catch (System.IO.IOException e) { await Ui.ShowError(XamlRoot, L("Не удалось открыть файл"), e.Message); }
     }
 
     private async Task NewFolder()

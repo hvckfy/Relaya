@@ -19,6 +19,14 @@ internal static partial class Shell
         catch (System.Exception e) { Trace.WriteLine($"Shell.OpenFolder: {e.Message}"); }
     }
 
+    public static partial void OpenFile(string path)
+    {
+        var info = new ProcessStartInfo(Dialogs.Which("xdg-open") ?? "xdg-open") { UseShellExecute = false };
+        info.ArgumentList.Add(path);
+        try { Process.Start(info); }
+        catch (System.Exception e) { throw new IOException(e.Message, e); }
+    }
+
     public static partial void Reveal(string path) => OpenFolder(Path.GetDirectoryName(path) ?? path);
 
     // gio trash (GLib) — Корзина freedesktop; ошибку видит пользователь.

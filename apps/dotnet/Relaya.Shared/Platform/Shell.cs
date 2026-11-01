@@ -11,4 +11,7 @@ internal static partial class Shell
 
     /// В Корзину, а не насовсем (ключи: восстановить можно из Корзины).
     public static partial void Trash(string path);
+
+    /// Открыть файл приложением по умолчанию (6.6 «Открыть в редакторе»).
+    public static partial void OpenFile(string path);
 }
