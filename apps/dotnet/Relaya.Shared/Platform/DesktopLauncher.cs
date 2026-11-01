@@ -28,11 +28,12 @@ internal static partial class DesktopLauncher
     /// Встроенная вкладка, если есть; иначе внешний клиент.
     public static void Open(RemoteDesktop d, XamlRoot root)
     {
-        if (!OpenInTab(d)) OpenExternal(d, root);
+        if (!OpenInTab(d)) _ = OpenExternal(d, root);
     }
 
-    /// Обработчик кнопки: исключение не должно валить процесс (аудит Н13).
-    public static async void OpenExternal(RemoteDesktop d, XamlRoot root)
+    /// Внешний клиент; исключения ловятся здесь и пишутся в трассировку — процесс не падает (аудит Н13, ревью 4).
+    /// Task, а не async void: вызывающие кнопки отбрасывают результат явно.
+    public static async Task OpenExternal(RemoteDesktop d, XamlRoot root)
     {
         try { await OpenExternalAsync(d, root); }
         catch (Exception e) { Trace.WriteLine($"DesktopLauncher: {e}"); }
