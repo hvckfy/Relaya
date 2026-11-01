@@ -27,6 +27,7 @@ pub mod server_os;
 pub mod ssh_commands;
 pub mod ssh_config;
 pub mod ssh_errors;
+pub mod ssh_mux;
 pub mod sync;
 pub mod terminal;
 pub mod tile_layout;
