@@ -43,13 +43,13 @@ public enum ServerOS: String, Sendable, CaseIterable {
     public static func guess(fromBanner text: String) -> ServerOS? { osGuessFromBanner(text: text).flatMap(ServerOS.init(rust:)) }
 }
 
-/// Готовые команды для меню «Действия» в сессии.
 /// Команда для пользователя сервера: под root `sudo` не нужен (и его может не быть, как на OpenWrt) — убирается
 /// только в начале команды и после ; && || |, а не внутри аргументов и строк. Правило ядра, общее с Windows/Linux (А3).
 public func commandForUser(_ command: String, user: String?) -> String {
     osCommandForUser(command: command, user: user ?? "")
 }
 
+/// Готовые команды для меню «Действия» в сессии.
 public struct OSAction: Sendable, Hashable {
     public var title: String
     public var command: String
