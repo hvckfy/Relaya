@@ -1267,3 +1267,6 @@
 "Не удалось сохранить" = "Couldn’t save";
 "Хосты · #%@" = "Hosts · #%@";
 "Цвета окна Relaya" = "Relaya window colors";
+"Выполнить «%@» на хостах" = "Run “%@” on hosts";
+"готово" = "done";
+"(нет вывода)" = "(no output)";

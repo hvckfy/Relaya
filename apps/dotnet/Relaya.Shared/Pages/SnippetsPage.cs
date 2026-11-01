@@ -29,6 +29,7 @@ internal sealed class SnippetsPage : UserControl
             actions.Children.Add(Ui.Button(L("Вставить"), async () => await Insert(s, run: false)));
             // «Выполнить» — вставить и нажать Enter (5.3), как на Mac.
             actions.Children.Add(Ui.Button(L("Выполнить"), async () => await Insert(s, run: true)));
+            actions.Children.Add(Ui.Button(L("На хостах…"), async () => await RunOnHosts(s)));
             actions.Children.Add(Ui.IconButton("", L("Копировать"), () => Ui.Copy(s.command)));
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(s)));
             actions.Children.Add(Ui.IconButton("", L("Удалить"), async () =>
@@ -66,6 +67,43 @@ internal sealed class SnippetsPage : UserControl
         }
         MainWindow.Current!.SelectTerminal(terminal);
         if (run) terminal.Type(command.TrimEnd('\r', '\n') + "\r"); else terminal.Paste(command);
+    }
+
+    // «На хостах…» (5.4): одна команда на нескольких хостах без терминала, вывод каждого — в итоговом окне.
+    private async Task RunOnHosts(Snippet s)
+    {
+        var boxes = AppState.Hosts.Select(h => new CheckBox { Content = h.alias, Tag = h.alias }).ToList();
+        var list = new StackPanel { Spacing = 4 };
+        boxes.ForEach(list.Children.Add);
+        var command = s.command;
+        var variables = RelayaCoreMethods.SnippetVariables(command);
+        var fields = variables.Select(v => new TextBox { Header = v }).ToList();
+        var content = new StackPanel { Spacing = 12, MinWidth = 420 };
+        fields.ForEach(content.Children.Add);
+        content.Children.Add(new ScrollViewer { Content = list, MaxHeight = 320 });
+        var ask = new ContentDialog
+        {
+            Title = L("Выполнить «%@» на хостах", s.name), Content = content,
+            PrimaryButtonText = L("Выполнить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+        };
+        if (await ask.ShowAsync() != ContentDialogResult.Primary) return;
+        var hosts = boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Tag).ToList();
+        if (hosts.Count == 0) return;
+        if (variables.Count > 0) command = RelayaCoreMethods.SnippetFilled(command, variables.Zip(fields).ToDictionary(x => x.First, x => x.Second.Text));
+        var results = await Task.WhenAll(hosts.Select(async h => (Host: h, Result: await AppState.RunOnHost(h, command, 120))));
+        var report = new StackPanel { Spacing = 12 };
+        foreach (var (h, r) in results)
+        {
+            report.Children.Add(new TextBlock { Text = $"{h} · " + (r.Status == 0 ? L("готово") : L("код %@", r.Status)), Style = Ui.Style("BodyStrongTextBlockStyle") });
+            report.Children.Add(Ui.Card(new TextBlock
+            {
+                Text = (r.Stdout + r.Stderr).Trim() is { Length: > 0 } o ? o : L("(нет вывода)"), IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
+                FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            }));
+        }
+        var done = new ContentDialog { Title = s.name, Content = new ScrollViewer { Content = report, MaxHeight = 480 }, CloseButtonText = L("Закрыть"), XamlRoot = XamlRoot };
+        done.Resources["ContentDialogMaxWidth"] = 900d;
+        await done.ShowAsync();
     }
 
     private async Task Edit(Snippet? s)
