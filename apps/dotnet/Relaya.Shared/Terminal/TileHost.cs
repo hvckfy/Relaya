@@ -155,7 +155,7 @@ internal sealed class TileHost : UserControl, IDisposable
         var showRecording = Command("", L("Показать файл записи"), () => Platform.Shell.OpenFolder(SshSession.RecordingsFolder));
         var commands = new CommandBar
         {
-            DefaultLabelPosition = CommandBarLabelPosition.Right, IsDynamicOverflowEnabled = true,
+            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsDynamicOverflowEnabled = true,
             HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0, 4, 0),
             Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"),
             Content = new StackPanel
