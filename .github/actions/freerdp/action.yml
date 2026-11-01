@@ -4,7 +4,7 @@ description: >
   при промахе — сборка (~15 минут). Не зависит от артефактов других workflow.
 inputs:
   triplet:
-    description: vcpkg triplet (x64-windows; на macOS — arm64-osx-dynamic / x64-osx-dynamic, ядро линкует dylib)
+    description: vcpkg triplet (x64-windows; на macOS — arm64-osx-dynamic / x64-osx-dynamic, на Linux — x64-linux-dynamic: ядро линкует dylib/.so)
     default: x64-windows
 outputs:
   dir:

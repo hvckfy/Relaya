@@ -1,12 +1,12 @@
 name: FreeRDP
 
 # Собирает FreeRDP 3 (клиент) через vcpkg (.github/actions/freerdp — тот же кэш, что у core.yml) и кладёт артефакт.
-# Версия закреплена в core/native/vcpkg.json и core/native/freerdp.version; без FFmpeg и OpenH264,
-# H.264 на Windows — Media Foundation из ОС.
+# Версия закреплена в core/native/vcpkg.json и core/native/freerdp.version; без FFmpeg. H.264 на Windows —
+# Media Foundation из ОС, на macOS и Linux — OpenH264 от Cisco, загружаемый по пути (overlay core/native/ports).
 on:
   push:
     branches: ["**"]
-    paths: ["core/native/**", ".github/workflows/freerdp.yml", ".github/actions/freerdp/**", "scripts/build-core-macos.sh"]
+    paths: ["core/native/**", ".github/workflows/freerdp.yml", ".github/actions/freerdp/**", "scripts/build-core-macos.sh", "scripts/build-core-linux.sh", "core/build.rs"]
   workflow_dispatch:
 
 concurrency:
@@ -25,6 +25,8 @@ jobs:
             triplet: arm64-osx-dynamic
           - os: macos-15
             triplet: x64-osx-dynamic
+          - os: ubuntu-24.04
+            triplet: x64-linux-dynamic
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +38,7 @@ jobs:
         shell: pwsh
         run: |
           $root = "core/native/vcpkg_installed/${{ matrix.triplet }}"
-          $libs = if ($IsWindows) { Get-ChildItem "$root/bin" -Filter *.dll } else { Get-ChildItem "$root/lib" -Filter *.dylib | Where-Object { -not $_.LinkType } }
+          $libs = if ($IsWindows) { Get-ChildItem "$root/bin" -Filter *.dll } else { Get-ChildItem "$root/lib" -Include *.dylib, *.so* -Recurse -Depth 0 | Where-Object { -not $_.LinkType } }
           $libs | ForEach-Object { "{0,10:N0}  {1}" -f $_.Length, $_.Name }
           Get-ChildItem "$root/include" -Directory | Select-Object -ExpandProperty Name
       - uses: actions/upload-artifact@v4
@@ -73,3 +75,20 @@ jobs:
           ls -la core/build/freerdp
           lipo -info core/build/librelaya_core.a
           grep -c "class RemoteSession\|func rdp(" apps/swift/Sources/RelayaRust/relaya_core.swift
+
+  # Ядро для Linux с движком FreeRDP (и RoyalVNC, как в linux.yml): проверка линковки и привязок C#.
+  core-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: FreeRDP
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: x64-linux-dynamic
+      - name: Build core with rdp-freerdp
+        run: |
+          scripts/build-core-linux.sh
+          ls -la core/target/release/*.so*
+          ldd core/target/release/librelaya_core.so
+          ! ldd core/target/release/librelaya_core.so | grep -q "not found"
+          grep -c "RemoteSupportsH264" apps/dotnet/Relaya.Shared/Core/*.cs

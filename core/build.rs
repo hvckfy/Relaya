@@ -38,4 +38,8 @@ fn freerdp() {
     for lib in ["freerdp-client3", "freerdp3", "winpr3"] {
         println!("cargo:rustc-link-lib=dylib={lib}");
     }
+    // Linux: .so FreeRDP лежат рядом с librelaya_core.so (AppImage, .deb) — искать их там.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
+    }
 }
