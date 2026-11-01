@@ -1249,3 +1249,5 @@
 "Имя и пароль пользователя macOS." = "The macOS user name and password.";
 "Пароль VNC: у классического VNC учитываются только первые 8 символов." = "VNC password: classic VNC uses only the first 8 characters.";
 "Сохранить пароль" = "Save Password";
+"Предлагать вход по ключу" = "Offer key sign-in";
+"После входа по паролю на хост без ключа терминал предложит настроить вход по ключу" = "After a password login to a host without a key, the terminal offers to set up key sign-in";

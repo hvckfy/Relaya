@@ -96,6 +96,10 @@ internal sealed class SettingsPage : UserControl
         confirm.Toggled += (_, _) => Platform.Settings.Set("security.confirmPassword", confirm.IsOn ? "1" : "0");
         list.Children.Add(Ui.Row("\uE72E", L("Подтверждать каждое использование пароля"),
             L("Перед тем как фоновый ssh (туннель, SFTP, панели хоста, агенты) получит сохранённый пароль, Relaya спросит вас"), confirm));
+        var offerKey = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.offerKeySetup", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
+        offerKey.Toggled += (_, _) => Platform.Settings.Set("terminal.offerKeySetup", offerKey.IsOn ? "1" : "0");
+        list.Children.Add(Ui.Row("\uE8D7", L("Предлагать вход по ключу"),
+            L("После входа по паролю на хост без ключа терминал предложит настроить вход по ключу"), offerKey));
 
         list.Children.Add(Ui.Section(L("Клавиши")));
         foreach (var (k, d) in new[]
