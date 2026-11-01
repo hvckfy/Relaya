@@ -85,7 +85,7 @@ internal sealed class SettingsPage : UserControl
         void ShowImage()
         {
             var path = Platform.Appearance.ImagePath;
-            imageName.Text = path == null ? L("Нет") : System.IO.Path.GetFileName(path);
+            imageName.Text = path == null ? L("Не выбрана") : System.IO.Path.GetFileName(path);
             clear.Visibility = path == null ? Visibility.Collapsed : Visibility.Visible;
             foreach (var o in options) o.Visibility = clear.Visibility;
         }
