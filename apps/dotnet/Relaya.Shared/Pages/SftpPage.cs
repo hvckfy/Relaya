@@ -218,11 +218,18 @@ internal sealed class SftpPage : UserControl
         foreach (var f in sel)
         {
             var target = System.IO.Path.Combine(folder.Path, f.name);
+            var part = f.isDirectory ? target : PartName(target);
             Enqueue(new Job
             {
-                Name = f.name, Commands = new[] { $"get -r {Q(Join(f.name))} {Q(folder.Path)}" }, Total = f.isDirectory ? 0 : f.size,
-                Done = () => new System.IO.FileInfo(target) is { Exists: true } fi ? fi.Length : 0,
-                Finished = () => { status.Text = L("Скачано в %@", folder.Path); return Task.CompletedTask; },
+                Name = f.name, Total = f.isDirectory ? 0 : f.size,
+                Commands = new[] { f.isDirectory ? $"get -r {Q(Join(f.name))} {Q(folder.Path)}" : $"get {Q(Join(f.name))} {Q(part)}" },
+                Done = () => new System.IO.FileInfo(part) is { Exists: true } fi ? fi.Length : 0,
+                Finished = () =>
+                {
+                    if (part != target) System.IO.File.Move(part, target, overwrite: true);
+                    status.Text = L("Скачано в %@", folder.Path);
+                    return Task.CompletedTask;
+                },
             });
         }
     }
@@ -243,11 +250,25 @@ internal sealed class SftpPage : UserControl
         foreach (var l in local)
             Enqueue(new Job
             {
-                Name = System.IO.Path.GetFileName(l.TrimEnd('\\', '/')), Commands = new[] { $"put -r {Q(l)} {Q(dir)}" },
+                Name = System.IO.Path.GetFileName(l.TrimEnd('\\', '/')),
+                Commands = System.IO.File.Exists(l) ? UploadCommands(l, dir, System.IO.Path.GetFileName(l)) : new[] { $"put -r {Q(l)} {Q(dir)}" },
                 Total = System.IO.File.Exists(l) ? new System.IO.FileInfo(l).Length : 0,
                 Finished = async () => { if (path == dir) await Open(path); },
             });
         return Task.CompletedTask;
+    }
+
+    // 6.5, как на Mac: файл передаётся во временное имя рядом и встаёт на место переименованием — оборванная передача
+    // не оставляет половину файла под настоящим именем. Папки (-r) — как есть.
+    private static string PartName(string target) =>
+        System.IO.Path.Combine(System.IO.Path.GetDirectoryName(target) ?? "", $".{System.IO.Path.GetFileName(target)}.{Guid.NewGuid().ToString("N")[..8]}.relaya-part");
+
+    private static string[] UploadCommands(string local, string dir, string name)
+    {
+        var prefix = dir == "/" ? "/" : dir.TrimEnd('/') + "/";
+        var temp = prefix + $".{name}.{Guid.NewGuid().ToString("N")[..8]}.relaya-part";
+        // rename у OpenSSH идёт через posix-rename и заменяет существующий файл.
+        return new[] { $"put {Q(local)} {Q(temp)}", $"rename {Q(temp)} {Q(prefix + name)}" };
     }
 
     // 6.4, как на Mac: очередь передач — по одной за раз, у каждой состояние, скорость, «Отменить» и «Повторить».
@@ -377,7 +398,7 @@ internal sealed class SftpPage : UserControl
             pending = false;
             Enqueue(new Job
             {
-                Name = name, Commands = new[] { $"put {Q(local)} {Q(remoteDir)}" }, Total = new System.IO.FileInfo(local).Length,
+                Name = name, Commands = UploadCommands(local, remoteDir, name), Total = new System.IO.FileInfo(local).Length,
                 Finished = () => { status.Text = L("Сохранено на сервере: %@", name); return Task.CompletedTask; },
             });
         });
