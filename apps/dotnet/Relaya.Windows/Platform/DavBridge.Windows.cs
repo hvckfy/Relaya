@@ -15,8 +15,8 @@ internal sealed partial class DavBridge
 {
     private static partial bool RequiresBasic() => false;
 
-    // До решения пользователя пункт скрыт (Relaya-macos, 2026-11-01).
-    private static partial bool PlatformSupported() => false;
+    // Пользователь принял модель без Basic (2026-11-01, по рекомендации Relaya-audit-security).
+    private static partial bool PlatformSupported() => true;
 
     // dav://relaya@127.0.0.1:PORT/a/b → \\127.0.0.1@PORT\a\b (UNC-путь WebClient).
     private static string Unc(string url)
