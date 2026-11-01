@@ -13,7 +13,7 @@ internal sealed record TerminalTheme(Color Background, Color Foreground, Color C
 
     public string Name { get; init; } = "Relaya";
 
-    public static TerminalTheme Default => Platform.Contrast.On && HighContrast() is { } hc ? hc : Named(Platform.Settings.Get("terminal.theme", "Relaya"));
+    public static TerminalTheme Default => Platform.Contrast.On && HighContrast() is { } hc ? hc : Named(CurrentName());
 
     private static TerminalTheme? HighContrast()
     {
@@ -26,17 +26,57 @@ internal sealed record TerminalTheme(Color Background, Color Foreground, Color C
         return new TerminalTheme(bg, fg, hl, ansi) { Name = "HighContrast", Monochrome = true, Selection = Color.FromArgb(160, hl.R, hl.G, hl.B) };
     }
 
-    public static readonly string[] Names = { "Relaya", "Light", "Solarized Dark", "Dracula", "Nord", "One Dark" };
-
-    public static TerminalTheme Named(string name) => name switch
+    /// Схема по настройкам: «следовать за темой окна» — пара светлая/тёмная, иначе одна выбранная.
+    public static string CurrentName()
     {
-        "Light" => Make(name, 0xFFFFFF, 0x1F1F1F, 0x1F1F1F, "000000 C91B00 00A600 C7C400 0225C7 CA30C7 00A6B2 BFBFBF 686868 FF6E67 5FF967 B8B200 6871FF FF77FF 5FFDFF FFFFFF"),
-        "Solarized Dark" => Make(name, 0x002B36, 0x839496, 0x93A1A1, "073642 DC322F 859900 B58900 268BD2 D33682 2AA198 EEE8D5 002B36 CB4B16 586E75 657B83 839496 6C71C4 93A1A1 FDF6E3"),
-        "Dracula" => Make(name, 0x282A36, 0xF8F8F2, 0xF8F8F2, "21222C FF5555 50FA7B F1FA8C BD93F9 FF79C6 8BE9FD F8F8F2 6272A4 FF6E6E 69FF94 FFFFA5 D6ACFF FF92DF A4FFFF FFFFFF"),
-        "Nord" => Make(name, 0x2E3440, 0xD8DEE9, 0xD8DEE9, "3B4252 BF616A A3BE8C EBCB8B 81A1C1 B48EAD 88C0D0 E5E9F0 4C566A BF616A A3BE8C EBCB8B 81A1C1 B48EAD 8FBCBB ECEFF4"),
-        "One Dark" => Make(name, 0x282C34, 0xABB2BF, 0x528BFF, "282C34 E06C75 98C379 E5C07B 61AFEF C678DD 56B6C2 ABB2BF 5C6370 E06C75 98C379 E5C07B 61AFEF C678DD 56B6C2 FFFFFF"),
-        _ => Make("Relaya", 0x1E1E1E, 0xD4D4D4, 0xFFFFFF, "000000 CD3131 0DBC79 E5E510 2472C8 BC3FBC 11A8CD E5E5E5 666666 F14C4C 23D18B F5F543 3B8EEA D670D6 29B8DB FFFFFF"),
+        if (Platform.Settings.Get("terminal.followTheme", "0") != "1") return Platform.Settings.Get("terminal.theme", "Relaya");
+        return WindowIsDark() ? Platform.Settings.Get("terminal.themeDark", "Campbell") : Platform.Settings.Get("terminal.themeLight", "One Half Light");
+    }
+
+    private static bool WindowIsDark() => Platform.Settings.Get("app.theme", "system") switch
+    {
+        "light" => false, "dark" => true,
+        _ => Microsoft.UI.Xaml.Application.Current.RequestedTheme == Microsoft.UI.Xaml.ApplicationTheme.Dark,
     };
+
+    // Схемы — общий файл resources/terminal/schemes.json (тот же список на Mac): копируется в Terminal/schemes.json
+    // рядом с приложением. Нет файла — одна встроенная «Relaya».
+    private static readonly Lazy<TerminalTheme[]> schemes = new(Load);
+
+    public static string[] Names => System.Array.ConvertAll(schemes.Value, t => t.Name);
+
+    public static bool IsDarkScheme(string name) => System.Array.Find(schemes.Value, t => t.Name == name)?.Dark ?? true;
+
+    public bool Dark { get; init; } = true;
+
+    public static TerminalTheme Named(string name) => System.Array.Find(schemes.Value, t => t.Name == name) ?? schemes.Value[0];
+
+    private static TerminalTheme[] Load()
+    {
+        var fallback = Make("Relaya", 0x1E1E1E, 0xD4D4D4, 0xFFFFFF, "000000 CD3131 0DBC79 E5E510 2472C8 BC3FBC 11A8CD E5E5E5 666666 F14C4C 23D18B F5F543 3B8EEA D670D6 29B8DB FFFFFF");
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "Terminal", "schemes.json")));
+            var list = new System.Collections.Generic.List<TerminalTheme>();
+            foreach (var e in doc.RootElement.GetProperty("schemes").EnumerateArray())
+            {
+                uint Hex(string s) => System.Convert.ToUInt32(s.TrimStart('#'), 16);
+                var ansi = new System.Collections.Generic.List<Color>();
+                foreach (var a in e.GetProperty("ansi").EnumerateArray()) ansi.Add(Rgb(Hex(a.GetString()!)));
+                if (ansi.Count != 16) continue;
+                list.Add(new TerminalTheme(Rgb(Hex(e.GetProperty("background").GetString()!)), Rgb(Hex(e.GetProperty("foreground").GetString()!)),
+                    Rgb(Hex(e.GetProperty("cursor").GetString()!)), ansi.ToArray())
+                { Name = e.GetProperty("name").GetString()!, Dark = e.GetProperty("dark").GetBoolean() });
+            }
+            return list.Count > 0 ? list.ToArray() : new[] { fallback };
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException
+                                   or InvalidOperationException or FormatException or OverflowException or System.Collections.Generic.KeyNotFoundException)
+        {
+            TerminalView.Trace("terminal schemes: " + ex.Message);
+            return new[] { fallback };
+        }
+    }
 
     private static TerminalTheme Make(string name, uint bg, uint fg, uint cursor, string ansi) =>
         new(Rgb(bg), Rgb(fg), Rgb(cursor), System.Array.ConvertAll(ansi.Split(' '), h => Rgb(System.Convert.ToUInt32(h, 16)))) { Name = name };

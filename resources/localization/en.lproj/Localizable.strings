@@ -1383,3 +1383,7 @@
 "Свой цвет…" = "Custom Color…";
 "Свой" = "Custom";
 "Как в системе" = "Use System Setting";
+"Схема для светлой темы" = "Scheme for light theme";
+"Схема для тёмной темы" = "Scheme for dark theme";
+"Схема по теме окна" = "Scheme follows window theme";
+"Светлая и тёмная схема меняются вместе с оформлением" = "Light and dark schemes switch with the appearance";

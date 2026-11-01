@@ -30,6 +30,8 @@
   <ItemGroup>
     <None Include="..\..\..\resources\localization\en.lproj\Localizable.strings" Link="Localization\en.strings"
           CopyToOutputDirectory="PreserveNewest" />
+    <!-- Схемы терминала — общий список с Mac. -->
+    <None Include="..\..\..\resources\terminal\schemes.json" Link="Terminal\schemes.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\..\resources\icon\relaya-icon.png" Link="Assets\relaya.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Rust-ядро: scripts/build-core-linux.sh кладёт librelaya_core.so и Relaya.Shared/Core/relaya_core.cs. -->
