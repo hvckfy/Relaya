@@ -147,7 +147,11 @@ internal sealed class SyncPage : UserControl
         }
 
         root.Children.Add(new TextBlock { Text = L("Профили"), Style = Style("BodyStrongTextBlockStyle"), Margin = new Thickness(0, 16, 0, 4) });
-        foreach (var p in sync.Profiles) root.Children.Add(ProfileCard(p));
+        foreach (var p in sync.Profiles)
+        {
+            root.Children.Add(ProfileCard(p));
+            if (KeysBar(p) is { } bar) root.Children.Add(bar);
+        }
 
         var add = new Button { Content = L("Новый профиль"), Margin = new Thickness(0, 8, 0, 0) };
         add.Click += (_, _) => { sync.Add(); Build(); };
@@ -155,6 +159,34 @@ internal sealed class SyncPage : UserControl
         all.Click += async (_, _) => await sync.SyncAll();
         root.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { add, all } });
         UpdateStates();
+    }
+
+    // П4: ключи с другой машины лежат в репозитории, но этот профиль их не берёт — сказать почему и предложить включить.
+    private InfoBar? KeysBar(SyncProfile p)
+    {
+        if (!SyncService.RemoteHasKeys(p)) return null;
+        var itemOff = !p.items.Contains(SyncItem.Keys);
+        if (!itemOff && sync.HasPassphrase) return null;
+        var bar = new InfoBar
+        {
+            Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 4, 0, 8),
+            Title = L("В профиле %@ есть SSH-ключи с другой машины", p.name),
+            Message = itemOff
+                ? L("Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине.")
+                : L("Пароль шифрования ключей не задан — ключи не загружаются. Задайте тот же пароль, что на другой машине."),
+        };
+        if (itemOff)
+        {
+            var enable = new Button { Content = L("Включить") };
+            enable.Click += (_, _) =>
+            {
+                if (sync.Profiles.FirstOrDefault(x => x.id == p.id) is { } cur)
+                    sync.Update(cur with { items = cur.items.Append(SyncItem.Keys).Distinct().ToList() });
+                Build();
+            };
+            bar.ActionButton = enable;
+        }
+        return bar;
     }
 
     private UIElement ProfileCard(SyncProfile initial)
