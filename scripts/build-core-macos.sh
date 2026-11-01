@@ -42,8 +42,13 @@ if [[ "$FREERDP_UNIVERSAL" == 1 ]]; then
     [[ -L "$lib" ]] && { cp -P "$lib" "$OUT/freerdp/"; continue; }
     lipo -create "$lib" "$FREERDP_DIR_X64/lib/$name" -output "$OUT/freerdp/$name"
   done
-  [[ -n "${ROYALVNC_DIR:-}" ]] && cp "$ROYALVNC_DIR/libRoyalVNCKit.dylib" "$OUT/freerdp/"
   echo "freerdp: $OUT/freerdp ($(ls "$OUT/freerdp" | wc -l | tr -d ' ') files)"
+fi
+
+# RoyalVNCKit — и без FreeRDP: ядро с vnc-royal без этой dylib не загрузится.
+if [[ -n "${ROYALVNC_DIR:-}" ]]; then
+  mkdir -p "$OUT/freerdp"
+  cp "$ROYALVNC_DIR/libRoyalVNCKit.dylib" "$OUT/freerdp/"
 fi
 
 # Обёртки из метаданных собранной библиотеки (library mode).
