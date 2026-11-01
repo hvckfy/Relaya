@@ -97,7 +97,7 @@ struct SFTPView: View {
             statusBar
         }
         .background { shortcuts }
-        .frame(width: embedded ? nil : 860, height: embedded ? nil : 560)
+        .frame(minWidth: embedded ? nil : 640, idealWidth: embedded ? nil : 860, minHeight: embedded ? nil : 420, idealHeight: embedded ? nil : 560)  // UI-M3: лист не больше экрана MacBook Air 13"
         .frame(maxWidth: embedded ? .infinity : nil, maxHeight: embedded ? .infinity : nil)
         .background(embedded ? Theme.session : Theme.bg)
         .task { await start() }

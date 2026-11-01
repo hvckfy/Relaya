@@ -46,7 +46,7 @@ struct HostEditorView: View {
             }
             footer
         }
-        .frame(width: 640, height: 760)
+        .frame(minWidth: 560, idealWidth: 640, maxWidth: 900, minHeight: 480, idealHeight: 760, maxHeight: .infinity)  // UI-M3: лист не больше экрана MacBook Air 13"
         .background(Theme.bg)
         .onAppear {
             document = try? model.store.loadDocument()

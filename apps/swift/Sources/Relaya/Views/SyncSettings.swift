@@ -268,7 +268,7 @@ struct ConflictSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 820, height: 560)
+        .frame(minWidth: 640, idealWidth: 820, maxWidth: .infinity, minHeight: 420, idealHeight: 560, maxHeight: .infinity)  // UI-M3: лист не больше экрана MacBook Air 13"
     }
 
     private func version(_ title: String, _ text: String, chosen: Bool) -> some View {
