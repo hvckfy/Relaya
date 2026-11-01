@@ -638,11 +638,16 @@ public sealed partial class MainWindow : Window
     /// Тема окна из настройки app.theme (system | light | dark).
     internal void ApplyTheme()
     {
-        if (Content is FrameworkElement root)
-            root.RequestedTheme = Platform.Settings.Get("app.theme", "system") switch
-            {
-                "light" => ElementTheme.Light, "dark" => ElementTheme.Dark, _ => ElementTheme.Default,
-            };
+        Platform.Accent.Apply();
+        if (Content is not FrameworkElement root) return;
+        var theme = Platform.Settings.Get("app.theme", "system") switch
+        {
+            "light" => ElementTheme.Light, "dark" => ElementTheme.Dark, _ => ElementTheme.Default,
+        };
+        // Кисти ThemeResource перечитывают акцент только при смене темы: переключаем на противоположную и обратно.
+        var actual = theme == ElementTheme.Default ? (Application.Current.RequestedTheme == ApplicationTheme.Dark ? ElementTheme.Dark : ElementTheme.Light) : theme;
+        root.RequestedTheme = actual == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
+        root.RequestedTheme = theme;
     }
 
     private void AddShortcuts()

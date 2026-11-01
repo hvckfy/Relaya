@@ -1367,3 +1367,9 @@
 "Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине." = "“SSH keys” is off, so the keys aren't loaded. Turn it on and set the same encryption password as on the other machine.";
 "Пароль шифрования ключей не задан — ключи не загружаются. Задайте тот же пароль, что на другой машине." = "The key encryption password isn't set, so the keys aren't loaded. Set the same password as on the other machine.";
 "Включить" = "Turn On";
+"Цвет акцента" = "Accent color";
+"Кнопки, переключатели и выделение" = "Buttons, switches and selection";
+"Цвет акцента %@" = "Accent color %@";
+"Свой цвет…" = "Custom Color…";
+"Свой" = "Custom";
+"Как в системе" = "Use System Setting";

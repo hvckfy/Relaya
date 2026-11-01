@@ -62,6 +62,42 @@ internal sealed class SettingsPage : UserControl
             MainWindow.Current?.ApplyTheme();
         };
         list.Children.Add(Ui.Row("\uE790", L("Оформление"), L("Цвета окна Relaya"), appTheme));
+        // Цвет акцента (как «Персонализация → Цвета» в Windows): «Как в системе» или свой из палитры Windows / любой.
+        var accentMode = new ComboBox { MinWidth = 220, Items = { L("Как в системе"), L("Свой") }, SelectedIndex = Platform.Accent.Custom == null ? 0 : 1 };
+        list.Children.Add(Ui.Row("\uE771", L("Цвет акцента"), L("Кнопки, переключатели и выделение"), accentMode));
+        var swatches = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 40, ItemHeight = 40, MaximumRowsOrColumns = 8 };
+        void SetAccent(Windows.UI.Color? c)
+        {
+            Platform.Accent.Custom = c;
+            MainWindow.Current?.ApplyTheme();
+        }
+        foreach (var v in Platform.Accent.Palette)
+        {
+            var color = Platform.Accent.FromRgb(v);
+            var hex = $"#{v:X6}";
+            var swatch = new Button
+            {
+                Width = 32, Height = 32, Padding = new Thickness(0), CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(color), BorderBrush = Ui.Brush("ControlStrokeColorDefaultBrush"),
+            };
+            ToolTipService.SetToolTip(swatch, hex);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(swatch, L("Цвет акцента %@", hex));
+            swatch.Click += (_, _) => SetAccent(color);
+            swatches.Children.Add(swatch);
+        }
+        var picker = new ColorPicker { IsAlphaEnabled = false, Color = Platform.Accent.Custom ?? Platform.Accent.FromRgb(0x0078D4) };
+        var applyPicked = new Button { Content = L("Применить"), Style = Ui.Style("AccentButtonStyle"), HorizontalAlignment = HorizontalAlignment.Right };
+        var pickFlyout = new Flyout { Content = new StackPanel { Spacing = 12, Children = { picker, applyPicked } } };
+        applyPicked.Click += (_, _) => { pickFlyout.Hide(); SetAccent(picker.Color); };
+        var customColor = new Button { Content = L("Свой цвет…"), Flyout = pickFlyout, Margin = new Thickness(0, 8, 0, 0) };
+        var accentPanel = new StackPanel { Margin = new Thickness(56, 0, 0, 8), Children = { swatches, customColor } };
+        accentPanel.Visibility = accentMode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        accentMode.SelectionChanged += (_, _) =>
+        {
+            accentPanel.Visibility = accentMode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+            if (accentMode.SelectedIndex == 0) SetAccent(null);
+        };
+        list.Children.Add(accentPanel);
         // Картинка фона (12.2), как на Mac: одна на всё окно, терминалы и разделы просвечивают её.
         var imageName = new TextBlock { VerticalAlignment = VerticalAlignment.Center, MaxWidth = 200, TextTrimming = TextTrimming.CharacterEllipsis };
         var pick = new Button { Content = L("Выбрать…") };
