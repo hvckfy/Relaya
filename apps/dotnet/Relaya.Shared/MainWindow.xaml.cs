@@ -77,6 +77,7 @@ public sealed partial class MainWindow : Window
             ui.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.DeletionsDialog.Show(root, pending); });
         Platform.SyncService.Shared.Changed += () => ui.TryEnqueue(UpdateSyncButton);
         UpdateSyncButton();
+        Platform.ConsentGrace.WatchSessionLock();
         Platform.SyncService.Shared.ScheduleAuto();
         Platform.TunnelManager.Shared.StartAuto();
         Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
