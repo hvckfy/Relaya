@@ -32,7 +32,7 @@ internal sealed class AgentsPage : UserControl
             {
                 Severity = InfoBarSeverity.Error, IsOpen = true, IsClosable = false,
                 Title = L("Политика не прочитана — доступ выключен"),
-                Message = L("Файл mcp.json повреждён. Агенты не получат доступ, пока вы не сохраните настройки заново."),
+                Message = L("Файл mcp.json повреждён. Агенты не получат доступ, пока вы не сохраните настройки заново.") + "\n" + L("Новая политика — с подтверждением каждой команды; режимы хостов задайте заново."),
                 ActionButton = Ui.Button(L("Создать политику заново"), () => { McpHost.ResetPolicy(); Build(); }),
             });
 
