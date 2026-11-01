@@ -1232,3 +1232,5 @@
 "Новый хост, изменить хост, перечитать ~/.ssh/config" = "New host, edit host, reload ~/.ssh/config";
 "Новая вкладка к хосту, файлы хоста" = "New tab to the host, host files";
 "Переподключить, вкладка по номеру" = "Reconnect, tab by number";
+"Keepalive, секунд (ServerAliveInterval)" = "Keepalive, seconds (ServerAliveInterval)";
+"Keepalive — число секунд от 0 до 86400" = "Keepalive must be 0–86400 seconds";

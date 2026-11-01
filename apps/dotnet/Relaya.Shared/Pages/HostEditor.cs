@@ -106,6 +106,8 @@ internal static class HostEditor
             Orientation = Orientation.Horizontal, Spacing = 8,
             Children = { Ui.Secondary(Platform.PlatformText.PasswordStored()), forgetButton },
         };
+        // Keepalive (ServerAliveInterval, секунды; пусто — как в конфиге): ssh шлёт пинги и рвёт мёртвое соединение.
+        var keepalive = Field(L("Keepalive, секунд (ServerAliveInterval)"), source?.serverAliveInterval?.ToString(), L("необязательно"));
         var tmux = new ToggleSwitch { Header = L("Сессии в tmux (переживают разрыв связи)"), IsOn = source?.tmux == true };
         var preview = new TextBlock
         {
@@ -124,6 +126,12 @@ internal static class HostEditor
             var taken = RelayaCoreMethods.ConfigAllAliases(AppState.ConfigText()).Contains(name);
             if (!editing && taken || editing && name != source!.alias && taken)
             { problem = L("Хост «%@» уже есть в ~/.ssh/config", name); return null; }
+            long? keepaliveValue = null;
+            if (Opt(keepalive.Text) is { } ka)
+            {
+                if (!long.TryParse(ka, out var kv) || kv is < 0 or > 86400) { problem = L("Keepalive — число секунд от 0 до 86400"); return null; }
+                keepaliveValue = kv;
+            }
             long? portValue = null;
             if (Opt(port.Text) is { } p)
             {
@@ -133,7 +141,7 @@ internal static class HostEditor
             var files = KeyFiles();
             return new SshHost(name, Opt(address.Text), Opt(user.Text), portValue, files.FirstOrDefault(), Opt(jump.Text),
                 // Выключили при ForwardAgent в блоке — пишем явное no, иначе значение из блока остаётся (R2).
-                TriBool(agent), source?.serverAliveInterval, TriBool(compression), Opt(group.Text),
+                TriBool(agent), keepaliveValue, TriBool(compression), Opt(group.Text),
                 RelayaCoreMethods.SplitTags(tags.Text), source?.color, os.SelectedIndex > 0 ? all[os.SelectedIndex - 1] : null, tmux.IsOn,
                 identityFiles: files, forwardAgentValue: TriValue(agent), compressionValue: TriValue(compression));
         }
@@ -144,7 +152,7 @@ internal static class HostEditor
             preview.Text = h == null ? "" : string.Join("\n",
                 RelayaCoreMethods.ConfigRenderedLines(AppState.ConfigText(), h, editing ? source!.alias : null));
         }
-        foreach (var t in new[] { alias, address, user, port, tags, keyList }) t.TextChanged += (_, _) => Update();
+        foreach (var t in new[] { alias, address, user, port, tags, keyList, keepalive }) t.TextChanged += (_, _) => Update();
         foreach (var c in new[] { jump, group }) { c.SelectionChanged += (_, _) => Update(); c.TextSubmitted += (_, _) => Update(); }
         os.SelectionChanged += (_, _) => Update();
         agent.SelectionChanged += (_, _) => Update();
@@ -182,7 +190,7 @@ internal static class HostEditor
             Ui.Button(L("Отмена"), Back),
             Ui.Button(editing ? L("Сохранить") : L("Добавить"), Save, accent: true));
         var form = new StackPanel { Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        foreach (var c in new UIElement[] { alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, os, agent, compression, tmux })
+        foreach (var c in new UIElement[] { alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, os, agent, compression, keepalive, tmux })
             form.Children.Add(c);
         form.Children.Add(Ui.Section(L("Будет записано в ~/.ssh/config")));
         form.Children.Add(Ui.Card(preview));
