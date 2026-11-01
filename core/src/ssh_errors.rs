@@ -36,6 +36,10 @@ const RULES: &[(&[&str], &str, &str)] = &[
     (&["could not resolve hostname", "name or service not known", "nodename nor servname", "no such host is known", "этот хост неизвестен", "неизвестный хост"],
      "Адрес сервера не найден",
      "Проверьте HostName на опечатки и подключение к сети или VPN."),
+    // FreeRDP: TCP или TLS не поднялись — чаще всего туннель ssh ещё не слушает или указан удалённый порт вместо локального.
+    (&["connect_transport_failed", "transport layer failed", "tls_connect_failed", "tls connect failed"],
+     "Не удалось установить соединение с сервером RDP",
+     "Соединение оборвалось до входа: проверьте, что туннель SSH запущен и порт верный, а на сервере включён удалённый рабочий стол; если сервер требует TLS 1.0 — обновите его."),
     (&["connection refused", "отверг запрос на подключение", "в подключении отказано"],
      "Сервер отказал в подключении",
      "На этом адресе и порту SSH не принимает соединения: проверьте порт и что sshd запущен."),
@@ -251,6 +255,10 @@ mod tests {
         let rdp = |m: &str| remote_explain(RemoteProtocol::Rdp, m.into()).map(|p| p.title);
         let vnc = |m: &str| remote_explain(RemoteProtocol::Vnc, m.into()).map(|p| p.title);
         assert_eq!(rdp("CredSSP: SEC_E_LOGON_DENIED").as_deref(), Some("Неверный логин или пароль"));
+        assert_eq!(
+            rdp("ERRCONNECT_CONNECT_TRANSPORT_FAILED: The connection transport layer failed").as_deref(),
+            Some("Не удалось установить соединение с сервером RDP")
+        );
         assert_eq!(rdp("STATUS_PASSWORD_EXPIRED").as_deref(), Some("Пароль истёк — сервер требует сменить его"));
         assert_eq!(rdp("STATUS_ACCOUNT_LOCKED_OUT").as_deref(), Some("Учётная запись заблокирована или отключена"));
         assert_eq!(
