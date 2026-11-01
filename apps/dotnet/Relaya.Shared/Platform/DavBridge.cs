@@ -167,11 +167,16 @@ internal sealed partial class DavBridge
         return parts.Length == 0 ? root : Join(root, string.Join("/", parts));
     }
 
+    private const string DavAllow = "OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, MOVE, COPY, PROPFIND, PROPPATCH, LOCK, UNLOCK";
+
     private async Task<byte[]> HandleAsync(DavRequest req)
     {
         var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{User}:{password}"));
         if (RequiresBasic() && Header(req, "authorization") != expected)
             return Response(401, "Unauthorized", new() { ["WWW-Authenticate"] = "Basic realm=\"Relaya\"" });
+        // OPTIONS ничего не раскрывает; редиректор WebClient на Windows спрашивает его у корня сервера, а не по секретному
+        // пути, и без ответа не подключает диск.
+        if (req.method == "OPTIONS") return Response(200, "OK", new() { ["Allow"] = DavAllow, ["DAV"] = "1, 2" });
         if (RemotePath(req.path) is not { } remote) return Response(404, "Not Found");
         if (remote == root && req.method is "DELETE" or "MOVE") return Response(403, "Forbidden");
         var name = remote.Split('/').Last();
@@ -180,8 +185,6 @@ internal sealed partial class DavBridge
         {
             switch (req.method)
             {
-                case "OPTIONS":
-                    return Response(200, "OK", new() { ["Allow"] = "OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, MOVE, COPY, PROPFIND, PROPPATCH, LOCK, UNLOCK", ["DAV"] = "1, 2" });
                 case "PROPFIND":
                     return await PropfindAsync(req, remote);
                 case "PROPPATCH":
