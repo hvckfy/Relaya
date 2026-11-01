@@ -172,7 +172,10 @@ internal sealed partial class RdpView : UserControl, IDisposable
         session = null;
         connected = false;
 
-        if (CredentialStore.Read(PasswordAccount) is not { } password)
+        // Учётка, введённая после CredentialsRequired, — на эту попытку; сохранённую не трогаем.
+        var once = askedCredentials;
+        askedCredentials = null;
+        if ((once?.Password ?? CredentialStore.Read(PasswordAccount)) is not { } password)
         {
             if (await AskPassword() is not { } entered) { ShowProblem(L("Нужен пароль"), L("Введите пароль, чтобы подключиться.")); return; }
             password = entered;
@@ -183,7 +186,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
         var scale = XamlRoot?.RasterizationScale ?? 1.0;
         var (w, h) = PhysicalSize();
-        var (user, domain) = SplitUser(desktop.user);
+        var (user, domain) = SplitUser(once?.User ?? desktop.user);
         var config = new RdpConfig(host, (ushort)port, user, password, domain, w, h, (uint)Math.Round((desktop.rdpRetina == false ? 1.0 : scale) * 100),
             TrustedCert(), desktop.gatewayHost, GatewayUser(), CredentialStore.Read("desktop-gateway:" + desktop.id), GatewayDomain(),
             OpenH264.LibraryPath); // H.264 — только включённый и проверенный кодек (9.12)
@@ -265,6 +268,31 @@ internal sealed partial class RdpView : UserControl, IDisposable
     {
         var i = user.IndexOf('\\');
         return i > 0 ? (user[(i + 1)..], user[..i]) : (user, null);
+    }
+
+    private (string User, string Password)? askedCredentials;
+
+    /// R-2: сервер требует учётку (NLA) — сразу форма логина и пароля, без карточки ошибки.
+    private async Task AskCredentialsAndConnect()
+    {
+        connecting.Visibility = Visibility.Collapsed;
+        var user = new TextBox { Header = L("Пользователь"), Text = desktop.user };
+        var box = new PasswordBox { Header = L("Пароль") };
+        var save = new CheckBox { Content = SavePasswordText(), IsChecked = true };
+        var dialog = new ContentDialog
+        {
+            Title = L("Вход на %@", desktop.name), Content = new StackPanel { Spacing = 8, Children = { user, box, save } },
+            PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            ShowProblem(L("Нужен пароль"), L("Введите пароль, чтобы подключиться."));
+            return;
+        }
+        // Пароль сохраняется только после успешного входа и только для имени из настроек стола.
+        pendingSave = save.IsChecked == true && box.Password.Length > 0 && user.Text.Trim() == desktop.user ? box.Password : null;
+        askedCredentials = (user.Text.Trim(), box.Password);
+        await Connect();
     }
 
     private async Task<string?> AskPassword()
@@ -493,7 +521,9 @@ internal sealed partial class RdpView : UserControl, IDisposable
         connected = false;
         if (disposed) return;
         if (close.kind == RemoteCloseKind.ClosedByUser) { ShowProblem(L("Отключено"), L("Сеанс завершён.")); return; }
+        if (close.kind == RemoteCloseKind.CredentialsRequired) { _ = AskCredentialsAndConnect(); return; }
         // Неверный сохранённый пароль: забываем его, иначе «Подключить снова» упирается в тот же отказ (К12).
+        // R-3: только при настоящем неверном пароле; блокировка или истёкший пароль (AccountProblem) пароль не стирают.
         if (close.kind == RemoteCloseKind.AuthFailed) CredentialStore.Delete(PasswordAccount);
         if (RelayaCoreMethods.RemoteExplain(RemoteProtocol.Rdp, close.message) is { } p) ShowProblem(L(p.title), L(p.hint));
         else ShowProblem(L("Соединение закрыто"), close.message);
