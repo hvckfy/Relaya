@@ -162,7 +162,6 @@ pub fn dav_decide(
     }
     let junk = !is_root && crate::webdav::dav_is_finder_junk(base_name(&remote).into());
     match method.as_str() {
-        "OPTIONS" => DavAction::Options,
         "PROPFIND" => DavAction::Propfind { remote, junk },
         "PROPPATCH" => DavAction::Proppatch,
         "LOCK" => DavAction::Lock,
