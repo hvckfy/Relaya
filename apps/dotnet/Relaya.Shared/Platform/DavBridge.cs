@@ -334,10 +334,12 @@ internal sealed partial class DavBridge
         if (r.Status != 0) throw new IOException(r.Stderr.Trim().Length > 0 ? r.Stderr.Trim() : "ssh: " + r.Status);
     }
 
-    // Содержимое чужих файлов — не в общий /tmp: XDG_RUNTIME_DIR доступен только владельцу.
-    private static string TempFile() =>
-        Path.Combine(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } run ? run : Path.GetTempPath(),
-            "relaya-dav-" + Guid.NewGuid().ToString("N"));
+    // Содержимое чужих файлов — в своём каталоге 0700 (CreateTempSubdirectory): и sftp get, и наша запись создают
+    // файлы по umask, а без XDG_RUNTIME_DIR база — общий /tmp.
+    private static readonly Lazy<string> tempDir = new(() =>
+        Directory.CreateTempSubdirectory("relaya-dav-").FullName);
+
+    private static string TempFile() => Path.Combine(tempDir.Value, Guid.NewGuid().ToString("N"));
 
     // Аргумент команды sftp -b: в кавычках, с экранированием, как в SftpPage.
     private static string Q(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
