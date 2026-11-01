@@ -16,7 +16,8 @@ namespace Relaya.Platform;
 internal static class TrayIcon
 {
     private const int WM_APP_TRAY = 0x8001, WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205, WM_CONTEXTMENU = 0x007B;
-    private const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4;
+    private const uint NIM_ADD = 0, NIM_DELETE = 2, NIM_SETVERSION = 4, NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NOTIFYICON_VERSION_4 = 4;
+    private const int NIN_SELECT = 0x400, NIN_KEYSELECT = 0x401, WM_NULL = 0;
     private const uint MF_STRING = 0, MF_SEPARATOR = 0x800, MF_GRAYED = 1, MF_CHECKED = 8;
     private const uint TPM_RETURNCMD = 0x100, TPM_RIGHTBUTTON = 2;
 
@@ -79,6 +80,9 @@ internal static class TrayIcon
     {
         var d = Data_();
         added = Shell_NotifyIconW(NIM_ADD, ref d);
+        // Версия 4: меню и выбор доступны и с клавиатуры (Shift+F10, Enter на значке), координаты — в wParam.
+        d.uVersion = NOTIFYICON_VERSION_4;
+        if (added) Shell_NotifyIconW(NIM_SETVERSION, ref d);
     }
 
     private static void Remove()
@@ -96,14 +100,15 @@ internal static class TrayIcon
         if (msg == WM_APP_TRAY)
         {
             var e = (int)(l.ToInt64() & 0xFFFF);
-            if (e == WM_LBUTTONUP) ShowWindow();
-            else if (e is WM_RBUTTONUP or WM_CONTEXTMENU) ShowMenu();
+            var at = w.ToInt64();
+            if (e is WM_LBUTTONUP or NIN_SELECT or NIN_KEYSELECT) ShowWindow();
+            else if (e is WM_RBUTTONUP or WM_CONTEXTMENU) ShowMenu((short)(at & 0xFFFF), (short)((at >> 16) & 0xFFFF));
             return IntPtr.Zero;
         }
         return DefWindowProcW(h, msg, w, l);
     }
 
-    private static void ShowMenu()
+    private static void ShowMenu(int x, int y)
     {
         var actions = new List<Action?> { null };
         var menu = CreatePopupMenu();
@@ -141,9 +146,9 @@ internal static class TrayIcon
             Remove();
             Application.Current.Exit();
         });
-        GetCursorPos(out var pt);
         SetForegroundWindow(hwnd); // иначе меню не закроется щелчком мимо
-        var id = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.X, pt.Y, hwnd, IntPtr.Zero);
+        var id = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, x, y, hwnd, IntPtr.Zero);
+        PostMessageW(hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero); // известная особенность меню у невидимого окна
         DestroyMenu(menu);
         if (id > 0 && id < actions.Count) actions[id]?.Invoke();
     }
@@ -178,8 +183,6 @@ internal static class TrayIcon
         public IntPtr hBalloonIcon;
     }
 
-    private struct Point { public int X, Y; }
-
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern ushort RegisterClassW(ref WndClass c);
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr CreateWindowExW(uint ex, string cls, string name, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr param);
@@ -191,7 +194,7 @@ internal static class TrayIcon
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool AppendMenuW(IntPtr menu, uint flags, UIntPtr id, string? text);
     [DllImport("user32.dll")] private static extern int TrackPopupMenuEx(IntPtr menu, uint flags, int x, int y, IntPtr hwnd, IntPtr tpm);
     [DllImport("user32.dll")] private static extern bool DestroyMenu(IntPtr menu);
-    [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point p);
+    [DllImport("user32.dll")] private static extern bool PostMessageW(IntPtr h, int msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern bool Shell_NotifyIconW(uint msg, ref NotifyIconData data);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr GetModuleHandleW(string? name);
