@@ -75,7 +75,9 @@ jobs:
           ./probe 127.0.0.1 5901 > probe.log 2>&1 &
           pid=$!
           for i in $(seq 1 60); do grep -q FIRST_FRAME probe.log && break; sleep 1; done
-          DISPLAY=:1 xrandr --fb 1280x800 || DISPLAY=:1 xrandr -s 1280x800 || true
+          DISPLAY=:1 xrandr | head -5
+          DISPLAY=:1 xrandr -s 1280x800 || DISPLAY=:1 xrandr --fb 1280x800
+          DISPLAY=:1 xrandr | head -1
           DISPLAY=:1 xsetroot -solid "#aa6633"
           wait $pid; rc=$?
           cat probe.log

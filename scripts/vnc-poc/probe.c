@@ -71,9 +71,10 @@ static void on_resize(rvnc_connection_t conn, const rvnc_context_t c, rvnc_frame
 {
 	(void)conn; (void)c;
 	uint16_t w = rvnc_framebuffer_size_width_get(fb), h = rvnc_framebuffer_size_height_get(fb);
-	printf("RESIZED %ux%u (was %ux%u)\n", w, h, width, height);
+	printf("RESIZE_EVENT %ux%u (was %ux%u)\n", w, h, width, height);
+	/* Засчитывается только настоящая смена размера (ExtendedDesktopSize при входе приходит с тем же размером). */
+	if ((w != width || h != height) && first_frame) { resized = 1; printf("RESIZED %ux%u\n", w, h); }
 	width = w; height = h;
-	resized = 1;
 	fflush(stdout);
 }
 
