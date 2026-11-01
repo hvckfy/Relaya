@@ -17,7 +17,7 @@ let freerdpLinker: [LinkerSetting] = FileManager.default.fileExists(atPath: free
 
 let package = Package(
     name: "Relaya",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v15)],
     products: [
         .executable(name: "Relaya", targets: ["Relaya"]),
         .library(name: "RelayaCore", targets: ["RelayaCore"]),

@@ -15,8 +15,8 @@ cd "$ROOT/apps/swift"
 # По архитектуре отдельно: мульти-arch сборка уходит в xcbuild, который не тянет плагин SwiftTerm.
 BINS=()
 for ARCH in arm64 x86_64; do
-  swift build -c release --triple "$ARCH-apple-macosx14.0"
-  BINS+=("$(swift build -c release --triple "$ARCH-apple-macosx14.0" --show-bin-path)/Relaya")
+  swift build -c release --triple "$ARCH-apple-macosx15.0"
+  BINS+=("$(swift build -c release --triple "$ARCH-apple-macosx15.0" --show-bin-path)/Relaya")
 done
 
 rm -rf "$APP"
@@ -72,7 +72,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleLocalizations</key><array>${LOCALIZATIONS}</array>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${VERSION}</string>
-  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict>

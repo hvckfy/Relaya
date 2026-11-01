@@ -12,7 +12,7 @@ cd "$CORE"
 
 TARGETS=(aarch64-apple-darwin x86_64-apple-darwin)
 if command -v rustup >/dev/null; then rustup target add "${TARGETS[@]}" >/dev/null; fi
-export MACOSX_DEPLOYMENT_TARGET=14.0
+export MACOSX_DEPLOYMENT_TARGET=15.0
 # Встроенный RDP (FreeRDP 3): с FREERDP_DIR_ARM64 и FREERDP_DIR_X64 (каталоги vcpkg arm64-osx-dynamic и
 # x64-osx-dynamic, см. .github/actions/freerdp) ядро собирается с rdp-freerdp, а dylib FreeRDP/OpenSSL склеиваются
 # в universal и кладутся в $OUT/freerdp — их линкует и встраивает в .app Swift-сборка. Без них — как раньше.
