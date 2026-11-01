@@ -48,6 +48,7 @@ struct HostEditorView: View {
         }
         .frame(minWidth: 560, idealWidth: 640, maxWidth: 900, minHeight: 480, idealHeight: 760, maxHeight: .infinity)  // UI-M3: лист не больше экрана MacBook Air 13"
         .background(Theme.bg)
+        .onChange(of: host.alias) { _, v in splitDestination(v) }
         .onAppear {
             document = try? model.store.loadDocument()
             keyFiles = Self.scanKeyFiles()
@@ -74,6 +75,7 @@ struct HostEditorView: View {
         FormGroup(title: L("Основное")) {
             FieldRow(L("Алиас (Host)")) {
                 MonoField(text: $host.alias, placeholder: "staging-web", width: 300)
+                    .help(L("Короткое имя без «@» и пробелов. Можно вставить user@host:port — разложим по полям."))
             }
             FieldRow(L("Адрес (HostName)")) {
                 MonoField(text: optional(\.hostName), placeholder: "staging.example.com", width: 300)
@@ -124,6 +126,25 @@ struct HostEditorView: View {
                 }
                 .labelsHidden()
                 .frame(width: 300)
+            }
+            // Дополнительные IdentityFile блока: ssh пробует их по порядку после первого (чек-лист 2.3).
+            FieldRow(L("Ещё ключи")) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(extraKeys.enumerated()), id: \.offset) { i, f in
+                        HStack(spacing: 6) {
+                            Text(f).font(.system(size: 12, design: .monospaced))
+                            Button { removeExtraKey(at: i) } label: { Image(systemName: "minus.circle") }
+                                .buttonStyle(.borderless).accessibilityLabel(L("Убрать ключ %@", f))
+                        }
+                    }
+                    Menu(L("Добавить ключ")) {
+                        ForEach(keyFiles.filter { $0 != host.identityFile && !extraKeys.contains($0) }, id: \.self) { f in
+                            Button(f) { addExtraKey(f) }
+                        }
+                    }
+                    .fixedSize()
+                    .disabled(host.identityFile?.isEmpty != false)
+                }
             }
             FieldRow(L("Хранить пароль в Keychain")) {
                 Toggle("", isOn: $storeInKeychain).labelsHidden().toggleStyle(.checkbox)
@@ -292,6 +313,31 @@ struct HostEditorView: View {
         h.serverAliveInterval = Int(keepAliveText.trimmingCharacters(in: .whitespaces))
         h.tags = SSHConfigParser.splitTags(h.tags.joined(separator: ","))
         return h
+    }
+
+    /// IdentityFile после первого.
+    private var extraKeys: [String] { Array(host.identityFiles.dropFirst()) }
+
+    private func addExtraKey(_ f: String) {
+        guard let first = host.identityFile, !first.isEmpty else { return }
+        host.identityFiles = [first] + extraKeys + [f]
+    }
+
+    private func removeExtraKey(at i: Int) {
+        var rest = extraKeys
+        rest.remove(at: i)
+        host.identityFiles = rest.isEmpty ? [] : [host.identityFile ?? ""] + rest
+    }
+
+    /// Вставили `user@host:port` в алиас — раскладываем по полям (чек-лист 2.4, как на Windows/Linux).
+    private func splitDestination(_ value: String) {
+        guard value.contains("@") || value.contains("ssh://") || value.filter({ $0 == ":" }).count == 1 else { return }
+        let d = Destination.parse(value)
+        guard !d.host.isEmpty else { return }
+        if let u = d.user { host.user = u }
+        host.hostName = d.host
+        if let p = d.port { portText = String(p) }
+        host.alias = d.host.split(separator: ".").first.map(String.init) ?? d.host
     }
 
     private var validationError: String? {

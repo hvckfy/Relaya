@@ -85,3 +85,11 @@ public enum KeyComment {
         return name.isEmpty ? "mac" : name
     }
 }
+
+/// Разбор ввода `user@host:port` (также `ssh://…`, `[::1]:22`) — правило ядра (parse_destination), общее с Windows и Linux.
+public enum Destination {
+    public static func parse(_ input: String) -> (user: String?, host: String, port: Int?) {
+        let d = parseDestination(input: input)
+        return (d.user, d.host, d.port.map(Int.init))
+    }
+}

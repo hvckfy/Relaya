@@ -1205,3 +1205,6 @@
 "Хосты и туннели не удаляются — только сохранённое расположение плиток." = "Hosts and tunnels stay — only the saved tile arrangement is deleted.";
 "Файл %@ не JSON-объект — не меняю его. Добавьте конфиг вручную." = "%@ isn't a JSON object — left unchanged. Add the config by hand.";
 "Не удалось изменить %@: %@" = "Couldn't change %@: %@";
+"Ещё ключи" = "More keys";
+"Убрать ключ %@" = "Remove key %@";
+"Добавить ключ" = "Add Key";
