@@ -12,6 +12,7 @@ public sealed partial class MainWindow
         var tunnels = Data.AppState.Tunnels.Concat(TunnelManager.Shared.Temporary);
         if (!tunnels.Any(t => TunnelManager.Shared.StatusOf(t).State is TunnelManager.State.Running or TunnelManager.State.Starting)) return false;
         AppWindow.Hide();
+        TrayIcon.WindowHidden = true;
         return true;
     }
 }

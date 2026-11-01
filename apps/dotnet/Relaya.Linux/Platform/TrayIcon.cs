@@ -48,14 +48,22 @@ internal static class TrayIcon
     /// Настройка tray.enabled (12.5) и правило Mac: значок виден, только когда есть туннели; иначе — Passive.
     public static bool Enabled => Settings.Get("tray.enabled", "1") == "1";
 
-    public static void Refresh() =>
-        item?.SetStatus(Enabled && (Data.AppState.Tunnels.Count > 0 || TunnelManager.Shared.Temporary.Count > 0) ? "Active" : "Passive");
+    /// Окно спрятано в трей (HideToTray); пропал значок — окно возвращается, иначе процесс остался бы невидимым.
+    public static bool WindowHidden { get; set; }
+
+    public static void Refresh()
+    {
+        var active = Enabled && (Data.AppState.Tunnels.Count > 0 || TunnelManager.Shared.Temporary.Count > 0);
+        item?.SetStatus(active ? "Active" : "Passive");
+        if (!active && WindowHidden) ShowWindow();
+    }
 
     public static bool Visible => item?.Status == "Active";
 
     internal static void ShowWindow()
     {
         if (MainWindow.Current is not { } w) return;
+        WindowHidden = false;
         w.AppWindow.Show();
         w.Activate();
     }
