@@ -203,8 +203,9 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             return;
         }
         // Ctrl+буква и Ctrl+[ \ ] Space — управляющие коды из KeyDown (Л2): Uno X11 их в CharacterReceived не присылает,
-        // WinUI присылает, но там они пропускаются, так что байт уходит один раз. Ctrl+Alt — это AltGr, не трогаем.
-        if (ctrl && !alt && ControlCode(e.Key) is { } control)
+        // WinUI присылает, но там они пропускаются, так что байт уходит один раз. Ctrl+Alt — это AltGr, не трогаем;
+        // Ctrl+Shift+буква — команды приложения (разделить, поиск, закрыть плитку), их не перехватываем.
+        if (ctrl && !alt && !shift && ControlCode(e.Key) is { } control)
         {
             e.Handled = true;
             Send(control.ToString());

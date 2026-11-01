@@ -1133,3 +1133,5 @@
 "SSH-туннель не поднялся за 20 секунд." = "The SSH tunnel did not come up within 20 seconds.";
 "Нет библиотеки libsecret: установите пакет libsecret-1-0 (или libsecret), чтобы сохранять пароли серверов." = "The libsecret library is missing. Install libsecret-1-0 (or libsecret) to save server passwords.";
 "Нет службы хранения паролей: установите gnome-keyring (GNOME, XFCE) или KWallet (KDE) и войдите в систему заново. Без неё пароли серверов не сохраняются, ключи работают." = "No password storage service. Install gnome-keyring (GNOME, Xfce) or KWallet (KDE) and log in again. Without it server passwords are not saved; keys still work.";
+"Разделить вправо (Ctrl+Shift+D)" = "Split right (Ctrl+Shift+D)";
+"Разделить вниз (Ctrl+Shift+E)" = "Split down (Ctrl+Shift+E)";

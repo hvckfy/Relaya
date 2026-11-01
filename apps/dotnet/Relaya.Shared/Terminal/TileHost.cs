@@ -82,6 +82,9 @@ internal sealed class TileHost : UserControl, IDisposable
                 portsPanel,
                 search,
                 broadcastToggle,
+                // Кнопки разделения — тот же путь, что Ctrl+Shift+D/E: на Skia X11 нет перетаскивания вкладок (Л4).
+                Pages.Ui.IconButton("\uE90D", L("Разделить вправо (Ctrl+Shift+D)"), () => Split(Edge.Right)),
+                Pages.Ui.IconButton("\uE90E", L("Разделить вниз (Ctrl+Shift+E)"), () => Split(Edge.Bottom)),
                 Pages.Ui.IconButton("", L("Поиск (Ctrl+Shift+F)"), OpenSearch),
                 Pages.Ui.IconButton("", L("Мельче (Ctrl+−)"), () => active?.View.ZoomFont(-1)),
                 Pages.Ui.IconButton("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
