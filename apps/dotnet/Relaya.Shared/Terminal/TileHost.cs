@@ -120,9 +120,58 @@ internal sealed class TileHost : UserControl, IDisposable
                 Pages.Ui.IconButton("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
             },
         };
+        // Е.20, как на Mac: действия хоста активной плитки над терминалом. Команды вставляются без Enter.
+        var osMenu = new MenuFlyout();
+        var osButton = new DropDownButton { Content = L("Действия"), Flyout = osMenu };
+        osMenu.Opening += (_, _) =>
+        {
+            osMenu.Items.Clear();
+            var h = ActiveAlias is { } a ? AppState.Host(a) : null;
+            var actions = h?.os is { } os ? RelayaCoreMethods.OsActions(os) : null;
+            if (h == null || actions is not { Count: > 0 })
+            {
+                osMenu.Items.Add(new MenuFlyoutItem { Text = L("Система не определена — откройте карточку хоста"), IsEnabled = false });
+                return;
+            }
+            foreach (var act in actions)
+            {
+                var item = new MenuFlyoutItem { Text = L(act.title) };
+                item.Click += (_, _) => active?.View.Paste(RelayaCoreMethods.OsCommandForUser(act.command, h.user ?? ""));
+                osMenu.Items.Add(item);
+            }
+        };
+        var snippetMenu = new MenuFlyout();
+        var snippetButton = new DropDownButton { Content = L("Сниппеты"), Flyout = snippetMenu };
+        ToolTipService.SetToolTip(snippetButton, L("Вставить сохранённую команду"));
+        snippetMenu.Opening += (_, _) =>
+        {
+            snippetMenu.Items.Clear();
+            var list = AppState.Snippets.OrderBy(sn => sn.name).ToList();
+            if (list.Count == 0) snippetMenu.Items.Add(new MenuFlyoutItem { Text = L("Сниппетов нет"), IsEnabled = false });
+            foreach (var sn in list)
+            {
+                var item = new MenuFlyoutItem { Text = sn.name };
+                ToolTipService.SetToolTip(item, sn.command);
+                item.Click += (_, _) => active?.View.Paste(sn.command);
+                snippetMenu.Items.Add(item);
+            }
+        };
+        var files = new Button { Content = "SFTP" };
+        ToolTipService.SetToolTip(files, L("Файлы на сервере"));
+        files.Click += (_, _) => { if (ActiveAlias is { } a) MainWindow.Current?.OpenSftp(a); };
+        var edit = new Button { Content = L("Изменить хост") };
+        edit.Click += (_, _) => { if (ActiveAlias is { } a && AppState.Host(a) is { } h) _ = Pages.HostEditor.Show(XamlRoot, h, false); };
+        var keyLogin = new Button { Content = L("Вход по ключу…") };
+        keyLogin.Click += (_, _) => { if (ActiveAlias is { } a && AppState.Host(a) is { } h) MainWindow.Current?.ShowPage(new Pages.KeyWizardPage(h)); };
+        var hostBar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(8, 4, 0, 4),
+            Children = { osButton, snippetButton, files, edit, keyLogin },
+        };
         // Прозрачный фон: без него пустые места холста не получают DragOver/Drop.
         var stage = new Grid { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), Children = { grid, dropHint } };
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
+        root.Children.Add(hostBar);
         root.Children.Add(bar);
         Grid.SetRow(broadcastBar, 1);
         root.Children.Add(broadcastBar);

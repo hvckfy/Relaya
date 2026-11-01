@@ -1328,3 +1328,6 @@
 "На %@ будет запрещён вход по паролю в sshd. Сначала убедитесь, что вход по ключу работает, иначе можно потерять доступ." = "Password login will be denied in sshd on %@. Make sure key login works first, or you may lose access.";
 "Разрешить вход по паролю?" = "Allow password login?";
 "Запретить вход по паролю?" = "Deny password login?";
+"Вставить сохранённую команду" = "Insert a saved command";
+"Сниппетов нет" = "No snippets";
+"Система не определена — откройте карточку хоста" = "System not detected — open the host card";
