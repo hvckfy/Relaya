@@ -1,0 +1,47 @@
+name: Lint
+
+# Линтеры, которые не собирают приложения: workflow (actionlint) и shell-скрипты (shellcheck).
+# Swift (swift-format), C# (dotnet format) и Rust (clippy, rustfmt) — отдельными задачами после базового
+# форматирования кода.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/**"
+      - "scripts/**"
+  pull_request:
+    paths:
+      - ".github/**"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  workflows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # actionlint 1.7.12 — бинарь релиза, сверка sha256 с закреплённым значением (без скриптов загрузки).
+      - name: actionlint
+        run: |
+          curl -fsSL -o actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum -c -
+          tar xzf actionlint.tar.gz actionlint
+          ./actionlint -color
+
+  scripts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # shellcheck есть в образе ubuntu-24.04.
+      - name: shellcheck
+        run: shellcheck --version && shellcheck scripts/*.sh
