@@ -190,6 +190,13 @@ public sealed partial class MainWindow : Window
 
     private Pages.SettingsPage? settingsPage;
 
+    /// Пустая область «Выберите хост слева» (например, отмена «Нового хоста»).
+    internal void ShowNothing()
+    {
+        Tabs.SelectedItem = null;
+        Show(null);
+    }
+
     /// Страница слева-справа (карточка хоста, ключи…): снимает выбор вкладки.
     public void ShowPage(UIElement page)
     {

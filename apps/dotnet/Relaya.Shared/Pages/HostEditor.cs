@@ -15,7 +15,7 @@ namespace Relaya.Pages;
 /// Новый хост, изменение и дубль: запись в ~/.ssh/config кодом ядра. Перед сохранением виден блок, который будет записан.
 internal static class HostEditor
 {
-    public static async Task Show(XamlRoot root, SshHost? source, bool duplicate)
+    public static Task Show(XamlRoot root, SshHost? source, bool duplicate)
     {
         var editing = source != null && !duplicate;
         TextBox Field(string header, string? text, string placeholder = "") => new() { Header = header, Text = text ?? "", PlaceholderText = placeholder };
@@ -152,33 +152,18 @@ internal static class HostEditor
         tmux.Toggled += (_, _) => Update();
         Update();
 
-        var dialog = new ContentDialog
+        // Длинная форма — страница в основной области, а не ContentDialog (UI-W3, Fluent: диалог — для коротких форм).
+        void Back()
         {
-            Title = editing ? L("Изменить %@", source!.alias) : L("Новый хост"),
-            Content = new ScrollViewer
-            {
-                MaxHeight = 560,
-                Content = new StackPanel
-                {
-                    Spacing = 12, MinWidth = 440,
-                    Children =
-                    {
-                        alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, os, agent, compression, tmux,
-                        Ui.Section(L("Будет записано в ~/.ssh/config")), Ui.Card(preview), error,
-                    },
-                },
-            },
-            PrimaryButtonText = editing ? L("Сохранить") : L("Добавить"),
-            CloseButtonText = L("Отмена"),
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = root,
-        };
-        dialog.PrimaryButtonClick += (_, args) =>
+            if (editing && AppState.Host(source!.alias) is { } h0) MainWindow.Current?.ShowPage(new HostPage(h0));
+            else MainWindow.Current?.ShowNothing();
+        }
+        void Save()
         {
             Split(alias);
             Split(address);
             var h = Build(out var problem);
-            if (h == null) { error.Text = problem ?? ""; args.Cancel = true; return; }
+            if (h == null) { error.Text = problem ?? ""; return; }
             try
             {
                 AppState.Upsert(h, editing ? source!.alias : null);
@@ -190,9 +175,21 @@ internal static class HostEditor
                 if (forget) Platform.CredentialStore.Delete(h.alias);
                 if (password.Password.Length > 0) Platform.CredentialStore.Write(h.alias, password.Password);
             }
-            catch (Exception e) { error.Text = e.Message; args.Cancel = true; }
-        };
-        await dialog.ShowAsync();
+            catch (Exception e) { error.Text = e.Message; return; }
+            if (AppState.Host(h.alias) is { } saved) MainWindow.Current?.ShowPage(new HostPage(saved));
+        }
+        var (page, body) = Ui.Scaffold(editing ? L("Изменить %@", source!.alias) : L("Новый хост"),
+            Ui.Button(L("Отмена"), Back),
+            Ui.Button(editing ? L("Сохранить") : L("Добавить"), Save, accent: true));
+        var form = new StackPanel { Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        foreach (var c in new UIElement[] { alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, os, agent, compression, tmux })
+            form.Children.Add(c);
+        form.Children.Add(Ui.Section(L("Будет записано в ~/.ssh/config")));
+        form.Children.Add(Ui.Card(preview));
+        form.Children.Add(error);
+        body.Children.Add(form);
+        MainWindow.Current?.ShowPage(page);
+        return Task.CompletedTask;
     }
 
     public static async Task AskPassword(XamlRoot root, string alias)
