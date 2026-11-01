@@ -30,6 +30,13 @@ for DYLIB in $(cd "$(dirname "${BINS[0]}")" && ls *.dylib 2>/dev/null); do
   lipo -create "${PARTS[@]}" -output "$APP/Contents/MacOS/$DYLIB"
 done
 
+# FreeRDP 3 (встроенный RDP ядра) — в Contents/Frameworks вместе со ссылками; install name у vcpkg — @rpath/…,
+# rpath @executable_path/../Frameworks прописан в Package.swift.
+if [ -d "$ROOT/core/build/freerdp" ]; then
+  mkdir -p "$APP/Contents/Frameworks"
+  cp -a "$ROOT/core/build/freerdp/"*.dylib "$APP/Contents/Frameworks/"
+fi
+
 # Иконка из resources/icon/ (рендер Blender, см. resources/icon/README.md) → все размеры .iconset.
 ICON_SRC="$ROOT/resources/icon/relaya-chain-r-icon.png"
 ICONSET="$ROOT/build/Relaya.iconset"

@@ -27,7 +27,22 @@ jobs:
           sudo xcode-select -s "$XC"
           xcodebuild -version
 
+      # FreeRDP 3 для встроенного RDP (ядро с rdp-freerdp): dylib обеих архитектур, кэш vcpkg в действии.
+      - name: FreeRDP arm64
+        id: freerdp_arm
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: arm64-osx-dynamic
+      - name: FreeRDP x86_64
+        id: freerdp_x64
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: x64-osx-dynamic
+
       - name: Build Rust core (universal static library + Swift bindings)
+        env:
+          FREERDP_DIR_ARM64: ${{ steps.freerdp_arm.outputs.dir }}
+          FREERDP_DIR_X64: ${{ steps.freerdp_x64.outputs.dir }}
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           scripts/build-core-macos.sh

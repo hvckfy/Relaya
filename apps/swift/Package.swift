@@ -1,5 +1,17 @@
 // swift-tools-version: 6.0
+import Foundation
 import PackageDescription
+
+// FreeRDP 3 (встроенный RDP ядра): scripts/build-core-macos.sh с FREERDP_DIR_* кладёт universal dylib в core/build/freerdp.
+// Без них ядро собирается без rdp-freerdp, и линковать нечего.
+let freerdpDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    .appending(path: "../../core/build/freerdp").standardized.path
+let freerdpLinker: [LinkerSetting] = FileManager.default.fileExists(atPath: freerdpDir + "/libfreerdp3.dylib") ? [
+    .linkedLibrary("freerdp3"), .linkedLibrary("freerdp-client3"), .linkedLibrary("winpr3"),
+    // Сборка и тесты берут dylib отсюда; в .app они лежат в Contents/Frameworks (bundle-macos.sh).
+    .unsafeFlags(["-L", freerdpDir, "-Xlinker", "-rpath", "-Xlinker", freerdpDir,
+                  "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
+] : []
 
 let package = Package(
     name: "Relaya",
@@ -25,7 +37,8 @@ let package = Package(
             name: "RelayaRust",
             dependencies: ["RelayaCoreFFI"],
             exclude: ["README.md"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            linkerSettings: freerdpLinker
         ),
         // UI-независимая логика: ~/.ssh/config, ключи, хосты. Логика — в Rust-ядре, здесь — Swift-фасад и платформа.
         .target(name: "RelayaCore", dependencies: ["RelayaRust"]),
