@@ -46,6 +46,15 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     private partial void CreateCanvas();
     private partial void RemoveCanvas();
     private partial void InvalidateCanvas();
+
+    // Кадр целиком: выделение, прокрутка, тема, размер. Иначе холст с памятью кадра перерисовывает только строки из Damage.
+    private bool fullFrame = true;
+
+    private void Invalidate()
+    {
+        fullFrame = true;
+        InvalidateCanvas();
+    }
     /// Размер ячейки для fontFamily/fontSize: ширина «M» и высота строки.
     private partial (double Width, double Height) MeasureCell();
     /// Нажата ли клавиша-модификатор сейчас.
@@ -58,6 +67,10 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         void Fill(double x, double y, double w, double h, Color color);
         void Text(string text, double x, double y, Color color, bool bold, bool italic);
         void Line(double x1, double y1, double x2, double y2, Color color);
+        /// Холст хранит прошлый кадр: можно перерисовать только изменившиеся строки, курсор рисуется отдельно поверх.
+        bool Retained { get; }
+        /// Заменить полосу строки цветом (с прозрачностью — без смешивания с прошлым кадром).
+        void ClearRow(double y, double h, Color color);
     }
 
     // UI-очередь снимается в конструкторе (UI-поток): Feed приходит из фонового потока ConPTY/pty.
@@ -88,6 +101,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     private void Redraw()
     {
         if (ui == null) { Trace("Feed: no UI DispatcherQueue"); return; }
+        // Вывод сервера: перерисовать только строки из Damage (холст с памятью кадра — Win2D).
         if (!ui.TryEnqueue(InvalidateCanvas)) Trace("Feed: TryEnqueue returned false");
     }
 
@@ -95,8 +109,8 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         ApplySettings();
         // Вкладку создают свёрнутой и потом показывают: перерисовать, как только она загружена и видима.
-        Loaded += (_, _) => { Trace($"Loaded {ActualWidth}x{ActualHeight}"); InvalidateCanvas(); };
-        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => InvalidateCanvas());
+        Loaded += (_, _) => { Trace($"Loaded {ActualWidth}x{ActualHeight}"); Invalidate(); };
+        RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => Invalidate());
         Platform.Settings.Changed += OnSettingsChanged;
         Platform.Contrast.Changed += OnSettingsChanged; // контрастная тема включена или выключена — перечитать палитру
         CreateCanvas();
@@ -116,7 +130,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         ApplySettings();
         measured = false;
-        InvalidateCanvas();
+        Invalidate();
     });
 
     // Тема и шрифт — общие настройки терминала (Параметры → Терминал), как на Mac.
@@ -160,7 +174,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             var row = (int)Emulator.RevealLine((uint)i);
             selStart = (row, col);
             selEnd = (row, col + query.Length - 1);
-            InvalidateCanvas();
+            Invalidate();
             return i;
         }
         return -1;
@@ -172,7 +186,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         Emulator.ScrollToBottom();
         ClearSelection();
-        InvalidateCanvas();
+        Invalidate();
     }
 
     public void ZoomFont(int delta)
@@ -317,7 +331,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         selStart = selEnd = at;
         selecting = true;
         CapturePointer(e.Pointer);
-        InvalidateCanvas();
+        Invalidate();
         e.Handled = true;
     }
 
@@ -330,7 +344,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         }
         if (!selecting) return;
         selEnd = CellAt(e);
-        InvalidateCanvas();
+        Invalidate();
     }
 
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -360,7 +374,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         if (selStart is null) return;
         selStart = selEnd = null;
-        InvalidateCanvas();
+        Invalidate();
     }
 
     private ((int Row, int Col) From, (int Row, int Col) To) Ordered()
@@ -413,7 +427,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         else
         {
             Emulator.Scroll(delta / 40);
-            InvalidateCanvas();
+            Invalidate();
         }
         e.Handled = true;
     }
@@ -447,7 +461,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         if (s.cols == cols && s.rows == rows) return;
         Emulator.Resize(cols, rows);
         Resized?.Invoke(cols, rows);
-        InvalidateCanvas();
+        Invalidate();
     }
 
     private const double Pad = 8;
@@ -471,6 +485,8 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     // текст строки и словарь собираются только для изменённых строк.
     private (int Color, bool Bold)?[]?[] rowMarks = Array.Empty<(int Color, bool Bold)?[]?>();
     private bool[] rowDirty = Array.Empty<bool>();
+    // Строки, изменившиеся с прошлого кадра (из Damage), — для холста с памятью кадра.
+    private bool[] drawDirty = Array.Empty<bool>();
 
     private (int Color, bool Bold)?[]? Highlights(Screen s, int row)
     {
@@ -586,11 +602,13 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             screen.rows = c.rows;
             screen.cells = new TermCell[c.cols * c.rows];
             Array.Fill(rowDirty, true);
+            fullFrame = true;
         }
         foreach (var line in d.lines)
         {
             if (line.row >= screen.rows) continue;
             if (line.row < rowDirty.Length) rowDirty[line.row] = true;
+            if (line.row < drawDirty.Length) drawDirty[line.row] = true;
             var n = Math.Min(line.cells.Count, (int)screen.cols);
             for (var i = 0; i < n; i++) screen.cells[line.row * screen.cols + i] = line.cells[i];
         }
@@ -608,13 +626,21 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         var clear = theme.Background;
         // Картинка фона под сессиями (12.2): фон терминала полупрозрачный, ячейки с цветом — как есть.
         clear.A = (byte)(clear.A * Platform.Appearance.SessionOpacity);
-        ds.Clear(clear);
         var s = CurrentScreen();
+        if (drawDirty.Length != s.rows) { drawDirty = new bool[s.rows]; fullFrame = true; }
+        // Холст с памятью кадра — только изменившиеся строки (П-2); иначе и после полной причины — весь кадр.
+        var partial = ds.Retained && !fullFrame;
+        if (!partial) ds.Clear(clear);
         var highlight = !s.altScreen && !theme.Monochrome && Platform.Settings.Get("terminal.highlight", "1") == "1";
         var run = new StringBuilder();
         for (var r = 0; r < s.rows; r++)
         {
             var y = Pad + r * cellH;
+            if (partial)
+            {
+                if (!drawDirty[r]) continue;
+                ds.ClearRow(y, cellH, clear);
+            }
             var marks = highlight ? Highlights(s, r) : null;
             // Прогон соседних ASCII-ячеек одного стиля рисуется одним DrawText (П3), а не по ячейке.
             double runX = 0; Color runFg = default; bool runBold = false, runItalic = false;
@@ -653,11 +679,20 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             }
             Flush();
         }
+        Array.Fill(drawDirty, false);
+        fullFrame = false;
+        if (!ds.Retained) DrawCursor(ds);
+    }
+
+    /// Курсор поверх кадра; холст с памятью кадра рисует его отдельно, чтобы след не оставался в строках.
+    private void DrawCursor(IPainter ds)
+    {
+        var s = screen;
         if (s.cursorVisible)
         {
             var cx = Pad + s.cursorCol * cellW;
             var cy = Pad + s.cursorRow * cellH;
-            ds.Fill(cx, cy, cellW, cellH, theme.Cursor with { A = 170 });
+            ds.Fill(cx, cy, cellW, cellH, Theme.Cursor with { A = 170 });
         }
     }
 }
