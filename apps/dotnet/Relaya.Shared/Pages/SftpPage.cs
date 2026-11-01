@@ -161,7 +161,7 @@ internal sealed class SftpPage : UserControl
             progressText.Text = L("%@ из %@", Platform.Format.Bytes(Math.Min(bytes, total)), Platform.Format.Bytes(total));
         };
         timer.Start();
-        try { return await Run(TransferTimeout, commands, transferCancel.Token); }
+        try { return await Run(TransferTimeout, commands, transferCancel.Token, transfer: true); }
         finally
         {
             cancelled = transferCancel.IsCancellationRequested;
@@ -171,7 +171,7 @@ internal sealed class SftpPage : UserControl
         }
     }
 
-    private async Task<AppState.Result> Run(int timeoutSeconds, string[] commands, System.Threading.CancellationToken cancel = default)
+    private async Task<AppState.Result> Run(int timeoutSeconds, string[] commands, System.Threading.CancellationToken cancel = default, bool transfer = false)
     {
         if (rejectedPath is { } bad)
         {
@@ -181,7 +181,7 @@ internal sealed class SftpPage : UserControl
         }
         if (transferCancel == null) busy.Visibility = Visibility.Visible;
         // Одно соединение на хост (П-9): Windows — долгоживущий sftp, Linux — ControlMaster.
-        var r = await Platform.SshMux.Sftp(alias, string.Join("\n", commands) + "\n", timeoutSeconds, cancel);
+        var r = await Platform.SshMux.Sftp(alias, string.Join("\n", commands) + "\n", timeoutSeconds, cancel, transfer);
         busy.Visibility = Visibility.Collapsed;
         if (r.Status != 0)
             status.Text = Platform.SshErrors.Describe(string.Join("\n", r.Stderr.Split('\n').Where(l => !l.StartsWith("sftp>"))), L("Ошибка sftp"));

@@ -182,7 +182,7 @@ internal sealed partial class DavBridge
                     var down = RelayaCoreMethods.DavTempFile();
                     try
                     {
-                        await SftpAsync($"get {Q(g.remote)} {Q(down)}");
+                        await SftpAsync($"get {Q(g.remote)} {Q(down)}", transfer: true);
                         return Response(200, "OK", new() { ["Content-Type"] = "application/octet-stream" }, await File.ReadAllBytesAsync(down));
                     }
                     finally { File.Delete(down); }
@@ -194,7 +194,7 @@ internal sealed partial class DavBridge
                     try
                     {
                         await File.WriteAllBytesAsync(up, req.body);
-                        await SftpAsync($"put {Q(up)} {Q(put.remote)}");
+                        await SftpAsync($"put {Q(up)} {Q(put.remote)}", transfer: true);
                     }
                     finally { File.Delete(up); }
                     Invalidate(put.remote);
@@ -313,9 +313,10 @@ internal sealed partial class DavBridge
         return line?.Split(':', 2)[1].Trim() ?? "/";
     }
 
-    private async Task<AppState.Result> SftpAsync(string command)
+    // get/put — отдельным разовым sftp (transfer), остальное — через общее соединение хоста (П-9).
+    private async Task<AppState.Result> SftpAsync(string command, bool transfer = false)
     {
-        var r = await SshMux.Sftp(alias, command + "\n", 7 * 24 * 3600);
+        var r = await SshMux.Sftp(alias, command + "\n", 7 * 24 * 3600, transfer: transfer);
         if (r.Status != 0) throw new IOException(SshErrors.Describe(r.Stderr, L("Ошибка sftp")));
         return r;
     }
