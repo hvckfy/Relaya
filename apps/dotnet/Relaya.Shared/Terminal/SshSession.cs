@@ -34,6 +34,8 @@ internal sealed class SshSession : IDisposable
     private DateTime startedAt;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? reconnectTimer;
     private int reconnectLeft;
+    // Лимит, как на Mac (аудит безопасности): больше 10 коротких сессий (< 60 с) подряд — ждём ручного переподключения.
+    private int shortRuns;
     /// Секунд до переподключения; null — отсчёта нет.
     public event Action<int?>? ReconnectCountdown;
 
@@ -298,7 +300,8 @@ internal sealed class SshSession : IDisposable
                 return;
             }
             End("\x1b[2m" + L("[сессия завершена, код %@]", code) + "\x1b[0m");
-            if (code == 255 && Relaya.Platform.Settings.Get("terminal.autoReconnect", "1") == "1"
+            shortRuns = DateTime.UtcNow - startedAt < TimeSpan.FromSeconds(60) ? shortRuns + 1 : 0;
+            if (code == 255 && shortRuns <= 10 && Relaya.Platform.Settings.Get("terminal.autoReconnect", "1") == "1"
                 && (sessionLoggedIn || DateTime.UtcNow - startedAt > TimeSpan.FromSeconds(10)))
                 ui.TryEnqueue(ScheduleReconnect);
         };
