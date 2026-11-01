@@ -100,4 +100,4 @@ Description: SSH hosts, terminals, tunnels and remote desktops
  RDP and VNC, and syncs settings with the macOS and Windows clients.
 CTRL
 dpkg-deb --root-owner-group --build "$DEB" "$OUT/relaya_${VERSION}-${LANG_CODE}_amd64.deb"
-echo "packages: $OUT/Relaya-$VERSION-x86_64.AppImage $OUT/relaya_${VERSION}_amd64.deb"
+echo "packages: $OUT/Relaya-$VERSION-$LANG_CODE-x86_64.AppImage $OUT/relaya_${VERSION}-${LANG_CODE}_amd64.deb"

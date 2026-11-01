@@ -1,5 +1,8 @@
+using System;
 using System.Diagnostics;
 using System.IO;
+
+using static Relaya.Strings;
 
 namespace Relaya.Platform;
 
@@ -24,8 +27,14 @@ internal static partial class Shell
         var info = new ProcessStartInfo(Dialogs.Which("gio") ?? "gio") { UseShellExecute = false, RedirectStandardError = true };
         info.ArgumentList.Add("trash");
         info.ArgumentList.Add(path);
-        using var p = Process.Start(info)!;
-        p.WaitForExit(10000);
-        if (p.ExitCode != 0) throw new IOException(p.StandardError.ReadToEnd().Trim());
+        using var p = Process.Start(info) ?? throw new IOException(L("Не удалось запустить gio trash."));
+        // stderr — до ожидания, чтобы полный буфер не держал процесс; не ответил за 10 с — понятная ошибка, а не ExitCode живого процесса.
+        var error = p.StandardError.ReadToEndAsync();
+        if (!p.WaitForExit(10000))
+        {
+            try { p.Kill(); } catch (Exception) { }
+            throw new IOException(L("gio trash не ответил за 10 секунд."));
+        }
+        if (p.ExitCode != 0) throw new IOException(error.Result.Trim());
     }
 }

@@ -1288,3 +1288,5 @@
 "Сервер спрашивает пароль" = "The server asks for a password";
 "Сохранённый пароль не подошёл" = "The saved password didn’t work";
 "Новая политика — с подтверждением каждой команды; режимы хостов задайте заново." = "The new policy asks before every command; set host modes again.";
+"Не удалось запустить gio trash." = "Couldn't start gio trash.";
+"gio trash не ответил за 10 секунд." = "gio trash did not respond within 10 seconds.";
