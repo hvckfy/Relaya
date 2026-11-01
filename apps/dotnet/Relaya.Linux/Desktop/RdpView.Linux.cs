@@ -2,25 +2,21 @@ using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
-using SkiaSharp;
-using Uno.WinUI.Graphics2DSK;
 using Windows.Foundation;
 using Windows.System;
 using static Relaya.Strings;
 
 namespace Relaya.Desktop;
 
-/// Холст удалённого стола на Linux: SkiaSharp (SKCanvasElement), scancode — по VirtualKey (в Uno X11 KeyStatus.ScanCode нет).
+/// Удалённый стол на Linux: модификаторы по событиям, scancode — по VirtualKey (в Uno X11 KeyStatus.ScanCode нет). Экран — RemoteScreen.Skia.
 internal sealed partial class RdpView
 {
-    private Surface surface = null!;
     // Модификаторы — по KeyDown/KeyUp этой вкладки (как в TerminalView.Skia), сброс при потере фокуса.
     private readonly HashSet<VirtualKey> down = new();
 
-    private partial void CreateCanvas()
+    // Модификаторы — по KeyDown/KeyUp этой вкладки, сброс при потере фокуса.
+    private partial void InitInput()
     {
-        surface = new Surface(this);
-        canvas = surface;
         AddHandler(KeyDownEvent, new KeyEventHandler((_, e) => Track(e.Key, true)), handledEventsToo: true);
         AddHandler(KeyUpEvent, new KeyEventHandler((_, e) => Track(e.Key, false)), handledEventsToo: true);
         LostFocus += (_, _) => { lock (down) down.Clear(); };
@@ -37,10 +33,6 @@ internal sealed partial class RdpView
         };
         lock (down) { if (pressed) down.Add(k); else down.Remove(k); }
     }
-
-    private partial void InvalidateCanvas() => surface.Invalidate();
-
-    private partial void RemoveCanvas() { }
 
     private partial bool IsDown(VirtualKey key) { lock (down) return down.Contains(key); }
 
@@ -86,30 +78,5 @@ internal sealed partial class RdpView
         Row("ASDFGHJKL", 0x1E);
         Row("ZXCVBNM", 0x2C);
         return m;
-    }
-
-    private void DrawFrame(SKCanvas sk, Size area)
-    {
-        sk.Clear(SKColors.Black);
-        try
-        {
-            SKImage image;
-            Rect at;
-            lock (frameLock)
-            {
-                if (remoteW == 0 || remoteH == 0) return;
-                image = SKImage.FromPixelCopy(new SKImageInfo(remoteW, remoteH, SKColorType.Bgra8888, SKAlphaType.Opaque), buffer);
-                at = Layout(area.Width, area.Height);
-            }
-            using (image)
-            using (var paint = new SKPaint { FilterQuality = SKFilterQuality.Medium })
-                sk.DrawImage(image, new SKRect((float)at.X, (float)at.Y, (float)(at.X + at.Width), (float)(at.Y + at.Height)), paint);
-        }
-        catch (Exception e) { Terminal.TerminalView.Trace("RDP draw: " + e.Message); }
-    }
-
-    private sealed class Surface(RdpView view) : SKCanvasElement
-    {
-        protected override void RenderOverride(SKCanvas canvas, Size area) => view.DrawFrame(canvas, area);
     }
 }

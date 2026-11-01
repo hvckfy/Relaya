@@ -27,18 +27,17 @@ namespace Relaya.Desktop;
 /// Удалённый стол RDP во вкладке (RDP в ядре): кадры BGRA, ввод scancode/unicode/мышь,
 /// динамическое разрешение, сертификат, буфер обмена. Колбэки ядра приходят из потока сессии —
 /// в UI их переносит очередь, снятая в конструкторе (тот же надёжный путь, что у TerminalView).
-/// Холст, модификаторы, scancode и звук — в приложении: RdpView.Win2D.cs (Windows), RdpView.Skia.cs (Linux).
+/// Экран — общий RemoteScreen (тот же, что у VNC); модификаторы, scancode и звук — в приложении:
+/// RdpView.Windows.cs, RdpView.Linux.cs.
 internal sealed partial class RdpView : UserControl, IDisposable
 {
     private readonly RemoteDesktop desktop;
     private readonly DispatcherQueue ui = DispatcherQueue.GetForCurrentThread();
-    private FrameworkElement canvas = null!;
+    private readonly RemoteScreen screen = new();
 
     // --- Платформа ---
-    /// Создать холст (canvas) и подписать его отрисовку.
-    private partial void CreateCanvas();
-    private partial void InvalidateCanvas();
-    private partial void RemoveCanvas();
+    /// Подготовка платформенного ввода (на Linux — отслеживание модификаторов), из конструктора.
+    private partial void InitInput();
     /// Нажата ли клавиша-модификатор сейчас.
     private partial bool IsDown(VirtualKey key);
     /// Scancode PC/AT для RDP (0xE0xx — расширенные), 0 — неизвестна.
@@ -53,9 +52,6 @@ internal sealed partial class RdpView : UserControl, IDisposable
     private readonly RdpAudio audio;
     private readonly DispatcherQueueTimer resizeTimer;
 
-    private readonly object frameLock = new();
-    private byte[] buffer = Array.Empty<byte>();
-    private int remoteW, remoteH;
 
     private RemoteSession? session;
     private string? tunnelId;
@@ -76,7 +72,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
             Label = L("Вписать"), Icon = new FontIcon { Glyph = "" },
             IsChecked = Platform.Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
         };
-        fit.Click += (_, _) => { Platform.Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); InvalidateCanvas(); };
+        fit.Click += (_, _) => { Platform.Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); screen.Fit = fit.IsChecked == true; };
         clipboard = new AppBarToggleButton
         {
             Label = L("Общий буфер обмена"), Icon = new FontIcon { Glyph = "" },
@@ -130,8 +126,9 @@ internal sealed partial class RdpView : UserControl, IDisposable
         reconnect.Click += (_, _) => _ = Connect();
         problem.ActionButton = reconnect;
 
-        CreateCanvas();
-        var stage = new Grid { Children = { canvas, connecting } };
+        screen.Fit = fit.IsChecked == true;
+        InitInput();
+        var stage = new Grid { Children = { screen, connecting } };
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         root.Children.Add(bar);
         Grid.SetRow(problem, 1);
@@ -142,10 +139,10 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
         IsTabStop = true;
         UseSystemFocusVisuals = false;
-        canvas.PointerPressed += (_, e) => { Focus(FocusState.Pointer); OnPointer(e); };
-        canvas.PointerMoved += (_, e) => OnPointer(e);
-        canvas.PointerReleased += (_, e) => OnPointer(e);
-        canvas.PointerWheelChanged += OnWheel;
+        screen.Surface.PointerPressed += (_, e) => { Focus(FocusState.Pointer); OnPointer(e); };
+        screen.Surface.PointerMoved += (_, e) => OnPointer(e);
+        screen.Surface.PointerReleased += (_, e) => OnPointer(e);
+        screen.Surface.PointerWheelChanged += OnWheel;
         KeyDown += (_, e) => OnKey(e, true);
         KeyUp += (_, e) => OnKey(e, false);
         CharacterReceived += OnCharacter;
@@ -154,7 +151,6 @@ internal sealed partial class RdpView : UserControl, IDisposable
         RegisterPropertyChangedCallback(VisibilityProperty, (_, _) =>
         {
             if (Visibility != Visibility.Visible) return;
-            InvalidateCanvas();
             _ = SendLocalClipboard();
         });
         Clipboard.ContentChanged += OnLocalClipboard;
@@ -210,7 +206,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
     {
         if (session is not { } s || !connected) return;
         var (w, h) = PhysicalSize();
-        if (w == remoteW && h == remoteH) return;
+        if (screen.Size == (w, h)) return;
         s.Resize(w, h);
     }
 
@@ -322,14 +318,9 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
     // --- Кадры ---
 
-    // Изменённые прямоугольники с прошлой отрисовки (П8): холст обновляет только их. Под frameLock.
-    // fullDirty — пересоздать картинку целиком (новый размер, слишком много мелких прямоугольников).
-    private readonly List<(int X, int Y, int W, int H)> dirty = new();
-    private bool fullDirty = true;
-
     private void OnConnectedCore(ushort w, ushort h)
     {
-        lock (frameLock) { remoteW = w; remoteH = h; buffer = new byte[w * h * 4]; dirty.Clear(); fullDirty = true; }
+        screen.Reset(w, h);
         ui.TryEnqueue(() =>
         {
             connected = true;
@@ -349,51 +340,15 @@ internal sealed partial class RdpView : UserControl, IDisposable
         });
     }
 
-    private void OnFrameCore(List<FrameRect> rects)
-    {
-        lock (frameLock)
-        {
-            foreach (var r in rects)
-            {
-                if (r.x + r.width > remoteW || r.y + r.height > remoteH) continue;
-                var row = r.width * 4;
-                for (var y = 0; y < r.height; y++)
-                    Buffer.BlockCopy(r.bgra, y * row, buffer, ((r.y + y) * remoteW + r.x) * 4, row);
-                if (!fullDirty) dirty.Add((r.x, r.y, r.width, r.height));
-            }
-            if (dirty.Count > 64) { dirty.Clear(); fullDirty = true; }
-        }
-        ui.TryEnqueue(() => { if (Visibility == Visibility.Visible) InvalidateCanvas(); });
-    }
-
-    private Rect target; // где на канве нарисован удалённый экран (DIP)
-
-    /// Под frameLock: где рисовать удалённый экран (вписать или 1:1 в физических пикселях); запоминает target для ввода.
-    private Rect Layout(double cw, double ch)
-    {
-        var scale = XamlRoot?.RasterizationScale ?? 1.0;
-        double k = fit.IsChecked == true ? Math.Min(cw / remoteW, ch / remoteH) : 1.0 / scale;
-        double w = remoteW * k, h = remoteH * k;
-        target = new Rect(Math.Max(0, (cw - w) / 2), Math.Max(0, (ch - h) / 2), w, h);
-        return target;
-    }
+    private void OnFrameCore(List<FrameRect> rects) => screen.Update(rects);
 
     // --- Ввод ---
-
-    private (ushort X, ushort Y)? Remote(Point p)
-    {
-        if (target.Width <= 0 || remoteW == 0) return null;
-        var x = (p.X - target.X) * remoteW / target.Width;
-        var y = (p.Y - target.Y) * remoteH / target.Height;
-        if (x < 0 || y < 0 || x >= remoteW || y >= remoteH) return null;
-        return ((ushort)x, (ushort)y);
-    }
 
     private void OnPointer(PointerRoutedEventArgs e)
     {
         if (session is not { } s || !connected) return;
-        var point = e.GetCurrentPoint(canvas);
-        if (Remote(point.Position) is { } at) s.Pointer(at.X, at.Y);
+        var point = e.GetCurrentPoint(screen.Surface);
+        if (screen.ToRemote(point.Position) is { } at) s.Pointer(at.X, at.Y);
         var p = point.Properties;
         var state = new[] { p.IsLeftButtonPressed, p.IsMiddleButtonPressed, p.IsRightButtonPressed, p.IsXButton1Pressed, p.IsXButton2Pressed };
         for (var i = 0; i < 5; i++)
@@ -404,7 +359,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
     private void OnWheel(object sender, PointerRoutedEventArgs e)
     {
         if (session is not { } s || !connected) return;
-        var p = e.GetCurrentPoint(canvas).Properties;
+        var p = e.GetCurrentPoint(screen.Surface).Properties;
         var delta = (short)Math.Clamp(p.MouseWheelDelta, short.MinValue, short.MaxValue);
         s.Wheel(p.IsHorizontalMouseWheel ? (short)-delta : delta, !p.IsHorizontalMouseWheel);
         e.Handled = true;
@@ -503,7 +458,6 @@ internal sealed partial class RdpView : UserControl, IDisposable
         session = null;
         if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);
         audio.Dispose();
-        RemoveCanvas();
     }
 
     private sealed class Listener(RdpView view) : RemoteListener
