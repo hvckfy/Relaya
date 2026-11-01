@@ -62,7 +62,9 @@ struct VNCContent: View {
                 .background(Color(white: 0.12), in: .rect(cornerRadius: 16, style: .continuous))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Идеальный размер маленький: содержимое стола занимает всё место вкладки, но не раздувает окно
+        // (NavigationSplitView спрашивает идеальный размер и растягивался по нему).
+        .frame(minWidth: 0, idealWidth: 400, maxWidth: .infinity, minHeight: 0, idealHeight: 300, maxHeight: .infinity)
         .sheet(isPresented: Binding(get: { session.credentialRequest != nil }, set: { if !$0 { session.cancelCredentials() } })) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(session.credentialRequest?.isAppleRemoteDesktop == true
