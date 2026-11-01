@@ -125,6 +125,16 @@ struct MainView: View {
                  ? L("Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу %@.", "\(host.identityFile ?? "")")
                  : L("У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу."))
         }
+        .confirmationDialog(
+            L("Разрешить вход по паролю на «%@»?", "\(model.pendingEnablePassword?.alias ?? "")"),
+            isPresented: Binding(get: { model.pendingEnablePassword != nil },
+                                 set: { if !$0 { model.pendingEnablePassword = nil } }),
+            presenting: model.pendingEnablePassword
+        ) { host in
+            Button(L("Разрешить")) { model.setPasswordLogin(true, on: host) }
+        } message: { _ in
+            Text(L("Это слабее, чем вход только по ключу: пароль можно подобрать. Откроется вкладка и выполнит команду на сервере."))
+        }
         .alert(L("Открыть в Finder"), isPresented: Binding(get: { model.finderMountRequest != nil },
                                                           set: { if !$0 { model.finderMountRequest = nil } }),
                presenting: model.finderMountRequest) { host in

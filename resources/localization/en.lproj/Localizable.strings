@@ -1345,3 +1345,5 @@
 "Развернуть плитку (Ctrl+Shift+Enter)" = "Maximize tile (Ctrl+Shift+Enter)";
 "Развернуть плитку" = "Maximize tile";
 "На %@ будет разрешён вход по паролю в sshd — это слабее, чем вход только по ключу: пароль можно подобрать. Команда откроется в терминале — проверьте её и нажмите Enter." = "Password login will be allowed in sshd on %@ — weaker than key-only login, a password can be guessed. The command opens in a terminal — check it and press Enter.";
+"Разрешить вход по паролю на «%@»?" = "Allow password login on “%@”?";
+"Это слабее, чем вход только по ключу: пароль можно подобрать. Откроется вкладка и выполнит команду на сервере." = "This is weaker than key-only login: a password can be guessed. A tab opens and runs the command on the server.";

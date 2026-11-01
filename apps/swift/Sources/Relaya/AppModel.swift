@@ -267,6 +267,8 @@ final class AppModel {
     var newGroupFor: SSHHost?
     /// Ждёт подтверждения: запретить вход по паролю на хосте.
     var pendingDisablePassword: SSHHost?
+    /// Разрешить вход по паролю — тоже с подтверждением: это ослабляет сервер (как на Windows/Linux).
+    var pendingEnablePassword: SSHHost?
 
     /// Свёрнутые группы в sidebar — удобство одного пользователя, поэтому в UserDefaults, а не в конфиге.
     var collapsedGroups: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "collapsedGroups") ?? []) {

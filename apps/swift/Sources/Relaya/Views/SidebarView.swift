@@ -181,7 +181,7 @@ struct HostMenuItems: View {
             Button(L("Определить ОС")) { Task { await model.detectOS(for: host.alias) } }
             if host.os != .windows {
                 Menu(L("Вход по паролю на сервере")) {
-                    Button(L("Разрешить")) { model.setPasswordLogin(true, on: host) }
+                    Button(L("Разрешить…")) { model.pendingEnablePassword = host }
                     Button(L("Запретить…")) { model.pendingDisablePassword = host }
                 }
             }
