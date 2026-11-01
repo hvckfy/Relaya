@@ -17,7 +17,8 @@ runs:
       id: cache
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
-        path: core/native/vcpkg_installed
+        # Только свой triplet: два triplet в одном install-root — второй vcpkg install удаляет пакеты первого.
+        path: core/native/vcpkg_installed/${{ inputs.triplet }}
         key: freerdp-${{ inputs.triplet }}-${{ hashFiles('core/native/vcpkg.json', 'core/native/freerdp.version', 'core/native/ports/**', 'core/native/openh264/**') }}
     - name: Build FreeRDP
       if: steps.cache.outputs.cache-hit != 'true'
@@ -35,8 +36,12 @@ runs:
           git -C $env:VCPKG_INSTALLATION_ROOT checkout -q $baseline
         }
         $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT ($IsWindows ? "vcpkg.exe" : "vcpkg")
-        & $vcpkg install --x-manifest-root=core/native --x-install-root=core/native/vcpkg_installed --overlay-ports=core/native/ports --triplet ${{ inputs.triplet }}
+        # Свой install-root на triplet (manifest-режим убирает из root всё, что не этот triplet), потом — на общее место.
+        $root = Join-Path $env:RUNNER_TEMP "vcpkg-root-${{ inputs.triplet }}"
+        & $vcpkg install --x-manifest-root=core/native --x-install-root=$root --overlay-ports=core/native/ports --triplet ${{ inputs.triplet }}
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        New-Item -ItemType Directory -Force core/native/vcpkg_installed | Out-Null
+        Move-Item (Join-Path $root "${{ inputs.triplet }}") "core/native/vcpkg_installed/${{ inputs.triplet }}"
     - name: Export FREERDP_DIR
       id: dir
       shell: pwsh
