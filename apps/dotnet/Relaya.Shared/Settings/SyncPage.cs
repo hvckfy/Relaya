@@ -36,11 +36,34 @@ internal sealed class SyncPage : UserControl
     {
         Content = new ScrollViewer { Content = root };
         // Новые предупреждения о ключах — перестроить страницу, иначе только обновить состояния профилей.
-        sync.Changed += () => ui.TryEnqueue(() => { if (sync.RenamedKeys.Count != shownRenamed || sync.SkippedKeys.Count != shownSkipped) Build(); else UpdateStates(); });
+        sync.Changed += () => ui.TryEnqueue(() =>
+        {
+            if (sync.RenamedKeys.Count != shownRenamed || sync.SkippedKeys.Count != shownSkipped || UnexportedSignature() != shownUnexported) Build();
+            else UpdateStates();
+        });
         Build();
     }
 
     private int shownRenamed, shownSkipped;
+    private string shownUnexported = "";
+
+    private string UnexportedSignature() => sync.Unexported is { } u ? (u.noPassphrase ? "p" : "") + string.Join("|", u.missing) : "";
+
+    // П3, как на Mac: ключи этой машины не ушли в синхронизацию — без пароля шифрования или файла ключа из IdentityFile нет.
+    private InfoBar? UnexportedBar()
+    {
+        var u = sync.Unexported;
+        shownUnexported = UnexportedSignature();
+        if (!u.noPassphrase && u.missing.Count == 0) return null;
+        return new InfoBar
+        {
+            Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 8, 0, 0),
+            Title = L("Ключи не выгружены"),
+            Message = u.noPassphrase
+                ? L("Задайте пароль шифрования ключей — без него ключи этой машины не уходят в синхронизацию.")
+                : L("Нет файлов ключей из IdentityFile: %@", string.Join(", ", u.missing)),
+        };
+    }
 
 
     // Конфликт по файлам (C8, и для git тоже): ContentDialog, у каждого файла выбор «мой / с другой машины».
@@ -114,6 +137,8 @@ internal sealed class SyncPage : UserControl
         root.Children.Add(Card(L("Пароль шифрования ключей"),
             Platform.PlatformText.SyncPassphraseHint(),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pass, savePass } }));
+
+        if (UnexportedBar() is { } unexported) root.Children.Add(unexported);
 
         // Одноимённые, но другие ключи с другой машины — сохранены рядом, не поверх (ядро, sync_take_renamed_keys).
         shownRenamed = sync.RenamedKeys.Count;
