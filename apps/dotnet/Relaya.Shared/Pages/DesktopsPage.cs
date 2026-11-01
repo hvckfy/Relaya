@@ -104,6 +104,8 @@ internal sealed class DesktopsPage : UserControl
         async Task SaveAsync()
         {
             if (address.Text.Trim().Length == 0) { error.Text = L("Укажите адрес"); return; }
+            // RDP без имени не войдёт (NLA спрашивает учётку целиком) — как на Mac, имя обязательно.
+            if (kind.SelectedIndex == 0 && user.Text.Trim().Length == 0) { error.Text = L("Укажите имя пользователя."); return; }
             var item = new RemoteDesktop(d?.id ?? RelayaCoreMethods.CoreNewId(),
                 name.Text.Trim().Length > 0 ? name.Text.Trim() : address.Text.Trim(), kind.SelectedIndex == 0 ? DesktopKind.Rdp : DesktopKind.Vnc,
                 address.Text.Trim(), (long)port.Value, user.Text.Trim(), via.SelectedIndex > 0 ? via.SelectedItem as string : null, full.IsOn,
