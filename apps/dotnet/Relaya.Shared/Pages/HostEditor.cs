@@ -69,6 +69,10 @@ internal static class HostEditor
         List<string> KeyFiles() => keyList.Text.Split('\r', '\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         var jump = Combo(L("Через хост (ProxyJump)"), AppState.Hosts.Select(h => h.alias), source?.proxyJump, L("необязательно"));
         var group = Combo(L("Группа"), AppState.Groups(), source?.group, L("необязательно"));
+        var color = new ComboBox { Header = L("Цвет"), HorizontalAlignment = HorizontalAlignment.Stretch };
+        color.Items.Add(L("Без цвета"));
+        foreach (var c in HostColors.All) color.Items.Add(c.Label);
+        color.SelectedIndex = Array.FindIndex(HostColors.All, c => c.Name == source?.color) + 1;
         var tags = Field(L("Метки через запятую"), source == null ? "" : string.Join(", ", source.tags), "prod, db");
         var os = new ComboBox { Header = L("Система"), HorizontalAlignment = HorizontalAlignment.Stretch };
         os.Items.Add(L("Не указана"));
@@ -142,7 +146,7 @@ internal static class HostEditor
             return new SshHost(name, Opt(address.Text), Opt(user.Text), portValue, files.FirstOrDefault(), Opt(jump.Text),
                 // Выключили при ForwardAgent в блоке — пишем явное no, иначе значение из блока остаётся (R2).
                 TriBool(agent), keepaliveValue, TriBool(compression), Opt(group.Text),
-                RelayaCoreMethods.SplitTags(tags.Text), source?.color, os.SelectedIndex > 0 ? all[os.SelectedIndex - 1] : null, tmux.IsOn,
+                RelayaCoreMethods.SplitTags(tags.Text), color.SelectedIndex > 0 ? HostColors.All[color.SelectedIndex - 1].Name : null, os.SelectedIndex > 0 ? all[os.SelectedIndex - 1] : null, tmux.IsOn,
                 identityFiles: files, forwardAgentValue: TriValue(agent), compressionValue: TriValue(compression));
         }
         void Update()
@@ -190,7 +194,7 @@ internal static class HostEditor
             Ui.Button(L("Отмена"), Back),
             Ui.Button(editing ? L("Сохранить") : L("Добавить"), Save, accent: true));
         var form = new StackPanel { Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        foreach (var c in new UIElement[] { alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, os, agent, compression, keepalive, tmux })
+        foreach (var c in new UIElement[] { alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, color, os, agent, compression, keepalive, tmux })
             form.Children.Add(c);
         form.Children.Add(Ui.Section(L("Будет записано в ~/.ssh/config")));
         form.Children.Add(Ui.Card(preview));

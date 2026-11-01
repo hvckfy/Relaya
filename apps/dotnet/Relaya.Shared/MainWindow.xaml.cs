@@ -202,6 +202,17 @@ public sealed partial class MainWindow : Window
     private NavigationViewItem HostItem(SshHost h)
     {
         var item = new NavigationViewItem { Content = h.alias, Tag = h, Icon = Pages.OsIcon.For(h.os) };
+        // Цвет хоста — точкой после имени (Е.10).
+        if (Pages.HostColors.Of(h.color) is { } dot)
+            item.Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = h.alias },
+                    new Microsoft.UI.Xaml.Shapes.Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Fill = new Microsoft.UI.Xaml.Media.SolidColorBrush(dot) },
+                },
+            };
         ToolTipService.SetToolTip(item, RelayaCoreMethods.HostSubtitle(h));
         item.ContextFlyout = Pages.HostActions.Menu(h, item);
         // Handled: иначе фокус остаётся у пункта списка, а не у новой плитки (Л3).
@@ -275,9 +286,15 @@ public sealed partial class MainWindow : Window
     {
         var tiles = new Terminal.TileHost();
         var tab = AddTab(alias, "", tiles, tiles);
+        if (Pages.HostColors.Of(AppState.Host(alias)?.color) is { } tint && tab.IconSource is FontIconSource icon)
+            icon.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(tint);
         tiles.TitleChanged += t => ui.TryEnqueue(() => tab.Header = t);
         tiles.AliveChanged += alive => ui.TryEnqueue(() =>
-            tab.IconSource = new FontIconSource { Glyph = alive ? "" : "" });
+            tab.IconSource = new FontIconSource
+            {
+                Glyph = alive ? "" : "",
+                Foreground = Pages.HostColors.Of(AppState.Host(alias)?.color) is { } c ? new Microsoft.UI.Xaml.Media.SolidColorBrush(c) : null,
+            });
         tiles.Add(alias, initialInput);
         // Контекстное меню вкладки: разделить — та же сессия рядом (как Ctrl+Shift+D/E).
         var menu = new MenuFlyout();
