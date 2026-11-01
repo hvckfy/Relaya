@@ -185,7 +185,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
         var (w, h) = PhysicalSize();
         var (user, domain) = SplitUser(desktop.user);
         var config = new RdpConfig(host, (ushort)port, user, password, domain, w, h, (uint)Math.Round((desktop.rdpRetina == false ? 1.0 : scale) * 100),
-            TrustedCert(), desktop.gatewayHost, GatewayUser(), CredentialStore.Read("desktop-gateway:" + desktop.id), GatewayDomain(),
+            TargetTrust(), NodeTrust(), desktop.gatewayHost, GatewayUser(), CredentialStore.Read("desktop-gateway:" + desktop.id), GatewayDomain(),
             OpenH264.LibraryPath); // H.264 — только включённый и проверенный кодек (9.12)
         var s = RemoteSession.Rdp(config, new Listener(this));
         s.SetClipboardListener(new ClipListener(this));
@@ -302,7 +302,29 @@ internal sealed partial class RdpView : UserControl, IDisposable
         catch (Exception) { return new(); }
     }
 
-    private string? TrustedCert() => LoadTrust().GetValueOrDefault(TrustKey);
+    private string? TargetTrust() => LoadTrust().GetValueOrDefault(TrustKey);
+
+    // R-4: доверие шлюзу и перенаправленному серверу — по узлу «host:port» внутри стола; ключ начинается с TrustKey,
+    // поэтому «Сбросить доверие» (ForgetTrust) чистит и их.
+    private string NodeKey(CertNode node) => TrustKey + "|" + node.host.Trim().ToLowerInvariant() + ":" + node.port;
+
+    private List<TrustedCert> NodeTrust()
+    {
+        var prefix = TrustKey + "|";
+        var list = new List<TrustedCert>();
+        foreach (var (key, sha) in LoadTrust())
+        {
+            if (!key.StartsWith(prefix)) continue;
+            var node = key[prefix.Length..];
+            var colon = node.LastIndexOf(':');
+            if (colon > 0 && ushort.TryParse(node[(colon + 1)..], out var port)) list.Add(new TrustedCert(node[..colon], port, sha));
+        }
+        return list;
+    }
+
+    // Отпечаток, которому этот узел раньше доверяли: для цели — прежний слот стола, для остальных — по host:port.
+    private string? PreviousTrust(CertNode node) =>
+        node.role == CertRole.Target ? TargetTrust() : LoadTrust().GetValueOrDefault(NodeKey(node));
 
     /// Есть ли сохранённое доверие сертификату для стола (любой путь — напрямую или через SSH-хост).
     public static bool HasTrust(string desktopId) => LoadTrust().Keys.Any(k => k.StartsWith(desktopId + "|"));
@@ -315,10 +337,10 @@ internal sealed partial class RdpView : UserControl, IDisposable
         AtomicFile.Write(TrustFile, JsonSerializer.Serialize(map));
     }
 
-    private void Trust(string sha256)
+    private void Trust(string sha256, CertNode node)
     {
         var map = LoadTrust();
-        map[TrustKey] = sha256;
+        map[node.role == CertRole.Target ? TrustKey : NodeKey(node)] = sha256;
         Directory.CreateDirectory(AppState.Support);
         AtomicFile.Write(TrustFile, JsonSerializer.Serialize(map));
     }
@@ -326,19 +348,31 @@ internal sealed partial class RdpView : UserControl, IDisposable
     private bool certOpen;
 
     // Диалоги сертификата — по одному (W-RDP-7); любая ошибка показа — отказ, а не зависшее подключение.
-    private async Task AskCertAsync(string sha256, string subject)
+    private async Task AskCertAsync(string sha256, string subject, CertNode node)
     {
         if (certOpen) { session?.AcceptCert(false); return; }
         certOpen = true;
-        try { await AskCertCore(sha256, subject); }
+        try { await AskCertCore(sha256, subject, node); }
         catch (Exception e) { Terminal.TerminalView.Trace("RDP cert dialog: " + e.Message); session?.AcceptCert(false); }
         finally { certOpen = false; }
     }
 
-    private async Task AskCertCore(string sha256, string subject)
+    private async Task AskCertCore(string sha256, string subject, CertNode node)
     {
-        var previous = TrustedCert();
+        // «Изменился» — только если этому же узлу раньше доверяли.
+        var previous = PreviousTrust(node);
         var content = new StackPanel { Spacing = 8 };
+        var address = node.host + ":" + node.port;
+        content.Children.Add(new TextBlock
+        {
+            Text = node.role switch
+            {
+                CertRole.Gateway => L("Шлюз RD Gateway %@", address),
+                CertRole.Redirect => L("Перенаправленный сервер %@ — сюда перенаправил брокер; неожиданный адрес — повод насторожиться", address),
+                _ => L("Сервер %@", address),
+            },
+            TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, Style = Pages.Ui.Style("BodyStrongTextBlockStyle"),
+        });
         if (previous != null && previous != sha256)
             content.Children.Add(new InfoBar
             {
@@ -358,7 +392,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
             PrimaryButtonText = L("Доверять"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
         };
         var ok = await dialog.ShowAsync() == ContentDialogResult.Primary;
-        if (ok) Trust(sha256);
+        if (ok) Trust(sha256, node);
         session?.AcceptCert(ok);
     }
 
@@ -516,7 +550,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
         public void OnConnected(ushort width, ushort height) => view.OnConnectedCore(width, height);
         public void OnFrame(List<FrameRect> rects) => view.OnFrameCore(rects);
         public void OnResize(ushort width, ushort height) => view.OnConnectedCore(width, height);
-        public void OnCert(string sha256, string subject) => view.ui.TryEnqueue(() => _ = view.AskCertAsync(sha256, subject));
+        public void OnCert(string sha256, string subject, CertNode node) => view.ui.TryEnqueue(() => _ = view.AskCertAsync(sha256, subject, node));
         public void OnClosed(RemoteClose close) => view.OnClosedCore(close);
     }
 
