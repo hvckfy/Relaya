@@ -22,6 +22,10 @@
   <PropertyGroup Condition="'$(RelayaLang)' == 'en'">
     <DefineConstants>$(DefineConstants);RELAYA_LANG_EN</DefineConstants>
   </PropertyGroup>
+  <!-- Значок в области уведомлений: StatusNotifierItem по D-Bus (Platform/TrayIcon.cs). -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus" Version="0.21.2" />
+  </ItemGroup>
   <Import Project="..\Relaya.Shared\Relaya.Shared.projitems" Label="Shared" />
   <ItemGroup>
     <None Include="..\..\..\resources\localization\en.lproj\Localizable.strings" Link="Localization\en.strings"

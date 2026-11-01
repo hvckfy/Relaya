@@ -12,5 +12,6 @@ public partial class App : Application
     {
         window = new MainWindow();
         window.Activate();
+        _ = Platform.TrayIcon.StartAsync();
     }
 }
