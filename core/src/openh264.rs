@@ -158,6 +158,7 @@ pub(crate) fn checked_copy(path: &str) -> Option<std::path::PathBuf> {
 /// Удалить копии из `checked_copy` от завершившихся процессов: копия живёт, пока жив процесс, и при выходе не
 /// удаляется. Каталог чужого живого процесса (или чужого пользователя — kill даёт EPERM) не трогается.
 #[cfg(unix)]
+#[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
 fn remove_stale_copies() {
     extern "C" {
         fn kill(pid: i32, sig: i32) -> i32;
