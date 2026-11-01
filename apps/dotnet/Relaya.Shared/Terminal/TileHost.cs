@@ -294,6 +294,13 @@ internal sealed class TileHost : UserControl, IDisposable
             Message = L("Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts."),
         };
         session.HostKeyChanged += () => ui.TryEnqueue(() => keyChanged.IsOpen = true);
+        // 4.22: после «Too many authentication failures» переподключились по паролю — сказать почему.
+        var passwordOnlyBar = new InfoBar
+        {
+            Severity = InfoBarSeverity.Informational, IsClosable = true, Margin = new Thickness(4, 0, 4, 4),
+            Message = L("Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было."),
+        };
+        session.PasswordOnlySwitched += () => ui.TryEnqueue(() => passwordOnlyBar.IsOpen = true);
         session.HostKeyRequested += fp => ui.TryEnqueue(async () =>
         {
             if (XamlRoot == null) { session.AnswerHostKey(false); return; }
@@ -336,7 +343,7 @@ internal sealed class TileHost : UserControl, IDisposable
         body.Children.Add(header);
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         // Баннеры — каждый в своей строке, чтобы не накладывались; терминал — в последней.
-        foreach (var bar in new FrameworkElement[] { keyChanged, ask, offer, login, pending })
+        foreach (var bar in new FrameworkElement[] { keyChanged, passwordOnlyBar, ask, offer, login, pending })
         {
             body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(bar, body.RowDefinitions.Count - 1);

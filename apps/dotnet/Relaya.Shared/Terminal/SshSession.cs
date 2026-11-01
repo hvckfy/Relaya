@@ -23,6 +23,12 @@ internal sealed class SshSession : IDisposable
     public string TmuxName => tmuxName;
     // Переключатель вкладки (Е.11) сильнее настройки хоста; null — как в хосте.
     private bool? tmuxOverride;
+    // 4.22, как на Mac: сервер оборвал вход после перебора ключей агента — до конца вкладки входим только по паролю.
+    private bool passwordOnly;
+    private bool retryPasswordOnly;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue ui;
+    public event Action? PasswordOnlySwitched;
+
     public bool UsesTmux => tmuxOverride ?? Relaya.Data.AppState.Host(alias)?.tmux == true;
 
     /// Е.11, как на Mac: вкладка переподключается — при включении внутри tmux, при выключении сессия на сервере закрывается.
@@ -118,6 +124,7 @@ internal sealed class SshSession : IDisposable
     {
         this.view = view;
         this.alias = alias;
+        ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread(); // создаётся на UI-потоке вкладки
         tmuxName = uniffi.relaya_core.RelayaCoreMethods.TmuxSessionName(alias, Guid.NewGuid().ToString("N"));
         view.Input += OnInput;
         view.Resized += (cols, rows) => console?.Resize((short)cols, (short)rows);
@@ -137,7 +144,7 @@ internal sealed class SshSession : IDisposable
             // Только пароль: сохранён пароль, а ключа у хоста нет — ssh-agent не перебирает ключи,
             // и сервер не рвёт вход с «Too many authentication failures» до запроса пароля.
             var host = Relaya.Data.AppState.Host(alias);
-            var options = Askpass.PasswordOnly(alias)
+            var options = passwordOnly || Askpass.PasswordOnly(alias)
                 ? uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().ToArray()
                 : [];
             string[] argv = [ssh, .. options, alias];
@@ -187,6 +194,11 @@ internal sealed class SshSession : IDisposable
                     try { KeySetupOffered?.Invoke(); }
                     catch (Exception e) { Relaya.Terminal.TerminalView.Trace("KeySetupOffered: " + e.GetType().Name); }
                 }
+            }
+            if (!loggedIn && !passwordOnly && text.Contains("Too many authentication failures"))
+            {
+                passwordOnly = true;
+                retryPasswordOnly = true;
             }
             if (!loggedIn && !warnedKeyChanged && text.Contains("REMOTE HOST IDENTIFICATION HAS CHANGED"))
             {
@@ -239,7 +251,19 @@ internal sealed class SshSession : IDisposable
             try { view.Feed(Encoding.UTF8.GetBytes("\r\n\x1b[31m" + L("Relaya: ошибка вывода терминала: %@", e.Message) + "\x1b[0m\r\n")); }
             catch (Exception) { }
         };
-        pc.Exited += code => { if (console == pc) End("\x1b[2m" + L("[сессия завершена, код %@]", code) + "\x1b[0m"); };
+        pc.Exited += code =>
+        {
+            if (console != pc) return;
+            if (retryPasswordOnly)
+            {
+                retryPasswordOnly = false;
+                try { PasswordOnlySwitched?.Invoke(); }
+                catch (Exception e) { Relaya.Terminal.TerminalView.Trace("PasswordOnlySwitched: " + e.GetType().Name); }
+                ui.TryEnqueue(Start);
+                return;
+            }
+            End("\x1b[2m" + L("[сессия завершена, код %@]", code) + "\x1b[0m");
+        };
         pc.Start();
         StateChanged?.Invoke(true);
     }
