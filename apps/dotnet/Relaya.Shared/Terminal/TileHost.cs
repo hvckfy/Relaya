@@ -40,6 +40,13 @@ internal sealed class TileHost : UserControl, IDisposable
     private readonly AutoSuggestBox search = new() { Width = 260, QueryIcon = new SymbolIcon(Symbol.Find), Visibility = Visibility.Collapsed };
     private Pane? active;
     private int searchFrom = int.MaxValue;
+    // Рассылка ввода (как на Mac): переключатель в панели и предупреждение, пока она включена.
+    private readonly Microsoft.UI.Xaml.Controls.Primitives.ToggleButton broadcastToggle = new()
+    {
+        Content = new FontIcon { Glyph = "\uEC05", FontSize = 16 }, Padding = new Thickness(8),
+    };
+    private readonly InfoBar broadcastBar = new() { Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(8, 0, 8, 4) };
+    private readonly CheckBox broadcastHere = new();
 
     public event Action<string>? TitleChanged;
     public event Action<bool>? AliveChanged;
@@ -54,21 +61,35 @@ internal sealed class TileHost : UserControl, IDisposable
         search.QuerySubmitted += (_, _) => FindNext();
         search.TextChanged += (_, args) => { if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput) { searchFrom = int.MaxValue; FindNext(); } };
         search.KeyDown += (_, e) => { if (e.Key == VirtualKey.Escape) CloseSearch(); };
+        var broadcastTip = L("Ввод во все терминалы");
+        ToolTipService.SetToolTip(broadcastToggle, broadcastTip);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(broadcastToggle, broadcastTip);
+        broadcastToggle.Click += (_, _) => Broadcast.Enabled = broadcastToggle.IsChecked == true;
+        var stopBroadcast = new Button { Content = L("Выключить") };
+        stopBroadcast.Click += (_, _) => Broadcast.Enabled = false;
+        broadcastBar.ActionButton = stopBroadcast;
+        broadcastHere.Content = L("Этот терминал участвует");
+        broadcastHere.Click += (_, _) => { if (active != null) Broadcast.SetIncluded(active.Session, broadcastHere.IsChecked == true); };
+        broadcastBar.Content = broadcastHere;
+        Broadcast.Changed += OnBroadcastChanged;
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 8, 4),
             Children =
             {
                 search,
+                broadcastToggle,
                 Pages.Ui.IconButton("", L("Поиск (Ctrl+Shift+F)"), OpenSearch),
                 Pages.Ui.IconButton("", L("Мельче (Ctrl+−)"), () => active?.View.ZoomFont(-1)),
                 Pages.Ui.IconButton("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
             },
         };
         var stage = new Grid { Children = { grid, dropHint } };
-        var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() } };
+        var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         root.Children.Add(bar);
-        Grid.SetRow(stage, 1);
+        Grid.SetRow(broadcastBar, 1);
+        root.Children.Add(broadcastBar);
+        Grid.SetRow(stage, 2);
         root.Children.Add(stage);
         Content = root;
         // Вкладку перетаскивают на этот холст (MainWindow.DraggedTiles): край плитки или всего холста.
@@ -252,9 +273,24 @@ internal sealed class TileHost : UserControl, IDisposable
         pending.IsOpen = true;
     }
 
+    // Состояние рассылки меняется из любой вкладки — обновляем панель через UI-очередь.
+    private void OnBroadcastChanged() => ui.TryEnqueue(UpdateBroadcast);
+
+    private void UpdateBroadcast()
+    {
+        var on = Broadcast.Enabled;
+        broadcastToggle.IsChecked = on;
+        broadcastBar.IsOpen = on;
+        if (!on) return;
+        broadcastBar.Title = L("Ввод во все терминалы");
+        broadcastBar.Message = L("Ввод рассылается в терминалы: %@. Пароли и сниппеты не рассылаются.", Broadcast.Receivers);
+        broadcastHere.IsChecked = active == null || Broadcast.Includes(active.Session);
+    }
+
     private void Activate(Pane pane)
     {
         active = pane;
+        UpdateBroadcast();
         foreach (var p in panes)
             p.Frame.BorderBrush = p == pane && panes.Count > 1 ? Pages.Ui.Brush("AccentFillColorDefaultBrush") : Pages.Ui.Brush("CardStrokeColorDefaultBrush");
         TitleChanged?.Invoke(panes.Count > 1 ? string.Join(" · ", panes.Select(p => p.Alias)) : pane.Alias);
@@ -388,6 +424,7 @@ internal sealed class TileHost : UserControl, IDisposable
 
     public void Dispose()
     {
+        Broadcast.Changed -= OnBroadcastChanged;
         foreach (var p in panes) { p.Session.Dispose(); p.View.Dispose(); }
         panes.Clear();
     }

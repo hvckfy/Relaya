@@ -28,6 +28,17 @@ internal sealed class SshSession : IDisposable
     public event Action? PasswordRequested;
 
     private IPty? asked;
+    // Последняя строка вывода — запрос пароля: такой ввод не рассылается в другие терминалы.
+    private volatile bool secretPrompt;
+
+    /// Сейчас вводится пароль (ssh, sudo, su) — рассылка из этого терминала на паузе.
+    public bool SecretPrompt => secretPrompt;
+
+    /// Ввод, разосланный из другого терминала: прямо в процесс, без повторной рассылки.
+    public void Receive(byte[] data)
+    {
+        if (!ended) console?.Write(data);
+    }
 
     /// Подставить сохранённый пароль — только в ту же сессию, где был запрос (не в переподключённую).
     public void SendPassword()
@@ -44,6 +55,7 @@ internal sealed class SshSession : IDisposable
         tmuxName = uniffi.relaya_core.RelayaCoreMethods.TmuxSessionName(alias, Guid.NewGuid().ToString("N"));
         view.Input += OnInput;
         view.Resized += (cols, rows) => console?.Resize((short)cols, (short)rows);
+        Broadcast.Register(this);
     }
 
     public void Start()
@@ -94,6 +106,7 @@ internal sealed class SshSession : IDisposable
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
             if (!loggedIn && view.Emulator.LoginReady()) loggedIn = true;
+            secretPrompt = PasswordPrompt.Matches(text) || PasswordPrompt.IsAnyPasswordPrompt(text);
             if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
                 passwordSent = true;
@@ -131,9 +144,18 @@ internal sealed class SshSession : IDisposable
 
     private void OnInput(byte[] data)
     {
-        if (!ended) { console?.Write(data); return; }
+        if (!ended)
+        {
+            console?.Write(data);
+            if (!view.IsProgrammaticInput && !secretPrompt) Broadcast.Send(this, data);
+            return;
+        }
         if (data.Length == 1 && data[0] == '\r') Start();
     }
 
-    public void Dispose() => console?.Dispose();
+    public void Dispose()
+    {
+        Broadcast.Unregister(this);
+        console?.Dispose();
+    }
 }

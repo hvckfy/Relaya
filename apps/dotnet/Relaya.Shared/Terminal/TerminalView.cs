@@ -129,12 +129,22 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     public void Paste(string text)
     {
         text = text.Replace("\r\n", "\r").Replace('\n', '\r');
-        Send(Emulator.CursorState().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text);
+        Programmatic(() => Send(Emulator.CursorState().bracketedPaste ? $"\x1b[200~{text}\x1b[201~" : text));
         Focus(FocusState.Programmatic);
     }
 
     /// Ввести текст как с клавиатуры (команда с \r выполнится).
-    public void Type(string text) => Send(text);
+    public void Type(string text) => Programmatic(() => Send(text));
+
+    /// Ввод идёт от программы (сниппет, команда ОС, tmux attach), а не с клавиатуры: такой ввод не рассылается.
+    public bool IsProgrammaticInput { get; private set; }
+
+    private void Programmatic(Action send)
+    {
+        IsProgrammaticInput = true;
+        try { send(); }
+        finally { IsProgrammaticInput = false; }
+    }
 
     /// Найти текст в истории снизу вверх, начиная перед строкой `before`; показать и выделить. Возвращает индекс строки или -1.
     public int Find(string query, int before)
