@@ -30,10 +30,8 @@
   </ItemGroup>
   <!-- Rust-ядро: scripts/build-core-linux.sh кладёт librelaya_core.so и Relaya.Shared/Core/relaya_core.cs. -->
   <ItemGroup>
-    <None Include="..\..\..\core\target\release\librelaya_core.so" Link="librelaya_core.so"
-          CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\librelaya_core.so')" />
-    <!-- VNC на RoyalVNCKit: рядом с ядром (ядро ищет её через rpath $ORIGIN). -->
-    <None Include="..\..\..\core\target\release\libRoyalVNCKit.so" Link="libRoyalVNCKit.so"
-          CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\libRoyalVNCKit.so')" />
+    <!-- Ядро и всё, что лежит рядом с ним: FreeRDP и OpenSSL из vcpkg, RoyalVNCKit (ядро ищет их через rpath $ORIGIN). -->
+    <None Include="..\..\..\core\target\release\*.so*" CopyToOutputDirectory="PreserveNewest" Visible="false"
+          Link="%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

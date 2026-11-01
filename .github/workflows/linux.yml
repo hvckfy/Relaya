@@ -49,6 +49,12 @@ jobs:
             ~/.nuget/packages
           key: linux-${{ hashFiles('core/Cargo.lock', 'apps/dotnet/**/*.csproj') }}
           restore-keys: linux-
+      # RDP на FreeRDP 3 из vcpkg с нашим overlay (OpenH264 по пути), как на Mac и Windows: action выставит FREERDP_DIR,
+      # скрипт ядра соберёт с rdp-freerdp и положит .so FreeRDP рядом с ядром. Первая сборка ~25 минут, дальше кэш.
+      - name: FreeRDP
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: x64-linux-dynamic
       # VNC на RoyalVNCKit (.so с -static-stdlib): скрипт ядра включит vnc-royal и положит её рядом с ядром.
       - name: RoyalVNCKit
         uses: ./.github/actions/royalvnc
