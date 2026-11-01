@@ -276,9 +276,10 @@ internal sealed partial class RdpView : UserControl, IDisposable
             Title = L("Пароль для %@", desktop.name), Content = new StackPanel { Spacing = 8, Children = { box, save } },
             PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
         };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary || box.Password.Length == 0) return null;
+        // Пустой пароль допустим, как в форме RDP на Mac (#32): учётная запись может быть без пароля. Его не сохраняем.
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
         // Сохраняем только после успешного входа (К12, как на Mac): неверный пароль в хранилище не попадает.
-        pendingSave = save.IsChecked == true ? box.Password : null;
+        pendingSave = save.IsChecked == true && box.Password.Length > 0 ? box.Password : null;
         return box.Password;
     }
 
