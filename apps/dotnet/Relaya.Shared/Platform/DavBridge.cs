@@ -75,10 +75,13 @@ internal sealed partial class DavBridge
     {
         List<DavBridge> all;
         lock (bridges) { all = bridges.Values.ToList(); bridges.Clear(); }
-        if (all.Count == 0) return;
         try { Task.WaitAll(all.Select(b => UnmountVolumeAsync(b.Url)).ToArray(), TimeSpan.FromSeconds(2)); }
         catch (Exception e) { Terminal.TerminalView.Trace("dav unmount: " + e.Message); }
         foreach (var b in all) b.listener?.Stop();
+        // Файлы удаляются после каждого запроса; пустой каталог процесса — при выходе.
+        if (tempDir.IsValueCreated)
+            try { Directory.Delete(tempDir.Value, true); }
+            catch (IOException e) { Terminal.TerminalView.Trace("dav temp: " + e.Message); }
     }
 
     // Платформа: подключить WebDAV-адрес как диск (пароль — не в аргументах), отключить, открыть.
