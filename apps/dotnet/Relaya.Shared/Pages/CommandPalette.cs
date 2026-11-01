@@ -145,10 +145,10 @@ internal static class CommandPalette
     }
 
     private static List<string> Recents() =>
-        Settings.Get("palette.recents", "").Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        Platform.Settings.Get("palette.recents", "").Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
 
     private static void Remember(string id) =>
-        Settings.Set("palette.recents", string.Join("\n", new[] { id }.Concat(Recents().Where(r => r != id)).Take(RecentLimit)));
+        Platform.Settings.Set("palette.recents", string.Join("\n", new[] { id }.Concat(Recents().Where(r => r != id)).Take(RecentLimit)));
 
     private static List<Item> Items(MainWindow w)
     {
