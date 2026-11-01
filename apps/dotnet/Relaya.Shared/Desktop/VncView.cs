@@ -9,6 +9,7 @@ using Relaya.Platform;
 using uniffi.relaya_core;
 using Windows.System;
 using static Relaya.Strings;
+using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 
 namespace Relaya.Desktop;
 

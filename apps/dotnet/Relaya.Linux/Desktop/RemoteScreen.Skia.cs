@@ -8,11 +8,11 @@ namespace Relaya.Desktop;
 /// Холст удалённого экрана на Linux: SkiaSharp (SKCanvasElement); картинка — из буфера целиком на кадр.
 internal sealed partial class RemoteScreen
 {
-    private Surface surface = null!;
+    private SkiaSurface surface = null!;
 
     private partial void CreateCanvas()
     {
-        surface = new Surface(this);
+        surface = new SkiaSurface(this);
         canvas = surface;
     }
 
@@ -40,7 +40,7 @@ internal sealed partial class RemoteScreen
         catch (Exception e) { Terminal.TerminalView.Trace("remote screen draw: " + e.Message); }
     }
 
-    private sealed class Surface(RemoteScreen view) : SKCanvasElement
+    private sealed class SkiaSurface(RemoteScreen view) : SKCanvasElement
     {
         protected override void RenderOverride(SKCanvas canvas, Size area) => view.DrawFrame(canvas, area);
     }
