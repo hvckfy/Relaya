@@ -464,10 +464,10 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     // Подсветка считается один раз на текст строки (П3): кадр без изменений не гоняет регулярки заново.
     private readonly System.Collections.Generic.Dictionary<string, (int Color, bool Bold)?[]?> highlightCache = new();
 
-    private (int Color, bool Bold)?[]? Highlights(TermSnapshot s, int row)
+    private (int Color, bool Bold)?[]? Highlights(Screen s, int row)
     {
         var text = new StringBuilder((int)s.cols);
-        for (var c = 0; c < s.cols; c++) text.Append(s.cells[row * (int)s.cols + c].ch is { Length: > 0 } ch ? ch[0] : ' ');
+        for (var c = 0; c < s.cols; c++) text.Append(s.cells[row * (int)s.cols + c]?.ch is { Length: > 0 } ch ? ch[0] : ' ');
         var line = text.ToString();
         if (line.Trim().Length == 0) return null;
         if (highlightCache.TryGetValue(line, out var cached)) return cached;
@@ -524,11 +524,45 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         }
     }
 
+    // Экран для отрисовки: копия ячеек, которую обновляют только изменённые строки из Damage ядра (П1),
+    // а не полный Snapshot на каждый кадр. Поля названы как у TermSnapshot.
+    private sealed class Screen
+    {
+        public uint cols, rows, cursorRow, cursorCol;
+        public bool cursorVisible, altScreen;
+        public TermCell[] cells = Array.Empty<TermCell>();
+    }
+
+    private readonly Screen screen = new();
+
+    private Screen CurrentScreen()
+    {
+        var d = Emulator.Damage();
+        var c = d.cursor;
+        if (d.full || screen.cols != c.cols || screen.rows != c.rows)
+        {
+            screen.cols = c.cols;
+            screen.rows = c.rows;
+            screen.cells = new TermCell[c.cols * c.rows];
+        }
+        foreach (var line in d.lines)
+        {
+            if (line.row >= screen.rows) continue;
+            var n = Math.Min(line.cells.Count, (int)screen.cols);
+            for (var i = 0; i < n; i++) screen.cells[line.row * screen.cols + i] = line.cells[i];
+        }
+        screen.cursorRow = c.row;
+        screen.cursorCol = c.col;
+        screen.cursorVisible = c.visible;
+        screen.altScreen = c.altScreen;
+        return screen;
+    }
+
     private void DrawFrame(IPainter ds)
     {
         if (!measured) Measure();
         ds.Clear(Theme.Background);
-        var s = Emulator.Snapshot();
+        var s = CurrentScreen();
         var highlight = !s.altScreen && Platform.Settings.Get("terminal.highlight", "1") == "1";
         var run = new StringBuilder();
         for (var r = 0; r < s.rows; r++)
@@ -545,6 +579,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             for (var c = 0; c < s.cols; c++)
             {
                 var cell = s.cells[r * (int)s.cols + c];
+                if (cell == null) continue;
                 var inverse = (cell.flags & 8) != 0;
                 // Подсветка (как на Mac) — только текста цвета по умолчанию: раскрашенное сервером не трогаем.
                 if (marks?[c] is { } mark && cell.fg == 0 && !inverse) cell = cell with { fg = 0x0200_0000u | (uint)mark.Color, flags = (ushort)(cell.flags | (mark.Bold ? 1 : 0)) };
