@@ -104,7 +104,7 @@ internal static class HostEditor
         var passwordNote = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8,
-            Children = { Ui.Secondary(L("Хранится в диспетчере учётных данных Windows")), forgetButton },
+            Children = { Ui.Secondary(Platform.PlatformText.PasswordStored()), forgetButton },
         };
         var tmux = new ToggleSwitch { Header = L("Сессии в tmux (переживают разрыв связи)"), IsOn = source?.tmux == true };
         var preview = new TextBlock
@@ -201,7 +201,7 @@ internal static class HostEditor
             Content = new StackPanel
             {
                 Spacing = 8,
-                Children = { box, Ui.Secondary(L("Хранится в диспетчере учётных данных Windows и вводится сам, когда сервер спросит пароль.")) },
+                Children = { box, Ui.Secondary(Platform.PlatformText.PasswordStoredAndTyped()) },
             },
             PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = root,
         };

@@ -53,7 +53,7 @@ internal sealed class HostPage : UserControl
         var passwordButton = Ui.Button(hasPassword ? L("Изменить") : L("Сохранить…"), async () => { await HostEditor.AskPassword(XamlRoot, h.alias); Refresh(); });
         var forget = Ui.Button(L("Забыть"), () => { Platform.CredentialStore.Delete(h.alias); Refresh(); });
         forget.Visibility = hasPassword ? Visibility.Visible : Visibility.Collapsed;
-        body.Children.Add(Ui.Row("", L("Пароль"), hasPassword ? L("Сохранён в диспетчере учётных данных") : L("Не сохранён"),
+        body.Children.Add(Ui.Row("", L("Пароль"), hasPassword ? Platform.PlatformText.PasswordSaved() : L("Не сохранён"),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { passwordButton, forget } }));
 
         var osText = h.os is { } os ? RelayaCoreMethods.OsTitle(os) : L("Не определена");

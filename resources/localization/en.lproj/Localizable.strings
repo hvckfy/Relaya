@@ -1221,3 +1221,11 @@
 "Разделить вправо (⌘D)" = "Split Right (⌘D)";
 "Разделить вниз (⇧⌘D)" = "Split Down (⇧⌘D)";
 "Вход не распознан — команда не отправлена: %@" = "Login not detected — the command wasn't sent: %@";
+"Сохранён в связке ключей" = "Saved in the keyring";
+"Хранится в связке ключей (GNOME Keyring или KWallet)" = "Stored in the keyring (GNOME Keyring or KWallet)";
+"Хранится в связке ключей и вводится сам, когда сервер спросит пароль." = "Stored in the keyring and typed automatically when the server asks for it.";
+"Профиль — ваш git-репозиторий или папка (Nextcloud, Syncthing, сетевой диск) и набор хостов. Пароли серверов не синхронизируются никогда." = "A profile is your git repository or folder (Nextcloud, Syncthing, network drive) and a set of hosts. Server passwords are never synced.";
+"Нужен, чтобы передавать SSH-ключи. Одинаковый на всех устройствах. Хранится в связке ключей." = "Needed to transfer SSH keys. The same on all devices. Stored in the keyring.";
+"Папка (Nextcloud, Syncthing, сетевой диск)" = "Folder (Nextcloud, Syncthing, network drive)";
+"Путь к папке, например ~/Nextcloud/Relaya" = "Folder path, for example ~/Nextcloud/Relaya";
+"Открыть во внешнем RDP-клиенте (FreeRDP или Remmina)" = "Open in an external RDP client (FreeRDP or Remmina)";
