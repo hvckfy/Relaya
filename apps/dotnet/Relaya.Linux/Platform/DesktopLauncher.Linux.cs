@@ -61,6 +61,8 @@ internal static partial class DesktopLauncher
         var ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         var log = new StringBuilder();
         var gate = new object();
+        // xfreerdp переспрашивает несколько раз подряд: пока диалог открыт, новые вопросы не показываем (ревью 2).
+        var asking = 0;
         async Task Pump(StreamReader reader)
         {
             var buf = new char[4096];
@@ -79,7 +81,12 @@ internal static partial class DesktopLauncher
                 if (at < 0) continue;
                 var block = text[..at];
                 lock (gate) log.Clear();
-                ui.TryEnqueue(() => _ = AskCertAsync(client, block, root));
+                if (System.Threading.Interlocked.Exchange(ref asking, 1) == 1) continue;
+                ui.TryEnqueue(async () =>
+                {
+                    try { await AskCertAsync(client, block, root); }
+                    finally { System.Threading.Volatile.Write(ref asking, 0); }
+                });
             }
         }
         _ = Pump(client.StandardOutput);
@@ -89,7 +96,8 @@ internal static partial class DesktopLauncher
         {
             string tail;
             lock (gate) tail = log.ToString();
-            Trace.WriteLine("xfreerdp: " + tail);
+            // В журнал — только хвост: в полном выводе детали сертификата, адрес и имя пользователя (ревью 5).
+            Trace.WriteLine($"xfreerdp: exit {client.ExitCode}: " + Last(tail, 600));
             if (client.ExitCode == 0 || tail.Trim().Length == 0) return;
             var explained = RelayaCoreMethods.RemoteExplain(RemoteProtocol.Rdp, tail);
             ui.TryEnqueue(() => _ = Message(root, explained is { } p ? L(p.title) + "\n\n" + L(p.hint) : Last(tail, 600)));
@@ -115,7 +123,7 @@ internal static partial class DesktopLauncher
         content.Children.Add(new TextBlock
         {
             Text = details, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true,
-            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("monospace"),
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(Terminal.TerminalView.ResolvedMonospace),
         });
         var dialog = new ContentDialog
         {
@@ -123,17 +131,22 @@ internal static partial class DesktopLauncher
             PrimaryButtonText = L("Доверять"), SecondaryButtonText = L("Только сейчас"), CloseButtonText = L("Отмена"),
             DefaultButton = ContentDialogButton.Close, XamlRoot = root,
         };
-        string answer;
-        try
+        // Уже открыт другой диалог Relaya — ждём его, а не отвечаем за пользователя (ревью 2). xfreerdp ждёт ответа в stdin.
+        string? answer = null;
+        for (var attempt = 0; answer == null && attempt < 120 && !client.HasExited; attempt++)
         {
-            answer = await dialog.ShowAsync() switch
+            try
             {
-                ContentDialogResult.Primary => "Y",
-                ContentDialogResult.Secondary => "T",
-                _ => "N",
-            };
+                answer = await dialog.ShowAsync() switch
+                {
+                    ContentDialogResult.Primary => "Y",
+                    ContentDialogResult.Secondary => "T",
+                    _ => "N",
+                };
+            }
+            catch (Exception) { await Task.Delay(1000); }
         }
-        catch (Exception) { answer = "N"; } // другой диалог уже открыт — безопасный отказ
+        if (answer == null) return;
         try
         {
             if (client.HasExited) return;

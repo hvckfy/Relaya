@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
@@ -67,6 +68,11 @@ internal sealed partial class TerminalView
 
     private static readonly string[] MonoCandidates =
         { "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono", "Source Code Pro", "Hack" };
+
+    private static readonly Lazy<string> systemMonospace = new(() => ResolveFamily(DefaultFont));
+
+    /// Моноширинное семейство системы для других экранов (отпечатки, команды): алиас «monospace» Skia сам не разрешает.
+    internal static string ResolvedMonospace => systemMonospace.Value;
 
     // Моноширинное семейство для запрошенного: само, если моноширинное; иначе fc-match monospace; иначе первый кандидат.
     private static string ResolveFamily(string requested)
