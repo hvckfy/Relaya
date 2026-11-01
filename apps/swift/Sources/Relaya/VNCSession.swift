@@ -216,8 +216,14 @@ extension VNCSession: VNCConnectionDelegate {
         DispatchQueue.main.async { MainActor.assumeIsolated { self.framebufferCreated(framebuffer, connection: connection) } }
     }
 
-    // Перерисовку, размер и курсор обрабатывает сам VNCCAFramebufferView.
-    nonisolated func connection(_ connection: VNCConnection, didResizeFramebuffer framebuffer: VNCFramebuffer) {}
+    // Смена размера (ExtendedDesktopSize — TigerVNC шлёт его сразу после подключения, xrandr — посреди сессии):
+    // RoyalVNCKit создаёт НОВЫЙ framebuffer, а вид держит старый слабой ссылкой — без нового вида экран чёрный (К25).
+    nonisolated func connection(_ connection: VNCConnection, didResizeFramebuffer framebuffer: VNCFramebuffer) {
+        nonisolated(unsafe) let framebuffer = framebuffer
+        nonisolated(unsafe) let connection = connection
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.framebufferCreated(framebuffer, connection: connection) } }
+    }
+    // Перерисовку и курсор обрабатывает сам VNCCAFramebufferView.
     nonisolated func connection(_ connection: VNCConnection, didUpdateFramebuffer framebuffer: VNCFramebuffer,
                                 x: UInt16, y: UInt16, width: UInt16, height: UInt16) {}
     nonisolated func connection(_ connection: VNCConnection, didUpdateCursor cursor: VNCCursor) {}
