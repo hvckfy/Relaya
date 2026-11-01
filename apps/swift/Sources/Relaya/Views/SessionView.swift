@@ -81,9 +81,8 @@ struct SessionView: View {
                 .buttonStyle(.borderless)
                 .help(L("Открыть localhost:%@ сервера в браузере через туннель", "\(port)"))
             }
+            // Кодировка и тип терминала всегда одни — служебный текст в строке состояния не нужен (UI-M4).
             if c.ended { Text(L("отключён")).foregroundStyle(Theme.red) }
-            Text("UTF-8")
-            Text("xterm-256color")
         }
         .font(.system(size: 11, design: .monospaced))
         .foregroundStyle(Theme.tx2)
@@ -209,8 +208,10 @@ private struct SessionBanners: View {
     }
 
     private var anyVisible: Bool {
+        // Все баннеры, которые рисует body, — иначе у части из них нет отступа от терминала (UI-M4).
         controller.passwordOnly || controller.hostKeyChanged || controller.hostKeyPrompt != nil || controller.savedPasswordRejected
             || controller.passwordPromptWithoutSaved || (controller.offerKeySetup && settings.offerKeySetup)
+            || controller.sudoPrompt || controller.passwordPromptAfterLogin || (controller.secretPromptActive && model.broadcastInput)
     }
 }
 
