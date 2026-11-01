@@ -301,6 +301,18 @@ internal sealed class TileHost : UserControl, IDisposable
             Message = L("Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было."),
         };
         session.PasswordOnlySwitched += () => ui.TryEnqueue(() => passwordOnlyBar.IsOpen = true);
+        // 4.15: отсчёт до переподключения после обрыва — «Переподключить» сейчас или «Отменить».
+        var reconnectBar = new InfoBar { Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(4, 0, 4, 4) };
+        var now = new Button { Content = L("Переподключить"), Style = Pages.Ui.Style("AccentButtonStyle") };
+        var stop = new Button { Content = L("Отменить") };
+        now.Click += (_, _) => { session.Start(); view.Focus(FocusState.Programmatic); };
+        stop.Click += (_, _) => session.CancelReconnect();
+        reconnectBar.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8), Children = { now, stop } };
+        session.ReconnectCountdown += left =>
+        {
+            reconnectBar.IsOpen = left != null;
+            if (left is { } n) reconnectBar.Title = L("Переподключение через %@ с…", n.ToString());
+        };
         session.HostKeyRequested += fp => ui.TryEnqueue(async () =>
         {
             if (XamlRoot == null) { session.AnswerHostKey(false); return; }
@@ -343,7 +355,7 @@ internal sealed class TileHost : UserControl, IDisposable
         body.Children.Add(header);
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         // Баннеры — каждый в своей строке, чтобы не накладывались; терминал — в последней.
-        foreach (var bar in new FrameworkElement[] { keyChanged, passwordOnlyBar, ask, offer, login, pending })
+        foreach (var bar in new FrameworkElement[] { keyChanged, passwordOnlyBar, reconnectBar, ask, offer, login, pending })
         {
             body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(bar, body.RowDefinitions.Count - 1);

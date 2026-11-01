@@ -29,6 +29,37 @@ internal sealed class SshSession : IDisposable
     private readonly Microsoft.UI.Dispatching.DispatcherQueue ui;
     public event Action? PasswordOnlySwitched;
 
+    // 4.15, как на Mac: обрыв (ssh вышел с 255) после входа или через 10 с — переподключение через 5 с с отсчётом.
+    private bool sessionLoggedIn;
+    private DateTime startedAt;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? reconnectTimer;
+    private int reconnectLeft;
+    /// Секунд до переподключения; null — отсчёта нет.
+    public event Action<int?>? ReconnectCountdown;
+
+    public void CancelReconnect()
+    {
+        reconnectTimer?.Stop();
+        reconnectTimer = null;
+        ReconnectCountdown?.Invoke(null);
+    }
+
+    private void ScheduleReconnect()
+    {
+        CancelReconnect();
+        reconnectLeft = 5;
+        reconnectTimer = ui.CreateTimer();
+        reconnectTimer.Interval = TimeSpan.FromSeconds(1);
+        reconnectTimer.Tick += (_, _) =>
+        {
+            if (--reconnectLeft > 0) { ReconnectCountdown?.Invoke(reconnectLeft); return; }
+            CancelReconnect();
+            Start();
+        };
+        reconnectTimer.Start();
+        ReconnectCountdown?.Invoke(reconnectLeft);
+    }
+
     public bool UsesTmux => tmuxOverride ?? Relaya.Data.AppState.Host(alias)?.tmux == true;
 
     /// Е.11, как на Mac: вкладка переподключается — при включении внутри tmux, при выключении сессия на сервере закрывается.
@@ -133,6 +164,9 @@ internal sealed class SshSession : IDisposable
 
     public void Start()
     {
+        CancelReconnect();
+        sessionLoggedIn = false;
+        startedAt = DateTime.UtcNow;
         console?.Dispose();
         ended = false;
         var ssh = Relaya.Data.AppState.SshExe;
@@ -188,6 +222,7 @@ internal sealed class SshSession : IDisposable
             if (!loggedIn && view.Emulator.LoginReady())
             {
                 loggedIn = true;
+                sessionLoggedIn = true;
                 if (sawPasswordPrompt && Relaya.Data.AppState.Host(alias)?.identityFile == null
                     && Relaya.Platform.Settings.Get("terminal.offerKeySetup", "1") == "1")
                 {
@@ -263,6 +298,9 @@ internal sealed class SshSession : IDisposable
                 return;
             }
             End("\x1b[2m" + L("[сессия завершена, код %@]", code) + "\x1b[0m");
+            if (code == 255 && Relaya.Platform.Settings.Get("terminal.autoReconnect", "1") == "1"
+                && (sessionLoggedIn || DateTime.UtcNow - startedAt > TimeSpan.FromSeconds(10)))
+                ui.TryEnqueue(ScheduleReconnect);
         };
         pc.Start();
         StateChanged?.Invoke(true);
@@ -357,6 +395,7 @@ internal sealed class SshSession : IDisposable
 
     public void Dispose()
     {
+        reconnectTimer?.Stop();
         Broadcast.Unregister(this);
         lock (logLock) { log?.Dispose(); log = null; }
         console?.Dispose();

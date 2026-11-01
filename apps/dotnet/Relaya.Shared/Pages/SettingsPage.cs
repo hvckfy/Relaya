@@ -136,6 +136,9 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(preview);
         Preview();
 
+        var reconnect = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.autoReconnect", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
+        reconnect.Toggled += (_, _) => Platform.Settings.Set("terminal.autoReconnect", reconnect.IsOn ? "1" : "0");
+        list.Children.Add(Ui.Row("\uE895", L("Переподключаться после обрыва соединения"), null, reconnect));
         var highlight = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.highlight", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         highlight.Toggled += (_, _) => Platform.Settings.Set("terminal.highlight", highlight.IsOn ? "1" : "0");
         list.Children.Add(Ui.Row("\uE7E6", L("Подсветка вывода"), L("Ошибки, предупреждения, успех, IP-адреса и ссылки — цветами темы; полноэкранные программы не трогаются"), highlight));
