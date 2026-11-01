@@ -44,6 +44,9 @@ ironrdp-blocking = { version = "0.10", optional = true }
 rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
 x509-cert = { version = "0.2", optional = true, default-features = false, features = ["std"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
+
 [build-dependencies]
 cc = { version = "1", optional = true }
 
