@@ -17,6 +17,9 @@ final class TunnelManager {
 
     private(set) var tunnels: [Tunnel] = []
     private(set) var status: [Tunnel.ID: Status] = [:]
+    /// Временные туннели, которых нет в списке (порт из вывода терминала, удалённый стол через SSH) —
+    /// показываются в строке меню, пока запущены (UI-M5).
+    private(set) var transient: [Tunnel.ID: Tunnel] = [:]
     var saveError: String?
 
     @ObservationIgnored private var processes: [Tunnel.ID: Process] = [:]
@@ -85,6 +88,7 @@ final class TunnelManager {
         guard processes[tunnel.id] == nil else { return }
         lastHosts = hosts
         retryTasks.removeValue(forKey: tunnel.id)?.cancel()
+        if !tunnels.contains(where: { $0.id == tunnel.id }) { transient[tunnel.id] = tunnel }
         let host = hosts.first { $0.alias == tunnel.hostAlias }
         let usePassword = host.map { keychain.hasPassword(for: $0.keychainAccount) && !$0.usesKey } ?? false
         // Пароль из Keychain — только после Touch ID.
@@ -162,6 +166,7 @@ final class TunnelManager {
 
     private func exited(_ id: Tunnel.ID, code: Int32, stderr: String) {
         processes[id] = nil
+        transient[id] = nil
         if stopping.remove(id) != nil {
             status[id] = .stopped
             return

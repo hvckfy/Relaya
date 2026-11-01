@@ -1173,3 +1173,4 @@
 "Удалить профиль…" = "Delete Profile…";
 "Удалить профиль «%@»?" = "Delete profile “%@”?";
 "Синхронизация по нему остановится, локальная копия репозитория будет удалена. Данные на этой машине и в самом репозитории останутся." = "Syncing with it stops and the local copy of the repository is deleted. Data on this machine and in the repository stays.";
+"Временные" = "Temporary";

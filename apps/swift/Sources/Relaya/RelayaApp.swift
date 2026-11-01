@@ -124,7 +124,7 @@ struct RelayaApp: App {
         // Туннели из строки меню — без открытого окна.
         // Значок показывается, только если есть туннели. macOS пишет в эту привязку при каждом
         // обновлении сцены — запись без изменения снова будила бы @Observable и зацикливала интерфейс.
-        MenuBarExtra(isInserted: Binding(get: { model.settings.menuBarIcon && !model.tunnels.tunnels.isEmpty },
+        MenuBarExtra(isInserted: Binding(get: { model.settings.menuBarIcon && !(model.tunnels.tunnels.isEmpty && model.tunnels.transient.isEmpty) },
                                          set: { shown in
                                              let current = model.settings.menuBarIcon && !model.tunnels.tunnels.isEmpty
                                              if shown != current, !model.tunnels.tunnels.isEmpty { model.settings.menuBarIcon = shown }
@@ -170,6 +170,14 @@ struct MenuBarTunnels: View {
                     if running { model.tunnels.stop(t.id) } else { model.tunnels.start(t, hosts: model.hosts) }
                 } label: {
                     Text((running ? "● " : "○ ") + (t.name.isEmpty ? t.spec : t.name) + " — " + t.summary)
+                }
+            }
+        }
+        let temporary = model.tunnels.transient.values.sorted { $0.name < $1.name }
+        if !temporary.isEmpty {
+            Section(L("Временные")) {
+                ForEach(temporary) { t in
+                    Button("● " + t.name + " — " + t.summary + " · " + L("Остановить")) { model.tunnels.stop(t.id) }
                 }
             }
         }
