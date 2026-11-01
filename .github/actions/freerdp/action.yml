@@ -17,7 +17,9 @@ runs:
       id: cache
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
-        path: core/native/vcpkg_installed
+        # Своя папка на каждый triplet: vcpkg в режиме манифеста удаляет из install-root пакеты других
+        # triplet'ов, и на macOS сборка x86_64 стирала arm64 (без кэша — нет winpr/crt.h).
+        path: core/native/vcpkg_installed/${{ inputs.triplet }}.root
         key: freerdp-${{ inputs.triplet }}-${{ hashFiles('core/native/vcpkg.json', 'core/native/freerdp.version', 'core/native/ports/**', 'core/native/openh264/**') }}
     - name: Build FreeRDP
       if: steps.cache.outputs.cache-hit != 'true'
@@ -35,13 +37,13 @@ runs:
           git -C $env:VCPKG_INSTALLATION_ROOT checkout -q $baseline
         }
         $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT ($IsWindows ? "vcpkg.exe" : "vcpkg")
-        & $vcpkg install --x-manifest-root=core/native --x-install-root=core/native/vcpkg_installed --overlay-ports=core/native/ports --triplet ${{ inputs.triplet }}
+        & $vcpkg install --x-manifest-root=core/native --x-install-root=core/native/vcpkg_installed/${{ inputs.triplet }}.root --overlay-ports=core/native/ports --triplet ${{ inputs.triplet }}
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Export FREERDP_DIR
       id: dir
       shell: pwsh
       run: |
-        $dir = (Resolve-Path "core/native/vcpkg_installed/${{ inputs.triplet }}").Path.Replace('\','/')
+        $dir = (Resolve-Path "core/native/vcpkg_installed/${{ inputs.triplet }}.root/${{ inputs.triplet }}").Path.Replace('\','/')
         "dir=$dir" | Out-File -Append $env:GITHUB_OUTPUT
         "FREERDP_DIR=$dir" | Out-File -Append $env:GITHUB_ENV
         if ($IsWindows) { "$dir/bin" | Out-File -Append $env:GITHUB_PATH }
