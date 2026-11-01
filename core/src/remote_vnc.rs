@@ -223,7 +223,12 @@ extern "C" fn on_state(connection: Ptr, _ctx: Ptr, state: Ptr) {
     let kind = if message.is_empty() {
         RemoteCloseKind::ClosedByUser
     } else if unsafe { rvnc_connection_state_error_is_authentication_error_get(state) } {
-        RemoteCloseKind::AuthFailed
+        // Временная блокировка после неудач — не неверный пароль: сохранённый пароль не стирается (V-1).
+        if crate::ssh_errors::vnc_locked_out(&message) {
+            RemoteCloseKind::AccountProblem
+        } else {
+            RemoteCloseKind::AuthFailed
+        }
     } else if *s.connected.locked() {
         RemoteCloseKind::ServerClosed
     } else {
