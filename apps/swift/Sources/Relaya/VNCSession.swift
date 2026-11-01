@@ -180,6 +180,8 @@ final class VNCSession: NSObject {
     }
 
     fileprivate func framebufferCreated(_ framebuffer: VNCFramebuffer, connection: VNCConnection) {
+        // Поздний кадр старого подключения (после переключения «1:1» / «По окну») не подменяет вид нового.
+        guard self.connection == nil || self.connection === connection else { return }
         let view = VNCCAFramebufferView(frame: .init(origin: .zero, size: framebuffer.cgSize),
                                         framebuffer: framebuffer, connection: connection, connectionDelegate: self)
         framebufferView = view
