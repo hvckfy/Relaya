@@ -19,7 +19,7 @@ internal sealed class SyncPage : UserControl
     private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
 
     private readonly SyncService sync = SyncService.Shared;
-    private readonly StackPanel root = new() { Spacing = 4, MaxWidth = 1000, Margin = new Thickness(36, 24, 36, 36) };
+    private readonly StackPanel root = new() { Spacing = 4 };
     private readonly Dictionary<string, (TextBlock Status, ProgressRing Ring, StackPanel Conflict, Button TrustKey)> rows = new();
 
     private static readonly (SyncItem Item, string Title)[] Items =
@@ -34,7 +34,7 @@ internal sealed class SyncPage : UserControl
 
     public SyncPage()
     {
-        Content = new ScrollViewer { Content = root };
+        Content = Pages.Ui.PageScroll(root);
         // Новые предупреждения о ключах — перестроить страницу, иначе только обновить состояния профилей.
         sync.Changed += () => ui.TryEnqueue(() =>
         {

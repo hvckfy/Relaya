@@ -22,14 +22,29 @@ internal static class Ui
         foreach (var a in actions) buttons.Children.Add(a);
         Grid.SetColumn(buttons, 1);
         header.Children.Add(buttons);
-        var root = new StackPanel { MaxWidth = 1100, Margin = new Thickness(36, 24, 36, 36), Children = { header, body } };
-        // Без горизонтального переполнения: ширина — по окну (не больше 1100), прокрутка только вертикальная.
-        root.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var root = new StackPanel { Children = { header, body } };
+        return (new UserControl { Content = PageScroll(root) }, body);
+    }
+
+    /// Наибольшая ширина колонки страницы — одна на все страницы, как в Параметрах Windows.
+    public const double PageMaxWidth = 1000;
+
+    /// Прокрутка страницы: колонка прижата влево, не шире PageMaxWidth, отступ 36 epx (56 — на широком окне).
+    /// Одна раскладка для всех страниц: при переключении разделов содержимое не «прыгает» по горизонтали.
+    public static ScrollViewer PageScroll(FrameworkElement column)
+    {
+        var grid = new Grid { ColumnDefinitions = { new() { MaxWidth = PageMaxWidth }, new() { Width = GridLength.Auto } } };
+        grid.Children.Add(column);
         var scroll = new ScrollViewer
         {
-            Content = root, HorizontalScrollMode = ScrollMode.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = grid, HorizontalScrollMode = ScrollMode.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
-        return (new UserControl { Content = scroll }, body);
+        scroll.SizeChanged += (_, e) =>
+        {
+            var side = e.NewSize.Width >= PageMaxWidth + 2 * 56 ? 56 : 36;
+            grid.Padding = new Thickness(side, 24, side, 36);
+        };
+        return scroll;
     }
 
     public static TextBlock Section(string text) =>
