@@ -133,9 +133,5 @@ struct OSActionsMenu: View {
         .help(L("Команда вставится в терминал — проверьте её и нажмите Enter"))
     }
 
-    /// Под root `sudo` не нужен (и его может не быть, как на OpenWrt).
-    private func command(for action: OSAction) -> String {
-        guard user == "root" else { return action.command }
-        return action.command.replacingOccurrences(of: "sudo ", with: "")
-    }
+    private func command(for action: OSAction) -> String { commandForUser(action.command, user: user) }
 }
