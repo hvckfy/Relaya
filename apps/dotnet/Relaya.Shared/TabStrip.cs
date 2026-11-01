@@ -11,6 +11,7 @@ namespace Relaya;
 /// Вкладка полосы TabStrip: иконка, заголовок и крестик, как у TabViewItem.
 internal sealed class TabStripItem : ListViewItem
 {
+    private readonly FontIcon icon = new() { FontSize = Pages.Ui.IconMedium };
     private readonly TextBlock text = new() { TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 240, VerticalAlignment = VerticalAlignment.Center };
 
     public TabStripItem(string header, string glyph, object tag, Action<TabStripItem> close)
@@ -25,7 +26,8 @@ internal sealed class TabStripItem : ListViewItem
         var closeButton = Pages.Ui.IconButton("", L("Закрыть вкладку"), () => close(this));
         closeButton.Padding = new Thickness(4);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-        row.Children.Add(new FontIcon { Glyph = glyph, FontSize = Pages.Ui.IconMedium });
+        icon.Glyph = glyph;
+        row.Children.Add(icon);
         row.Children.Add(text);
         row.Children.Add(closeButton);
         Content = row;
@@ -46,6 +48,14 @@ internal sealed class TabStripItem : ListViewItem
             text.Text = value;
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(this, value);
         }
+    }
+
+    /// Иконка вкладки; tint — цвет хоста или null (цвет текста).
+    public void SetIcon(string glyph, Microsoft.UI.Xaml.Media.Brush? tint)
+    {
+        icon.Glyph = glyph;
+        if (tint != null) icon.Foreground = tint;
+        else icon.ClearValue(IconElement.ForegroundProperty);
     }
 
     /// Вкладка на экране: фон слоя контента, как выбранная вкладка TabView.
