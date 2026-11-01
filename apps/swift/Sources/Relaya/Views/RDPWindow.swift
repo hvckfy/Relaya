@@ -40,18 +40,9 @@ struct RDPContent: View {
     var body: some View {
         ZStack {
             CanvasHost(view: session.canvas)
-                .alert(L("Сертификат сервера"), isPresented: Binding(get: { session.trustPrompt != nil },
-                                                                   set: { _ in })) {
-                    Button(L("Доверять")) { session.answerTrust(true) }
-                    // Return — «Отмена»: доверие сертификату не должно быть действием по умолчанию (HIG, чек-лист безопасности).
-                    Button(L("Отмена"), role: .cancel) { session.answerTrust(false) }.keyboardShortcut(.defaultAction)
-                } message: {
-                    Text((session.trustPromptChanged
-                          ? L("Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):", session.desktop.summary)
-                          : L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", session.desktop.summary))
-                         + "\n\n" + (session.trustPrompt ?? ""))
-                }
             switch session.phase {
+            case _ where session.trustPrompt != nil:
+                trustCard
             case .idle, .tunneling, .connecting:
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.large)
@@ -124,6 +115,30 @@ struct RDPContent: View {
             }
         }
         .onAppear { user = session.desktop.user }
+    }
+
+    /// Вопрос о сертификате — карточкой в окне стола, а не системным alert: alert на холсте в главном окне не
+    /// появлялся на экране, но блокировал окно (пропадали боковая панель и вкладки), а без ответа подключение падало.
+    private var trustCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L("Сертификат сервера")).font(.system(size: 15, weight: .bold))
+            Text(session.trustPromptChanged
+                 ? L("Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):", session.desktop.summary)
+                 : L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", session.desktop.summary))
+                .fixedSize(horizontal: false, vertical: true)
+            Text(session.trustPrompt ?? "").font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button(L("Доверять")) { session.answerTrust(true) }.buttonStyle(.relaya)
+                // Return — «Отмена»: доверие сертификату не должно быть действием по умолчанию (HIG, чек-лист безопасности).
+                Button(L("Отмена")) { session.answerTrust(false) }
+                    .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+        .background(Theme.bg, in: .rect(cornerRadius: 16, style: .continuous))
     }
 
     private var credentialsForm: some View {
