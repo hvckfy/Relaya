@@ -151,7 +151,7 @@ pub fn host_panel_parse(output: String) -> HostPanel {
     let mut seen = std::collections::HashSet::new();
     ports.retain(|p| seen.insert(format!("{} {}", p.proto, p.address)));
     ports.sort_by_key(|p| (p.port.unwrap_or(0), p.proto.clone()));
-    services.sort_by(|a, b| (a.rank(), a.name.to_lowercase()).cmp(&(b.rank(), b.name.to_lowercase())));
+    services.sort_by_cached_key(|s| (s.rank(), s.name.to_lowercase()));
     let has_systemd = !services.is_empty();
     HostPanel { services, ports, errors, updates, has_systemd }
 }

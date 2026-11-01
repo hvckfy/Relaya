@@ -446,7 +446,8 @@ mod tests {
         assert_eq!(root("echo 'sudo rm' \"; sudo x\""), "echo 'sudo rm' \"; sudo x\"");
         assert_eq!(root("visudo -c; pseudo sudo"), "visudo -c; pseudo sudo");
         assert_eq!(root("sudo -u www ls"), "sudo -u www ls");
-        assert_eq!(root("echo \\; sudo x"), "echo \\; x");
+        // Экранированная `\;` — не разделитель команд.
+        assert_eq!(root("echo \\; sudo x"), "echo \\; sudo x");
         assert_eq!(root("sudo"), "sudo");
         assert_eq!(os_command_for_user("sudo apt update".into(), "deploy".into()), "sudo apt update");
     }
