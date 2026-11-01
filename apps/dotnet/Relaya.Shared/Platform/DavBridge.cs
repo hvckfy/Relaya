@@ -152,8 +152,6 @@ internal sealed partial class DavBridge
         // Windows: Basic не проверяем — WebClient не шлёт его по http (решение пользователя и аудита безопасности).
         if (RequiresBasic() && !RelayaCoreMethods.DavAuthorized(Header(req, "authorization"), secrets.password))
             return Response(401, "Unauthorized", new() { ["WWW-Authenticate"] = "Basic realm=\"Relaya\"" });
-        // OPTIONS ничего не раскрывает; WebClient спрашивает его у корня сервера, а не по секретному пути.
-        if (req.method == "OPTIONS") return Response(200, "OK", new() { ["Allow"] = DavAllow, ["DAV"] = "1, 2" });
         var action = RelayaCoreMethods.DavDecide(req.method, req.path, Header(req, "destination"), Header(req, "overwrite"), secrets.prefix, root);
         try
         {
@@ -161,7 +159,7 @@ internal sealed partial class DavBridge
             {
                 case DavAction.Reply r:
                     return Response(r.status, r.reason);
-                case DavAction.Options:
+                case DavAction.Options: // на любом пути (WebClient спрашивает корень сервера) — решает ядро
                     return Response(200, "OK", new() { ["Allow"] = DavAllow, ["DAV"] = "1, 2" });
                 case DavAction.Propfind p:
                     return await PropfindAsync(req, p.remote, p.junk);
