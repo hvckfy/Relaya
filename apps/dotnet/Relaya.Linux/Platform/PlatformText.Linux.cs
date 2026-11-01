@@ -13,5 +13,6 @@ internal static partial class PlatformText
     public static partial string SyncFolderOption() => L("Папка (Nextcloud, Syncthing, сетевой диск)");
     public static partial string SyncFolderPath() => L("Путь к папке, например ~/Nextcloud/Relaya");
     public static partial string ExternalRdp() => L("Открыть во внешнем RDP-клиенте (FreeRDP или Remmina)");
+    public static partial string RevealInFileManager() => L("Показать в файловом менеджере");
     public static partial string ExternalVnc() => L("Открыть во внешнем VNC-клиенте (vncviewer или Remmina)");
 }

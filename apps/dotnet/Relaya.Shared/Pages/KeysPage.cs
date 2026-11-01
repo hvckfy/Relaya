@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,6 +22,12 @@ internal sealed class KeysPage : UserControl
         var (page, body) = Ui.Scaffold(L("Ключи"), Ui.Button(L("Новый ключ"), async () => await Create(), accent: true, glyph: ""));
         Content = page;
         var configHosts = RelayaCoreMethods.ParseConfig(AppState.ConfigText());
+        // ssh-agent: какие ключи загружены (ssh-add -l). Служба выключена — пункты агента не показываем.
+        var agent = await AppState.Run(AppState.SshAddExe, new[] { "-l" }, null, null, 10);
+        var agentAvailable = agent.Status is 0 or 1; // 1 — агент работает, но ключей нет
+        var agentKeys = agent.Status == 0
+            ? agent.Stdout.Split('\n').Select(l => l.Split(' ').ElementAtOrDefault(1) ?? "").Where(f => f.StartsWith("SHA256:")).ToList()
+            : new List<string>();
         var pubs = Directory.Exists(AppState.SshDir) ? Directory.GetFiles(AppState.SshDir, "*.pub").OrderBy(p => p).ToList() : new();
         if (pubs.Count == 0) body.Children.Add(Ui.Card(Ui.Secondary(L("В ~/.ssh нет ключей. Создайте ключ ed25519 — его можно установить на хосты и входить без пароля."))));
         foreach (var pub in pubs)
@@ -40,7 +47,22 @@ internal sealed class KeysPage : UserControl
                 install.Items.Add(item);
             }
             actions.Children.Add(new DropDownButton { Content = L("Установить на хост"), Flyout = install });
-            var row = Ui.Row("", name, fingerprint, actions);
+            // «…»: Проводник, ssh-agent, удаление в Корзину (7.3, 7.6, 7.7).
+            var keyPath = Path.Combine(AppState.SshDir, name);
+            var more = new MenuFlyout();
+            void MoreItem(string text, Action act) { var i = new MenuFlyoutItem { Text = text }; i.Click += (_, _) => act(); more.Items.Add(i); }
+            MoreItem(Platform.PlatformText.RevealInFileManager(), () => Platform.Shell.Reveal(keyPath));
+            var inAgent = agentKeys.Any(f => fingerprint.Contains(f));
+            if (agentAvailable)
+                MoreItem(inAgent ? L("Убрать из агента") : L("Добавить в агент"), () => _ = ToggleAgent(keyPath, inAgent));
+            more.Items.Add(new MenuFlyoutSeparator());
+            MoreItem(L("В Корзину…"), () => _ = TrashKey(keyPath, used));
+            var moreButton = new Button { Content = new FontIcon { Glyph = "\uE712", FontSize = Ui.IconMedium }, Flyout = more };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(moreButton, L("Ещё"));
+            actions.Children.Add(moreButton);
+            var created = File.GetCreationTime(pub).ToString("d");
+            var details = fingerprint + "\n" + L("Создан %@", created) + (agentAvailable ? " · " + (inAgent ? L("в ssh-agent") : L("не в агенте")) : "");
+            var row = Ui.Row("", name, details, actions);
             if (used.Count > 0)
             {
                 // Хосты ключа с иконкой: сервер или git-сервер (как на Mac).
@@ -126,6 +148,41 @@ internal sealed class KeysPage : UserControl
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;
         var hosts = servers.Children.Concat(gits.Children).OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
         AppState.WriteConfig(RelayaCoreMethods.ConfigBindKey(AppState.ConfigText(), key, hosts));
+        await Build();
+    }
+
+    private async Task ToggleAgent(string keyPath, bool remove)
+    {
+        var r = remove
+            ? await AppState.Run(AppState.SshAddExe, new[] { "-d", keyPath }, null, null, 10)
+            : await Platform.KeyGen.AddToAgentAsync(keyPath, await AskPassphrase() ?? "") ? new AppState.Result(0, "", "") : new AppState.Result(1, "", L("Не удалось добавить ключ в агент"));
+        if (r.Status != 0) await Ui.ShowError(XamlRoot, L("ssh-agent"), r.Stderr.Trim());
+        await Build();
+    }
+
+    private async Task<string?> AskPassphrase()
+    {
+        var box = new PasswordBox { Header = L("Passphrase ключа, если есть") };
+        var d = new ContentDialog
+        {
+            Title = L("Добавить в агент"), Content = box, PrimaryButtonText = L("Добавить"), CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+        };
+        return await d.ShowAsync() == ContentDialogResult.Primary ? box.Password : null;
+    }
+
+    private async Task TrashKey(string keyPath, List<string> used)
+    {
+        var text = used.Count > 0
+            ? L("Перестанут подключаться по этому ключу: %@. Файлы можно будет восстановить из Корзины.", string.Join(", ", used))
+            : L("Ключ не указан ни у одного хоста в ~/.ssh/config. Файлы можно будет восстановить из Корзины.");
+        if (!await Ui.Confirm(XamlRoot, L("Переместить %@ в Корзину?", Path.GetFileName(keyPath)), text, L("В Корзину"))) return;
+        try
+        {
+            if (File.Exists(keyPath)) Platform.Shell.Trash(keyPath);
+            if (File.Exists(keyPath + ".pub")) Platform.Shell.Trash(keyPath + ".pub");
+        }
+        catch (Exception e) { await Ui.ShowError(XamlRoot, L("Не удалось удалить"), e.Message); }
         await Build();
     }
 

@@ -5,4 +5,10 @@ namespace Relaya.Platform;
 internal static partial class Shell
 {
     public static partial void OpenFolder(string path);
+
+    /// Показать файл в файловом менеджере (Windows — выделенным в Проводнике, Linux — папку).
+    public static partial void Reveal(string path);
+
+    /// В Корзину, а не насовсем (ключи: восстановить можно из Корзины).
+    public static partial void Trash(string path);
 }

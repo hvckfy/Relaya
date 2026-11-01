@@ -1256,3 +1256,10 @@
 "При следующем подключении Relaya снова покажет сертификат сервера" = "Relaya will show the server certificate again on the next connection";
 "Записывать сессию в файл (Ctrl+Shift+L)" = "Record the session to a file (Ctrl+Shift+L)";
 "Сессия записывается в файл: %@" = "The session is being recorded to: %@";
+"Ещё" = "More";
+"Не удалось добавить ключ в агент" = "Couldn’t add the key to the agent";
+"Показать в Проводнике" = "Show in File Explorer";
+"Показать в файловом менеджере" = "Show in File Manager";
+"Создан %@" = "Created %@";
+"в ssh-agent" = "in ssh-agent";
+"не в агенте" = "not in the agent";

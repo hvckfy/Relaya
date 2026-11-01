@@ -12,4 +12,16 @@ internal static partial class Shell
         try { Process.Start(info); }
         catch (System.Exception e) { Trace.WriteLine($"Shell.OpenFolder: {e.Message}"); }
     }
+
+    public static partial void Reveal(string path)
+    {
+        var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+        info.ArgumentList.Add("/select," + path);
+        try { Process.Start(info); }
+        catch (System.Exception e) { Trace.WriteLine($"Shell.Reveal: {e.Message}"); }
+    }
+
+    public static partial void Trash(string path) =>
+        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,
+            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
 }

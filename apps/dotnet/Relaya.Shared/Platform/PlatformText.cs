@@ -21,6 +21,7 @@ internal static partial class PlatformText
     public static partial string SyncFolderPath();
     /// Удалённые столы: открыть во внешнем RDP-клиенте.
     public static partial string ExternalRdp();
+    public static partial string RevealInFileManager();
     /// Удалённые столы: открыть во внешнем VNC-клиенте.
     public static partial string ExternalVnc();
 }
