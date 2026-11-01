@@ -59,7 +59,6 @@ struct relaya_rdp
 	CliprdrClientContext* cliprdr;
 	char* local_text;
 	int cert_rejected;
-	int no_nla;                  /* повтор без NLA после «нет учётных данных» */
 	int closed;
 	uint16_t last_x, last_y;
 };
@@ -524,8 +523,9 @@ static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 	ok &= freerdp_settings_set_string(s, FreeRDP_Password, r->password);
 	/* Пустой пароль: NLA без учётных данных не пройдёт (LimitBlankPasswordUse), вход — на экране сервера, как у mstsc.
 	   Остаётся только TLS: у него есть сертификат, и verify_cert (TOFU) спрашивается; старая RDP Security без
-	   сертификата выключена, чтобы подмену сервера нельзя было пропустить молча. */
-	if (r->no_nla || !r->password || !r->password[0])
+	   сертификата выключена, чтобы подмену сервера нельзя было пропустить молча. Непустой пароль всегда идёт через NLA:
+	   автоповтора без NLA нет — иначе пароль ушёл бы серверу в обход CredSSP (решение аудита безопасности). */
+	if (!r->password || !r->password[0])
 	{
 		ok &= freerdp_settings_set_bool(s, FreeRDP_NlaSecurity, FALSE);
 		ok &= freerdp_settings_set_bool(s, FreeRDP_TlsSecurity, TRUE);
@@ -710,16 +710,13 @@ static void run_commands(relaya_rdp* r, freerdp* instance)
 	}
 }
 
-/* NLA не дошёл до входа из-за отсутствия учётных данных — один повтор без NLA (сервер покажет свой вход).
-   Неверный пароль сюда не попадает: с ним повтор без NLA отправил бы пароль в обход CredSSP. */
-static BOOL retry_without_nla(relaya_rdp* r, UINT32 error)
+void relaya_rdp_run(relaya_rdp* r)
 {
-	return !r->no_nla && !r->cert_rejected && error == FREERDP_ERROR_CONNECT_NO_OR_MISSING_CREDENTIALS;
-}
-
-/* Одна попытка. Вернуть TRUE — нужен повтор без NLA (on_closed ещё не вызван). */
-static BOOL run_once(relaya_rdp* r)
-{
+	if (!previous_provider)
+	{
+		previous_provider = freerdp_get_current_addin_provider();
+		(void)freerdp_register_addin_provider(relaya_addin_provider, 0);
+	}
 	RDP_CLIENT_ENTRY_POINTS ep = { 0 };
 	ep.Version = RDP_CLIENT_INTERFACE_VERSION;
 	ep.Size = sizeof(RDP_CLIENT_ENTRY_POINTS_V1);
@@ -732,7 +729,7 @@ static BOOL run_once(relaya_rdp* r)
 	if (!context)
 	{
 		close_once(r, RELAYA_CLOSE_PROTOCOL, "freerdp_client_context_new failed");
-		return FALSE;
+		return;
 	}
 	((relaya_context*)context)->owner = r;
 	r->context = context;
@@ -741,21 +738,16 @@ static BOOL run_once(relaya_rdp* r)
 	{
 		close_once(r, RELAYA_CLOSE_PROTOCOL, "settings");
 		freerdp_client_context_free(context);
-		return FALSE;
+		return;
 	}
-	BOOL retry = FALSE;
 
 	if (!freerdp_connect(instance))
 	{
 		UINT32 e = freerdp_get_last_error(context);
-		retry = retry_without_nla(r, e);
-		if (!retry)
-		{
-			char msg[512];
-			_snprintf(msg, sizeof(msg), "%s: %s", freerdp_get_last_error_name(e), freerdp_get_last_error_string(e));
-			msg[sizeof(msg) - 1] = 0; /* _snprintf не ставит '\0' при усечении */
-			close_once(r, close_kind(e, r->cert_rejected), msg);
-		}
+		char msg[512];
+		_snprintf(msg, sizeof(msg), "%s: %s", freerdp_get_last_error_name(e), freerdp_get_last_error_string(e));
+		msg[sizeof(msg) - 1] = 0; /* _snprintf не ставит '\0' при усечении */
+		close_once(r, close_kind(e, r->cert_rejected), msg);
 	}
 	else
 	{
@@ -782,21 +774,6 @@ static BOOL run_once(relaya_rdp* r)
 	freerdp_client_stop(context);
 	r->context = NULL;
 	freerdp_client_context_free(context);
-	return retry;
-}
-
-void relaya_rdp_run(relaya_rdp* r)
-{
-	if (!previous_provider)
-	{
-		previous_provider = freerdp_get_current_addin_provider();
-		(void)freerdp_register_addin_provider(relaya_addin_provider, 0);
-	}
-	if (run_once(r))
-	{
-		r->no_nla = 1;
-		(void)run_once(r);
-	}
 }
 
 void relaya_rdp_free(relaya_rdp* r)
