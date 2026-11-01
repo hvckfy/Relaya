@@ -51,7 +51,14 @@ internal static class TrayIcon
     public static void Refresh() =>
         item?.SetStatus(Enabled && (Data.AppState.Tunnels.Count > 0 || TunnelManager.Shared.Temporary.Count > 0) ? "Active" : "Passive");
 
-    internal static void ShowWindow() => MainWindow.Current?.Activate();
+    public static bool Visible => item?.Status == "Active";
+
+    internal static void ShowWindow()
+    {
+        if (MainWindow.Current is not { } w) return;
+        w.AppWindow.Show();
+        w.Activate();
+    }
 }
 
 [DBusInterface("org.kde.StatusNotifierWatcher")]
@@ -94,6 +101,8 @@ internal sealed class StatusNotifierItem(DispatcherQueue ui) : IStatusNotifierIt
 
     private readonly object gate = new();
     private string status = "Passive";
+
+    public string Status { get { lock (gate) return status; } }
     private Action<string>? newStatus;
 
     public void SetStatus(string value)

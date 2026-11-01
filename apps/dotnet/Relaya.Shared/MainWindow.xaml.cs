@@ -18,6 +18,9 @@ public sealed partial class MainWindow : Window
 
     public static MainWindow? Current { get; private set; }
 
+    /// true — окно спрятано в трей вместо закрытия; реализация своя у каждой платформы.
+    private partial bool HideToTray();
+
     /// Handle окна, снятый в UI-потоке: им пользуются фоновые потоки (Windows Hello для askpass).
     public static IntPtr Hwnd { get; private set; }
 
@@ -80,6 +83,8 @@ public sealed partial class MainWindow : Window
         Platform.ConsentGrace.WatchSessionLock();
         Platform.SyncService.Shared.ScheduleAuto();
         Platform.TunnelManager.Shared.StartAuto();
+        // Пока работают туннели и есть значок в трее, закрытие прячет окно (8.6, как на Mac).
+        AppWindow.Closing += (_, a) => { if (HideToTray()) a.Cancel = true; };
         Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
         // Свёрнутые группы запоминаются, как на Mac.
         Nav.Expanding += (_, a) => { if (a.ExpandingItemContainer?.Tag is string t && t.StartsWith("group:")) Platform.Settings.Set(t.Replace("group:", "group."), "1"); };
