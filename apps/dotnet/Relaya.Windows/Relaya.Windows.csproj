@@ -15,7 +15,6 @@
     <Nullable>enable</Nullable>
     <ApplicationIcon>Assets\Relaya.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- Сгенерированные UniFFI-привязки не проходят наши предупреждения. -->
     <!-- Свой Main (Program.cs): askpass- и MCP-режимы без окна. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
