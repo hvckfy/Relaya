@@ -296,12 +296,51 @@ public sealed partial class MainWindow : Window
     /// Страница слева-справа (карточка хоста, ключи…): снимает выбор вкладки.
     public void ShowPage(UIElement page)
     {
+        gridMode = false;
         Tabs.SelectedItem = null;
         Show(page);
     }
 
+    // Е.12, как на Mac: «Сетка: все терминалы сразу» — все вкладки терминалов плитками одной сеткой (Ctrl+Shift+G).
+    private bool gridMode;
+
+    internal void ToggleGrid()
+    {
+        gridMode = !gridMode;
+        Show((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t ? t.Content : null);
+    }
+
+    private bool ShowGrid()
+    {
+        TabHost.RowDefinitions.Clear();
+        TabHost.ColumnDefinitions.Clear();
+        var terminals = TabHost.Children.OfType<Terminal.TileHost>().Cast<FrameworkElement>().ToList();
+        if (!gridMode || terminals.Count == 0)
+        {
+            foreach (var c in TabHost.Children.OfType<FrameworkElement>()) { Grid.SetRow(c, 0); Grid.SetColumn(c, 0); }
+            return false;
+        }
+        var cols = (int)Math.Ceiling(Math.Sqrt(terminals.Count));
+        var rows = (terminals.Count + cols - 1) / cols;
+        for (var i = 0; i < cols; i++) TabHost.ColumnDefinitions.Add(new ColumnDefinition());
+        for (var i = 0; i < rows; i++) TabHost.RowDefinitions.Add(new RowDefinition());
+        foreach (var c in TabHost.Children) c.Visibility = Visibility.Collapsed;
+        for (var i = 0; i < terminals.Count; i++)
+        {
+            Grid.SetRow(terminals[i], i / cols);
+            Grid.SetColumn(terminals[i], i % cols);
+            terminals[i].Visibility = Visibility.Visible;
+        }
+        Page.Content = null;
+        Page.Visibility = Visibility.Collapsed;
+        Empty.Visibility = Visibility.Collapsed;
+        ApplyBackground();
+        return true;
+    }
+
     private void Show(UIElement? page)
     {
+        if (ShowGrid()) return;
         // Вкладки не вынимаются из дерева (иначе Win2D теряет Canvas) — показывается одна, остальные свёрнуты.
         var tab = page != null && TabHost.Children.Contains(page);
         foreach (var c in TabHost.Children) c.Visibility = c == page ? Visibility.Visible : Visibility.Collapsed;
@@ -378,6 +417,10 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(tmux);
         menu.Items.Add(keep);
         menu.Items.Add(new MenuFlyoutSeparator());
+        var grid = new ToggleMenuFlyoutItem { Text = L("Сетка: все терминалы сразу"), KeyboardAcceleratorTextOverride = "Ctrl+Shift+G" };
+        grid.Click += (_, _) => ToggleGrid();
+        menu.Opening += (_, _) => grid.IsChecked = gridMode;
+        menu.Items.Add(grid);
         var save = new MenuFlyoutItem { Text = L("Сохранить раскладку…") };
         save.Click += async (_, _) => await SaveLayout(tiles);
         menu.Items.Add(save);
@@ -486,6 +529,7 @@ public sealed partial class MainWindow : Window
         if (tab.Tag is Tab t) { t.Owner?.Dispose(); TabHost.Children.Remove(t.Content); }
         Tabs.TabItems.Remove(tab);
         if (Tabs.TabItems.Count == 0) Show(null);
+        else if (gridMode) ShowGrid();
     }
 
     // Ctrl+T — новая вкладка к хосту из поиска, Ctrl+W — закрыть, Ctrl+Tab — следующая.
@@ -535,6 +579,7 @@ public sealed partial class MainWindow : Window
         Add(Windows.System.VirtualKey.F2, none, () => { if (CurrentHost() is { } h) _ = Pages.HostEditor.Show(Content.XamlRoot, h, false); });
         Add(Windows.System.VirtualKey.F5, none, AppState.LoadHosts);
         Add(Windows.System.VirtualKey.T, cs, () => { if (CurrentHost() is { } h) OpenSession(h.alias); });
+        Add(Windows.System.VirtualKey.G, cs, ToggleGrid);
         Add(Windows.System.VirtualKey.O, cs, () => { if (CurrentHost() is { } h) OpenSftp(h.alias); });
         Add(Windows.System.VirtualKey.R, cs, () =>
         {

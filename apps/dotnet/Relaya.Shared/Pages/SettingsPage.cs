@@ -200,6 +200,7 @@ internal sealed class SettingsPage : UserControl
             ("Ctrl+Shift+N, F2, F5", L("Новый хост, изменить хост, перечитать ~/.ssh/config")),
             ("Ctrl+Shift+T, Ctrl+Shift+O", L("Новая вкладка к хосту, файлы хоста")),
             ("Ctrl+Shift+R, Ctrl+Alt+1…9", L("Переподключить, вкладка по номеру")),
+            ("Ctrl+Shift+G", L("Сетка: все терминалы сразу")),
         })
             list.Children.Add(Ui.Row(null, k, d));
         return page;
