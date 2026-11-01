@@ -1175,7 +1175,7 @@ mod tests {
         assert_eq!(call(&s, "run_command", json!({"host": "web", "command": "uptime"}))["isError"], false);
         assert_eq!(f.ran.lock().unwrap().as_slice(), ["uptime"]);
 
-        let c = McpPolicy {
+        let mut c = McpPolicy {
             allow: Some(HashMap::from([("web".into(), vec!["systemctl restart *".into()])])),
             deny: Some(HashMap::from([("*".into(), vec!["rm -rf *".into()])])),
             ..Default::default()
