@@ -143,7 +143,7 @@ internal sealed class SettingsPage : UserControl
             {
                 Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false,
                 Title = L("Блокировка экрана не сбрасывает подтверждение"),
-                Message = L("Нет gdbus (пакет libglib2.0-bin) — окно доверия закроется только по истечении срока."),
+                Message = L("Нет gdbus — установите его в «Компонентах». Пока окно доверия закроется только по истечении срока."),
             });
         var offerKey = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.offerKeySetup", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         offerKey.Toggled += (_, _) => Platform.Settings.Set("terminal.offerKeySetup", offerKey.IsOn ? "1" : "0");
