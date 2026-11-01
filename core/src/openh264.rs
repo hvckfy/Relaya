@@ -37,45 +37,42 @@ pub struct OpenH264Info {
     pub notice: String,
 }
 
-/// (платформа, файл у Cisco, sha256 архива, sha256 библиотеки).
-const PINS: &[(CodecPlatform, &str, &str, &str)] = &[
-    (
-        CodecPlatform::LinuxX64,
-        "libopenh264-2.6.0-linux64.8.so",
-        "27ab53323c110b76214c1c72222f459d17febbcd1e252136cadc292b0308d75b",
-        "2f0cde7c6a6abcf5cae76942894ea42897fa677bce4ed6c91a24dd1b041d5f04",
-    ),
-    (
-        CodecPlatform::LinuxArm64,
-        "libopenh264-2.6.0-linux-arm64.8.so",
-        "a78aea7970150f46bcd3bb7994c9e6dd90bd7a9ea785920f5a73f6964e3fcda7",
-        "12e7b33623667cdab0e575170c147b1b36eadb77d0d2aa7ceb5afd3e58902140",
-    ),
-    (
-        CodecPlatform::MacArm64,
-        "libopenh264-2.6.0-mac-arm64.dylib",
-        "6db362ee5abdab572311aeadb96d3f44b0617d9a4a4b9f4db4cb5ac4d968da71",
-        "052e98bfcf7a9167d22f3bbb3f5988ef79065591f36af8b52924b22b13624551",
-    ),
-    (
-        CodecPlatform::MacX64,
-        "libopenh264-2.6.0-mac-x64.dylib",
-        "38b2ed6d1d45b6a3e408c734173f2d67ab44a10d0e154ff3489b89877cd60e7e",
-        "e3dc8bc01fe69363f61fd3c02fd27798537a585eadd38cd808f303d1ee505a19",
-    ),
-    (
-        CodecPlatform::WindowsX64,
-        "openh264-2.6.0-win64.dll",
-        "dab5f2a872777f9a58b69bfa9fbcf20d9f82f2d6ec91383fd70bff49bd34ac9f",
-        "2076cb5675ec6c1a4c70e7a2a322552f547b6eeed649d6dfcd9e02a543b24691",
-    ),
-    (
-        CodecPlatform::WindowsArm64,
-        "openh264-2.6.0-win-arm64.dll",
-        "6b57d3ecd06bd80b5f3ee1abbb31d48798ca6d89ef1bc98cf2e6d1ebddf5cf45",
-        "fb75103938f4f47d119b983e06334df41a803bc72fb5c46e3623f6fea5782732",
-    ),
-];
+/// Закреплённые (файл у Cisco, sha256 архива, sha256 библиотеки). match — компилятор проверит, что закреплена каждая
+/// платформа.
+fn pin(platform: CodecPlatform) -> (&'static str, &'static str, &'static str) {
+    match platform {
+        CodecPlatform::LinuxX64 => (
+            "libopenh264-2.6.0-linux64.8.so",
+            "27ab53323c110b76214c1c72222f459d17febbcd1e252136cadc292b0308d75b",
+            "2f0cde7c6a6abcf5cae76942894ea42897fa677bce4ed6c91a24dd1b041d5f04",
+        ),
+        CodecPlatform::LinuxArm64 => (
+            "libopenh264-2.6.0-linux-arm64.8.so",
+            "a78aea7970150f46bcd3bb7994c9e6dd90bd7a9ea785920f5a73f6964e3fcda7",
+            "12e7b33623667cdab0e575170c147b1b36eadb77d0d2aa7ceb5afd3e58902140",
+        ),
+        CodecPlatform::MacArm64 => (
+            "libopenh264-2.6.0-mac-arm64.dylib",
+            "6db362ee5abdab572311aeadb96d3f44b0617d9a4a4b9f4db4cb5ac4d968da71",
+            "052e98bfcf7a9167d22f3bbb3f5988ef79065591f36af8b52924b22b13624551",
+        ),
+        CodecPlatform::MacX64 => (
+            "libopenh264-2.6.0-mac-x64.dylib",
+            "38b2ed6d1d45b6a3e408c734173f2d67ab44a10d0e154ff3489b89877cd60e7e",
+            "e3dc8bc01fe69363f61fd3c02fd27798537a585eadd38cd808f303d1ee505a19",
+        ),
+        CodecPlatform::WindowsX64 => (
+            "openh264-2.6.0-win64.dll",
+            "dab5f2a872777f9a58b69bfa9fbcf20d9f82f2d6ec91383fd70bff49bd34ac9f",
+            "2076cb5675ec6c1a4c70e7a2a322552f547b6eeed649d6dfcd9e02a543b24691",
+        ),
+        CodecPlatform::WindowsArm64 => (
+            "openh264-2.6.0-win-arm64.dll",
+            "6b57d3ecd06bd80b5f3ee1abbb31d48798ca6d89ef1bc98cf2e6d1ebddf5cf45",
+            "fb75103938f4f47d119b983e06334df41a803bc72fb5c46e3623f6fea5782732",
+        ),
+    }
+}
 
 /// Платформа, на которой работает ядро; None — для неё у Cisco нет бинаря.
 #[uniffi::export]
@@ -94,7 +91,7 @@ pub fn openh264_current_platform() -> Option<CodecPlatform> {
 /// Что скачивать для платформы: закреплённые версия, адрес и хеши.
 #[uniffi::export]
 pub fn openh264_info(platform: CodecPlatform) -> OpenH264Info {
-    let (_, file, archive, lib) = PINS.iter().find(|p| p.0 == platform).copied().expect("every platform is pinned");
+    let (file, archive, lib) = pin(platform);
     OpenH264Info {
         version: VERSION.into(),
         url: format!("https://ciscobinary.openh264.org/{file}.bz2"),

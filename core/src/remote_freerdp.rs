@@ -23,6 +23,7 @@ struct Config {
     gateway_password: *const c_char,
     gateway_domain: *const c_char,
     audio: c_int,
+    h264: c_int,
 }
 
 #[repr(C)]
@@ -203,18 +204,35 @@ fn ptr(s: &Option<CString>) -> *const c_char {
     s.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null())
 }
 
+/// Включать ли H.264 в этом подключении. Windows — Media Foundation, всегда. macOS и Linux — OpenH264 от Cisco (9.12):
+/// только проверенная копия в приватном каталоге; FreeRDP берёт её путь из RELAYA_OPENH264_LIBRARY (патч overlay-порта).
+/// Копия и переменная — одна на процесс: выставляется при первом подключении с H.264 и больше не меняется, так что
+/// параллельные подключения не затирают её друг другу. Подключение без H.264 выключает кодек настройкой FreeRDP
+/// (GfxH264), не окружением. Остаток: первая установка переменной может совпасть с чтением окружения в другом потоке
+/// FreeRDP — однократно за процесс, принято.
+fn h264_enabled(library: Option<&str>) -> bool {
+    if cfg!(windows) {
+        return true;
+    }
+    static COPY: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+    let Some(library) = library.filter(|p| !p.is_empty()) else { return false };
+    let mut copy = COPY.locked();
+    if copy.is_none() {
+        // Не прошла проверку — без H.264, не ошибка.
+        let Some(path) = crate::openh264::checked_copy(library) else { return false };
+        std::env::set_var("RELAYA_OPENH264_LIBRARY", &path);
+        *copy = Some(path);
+    }
+    true
+}
+
 /// Запустить сессию FreeRDP в своём потоке. Повторный вызов ничего не делает.
 pub(crate) fn connect(session: Arc<RemoteSession>) {
     if session.native.locked().is_some() {
         return;
     }
     let c = session.config().clone();
-    // 9.12: OpenH264 от Cisco (macOS, Linux) — только проверенная копия в приватном каталоге, хеш сразу перед загрузкой;
-    // FreeRDP берёт путь из RELAYA_OPENH264_LIBRARY (патч overlay-порта). Не прошла проверку — без H.264, не ошибка.
-    match c.h264_library_path.as_deref().filter(|p| !p.is_empty()).and_then(crate::openh264::checked_copy) {
-        Some(copy) => std::env::set_var("RELAYA_OPENH264_LIBRARY", copy),
-        None => std::env::remove_var("RELAYA_OPENH264_LIBRARY"),
-    }
+    let h264 = h264_enabled(c.h264_library_path.as_deref());
     let (host, user, password) = (cstr(&c.host), cstr(&c.user), cstr(&c.password));
     let (domain, gw_host, gw_user, gw_password, gw_domain) =
         (opt(&c.domain), opt(&c.gateway_host), opt(&c.gateway_user), opt(&c.gateway_password), opt(&c.gateway_domain));
@@ -232,6 +250,7 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
         gateway_password: ptr(&gw_password),
         gateway_domain: ptr(&gw_domain),
         audio: session.audio_listener().is_some().into(),
+        h264: h264.into(),
     };
     let ctx = Box::into_raw(Box::new(Ctx {
         session: session.clone(),
@@ -266,23 +285,28 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
     }
     *session.native.locked() = Some(Native(raw));
     let (ctx_addr, raw_addr) = (ctx as usize, raw as usize);
-    std::thread::Builder::new()
-        .name("relaya-freerdp".into())
-        .spawn(move || {
-            unsafe { relaya_rdp_run(raw_addr as *mut RawRdp) };
-            let ctx = unsafe { Box::from_raw(ctx_addr as *mut Ctx) };
-            let close = ctx
-                .closed
-                .lock()
-                .unwrap()
-                .take()
-                .unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
-            // Сначала убрать указатель, чтобы команды после закрытия не ушли в освобождённую сессию.
-            let native = ctx.session.native.locked().take();
-            if let Some(Native(p)) = native {
-                unsafe { relaya_rdp_free(p) }
-            }
-            ctx.session.listener().on_closed(close);
-        })
-        .ok();
+    let spawned = std::thread::Builder::new().name("relaya-freerdp".into()).spawn(move || {
+        unsafe { relaya_rdp_run(raw_addr as *mut RawRdp) };
+        let ctx = unsafe { Box::from_raw(ctx_addr as *mut Ctx) };
+        let close = ctx
+            .closed
+            .locked()
+            .take()
+            .unwrap_or(RemoteClose { kind: RemoteCloseKind::ClosedByUser, message: String::new() });
+        // Сначала убрать указатель, чтобы команды после закрытия не ушли в освобождённую сессию.
+        let native = ctx.session.native.locked().take();
+        if let Some(Native(p)) = native {
+            unsafe { relaya_rdp_free(p) }
+        }
+        ctx.session.listener().on_closed(close);
+    });
+    if let Err(e) = spawned {
+        // Поток не создан: освободить сессию и контекст, иначе клиент навсегда останется в «Подключение…».
+        let native = session.native.locked().take();
+        if let Some(Native(p)) = native {
+            unsafe { relaya_rdp_free(p) }
+        }
+        drop(unsafe { Box::from_raw(ctx_addr as *mut Ctx) });
+        session.listener().on_closed(RemoteClose { kind: RemoteCloseKind::Protocol, message: e.to_string() });
+    }
 }

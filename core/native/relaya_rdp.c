@@ -524,8 +524,8 @@ static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 	if (r->cfg.scale_percent > 100)
 		ok &= freerdp_settings_set_uint32(s, FreeRDP_DesktopScaleFactor, r->cfg.scale_percent);
 	ok &= freerdp_settings_set_bool(s, FreeRDP_SupportGraphicsPipeline, TRUE);
-	ok &= freerdp_settings_set_bool(s, FreeRDP_GfxH264, TRUE);
-	ok &= freerdp_settings_set_bool(s, FreeRDP_GfxAVC444, TRUE);
+	ok &= freerdp_settings_set_bool(s, FreeRDP_GfxH264, r->cfg.h264 ? TRUE : FALSE);
+	ok &= freerdp_settings_set_bool(s, FreeRDP_GfxAVC444, r->cfg.h264 ? TRUE : FALSE);
 	ok &= freerdp_settings_set_bool(s, FreeRDP_RemoteFxCodec, TRUE);
 	ok &= freerdp_settings_set_bool(s, FreeRDP_SupportDisplayControl, TRUE);
 	ok &= freerdp_settings_set_bool(s, FreeRDP_DynamicResolutionUpdate, TRUE);
