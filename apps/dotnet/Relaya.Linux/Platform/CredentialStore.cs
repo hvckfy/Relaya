@@ -31,22 +31,16 @@ internal static class CredentialStore
 
     public static bool Has(string account) => Read(account) != null;
 
-    /// Есть ли служба Secret Service (для «Компонентов»): пробный поиск без ошибки D-Bus.
-    /// false и при отсутствии libsecret.
+    /// Есть ли служба Secret Service (для «Компонентов»): только подключение к службе, без обращения к секретам —
+    /// запертая связка ключей не просит пароль при каждом запуске. false и при отсутствии libsecret.
     public static bool ServiceAvailable()
     {
         try
         {
-            var attrs = Attributes("relaya-probe");
-            try
-            {
-                var p = secret_password_lookupv_sync(schema.Value, attrs, IntPtr.Zero, out var error);
-                if (p != IntPtr.Zero) secret_password_free(p);
-                if (error == IntPtr.Zero) return true;
-                Drop(error);
-                return false;
-            }
-            finally { g_hash_table_unref(attrs); }
+            var service = secret_service_get_sync(0 /* SECRET_SERVICE_NONE */, IntPtr.Zero, out var error);
+            if (service != IntPtr.Zero) g_object_unref(service);
+            Drop(error);
+            return service != IntPtr.Zero;
         }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; }
     }
@@ -129,6 +123,8 @@ internal static class CredentialStore
         [MarshalAs(UnmanagedType.LPUTF8Str)] string password, IntPtr cancellable, out IntPtr error);
     [DllImport(Secret)] private static extern bool secret_password_clearv_sync(IntPtr schema, IntPtr attributes, IntPtr cancellable, out IntPtr error);
     [DllImport(Secret)] private static extern void secret_password_free(IntPtr password);
+    [DllImport(Secret)] private static extern IntPtr secret_service_get_sync(int flags, IntPtr cancellable, out IntPtr error);
+    [DllImport("libgobject-2.0.so.0")] private static extern void g_object_unref(IntPtr obj);
     [DllImport(Glib)] private static extern IntPtr g_hash_table_new_full(IntPtr hash, IntPtr equal, IntPtr keyFree, IntPtr valueFree);
     [DllImport(Glib)] private static extern bool g_hash_table_insert(IntPtr table, IntPtr key, IntPtr value);
     [DllImport(Glib)] private static extern void g_hash_table_unref(IntPtr table);
