@@ -507,7 +507,7 @@ mod tests {
             fn on_connected(&self, _: u16, _: u16) {}
             fn on_frame(&self, _: Vec<FrameRect>) {}
             fn on_resize(&self, _: u16, _: u16) {}
-            fn on_cert(&self, _: String, _: String) {}
+            fn on_cert(&self, _: String, _: String, _: crate::remote::CertNode) {}
             fn on_closed(&self, c: RemoteClose) {
                 *self.0.locked() = Some(c);
             }

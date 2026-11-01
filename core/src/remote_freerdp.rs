@@ -34,7 +34,7 @@ struct Callbacks {
     on_rect: extern "C" fn(*mut c_void, *const u8, usize, u32, u32, u32, u32, u32),
     on_frame_end: extern "C" fn(*mut c_void),
     on_resize: extern "C" fn(*mut c_void, u32, u32),
-    on_cert: extern "C" fn(*mut c_void, *const c_char, *const c_char) -> c_int,
+    on_cert: extern "C" fn(*mut c_void, *const c_char, *const c_char, *const c_char, u16, c_int) -> c_int,
     on_clipboard: Option<extern "C" fn(*mut c_void, *const c_char)>,
     on_audio: extern "C" fn(*mut c_void, u32, u16, u16, u32, *const u8, usize),
     on_audio_volume: extern "C" fn(*mut c_void, u16, u16),
@@ -151,8 +151,17 @@ extern "C" fn on_resize(user: *mut c_void, w: u32, h: u32) {
     ctx(user).session.listener().on_resize(w.min(u16::MAX as u32) as u16, h.min(u16::MAX as u32) as u16);
 }
 
-extern "C" fn on_cert(user: *mut c_void, sha256: *const c_char, subject: *const c_char) -> c_int {
-    ctx(user).session.ask_cert(text(sha256), text(subject)).into()
+extern "C" fn on_cert(
+    user: *mut c_void,
+    sha256: *const c_char,
+    subject: *const c_char,
+    host: *const c_char,
+    port: u16,
+    gateway: c_int,
+) -> c_int {
+    let session = &ctx(user).session;
+    let node = session.cert_node(&text(host), port, gateway != 0);
+    session.ask_cert(text(sha256), text(subject), node).into()
 }
 
 extern "C" fn on_clipboard(user: *mut c_void, utf8: *const c_char) {

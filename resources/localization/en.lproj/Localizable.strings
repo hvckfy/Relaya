@@ -1389,3 +1389,6 @@
 "Светлая и тёмная схема меняются вместе с оформлением" = "Light and dark schemes switch with the appearance";
 "Разместить рядом" = "Place beside";
 "Перетащить в плитки другой вкладки" = "Drag into another tab's tiles";
+"Шлюз RD Gateway %@" = "RD Gateway %@";
+"Перенаправленный сервер %@ — сюда перенаправил брокер; неожиданный адрес — повод насторожиться" = "Redirected server %@ — the broker sent you here; an unexpected address is a reason for caution";
+"Сервер %@" = "Server %@";

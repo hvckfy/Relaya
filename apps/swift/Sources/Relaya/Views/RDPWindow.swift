@@ -127,9 +127,11 @@ struct RDPContent: View {
     private var trustCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L("Сертификат сервера")).font(.system(size: 15, weight: .bold))
+            // R-4: вопрос называет узел — шлюз, сервер или сервер, куда перенаправил брокер.
+            Text(trustNodeTitle).bold()
             Text(session.trustPromptChanged
-                 ? L("Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):", session.desktop.summary)
-                 : L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", session.desktop.summary))
+                 ? L("Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):", trustNodeAddress)
+                 : L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", trustNodeAddress))
                 .fixedSize(horizontal: false, vertical: true)
             Text(session.trustPrompt ?? "").font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -144,6 +146,19 @@ struct RDPContent: View {
         .padding(20)
         .frame(width: 440)
         .background(Theme.bg, in: .rect(cornerRadius: 16, style: .continuous))
+    }
+
+    private var trustNodeAddress: String {
+        guard let n = session.trustNode, n.role != .target else { return session.desktop.summary }
+        return "\(n.host):\(n.port)"
+    }
+
+    private var trustNodeTitle: String {
+        switch session.trustNode?.role {
+        case .gateway?: L("Шлюз RD Gateway %@", trustNodeAddress)
+        case .redirect?: L("Перенаправленный сервер %@ — сюда перенаправил брокер; неожиданный адрес — повод насторожиться", trustNodeAddress)
+        default: L("Сервер %@", trustNodeAddress)
+        }
     }
 
     private var credentialsForm: some View {
