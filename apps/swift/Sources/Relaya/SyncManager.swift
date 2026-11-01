@@ -66,6 +66,13 @@ final class SyncManager {
         try? FileManager.default.removeItem(at: repoDirectory(id))
     }
 
+    /// В репозитории (git) или папке iCloud профиля есть зашифрованные ключи `keys/` — с этой или другой машины.
+    func remoteHasKeys(_ p: Sync.Profile) -> Bool {
+        let dir = (p.backend == .git ? repoDirectory(p.id) : FolderSync.folder(for: p)).appending(path: "keys")
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return files.contains { !$0.hasPrefix(".") }
+    }
+
     private func repoDirectory(_ id: Sync.Profile.ID) -> URL {
         RelayaPaths.supportDirectory.appending(path: "sync").appending(path: id.uuidString)
     }
