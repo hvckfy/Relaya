@@ -87,16 +87,17 @@ final class VNCSession {
             for _ in 0..<40 {
                 try? await Task.sleep(for: .milliseconds(250))
                 if case .failed(let m) = model.tunnels.status(of: t) { phase = .disconnected(L("SSH-туннель: %@", "\(m)")); return }
-                if model.tunnels.status(of: t) == .running { break }
+                // Туннель готов, когда ssh -L уже слушает порт: иначе FreeRDP/VNC получат отказ (TRANSPORT_FAILED).
+                if model.tunnels.status(of: t) == .running, RemoteDesktop.isLocalPortListening(t.listenPort) { break }
             }
-            guard model.tunnels.status(of: t) == .running else {
+            guard model.tunnels.status(of: t) == .running, RemoteDesktop.isLocalPortListening(t.listenPort) else {
                 model.tunnels.stop(t.id)
                 phase = .disconnected(L("SSH-туннель не поднялся за %@ с", "10"))
                 return
             }
             tunnel = t
             if closed { model.tunnels.stop(t.id); tunnel = nil; return }
-            host = "localhost"
+            host = "127.0.0.1"
             port = t.listenPort
         }
 
