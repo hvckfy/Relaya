@@ -107,7 +107,8 @@ internal sealed class SftpPage : UserControl
             await Put(items.Select(i => i.Path));
         };
         Loaded += async (_, _) => await Open(".");
-        Unloaded += (_, _) => { foreach (var w in edits) w.Dispose(); edits.Clear(); };
+        Unloaded += (_, _) => DropEdits();
+        SweepEditRoot();
     }
 
     private List<RemoteFile> Selected() => list.SelectedItems.OfType<ListViewItem>().Select(i => (RemoteFile)i.Tag).ToList();
@@ -224,6 +225,7 @@ internal sealed class SftpPage : UserControl
                 Name = f.name, Total = f.isDirectory ? 0 : f.size,
                 Commands = new[] { f.isDirectory ? $"get -r {Q(Join(f.name))} {Q(folder.Path)}" : $"get {Q(Join(f.name))} {Q(part)}" },
                 Done = () => new System.IO.FileInfo(part) is { Exists: true } fi ? fi.Length : 0,
+                Cleanup = () => { if (part != target) System.IO.File.Delete(part); return Task.CompletedTask; },
                 Finished = () =>
                 {
                     if (part != target) System.IO.File.Move(part, target, overwrite: true);
@@ -247,14 +249,11 @@ internal sealed class SftpPage : UserControl
     {
         // Загрузка: размер знаем, сколько уже на сервере — нет (sftp -b молчит), поэтому полоса неопределённая.
         var dir = path;
+        Func<Task> refresh = async () => { if (path == dir) await Open(path); };
         foreach (var l in local)
-            Enqueue(new Job
-            {
-                Name = System.IO.Path.GetFileName(l.TrimEnd('\\', '/')),
-                Commands = System.IO.File.Exists(l) ? UploadCommands(l, dir, System.IO.Path.GetFileName(l)) : new[] { $"put -r {Q(l)} {Q(dir)}" },
-                Total = System.IO.File.Exists(l) ? new System.IO.FileInfo(l).Length : 0,
-                Finished = async () => { if (path == dir) await Open(path); },
-            });
+            Enqueue(System.IO.File.Exists(l)
+                ? UploadJob(l, dir, System.IO.Path.GetFileName(l), refresh)
+                : new Job { Name = System.IO.Path.GetFileName(l.TrimEnd('\\', '/')), Commands = new[] { $"put -r {Q(l)} {Q(dir)}" }, Finished = refresh });
         return Task.CompletedTask;
     }
 
@@ -263,13 +262,21 @@ internal sealed class SftpPage : UserControl
     private static string PartName(string target) =>
         System.IO.Path.Combine(System.IO.Path.GetDirectoryName(target) ?? "", $".{System.IO.Path.GetFileName(target)}.{Guid.NewGuid().ToString("N")[..8]}.relaya-part");
 
-    private static string[] UploadCommands(string local, string dir, string name)
+    // rename у OpenSSH идёт через posix-rename и заменяет существующий файл; без него (не-OpenSSH sftp-server) шаг упадёт,
+    // и временный файл уберёт Cleanup.
+    private Job UploadJob(string local, string dir, string name, Func<Task>? finished)
     {
         var prefix = dir == "/" ? "/" : dir.TrimEnd('/') + "/";
         var temp = prefix + $".{name}.{Guid.NewGuid().ToString("N")[..8]}.relaya-part";
-        // rename у OpenSSH идёт через posix-rename и заменяет существующий файл.
-        return new[] { $"put {Q(local)} {Q(temp)}", $"rename {Q(temp)} {Q(prefix + name)}" };
+        return new Job
+        {
+            Name = name, Total = new System.IO.FileInfo(local).Length, Finished = finished,
+            Commands = new[] { $"put {Q(local)} {Q(temp)}", $"rename {Q(temp)} {Q(prefix + name)}" },
+            Cleanup = async () => await Batch($"-rm {Q(temp)}"), // «-»: ошибку sftp игнорирует, если файла уже нет
+        };
     }
+
+    private static void TerminalTrace(string message) => Terminal.TerminalView.Trace("sftp " + message);
 
     // 6.4, как на Mac: очередь передач — по одной за раз, у каждой состояние, скорость, «Отменить» и «Повторить».
     private enum JobState { Queued, Running, Done, Failed, Cancelled }
@@ -281,6 +288,8 @@ internal sealed class SftpPage : UserControl
         public long Total;
         public Func<long?>? Done;
         public Func<Task>? Finished;
+        /// Уборка временных файлов после неудачи или отмены (6.5).
+        public Func<Task>? Cleanup;
         public JobState State;
         public string Error = "";
         public long Bytes;
@@ -316,6 +325,9 @@ internal sealed class SftpPage : UserControl
             running = null;
             RenderJobs();
             if (job.State == JobState.Done && job.Finished != null) await job.Finished();
+            else if (job.State != JobState.Done && job.Cleanup != null)
+                try { await job.Cleanup(); }
+                catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { TerminalTrace("cleanup: " + e.Message); }
         }
     }
 
@@ -367,13 +379,38 @@ internal sealed class SftpPage : UserControl
     // 6.6, как на Mac: файл скачивается в личную папку Relaya (не в общий /tmp), открывается приложением по умолчанию,
     // каждое сохранение уходит обратно в ту же папку на сервере. Слежка — пока открыта страница файлов.
     private readonly List<System.IO.FileSystemWatcher> edits = new();
+    private readonly List<string> editDirs = new();
+    private static readonly string EditRoot = System.IO.Path.Combine(AppState.Support, "edit");
+    private static bool editRootSwept;
+
+    // Копии чужих файлов на диске не копятся: каталог правки удаляется, когда страница закрыта.
+    private void DropEdits()
+    {
+        foreach (var w in edits) w.Dispose();
+        edits.Clear();
+        foreach (var d in editDirs)
+            try { System.IO.Directory.Delete(d, true); }
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { TerminalTrace("edit dir: " + e.Message); }
+        editDirs.Clear();
+    }
+
+    // Остатки прошлых запусков (приложение закрыли с открытой страницей) — при первом открытии файлов.
+    private static void SweepEditRoot()
+    {
+        if (editRootSwept) return;
+        editRootSwept = true;
+        if (!System.IO.Directory.Exists(EditRoot)) return;
+        try { System.IO.Directory.Delete(EditRoot, true); }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { TerminalTrace("edit root: " + e.Message); }
+    }
 
     private void Edit()
     {
         if (Selected() is not [{ isDirectory: false } f]) { status.Text = L("Выберите один файл"); return; }
         var remoteDir = path;
-        var dir = System.IO.Path.Combine(AppState.Support, "edit", Guid.NewGuid().ToString("N"));
+        var dir = System.IO.Path.Combine(EditRoot, Guid.NewGuid().ToString("N"));
         System.IO.Directory.CreateDirectory(dir);
+        editDirs.Add(dir);
         var local = System.IO.Path.Combine(dir, f.name);
         long? Done() => new System.IO.FileInfo(local) is { Exists: true } fi ? fi.Length : 0;
         // Скачивание — через ту же очередь (одна передача за раз), открытие — когда оно закончилось.
@@ -396,15 +433,11 @@ internal sealed class SftpPage : UserControl
             pending = true;
             await Task.Delay(1000);
             pending = false;
-            Enqueue(new Job
-            {
-                Name = name, Commands = UploadCommands(local, remoteDir, name), Total = new System.IO.FileInfo(local).Length,
-                Finished = () => { status.Text = L("Сохранено на сервере: %@", name); return Task.CompletedTask; },
-            });
+            Enqueue(UploadJob(local, remoteDir, name, () => { status.Text = L("Сохранено на сервере: %@", name); return Task.CompletedTask; }));
         });
         watcher.EnableRaisingEvents = true;
         edits.Add(watcher);
-        try { Platform.Shell.OpenForEditing(local); status.Text = L("Изменения в %@ сохраняются на сервер, пока открыта эта вкладка", name); }
+        try { await Task.Run(() => Platform.Shell.OpenForEditing(local)); status.Text = L("Изменения в %@ сохраняются на сервер, пока открыта эта вкладка", name); }
         catch (System.IO.IOException e) { await Ui.ShowError(XamlRoot, L("Не удалось открыть файл"), e.Message); }
     }
 
