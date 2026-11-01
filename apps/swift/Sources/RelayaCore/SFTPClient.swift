@@ -113,9 +113,11 @@ public struct SFTPClient: Sendable {
         }
     }
 
-    /// Аргумент команды sftp в кавычках.
-    public static func quote(_ s: String) -> String {
-        "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    /// Аргумент команды `sftp -b -` по грамматике sftp (правило ядра `sftp_batch_path`): кавычки, экранированные
+    /// `\`, `"` и знаки шаблона. Управляющие символы (перевод строки, NUL) — ошибка: иначе имя файла с сервера
+    /// вписало бы в пакет лишнюю команду.
+    public static func quote(_ s: String) throws -> String {
+        try sftpBatchPath(path: s)
     }
 
     public static func join(_ dir: String, _ name: String) -> String {

@@ -19,8 +19,10 @@ import Testing
         #expect(files[3].modified == "Oct 28 23:59")
     }
 
-    @Test func quotesAndPaths() {
-        #expect(SFTPClient.quote(#"a "b"\c"#) == #""a \"b\"\\c""#)
+    @Test func quotesAndPaths() throws {
+        #expect(try SFTPClient.quote(#"a "b"\c"#) == #""a \"b\"\\c""#)
+        #expect(throws: (any Error).self) { try SFTPClient.quote("a\nrm -rf /") }
+        #expect(try SFTPClient.quote("*.log") == #""\*.log""#)
         #expect(SFTPClient.join("/root", "x") == "/root/x")
         #expect(SFTPClient.join("/", "etc") == "/etc")
         #expect(SFTPClient.parent(of: "/var/log/") == "/var")
