@@ -54,12 +54,15 @@ internal sealed class VncView : UserControl, IDisposable
         Combo("Ctrl+Alt+Del", 0xffe3, 0xffe9, 0xffff);
         Combo("Alt+Tab", 0xffe9, 0xff09);
         var send = new AppBarButton { Label = L("Отправить сочетание"), Icon = new FontIcon { Glyph = "" }, Flyout = keys };
+        // Во весь экран, как у RDP и на Mac: окно со столом целиком, выход — F11.
+        var full = new AppBarButton { Label = L("Во весь экран"), Icon = new FontIcon { Glyph = "\uE740" } };
+        full.Click += (_, _) => ToggleFullScreen();
         var stop = new AppBarButton { Label = L("Отключить"), Icon = new FontIcon { Glyph = "" } };
         stop.Click += (_, _) => session?.Disconnect();
         var bar = new CommandBar
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsDynamicOverflowEnabled = true,
-            PrimaryCommands = { fit, send, stop },
+            PrimaryCommands = { fit, send, full, stop },
         };
         connecting = new StackPanel
         {
@@ -220,6 +223,7 @@ internal sealed class VncView : UserControl, IDisposable
     // CharacterReceived с Ctrl не приходит); остальные символы — из CharacterReceived через vnc_keysym_for_char.
     private void OnKey(KeyRoutedEventArgs e, bool down)
     {
+        if (e.Key == VirtualKey.F11 && down) { e.Handled = true; ToggleFullScreen(); return; }
         if (session is not { } s || !connected) return;
         if (!down)
         {
@@ -300,4 +304,13 @@ internal sealed class VncView : UserControl, IDisposable
         public void OnCredentials(VncAuthKind kind, bool needsUser) =>
             view.ui.TryEnqueue(() => _ = view.AskCredentialsAsync(kind, needsUser));
     }
+
+    /// Окно, в котором показан стол (9.15: отдельное окно); по умолчанию — главное.
+    public Window? HostWindow { get; set; }
+
+    private Microsoft.UI.Windowing.AppWindow? Host => (HostWindow ?? MainWindow.Current)?.AppWindow;
+
+    private void ToggleFullScreen() =>
+        Host?.SetPresenter(Host.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen
+            ? Microsoft.UI.Windowing.AppWindowPresenterKind.Default : Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
 }

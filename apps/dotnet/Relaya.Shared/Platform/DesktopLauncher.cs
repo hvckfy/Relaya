@@ -38,7 +38,7 @@ internal static partial class DesktopLauncher
         IDisposable owner;
         var window = new Microsoft.UI.Xaml.Window { Title = d.name };
         if (d.kind == DesktopKind.Rdp) { var r = new Desktop.RdpView(d) { HostWindow = window }; view = r; owner = r; }
-        else { var v = new Desktop.VncView(d); view = v; owner = v; }
+        else { var v = new Desktop.VncView(d) { HostWindow = window }; view = v; owner = v; }
         // Тема — как у главного окна (12.1).
         if (MainWindow.Current?.Content is Microsoft.UI.Xaml.FrameworkElement main) view.RequestedTheme = main.RequestedTheme;
         window.Content = view;
