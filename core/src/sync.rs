@@ -409,17 +409,20 @@ fn import_inner(
     let dir = Path::new(&dir);
     let items = profile.effective_items();
     let mut changed = Vec::new();
+    // Общий конфиг из репозитория читается и разбирается один раз (Я-2), а не в трёх местах.
+    let incoming_config = fs::read_to_string(dir.join("ssh/config")).ok();
+    let incoming_hosts = incoming_config.clone().map(parse_config).unwrap_or_default();
 
     if items.contains(&SyncItem::SshConfig) {
-        if let Ok(incoming) = fs::read_to_string(dir.join("ssh/config")) {
+        if let Some(incoming) = incoming_config.clone() {
             // Профиль «группа work» не должен приносить чужие хосты из общего файла.
             let incoming = if profile.scope.all_hosts {
                 incoming
             } else {
-                let wanted: Vec<String> = parse_config(incoming.clone())
-                    .into_iter()
+                let wanted: Vec<String> = incoming_hosts
+                    .iter()
                     .filter(|h| profile.contains(h) && !h.is_git_service())
-                    .map(|h| h.alias)
+                    .map(|h| h.alias.clone())
                     .collect();
                 config_extract(incoming, wanted)
             };
@@ -453,9 +456,8 @@ fn import_inner(
         changed.push(SyncItem::Snippets);
     }
     // Хосты профиля по общему файлу: туннели и рабочие столы чужих хостов не приходят.
-    let scoped: HashSet<String> = fs::read_to_string(dir.join("ssh/config"))
-        .map(|t| parse_config(t).into_iter().filter(|h| profile.contains(h)).map(|h| h.alias).collect())
-        .unwrap_or_default();
+    let scoped: HashSet<String> =
+        incoming_hosts.iter().filter(|h| profile.contains(h)).map(|h| h.alias.clone()).collect();
     let all = profile.scope.all_hosts;
     if items.contains(&SyncItem::Tunnels)
         && merge_list_where::<Tunnel>(
@@ -507,16 +509,12 @@ fn import_inner(
     if items.contains(&SyncItem::Keys) {
         // Только ключи, которыми пользуются хосты профиля (по имени файла внутри .ssh).
         let only: Option<HashSet<String>> = (!all).then(|| {
-            fs::read_to_string(dir.join("ssh/config"))
-                .map(|t| {
-                    parse_config(t)
-                        .into_iter()
-                        .filter(|h| scoped.contains(&h.alias))
-                        .flat_map(|h| h.identity_files.into_iter())
-                        .filter_map(|p| p.replace('\\', "/").rsplit('/').next().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default()
+            incoming_hosts
+                .iter()
+                .filter(|h| scoped.contains(&h.alias))
+                .flat_map(|h| h.identity_files.iter())
+                .filter_map(|p| p.replace('\\', "/").rsplit('/').next().map(str::to_string))
+                .collect()
         });
         let (added, renamed, skipped) = keys_import(&paths.ssh, passphrase.as_deref(), dir, only.as_ref())?;
         if !added.is_empty() {
