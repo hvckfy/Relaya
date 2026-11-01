@@ -1359,3 +1359,5 @@
 "Сниппеты: вставить в терминал" = "Snippets: insert into the terminal";
 "Масштаб экрана — крупный интерфейс" = "Display scale — larger interface";
 "↑↓ — выбрать · Enter — вставить · Esc — закрыть" = "↑↓ — choose · Enter — insert · Esc — close";
+"пароль · сохранён" = "password · saved";
+"ключ из агента или пароль" = "agent key or password";

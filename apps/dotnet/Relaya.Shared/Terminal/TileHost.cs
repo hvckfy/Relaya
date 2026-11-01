@@ -527,7 +527,8 @@ internal sealed class TileHost : UserControl, IDisposable
     private void UpdateState()
     {
         if (active != null && Data.AppState.Host(active.Alias) is { } h)
-            connectionInfo.Text = RelayaCoreMethods.HostSubtitle(h) + " · " + (h.identityFile != null ? L("ключ") : L("пароль"));
+            connectionInfo.Text = RelayaCoreMethods.HostSubtitle(h) + " · " + (h.identityFile != null ? L("ключ")
+                : Platform.CredentialStore.Has(h.alias) ? L("пароль · сохранён") : L("ключ из агента или пароль"));
         else
             connectionInfo.Text = "";
         disconnected.Text = L("отключён");
