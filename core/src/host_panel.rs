@@ -82,7 +82,8 @@ pub fn host_panel_probe_command(os: Option<ServerOs>) -> String {
 #[uniffi::export]
 pub fn host_panel_parse(output: String) -> HostPanel {
     static UNIT_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let unit_re = UNIT_RE.get_or_init(|| regex::Regex::new(r"^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$").expect("постоянный шаблон"));
+    let unit_re = UNIT_RE
+        .get_or_init(|| regex::Regex::new(r"^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$").expect("постоянный шаблон"));
     let mut section = "";
     let (mut services, mut ports, mut errors) = (Vec::new(), Vec::<ListeningPort>::new(), Vec::new());
     let mut updates: Option<Vec<String>> = Some(Vec::new());

@@ -367,7 +367,8 @@ pub struct RemoteFile {
 pub fn sftp_parse_listing(output: String) -> Vec<RemoteFile> {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     let re = RE.get_or_init(|| {
-        Regex::new(r"^([-dlcbps]\S*)\s+\S+\s+\S+\s+\S+\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s(.+)$").expect("постоянный шаблон")
+        Regex::new(r"^([-dlcbps]\S*)\s+\S+\s+\S+\s+\S+\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s(.+)$")
+            .expect("постоянный шаблон")
     });
     let mut files: Vec<RemoteFile> = output
         .lines()

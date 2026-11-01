@@ -199,21 +199,14 @@ impl TerminalEmulator {
 
     /// Строки экрана как текст (без хвостовых пробелов) — для копирования и тестов.
     pub fn screen_text(&self) -> Vec<String> {
-        Self::rows_text(&self.snapshot())
-    }
-
-    fn rows_text(snap: &TermSnapshot) -> Vec<String> {
-        snap.cells
-            .chunks(snap.cols.max(1) as usize)
-            .map(|row| row.iter().map(|c| c.ch.as_str()).collect::<String>().trim_end().to_string())
-            .collect()
+        rows_text(&self.snapshot())
     }
 
     /// Вход выполнен и shell ждёт команду (C23): см. `terminal_login_ready`. Один снимок экрана, а не два
     /// (П-6): вызывается на каждый кусок вывода, пока вход не распознан.
     pub fn login_ready(&self) -> bool {
         let snap = self.snapshot();
-        terminal_login_ready(Self::rows_text(&snap), snap.cursor_row, snap.cursor_col, snap.alt_screen)
+        terminal_login_ready(rows_text(&snap), snap.cursor_row, snap.cursor_col, snap.alt_screen)
     }
 
     /// Изменения экрана с прошлого вызова (П1): вместо полного снимка на каждый кадр — только изменённые строки.
@@ -378,6 +371,15 @@ fn encode(color: Color) -> u32 {
             n => 0x0200_0000 | ((n as u32).saturating_sub(NamedColor::DimBlack as u32) & 7),
         },
     }
+}
+
+/// Строки экрана без хвостовых пробелов — из готового снимка (вне экспортируемого impl: UniFFI не берёт
+/// связанные функции).
+fn rows_text(snap: &TermSnapshot) -> Vec<String> {
+    snap.cells
+        .chunks(snap.cols.max(1) as usize)
+        .map(|row| row.iter().map(|c| c.ch.as_str()).collect::<String>().trim_end().to_string())
+        .collect()
 }
 
 #[cfg(test)]
