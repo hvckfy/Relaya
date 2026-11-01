@@ -185,7 +185,7 @@ internal sealed class TileHost : UserControl, IDisposable
             Command("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
         }) commands.SecondaryCommands.Add(c);
         // Прозрачный фон: без него пустые места холста не получают DragOver/Drop.
-        var stage = new Grid { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), Children = { grid, dropHint } };
+        var stage = new Grid { Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"), Children = { grid, dropHint } };
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         root.Children.Add(commands);
         Grid.SetRow(broadcastBar, 1);
