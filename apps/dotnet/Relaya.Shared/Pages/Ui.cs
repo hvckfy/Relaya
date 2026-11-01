@@ -115,7 +115,7 @@ internal static class Ui
 
     public static Button IconButton(string glyph, string tip, Action onClick)
     {
-        var b = new Button { Content = new FontIcon { Glyph = glyph, FontSize = IconMedium }, Padding = new Thickness(8), Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0) };
+        var b = new Button { Content = new FontIcon { Glyph = glyph, FontSize = IconMedium }, Padding = new Thickness(8), Background = Brush("SubtleFillColorTransparentBrush"), BorderThickness = new Thickness(0) };
         ToolTipService.SetToolTip(b, tip);
         // Narrator читает подсказку как имя кнопки, а не просто «кнопка» (UI-аудит W1).
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip);

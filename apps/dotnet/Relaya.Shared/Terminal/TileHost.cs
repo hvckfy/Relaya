@@ -178,7 +178,7 @@ internal sealed class TileHost : UserControl, IDisposable
             Children = { osButton, snippetButton, files, edit, keyLogin },
         };
         // Прозрачный фон: без него пустые места холста не получают DragOver/Drop.
-        var stage = new Grid { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), Children = { grid, dropHint } };
+        var stage = new Grid { Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"), Children = { grid, dropHint } };
         // Панели хоста и плиток — в колонках одной строки: при узком окне не наезжают друг на друга.
         var toolbar = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } } };
         toolbar.Children.Add(hostBar);

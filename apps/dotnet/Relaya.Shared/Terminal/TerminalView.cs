@@ -37,6 +37,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     public void Dispose()
     {
         Platform.Settings.Changed -= OnSettingsChanged;
+        Platform.Contrast.Changed -= OnSettingsChanged;
         RemoveCanvas();
     }
 
@@ -98,6 +99,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         Loaded += (_, _) => { Trace($"Loaded {ActualWidth}x{ActualHeight}"); InvalidateCanvas(); };
         RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => InvalidateCanvas());
         Platform.Settings.Changed += OnSettingsChanged;
+        Platform.Contrast.Changed += OnSettingsChanged; // контрастная тема включена или выключена — перечитать палитру
         CreateCanvas();
         SizeChanged += (_, _) => FitToSize();
         IsTabStop = true;
@@ -526,8 +528,8 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             drawError = e.Message;
             try
             {
-                painter.Clear(Microsoft.UI.Colors.Black);
-                painter.Text("Relaya: " + e.Message, 12, 12, Microsoft.UI.Colors.IndianRed, false, false);
+                painter.Clear(Theme.Background);
+                painter.Text("Relaya: " + e.Message, 12, 12, Theme.Foreground, false, false);
             }
             catch (Exception) { }
         }
@@ -575,7 +577,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         clear.A = (byte)(clear.A * Platform.Appearance.SessionOpacity);
         ds.Clear(clear);
         var s = CurrentScreen();
-        var highlight = !s.altScreen && Platform.Settings.Get("terminal.highlight", "1") == "1";
+        var highlight = !s.altScreen && !Theme.Monochrome && Platform.Settings.Get("terminal.highlight", "1") == "1";
         var run = new StringBuilder();
         for (var r = 0; r < s.rows; r++)
         {

@@ -6,11 +6,25 @@ namespace Relaya.Terminal;
 /// Палитра терминала. Цвет ячейки из ядра: 0 — по умолчанию, 0x01RRGGBB — RGB, 0x02_0000II — индекс 0…255.
 internal sealed record TerminalTheme(Color Background, Color Foreground, Color Cursor, Color[] Ansi)
 {
-    public Color Selection => Color.FromArgb(90, 0x3B, 0x8E, 0xEA);
+    public Color Selection { get; init; } = Color.FromArgb(90, 0x3B, 0x8E, 0xEA);
+
+    /// Контрастная тема: только два цвета системы — текст и фон, без цветов программ (как Windows Terminal в HC).
+    public bool Monochrome { get; init; }
 
     public string Name { get; init; } = "Relaya";
 
-    public static TerminalTheme Default => Named(Platform.Settings.Get("terminal.theme", "Relaya"));
+    public static TerminalTheme Default => Platform.Contrast.On && HighContrast() is { } hc ? hc : Named(Platform.Settings.Get("terminal.theme", "Relaya"));
+
+    private static TerminalTheme? HighContrast()
+    {
+        if (Platform.Contrast.SystemColor(Windows.UI.ViewManagement.UIElementType.Window) is not { } bg
+            || Platform.Contrast.SystemColor(Windows.UI.ViewManagement.UIElementType.WindowText) is not { } fg) return null;
+        var hl = Platform.Contrast.SystemColor(Windows.UI.ViewManagement.UIElementType.Highlight) ?? fg;
+        var ansi = new Color[16];
+        System.Array.Fill(ansi, fg);
+        ansi[0] = bg;
+        return new TerminalTheme(bg, fg, hl, ansi) { Name = "HighContrast", Monochrome = true, Selection = Color.FromArgb(160, hl.R, hl.G, hl.B) };
+    }
 
     public static readonly string[] Names = { "Relaya", "Light", "Solarized Dark", "Dracula", "Nord", "One Dark" };
 
@@ -29,6 +43,7 @@ internal sealed record TerminalTheme(Color Background, Color Foreground, Color C
 
     public Color Resolve(uint code, bool foreground, bool bold)
     {
+        if (Monochrome) return foreground ? Foreground : Background;
         switch (code >> 24)
         {
             case 1: return Rgb(code & 0xFFFFFF);

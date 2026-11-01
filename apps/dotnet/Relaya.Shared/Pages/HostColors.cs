@@ -15,8 +15,10 @@ internal static class HostColors
         ("gray", L("Серый"), Color.FromArgb(255, 0x8E, 0x8E, 0x93)),
     };
 
+    /// В контрастной теме цвета хостов не показываются: только системные цвета (WCAG, Windows HC).
     public static Color? Of(string? name)
     {
+        if (Platform.Contrast.On) return null;
         foreach (var c in All) if (c.Name == name) return c.Color;
         return null;
     }
