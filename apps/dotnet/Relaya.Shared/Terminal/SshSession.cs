@@ -73,6 +73,16 @@ internal sealed class SshSession : IDisposable
     }
 
     /// Подставить сохранённый пароль — только в ту же сессию, где был запрос (не в переподключённую).
+    /// До входа: сервер спрашивает пароль, а сохранённого нет (true) или сохранённый не подошёл (false) — 4.20.
+    public event Action<bool>? LoginPasswordNeeded;
+
+    /// Ввести пароль в запрос ssh (из баннера «Ввести и сохранить…» / «Ввести новый…»); сохранить — по выбору.
+    public void TypeLoginPassword(string password, bool save)
+    {
+        if (save) Relaya.Platform.CredentialStore.Write(alias, password);
+        if (!ended) console?.Write(Encoding.UTF8.GetBytes(password + "\r"));
+    }
+
     public void SendPassword()
     {
         if (asked is { } pc && pc == console && !ended && Relaya.Platform.CredentialStore.Read(alias) is { } password)
@@ -122,6 +132,7 @@ internal sealed class SshSession : IDisposable
         }
         console = pc;
         var passwordSent = false;
+        var offeredLoginPassword = false;
         var autofill = Askpass.CanAutofill(alias); // M8-1: не для хостов с ProxyCommand/LocalCommand
         var loggedIn = false;
         var sawPasswordPrompt = false;
@@ -170,6 +181,15 @@ internal sealed class SshSession : IDisposable
                 passwordSent = true;
                 tail.Clear();
                 pc.Write(Encoding.UTF8.GetBytes(password + "\r"));
+            }
+            else if (!loggedIn && PasswordPrompt.Matches(text) && !offeredLoginPassword)
+            {
+                // Пароля нет — «Ввести и сохранить…»; подставленный уже не подошёл (ssh спрашивает снова) — «Ввести новый…».
+                offeredLoginPassword = true;
+                var rejected = passwordSent;
+                tail.Clear();
+                try { LoginPasswordNeeded?.Invoke(!rejected); }
+                catch (Exception e) { Relaya.Terminal.TerminalView.Trace("LoginPasswordNeeded: " + e.GetType().Name); }
             }
             else if (loggedIn && autofill && PasswordPrompt.IsAnyPasswordPrompt(text))
             {

@@ -229,6 +229,34 @@ internal sealed class TileHost : UserControl, IDisposable
         put.Click += (_, _) => { ask.IsOpen = false; session.SendPassword(); view.Focus(FocusState.Programmatic); };
         no.Click += (_, _) => { ask.IsOpen = false; view.Focus(FocusState.Programmatic); };
         session.PasswordRequested += () => ui.TryEnqueue(() => ask.IsOpen = true);
+        // 4.20, как на Mac: сервер спрашивает пароль, а сохранённого нет — «Ввести и сохранить…»;
+        // сохранённый не подошёл — «Ввести новый…». Пароль вводится в запрос ssh и сохраняется по флажку.
+        var login = new InfoBar { Severity = InfoBarSeverity.Informational, IsClosable = true, Margin = new Thickness(4, 0, 4, 4) };
+        var enter = new Button { Style = Pages.Ui.Style("AccentButtonStyle") };
+        login.ActionButton = enter;
+        enter.Click += async (_, _) =>
+        {
+            login.IsOpen = false;
+            var box = new PasswordBox { Header = L("Пароль") };
+            var save = new CheckBox { Content = Platform.PlatformText.PasswordSaved(), IsChecked = true };
+            var d = new ContentDialog
+            {
+                Title = L("Пароль для %@", alias), Content = new StackPanel { Spacing = 8, Children = { box, save } },
+                PrimaryButtonText = L("Ввести"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            };
+            if (await d.ShowAsync() == ContentDialogResult.Primary && box.Password.Length > 0)
+            {
+                try { session.TypeLoginPassword(box.Password, save.IsChecked == true); }
+                catch (Exception e) { await Pages.Ui.ShowError(XamlRoot, L("Не удалось сохранить пароль"), e.Message); }
+            }
+            view.Focus(FocusState.Programmatic);
+        };
+        session.LoginPasswordNeeded += none => ui.TryEnqueue(() =>
+        {
+            login.Title = none ? L("Сервер спрашивает пароль") : L("Сохранённый пароль не подошёл");
+            enter.Content = none ? L("Ввести и сохранить…") : L("Ввести новый…");
+            login.IsOpen = true;
+        });
         // Вошли по паролю — предложить ключ: «Настроить», «Не сейчас», «Больше не предлагать».
         var offer = new InfoBar
         {
@@ -292,6 +320,8 @@ internal sealed class TileHost : UserControl, IDisposable
         body.Children.Add(ask);
         Grid.SetRow(offer, 2);
         body.Children.Add(offer);
+        Grid.SetRow(login, 2);
+        body.Children.Add(login);
         Grid.SetRow(pending, 3);
         body.Children.Add(pending);
         Grid.SetRow(view, 4);
