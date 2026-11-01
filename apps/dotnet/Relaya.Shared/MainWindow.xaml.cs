@@ -63,9 +63,12 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        // Без переходной анимации: страница не «въезжает» справа (и не застревает за краем при двойном клике
-        // по хосту, когда сразу открывается вкладка) — показывается сразу, как в Параметрах Windows.
-        Page.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
+        // Смена раздела — короткое появление снизу, как в Параметрах Windows. Не сбоку: страница не «въезжает»
+        // справа и не застревает за краем при двойном клике по хосту, когда сразу открывается вкладка.
+        Page.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection
+        {
+            new Microsoft.UI.Xaml.Media.Animation.EntranceThemeTransition { FromHorizontalOffset = 0, FromVerticalOffset = 28 },
+        };
         // Вкладку можно перетащить на край терминала другой вкладки — режим плиток.
         // Порядок вкладок меняется перетаскиванием, как на Mac.
         Tabs.CanDragTabs = true;
