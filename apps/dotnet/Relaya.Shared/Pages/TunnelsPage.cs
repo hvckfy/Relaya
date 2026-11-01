@@ -42,8 +42,9 @@ internal sealed class TunnelsPage : UserControl
             toggle.Toggled += (_, _) => { if (toggle.IsOn) TunnelManager.Shared.Start(t); else TunnelManager.Shared.Stop(t.id); };
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { toggle } };
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(t)));
-            actions.Children.Add(Ui.IconButton("", L("Удалить"), () =>
+            actions.Children.Add(Ui.IconButton("", L("Удалить"), async () =>
             {
+                if (!await Ui.Confirm(XamlRoot, L("Удалить %@?", t.name), L("Туннель будет остановлен и удалён."), L("Удалить"))) return;
                 TunnelManager.Shared.Stop(t.id);
                 AppState.Tunnels = AppState.Tunnels.Where(x => x.id != t.id).ToList();
                 Build();

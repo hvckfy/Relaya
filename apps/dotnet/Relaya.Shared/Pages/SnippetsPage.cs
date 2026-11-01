@@ -29,8 +29,9 @@ internal sealed class SnippetsPage : UserControl
             actions.Children.Add(Ui.Button(L("Вставить"), async () => await Insert(s)));
             actions.Children.Add(Ui.IconButton("", L("Копировать"), () => Ui.Copy(s.command)));
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(s)));
-            actions.Children.Add(Ui.IconButton("", L("Удалить"), () =>
+            actions.Children.Add(Ui.IconButton("", L("Удалить"), async () =>
             {
+                if (!await Ui.Confirm(XamlRoot, L("Удалить %@?", s.name), L("Сниппет будет удалён."), L("Удалить"))) return;
                 AppState.Snippets = AppState.Snippets.Where(x => x.id != s.id).ToList();
                 Build();
             }));

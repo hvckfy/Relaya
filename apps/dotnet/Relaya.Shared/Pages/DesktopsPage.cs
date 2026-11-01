@@ -32,8 +32,11 @@ internal sealed class DesktopsPage : UserControl
                     () => Platform.DesktopLauncher.OpenExternal(d, XamlRoot)));
 #endif
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(d)));
-            actions.Children.Add(Ui.IconButton("", L("Удалить"), () =>
+            actions.Children.Add(Ui.IconButton("", L("Удалить"), async () =>
             {
+                if (!await Ui.Confirm(XamlRoot, L("Удалить %@?", d.name), L("Удалённый стол будет удалён; сохранённые пароли тоже."), L("Удалить"))) return;
+                Platform.CredentialStore.Delete("desktop:" + d.id);
+                Platform.CredentialStore.Delete("desktop-gateway:" + d.id);
                 AppState.Desktops = AppState.Desktops.Where(x => x.id != d.id).ToList();
                 AppState.LoadHosts();
                 Build();

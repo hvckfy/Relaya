@@ -218,7 +218,13 @@ internal sealed class SyncPage : UserControl
         var syncNow = new Button { Content = L("Синхронизировать"), Style = Style("AccentButtonStyle") };
         syncNow.Click += async (_, _) => await sync.Sync(id);
         var delete = new Button { Content = L("Удалить профиль") };
-        delete.Click += (_, _) => { sync.Remove(id); Build(); };
+        delete.Click += async (_, _) =>
+        {
+            if (!await Pages.Ui.Confirm(XamlRoot, L("Удалить профиль %@?", Current().name),
+                L("Профиль синхронизации будет удалён. Хосты и файлы на этой машине не затрагиваются."), L("Удалить"))) return;
+            sync.Remove(id);
+            Build();
+        };
 
         var keepMine = new Button { Content = L("Оставить мои") };
         keepMine.Click += async (_, _) => await sync.Resolve(id, keepMine: true);

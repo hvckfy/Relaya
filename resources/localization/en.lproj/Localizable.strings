@@ -1213,3 +1213,8 @@
 "Откроет терминал к серверу репозитория: сверьте отпечаток и подтвердите, затем синхронизируйте снова." = "Opens a terminal to the repository server: check the fingerprint, confirm it, then sync again.";
 "Alt+Tab" = "Alt+Tab";
 "У хоста ProxyCommand или LocalCommand — сохранённый пароль Relaya не подставляет, введите его сами." = "This host runs ProxyCommand or LocalCommand — Relaya won't fill in the saved password; type it yourself.";
+"Сниппет будет удалён." = "The snippet will be deleted.";
+"Туннель будет остановлен и удалён." = "The tunnel will be stopped and deleted.";
+"Удалённый стол будет удалён; сохранённые пароли тоже." = "The remote desktop and its saved passwords will be deleted.";
+"Удалить профиль %@?" = "Delete profile %@?";
+"Профиль синхронизации будет удалён. Хосты и файлы на этой машине не затрагиваются." = "The sync profile will be deleted. Hosts and files on this machine stay as they are.";
