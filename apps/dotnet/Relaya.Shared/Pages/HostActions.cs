@@ -55,6 +55,26 @@ internal static class HostActions
         menu.Items.Add(Item(L("Пароль…"), "\ue8d7", async () => await HostEditor.AskPassword(anchor.XamlRoot, h.alias)));
         if (Platform.CredentialStore.Has(h.alias))
             menu.Items.Add(Item(L("Забыть пароль"), "\ue8d8", () => Platform.CredentialStore.Delete(h.alias)));
+        // Вход по паролю на сервере (1.12, как на Mac): команда sshd под ОС хоста — ядро; вставляется в терминал
+        // с подтверждением, без sudo под root. ОС не определена — считаем Linux.
+        var sshd = new MenuFlyoutSubItem { Text = L("Вход по паролю на сервере"), Icon = new FontIcon { Glyph = "\uE72E" } };
+        foreach (var (title, enabled) in new[] { (L("Разрешить…"), true), (L("Запретить…"), false) })
+        {
+            var item = new MenuFlyoutItem { Text = title };
+            item.Click += async (_, _) =>
+            {
+                var cmd = RelayaCoreMethods.OsCommandForUser(
+                    RelayaCoreMethods.OsPasswordLoginCommand(h.os ?? ServerOs.Linux, enabled), h.user ?? "");
+                var text = enabled
+                    ? L("На %@ будет разрешён вход по паролю в sshd. Команда откроется в терминале — проверьте её и нажмите Enter.", h.alias)
+                    : L("На %@ будет запрещён вход по паролю в sshd. Сначала убедитесь, что вход по ключу работает, иначе можно потерять доступ.", h.alias);
+                if (await Ui.Confirm(anchor.XamlRoot, enabled ? L("Разрешить вход по паролю?") : L("Запретить вход по паролю?"), text,
+                        enabled ? L("Разрешить") : L("Запретить")))
+                    MainWindow.Current?.OpenSession(h.alias, cmd);
+            };
+            sshd.Items.Add(item);
+        }
+        menu.Items.Add(sshd);
         menu.Items.Add(Item(L("Копировать ssh-команду"), "", () => Ui.Copy(AppState.SshCommand(h))));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item(L("Удалить…"), "", async () =>

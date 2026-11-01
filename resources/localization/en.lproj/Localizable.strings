@@ -1323,3 +1323,8 @@
 "Новый блок в конце ~/.ssh/config" = "New block at the end of ~/.ssh/config";
 "Изменения в ~/.ssh/config" = "Changes to ~/.ssh/config";
 "Пропустить" = "Skip";
+"Разрешить…" = "Allow…";
+"На %@ будет разрешён вход по паролю в sshd. Команда откроется в терминале — проверьте её и нажмите Enter." = "Password login will be allowed in sshd on %@. The command opens in a terminal — check it and press Enter.";
+"На %@ будет запрещён вход по паролю в sshd. Сначала убедитесь, что вход по ключу работает, иначе можно потерять доступ." = "Password login will be denied in sshd on %@. Make sure key login works first, or you may lose access.";
+"Разрешить вход по паролю?" = "Allow password login?";
+"Запретить вход по паролю?" = "Deny password login?";
