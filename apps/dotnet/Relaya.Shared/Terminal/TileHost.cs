@@ -47,6 +47,8 @@ internal sealed class TileHost : UserControl, IDisposable
     };
     private readonly InfoBar broadcastBar = new() { Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(8, 0, 8, 4) };
     private readonly CheckBox broadcastHere = new();
+    // Порты сервера из вывода активной плитки: «:3000» — открыть в браузере через туннель.
+    private readonly StackPanel portsPanel = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
 
     public event Action<string>? TitleChanged;
     public event Action<bool>? AliveChanged;
@@ -77,6 +79,7 @@ internal sealed class TileHost : UserControl, IDisposable
             Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 8, 4),
             Children =
             {
+                portsPanel,
                 search,
                 broadcastToggle,
                 Pages.Ui.IconButton("", L("Поиск (Ctrl+Shift+F)"), OpenSearch),
@@ -217,6 +220,7 @@ internal sealed class TileHost : UserControl, IDisposable
         close.Click += (_, _) => pane.Owner.Close(pane);
         view.GotFocus += (_, _) => pane.Owner.Activate(pane);
         session.StateChanged += alive => pane.Owner.AliveChanged?.Invoke(alive);
+        session.PortsChanged += () => pane.Owner.ui.TryEnqueue(() => { if (pane.Owner.active == pane) pane.Owner.UpdatePorts(); });
         var started = false;
         view.Loaded += (_, _) =>
         {
@@ -287,10 +291,30 @@ internal sealed class TileHost : UserControl, IDisposable
         broadcastHere.IsChecked = active == null || Broadcast.Includes(active.Session);
     }
 
+    private void UpdatePorts()
+    {
+        portsPanel.Children.Clear();
+        if (active is not { } pane) return;
+        foreach (var port in pane.Session.Ports)
+        {
+            var b = new Button { Content = ":" + port, Padding = new Thickness(8, 4, 8, 4) };
+            var tip = L("Открыть localhost:%@ сервера в браузере через туннель", port);
+            ToolTipService.SetToolTip(b, tip);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip);
+            b.Click += async (_, _) =>
+            {
+                try { await Platform.PortTunnel.OpenAsync(pane.Alias, port, XamlRoot); }
+                catch (Exception e) { TerminalView.Trace("port tunnel: " + e.Message); }
+            };
+            portsPanel.Children.Add(b);
+        }
+    }
+
     private void Activate(Pane pane)
     {
         active = pane;
         UpdateBroadcast();
+        UpdatePorts();
         foreach (var p in panes)
             p.Frame.BorderBrush = p == pane && panes.Count > 1 ? Pages.Ui.Brush("AccentFillColorDefaultBrush") : Pages.Ui.Brush("CardStrokeColorDefaultBrush");
         TitleChanged?.Invoke(panes.Count > 1 ? string.Join(" · ", panes.Select(p => p.Alias)) : pane.Alias);

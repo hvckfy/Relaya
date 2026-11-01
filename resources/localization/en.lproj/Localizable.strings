@@ -1131,3 +1131,4 @@
 "Параметры" = "Settings";
 "↑↓ — выбрать · Enter — открыть · Ctrl+Enter — файлы · Esc — закрыть" = "↑↓ select · Enter open · Ctrl+Enter files · Esc close";
 "Этот терминал участвует" = "This terminal takes part";
+"SSH-туннель не поднялся за 20 секунд." = "The SSH tunnel did not come up within 20 seconds.";

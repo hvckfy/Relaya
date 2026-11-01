@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Linq;
+using System.Collections.Generic;
 using Relaya.Platform;
 using static Relaya.Strings;
 
@@ -30,6 +31,15 @@ internal sealed class SshSession : IDisposable
     private IPty? asked;
     // Последняя строка вывода — запрос пароля: такой ввод не рассылается в другие терминалы.
     private volatile bool secretPrompt;
+
+    private readonly object portsLock = new();
+    private List<long> ports = new();
+
+    /// Порты сервера, замеченные в выводе (`localhost:3000`, `0.0.0.0:5173`) — до 4, последние первыми (local_ports_find ядра).
+    public IReadOnlyList<long> Ports { get { lock (portsLock) return ports.ToList(); } }
+
+    /// Список портов изменился (из потока вывода).
+    public event Action? PortsChanged;
 
     /// Сейчас вводится пароль (ssh, sudo, su) — рассылка из этого терминала на паузе.
     public bool SecretPrompt => secretPrompt;
@@ -107,6 +117,7 @@ internal sealed class SshSession : IDisposable
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
             if (!loggedIn && view.Emulator.LoginReady()) loggedIn = true;
             secretPrompt = PasswordPrompt.Matches(text) || PasswordPrompt.IsAnyPasswordPrompt(text);
+            NotePorts(new string(chars));
             if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
                 passwordSent = true;
@@ -133,6 +144,22 @@ internal sealed class SshSession : IDisposable
         pc.Exited += code => { if (console == pc) End("\x1b[2m" + L("[сессия завершена, код %@]", code) + "\x1b[0m"); };
         pc.Start();
         StateChanged?.Invoke(true);
+    }
+
+    // Порты из нового куска вывода (без escape-последовательностей): новые — в начало списка.
+    private void NotePorts(string chunk)
+    {
+        var plain = System.Text.RegularExpressions.Regex.Replace(chunk, "\x1b\\[[0-9;?]*[A-Za-z]", "");
+        var found = uniffi.relaya_core.RelayaCoreMethods.LocalPortsFind(plain);
+        if (found.Count == 0) return;
+        bool changed;
+        lock (portsLock)
+        {
+            var next = found.AsEnumerable().Reverse().Concat(ports.Where(p => !found.Contains(p))).Distinct().Take(4).ToList();
+            changed = !next.SequenceEqual(ports);
+            ports = next;
+        }
+        if (changed) PortsChanged?.Invoke();
     }
 
     private void End(string message)
