@@ -173,7 +173,7 @@ internal sealed class KeysPage : UserControl
         var key = File.ReadAllText(pub).Trim();
         var results = await Task.WhenAll(boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Tag).Select(async alias =>
         {
-            var password = Platform.CredentialStore.Has(alias);
+            var password = Platform.Askpass.CanAutofill(alias);
             var r = await AppState.Run(AppState.SshExe, RelayaCoreMethods.KeyInstallSshArgs(alias, password), password ? alias : null, key + "\n", 60);
             return (alias, r);
         }));
@@ -187,9 +187,11 @@ internal sealed class KeysPage : UserControl
 
     private async Task ToggleAgent(string keyPath, bool remove)
     {
+        var passphrase = remove ? "" : await AskPassphrase();
+        if (passphrase == null) return; // отмена в диалоге — ключ не добавляем
         var r = remove
             ? await AppState.Run(AppState.SshAddExe, new[] { "-d", keyPath }, null, null, 10)
-            : await Platform.KeyGen.AddToAgentAsync(keyPath, await AskPassphrase() ?? "") ? new AppState.Result(0, "", "") : new AppState.Result(1, "", L("Не удалось добавить ключ в агент"));
+            : await Platform.KeyGen.AddToAgentAsync(keyPath, passphrase) ? new AppState.Result(0, "", "") : new AppState.Result(1, "", L("Не удалось добавить ключ в агент"));
         if (r.Status != 0) await Ui.ShowError(XamlRoot, L("ssh-agent"), r.Stderr.Trim());
         await Build();
     }
