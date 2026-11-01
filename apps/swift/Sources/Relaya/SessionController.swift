@@ -101,7 +101,8 @@ final class SessionController {
             return
         }
 
-        if PasswordPrompt.matches(tail) || PasswordPrompt.isSudo(tail) {
+        // До входа весь ввод — ответы ssh (пароль, passphrase, код), после — любой запрос секрета (L-SEC-1).
+        if !loggedIn || PasswordPrompt.matches(tail) || PasswordPrompt.isSudo(tail) || PasswordPrompt.isSecret(tail) {
             secretPromptActive = true
         } else if secretPromptActive, text.contains(where: \.isNewline) {
             secretPromptActive = false
@@ -110,6 +111,7 @@ final class SessionController {
         // Первое приглашение shell — вход выполнен (по ключу или паролю).
         if !loggedIn, !PasswordPrompt.matches(tail), loginReady() {
             loggedIn = true
+            secretPromptActive = false
             passwordPromptWithoutSaved = false
             if sawPasswordPrompt, !host.usesKey { offerKeySetup = true }
         }
