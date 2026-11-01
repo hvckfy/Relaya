@@ -137,6 +137,8 @@ pub fn remote_supports_h264() -> bool {
 #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
 pub(crate) fn checked_copy(path: &str) -> Option<std::path::PathBuf> {
     let platform = openh264_current_platform()?;
+    #[cfg(unix)]
+    remove_stale_copies();
     let dir = std::env::temp_dir().join(format!("relaya-openh264-{}-{}", std::process::id(), crate::models::new_id()));
     std::fs::create_dir(&dir).ok()?;
     #[cfg(unix)]
@@ -151,6 +153,29 @@ pub(crate) fn checked_copy(path: &str) -> Option<std::path::PathBuf> {
         return None;
     }
     Some(copy)
+}
+
+/// Удалить копии из `checked_copy` от завершившихся процессов: копия живёт, пока жив процесс, и при выходе не
+/// удаляется. Каталог чужого живого процесса (или чужого пользователя — kill даёт EPERM) не трогается.
+#[cfg(unix)]
+fn remove_stale_copies() {
+    extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+    const ESRCH: i32 = 3; // одинаково в Linux и macOS
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(rest) = name.to_str().and_then(|n| n.strip_prefix("relaya-openh264-")) else { continue };
+        let Some(pid) = rest.split('-').next().and_then(|p| p.parse::<i32>().ok()).filter(|&p| p > 0) else { continue };
+        if pid as u32 == std::process::id() {
+            continue;
+        }
+        let dead = unsafe { kill(pid, 0) } != 0 && std::io::Error::last_os_error().raw_os_error() == Some(ESRCH);
+        if dead {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 /// Проверка скачанного архива .bz2 до распаковки.
@@ -186,5 +211,17 @@ mod tests {
         assert!(!openh264_verify(f.to_string_lossy().into()));
         assert!(!openh264_verify("/nonexistent".into()));
         assert!(checked_copy(&f.to_string_lossy()).is_none(), "чужой файл не копируется для загрузки");
+        #[cfg(unix)]
+        {
+            // pid, которого нет (больше pid_max), — каталог удаляется; свой — остаётся.
+            let tmp = std::env::temp_dir();
+            let stale = tmp.join(format!("relaya-openh264-{}-test", i32::MAX - 1));
+            let mine = tmp.join(format!("relaya-openh264-{}-test", std::process::id()));
+            std::fs::create_dir_all(&stale).unwrap();
+            std::fs::create_dir_all(&mine).unwrap();
+            remove_stale_copies();
+            assert!(!stale.exists() && mine.exists());
+            std::fs::remove_dir_all(&mine).unwrap();
+        }
     }
 }
