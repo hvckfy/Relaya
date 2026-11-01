@@ -40,7 +40,7 @@ internal static partial class Components
                 Has("xdg-open"), false, Install(new("xdg-utils", "xdg-utils", "xdg-utils", "xdg-utils"))),
             new("pacat (PulseAudio / PipeWire)", L("Звук встроенного RDP."),
                 Has("pacat"), false, Install(new("pulseaudio-utils", "pulseaudio-utils", "libpulse", "pulseaudio-utils"))),
-            new("TigerVNC / Remmina", L("Подключения VNC (встроенного VNC пока нет)."),
+            new("TigerVNC / Remmina", L("Запасной внешний VNC-клиент; основной VNC — встроенный, во вкладке."),
                 Has("vncviewer", "remmina"), false, Install(new("tigervnc-viewer", "tigervnc", "tigervnc", "tigervnc"))),
             new("FreeRDP / Remmina", L("Запасной внешний RDP-клиент; основной RDP — встроенный, во вкладке."),
                 Has("xfreerdp3", "xfreerdp", "remmina"), false, Install(new("freerdp3-x11", "freerdp", "freerdp", "freerdp"))),

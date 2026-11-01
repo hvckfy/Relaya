@@ -1147,7 +1147,6 @@
 "Компоненты" = "Components";
 "Не хватает обязательных компонентов" = "Required components are missing";
 "Открывать ссылки из терминала, порты сервера в браузере и папку журналов." = "Opens links from the terminal, server ports in the browser and the logs folder.";
-"Подключения VNC (встроенного VNC пока нет)." = "VNC connections (there is no built-in VNC yet).";
 "Подтверждения без окна Relaya: команды агентов (MCP) и выдача пароля по запросу ssh." = "Confirmations outside the Relaya window: agent (MCP) commands and handing a password to ssh.";
 "Скопировать команду" = "Copy Command";
 "Служба хранения паролей (GNOME Keyring или KWallet)" = "Password storage service (GNOME Keyring or KWallet)";
@@ -1273,3 +1272,4 @@
 "Открытый ключ допишется в ~/.ssh/authorized_keys на каждом выбранном хосте (без дублей)." = "The public key is appended to ~/.ssh/authorized_keys on each selected host (no duplicates).";
 "ключ добавлен" = "key added";
 "Разложить на хосты" = "Deploy to Hosts";
+"Запасной внешний VNC-клиент; основной VNC — встроенный, во вкладке." = "Fallback external VNC client; the main VNC is built in and opens in a tab.";
