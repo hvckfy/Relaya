@@ -57,7 +57,9 @@ internal static class HostActions
             menu.Items.Add(Item(L("Забыть пароль"), "\ue8d8", () => Platform.CredentialStore.Delete(h.alias)));
         // Вход по паролю на сервере (1.12, как на Mac): команда sshd под ОС хоста — ядро; вставляется в терминал
         // с подтверждением, без sudo под root. ОС не определена — считаем Linux.
-        var sshd = new MenuFlyoutSubItem { Text = L("Вход по паролю на сервере"), Icon = new FontIcon { Glyph = "\uE72E" } };
+        // Windows-сервер: у ядра нет команды для его sshd — пункт не показываем, как на Mac.
+        var sshd = new MenuFlyoutSubItem { Text = L("Вход по паролю на сервере"), Icon = new FontIcon { Glyph = "\uE72E" },
+            Visibility = h.os == ServerOs.Windows ? Visibility.Collapsed : Visibility.Visible };
         foreach (var (title, enabled) in new[] { (L("Разрешить…"), true), (L("Запретить…"), false) })
         {
             var item = new MenuFlyoutItem { Text = title };

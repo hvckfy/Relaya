@@ -143,6 +143,8 @@ internal sealed class SettingsPage : UserControl
         highlight.Toggled += (_, _) => Platform.Settings.Set("terminal.highlight", highlight.IsOn ? "1" : "0");
         var highlightRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         highlightRow.Children.Add(Ui.Button(L("Правила…"), () => MainWindow.Current?.ShowPage(new HighlightRulesPage())));
+        // Переключатель внутри панели теряет подпись строки — даём имя для экранного диктора сами.
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(highlight, L("Подсветка вывода"));
         highlightRow.Children.Add(highlight);
         list.Children.Add(Ui.Row("\uE7E6", L("Подсветка вывода"), L("Ошибки, предупреждения, успех, IP-адреса и ссылки — цветами темы; полноэкранные программы не трогаются"), highlightRow));
 
