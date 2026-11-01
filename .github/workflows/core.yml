@@ -1,11 +1,12 @@
 name: Core (Rust)
 
+# Ветки проверяются через PR, main — после fast-forward: один прогон на пуш, без дубля push + pull_request.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths: ["core/**", ".github/workflows/core.yml", ".github/actions/**"]
   pull_request:
-    paths: ["core/**"]
+    paths: ["core/**", ".github/workflows/core.yml", ".github/actions/**"]
 
 concurrency:
   group: core-${{ github.ref }}
