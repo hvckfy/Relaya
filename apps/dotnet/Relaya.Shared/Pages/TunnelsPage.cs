@@ -42,6 +42,9 @@ internal sealed class TunnelsPage : UserControl
             toggle.Toggled += (_, _) => { if (toggle.IsOn) TunnelManager.Shared.Start(t); else TunnelManager.Shared.Stop(t.id); };
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { toggle } };
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(t)));
+            // Та же команда, что запускает Relaya (аргументы ядра), — для терминала или скрипта (8.2).
+            actions.Children.Add(Ui.IconButton("\uE8C8", L("Копировать ssh-команду"), () =>
+                Ui.Copy("ssh " + string.Join(" ", RelayaCoreMethods.TunnelSshArguments(t, false).Select(a => a.Contains(' ') ? $"\"{a}\"" : a)))));
             actions.Children.Add(Ui.IconButton("", L("Удалить"), async () =>
             {
                 if (!await Ui.Confirm(XamlRoot, L("Удалить %@?", t.name), L("Туннель будет остановлен и удалён."), L("Удалить"))) return;
