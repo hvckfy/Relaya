@@ -32,6 +32,9 @@ public sealed partial class MainWindow : Window
         Tabs.TabDragStarting += (_, e) =>
         {
             DraggedTiles = (e.Tab.Tag as Tab)?.Content as Terminal.TileHost;
+            // Нажатие на вкладку уже выбрало её, и на экране её же плитки — бросить некуда. Показываем вкладку,
+            // открытую до нажатия: на неё и перетаскивают.
+            if (Tabs.SelectedItem == e.Tab && previousTab != null && Tabs.TabItems.Contains(previousTab)) Tabs.SelectedItem = previousTab;
             e.Data.SetText("relaya-tab");
             e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
         };
@@ -159,7 +162,12 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(item, RelayaCoreMethods.HostSubtitle(h));
         item.ContextFlyout = Pages.HostActions.Menu(h, item);
         // Handled: иначе фокус остаётся у пункта списка, а не у новой плитки (Л3).
-        item.DoubleTapped += (_, e) => { e.Handled = true; OpenSession(h.alias); };
+        item.DoubleTapped += (_, e) =>
+        {
+            e.Handled = true;
+            openedByDoubleTap = (h.alias, Environment.TickCount64);
+            OpenSession(h.alias);
+        };
         return item;
     }
 
@@ -178,6 +186,8 @@ public sealed partial class MainWindow : Window
         if (args.IsSettingsInvoked) { ShowPage(settingsPage ??= new Pages.SettingsPage()); return; }
         switch (args.InvokedItemContainer?.Tag)
         {
+            // Второй щелчок двойного клика тоже приходит как ItemInvoked — не уводим с только что открытого терминала.
+            case SshHost h when openedByDoubleTap is { } t && t.Alias == h.alias && Environment.TickCount64 - t.At < 700: break;
             case SshHost h: ShowPage(new Pages.HostPage(h)); break;
             case RemoteDesktop d: Platform.DesktopLauncher.Open(d, Content.XamlRoot); break;
             case "keys": ShowPage(new Pages.KeysPage()); break;
@@ -190,6 +200,7 @@ public sealed partial class MainWindow : Window
     }
 
     private Pages.SettingsPage? settingsPage;
+    private (string Alias, long At)? openedByDoubleTap;
 
     /// Пустая область «Выберите хост слева» (например, отмена «Нового хоста»).
     internal void ShowNothing()
@@ -317,8 +328,12 @@ public sealed partial class MainWindow : Window
             if ((t.Tag as Tab)?.Content is Terminal.TileHost host && host.Contains(view)) { Tabs.SelectedItem = t; return; }
     }
 
+    // Вкладка, выбранная до последнего переключения, — цель перетаскивания вкладки на плитки.
+    private TabViewItem? previousTab;
+
     private void OnTabSelected(object sender, SelectionChangedEventArgs e)
     {
+        if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem removed) previousTab = removed;
         if ((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t)
         {
             Nav.SelectedItem = null;

@@ -90,7 +90,8 @@ internal sealed class TileHost : UserControl, IDisposable
                 Pages.Ui.IconButton("", L("Крупнее (Ctrl+=)"), () => active?.View.ZoomFont(1)),
             },
         };
-        var stage = new Grid { Children = { grid, dropHint } };
+        // Прозрачный фон: без него пустые места холста не получают DragOver/Drop.
+        var stage = new Grid { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), Children = { grid, dropHint } };
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         root.Children.Add(bar);
         Grid.SetRow(broadcastBar, 1);
