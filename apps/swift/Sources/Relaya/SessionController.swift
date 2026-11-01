@@ -23,7 +23,28 @@ final class SessionController {
     @ObservationIgnored private var osGuessed = false
     @ObservationIgnored private var retryPasswordOnly = false
     /// Команда, которую нужно выполнить после входа (например, из мастера ключей).
-    @ObservationIgnored var pendingCommand: String?
+    @ObservationIgnored var pendingCommand: String? {
+        didSet {
+            stuckCommand = nil
+            guard let cmd = pendingCommand else { return }
+            // Е.3: вход так и не распознан за 15 с — команду не вводим вслепую, а предлагаем «Вставить».
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(15))
+                guard let self, self.pendingCommand == cmd else { return }
+                self.pendingCommand = nil
+                self.stuckCommand = cmd
+            }
+        }
+    }
+    /// Команда, которая не дождалась входа: баннер «Вставить» (Е.3).
+    var stuckCommand: String?
+
+    /// Вставить команду без Enter — пользователь проверит и запустит сам.
+    func insertStuckCommand() {
+        guard let cmd = stuckCommand else { return }
+        stuckCommand = nil
+        terminal?.sendQuiet(cmd)
+    }
     /// Имя постоянной сессии tmux на сервере (если для хоста включено).
     /// Можно включить и выключить в открытой вкладке — тогда она переподключается.
     var tmuxName: String?

@@ -178,6 +178,16 @@ private struct SessionBanners: View {
                         .buttonStyle(.relaya(.normal, height: 24))
                 }
             }
+            if let cmd = controller.stuckCommand {
+                BannerRow(tint: Theme.orgTint, border: Theme.line) {
+                    Text(L("Вход не распознан — команда не отправлена: %@", cmd)).lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Button(L("Вставить")) { controller.insertStuckCommand() }
+                        .buttonStyle(.relaya(.primary, height: 24))
+                    Button(L("Отмена")) { controller.stuckCommand = nil }
+                        .buttonStyle(.relaya(.ghost, height: 24))
+                }
+            }
             if controller.offerKeySetup, settings.offerKeySetup {
                 BannerRow(tint: Theme.accTint, border: Theme.line) {
                     Text(L("Вы вошли по паролю. Настроить вход по ключу?"))
@@ -211,7 +221,7 @@ private struct SessionBanners: View {
         // Все баннеры, которые рисует body, — иначе у части из них нет отступа от терминала (UI-M4).
         controller.passwordOnly || controller.hostKeyChanged || controller.hostKeyPrompt != nil || controller.savedPasswordRejected
             || controller.passwordPromptWithoutSaved || (controller.offerKeySetup && settings.offerKeySetup)
-            || controller.sudoPrompt || controller.passwordPromptAfterLogin || (controller.secretPromptActive && model.broadcastInput)
+            || controller.sudoPrompt || controller.passwordPromptAfterLogin || controller.stuckCommand != nil || (controller.secretPromptActive && model.broadcastInput)
     }
 }
 

@@ -1220,3 +1220,4 @@
 "Профиль синхронизации будет удалён. Хосты и файлы на этой машине не затрагиваются." = "The sync profile will be deleted. Hosts and files on this machine stay as they are.";
 "Разделить вправо (⌘D)" = "Split Right (⌘D)";
 "Разделить вниз (⇧⌘D)" = "Split Down (⇧⌘D)";
+"Вход не распознан — команда не отправлена: %@" = "Login not detected — the command wasn't sent: %@";
