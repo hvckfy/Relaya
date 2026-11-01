@@ -26,7 +26,9 @@ internal static class KeyGen
             string tail;
             lock (output) { output.Append(Encoding.UTF8.GetString(data)); tail = output.ToString(); }
             // «Enter passphrase…» и «Enter same passphrase again:» — отвечаем на каждый запрос по одному разу.
-            var prompts = Count(tail, "passphrase");
+            // Считаем «Enter»: в первом запросе слово passphrase встречается дважды, и второй ответ уходил
+            // раньше второго запроса — Windows ssh-keygen его терял и ждал ввода до таймаута, диалог замирал.
+            var prompts = Count(tail, "Enter ");
             while (answered < Math.Min(prompts, 2))
             {
                 answered++;
