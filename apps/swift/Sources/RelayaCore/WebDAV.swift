@@ -67,4 +67,49 @@ public enum WebDAV {
     public static func date(fromListing s: String, now: Date = Date()) -> Date {
         Date(timeIntervalSince1970: davDateFromListing(s: s, now: now.timeIntervalSince1970))
     }
+
+    // Правила моста — в ядре (`core/src/webdav_policy.rs`): клиент только выполняет решение.
+
+    public typealias Secrets = DavSecrets
+    public typealias Action = DavAction
+    public typealias TransferPlan = DavTransferPlan
+
+    /// Случайные путь `/<uuid>/<имя>` и Basic-пароль одного подключения диска.
+    public static func newSecrets(volumeName: String) -> Secrets { davNewSecrets(volumeName: volumeName) }
+
+    /// Заголовок `Authorization` совпадает с паролем подключения (сравнение за постоянное время).
+    public static func isAuthorized(_ authorization: String?, password: String) -> Bool {
+        davAuthorized(authorization: authorization, password: password)
+    }
+
+    /// Имя диска в Finder: хост, для вложенной папки — «хост · папка».
+    public static func volumeName(alias: String, path: String) -> String { davVolumeName(alias: alias, path: path) }
+
+    public static func rootNeedsHome(_ requested: String) -> Bool { davRootNeedsHome(requested: requested) }
+
+    /// Корень диска на сервере; `.`/`..` — ошибка.
+    public static func resolveRoot(_ requested: String, home: String) throws -> String {
+        try davResolveRoot(requested: requested, home: home)
+    }
+
+    /// Что сделать по запросу и каким кодом ответить (после проверки пароля).
+    public static func decide(_ req: Request, prefix: String, root: String) -> Action {
+        davDecide(method: req.method, path: req.path, destination: req.header("destination"),
+                  overwrite: req.header("overwrite"), prefix: prefix, root: root)
+    }
+
+    public static func transferPlan(source: String, destination: String, isMove: Bool, overwrite: Bool,
+                                    destinationExists: Bool) -> TransferPlan {
+        davTransferPlan(source: source, destination: destination, isMove: isMove, overwrite: overwrite,
+                        destinationExists: destinationExists)
+    }
+
+    public static func deleteCommand(_ remote: String) -> String { davDeleteCommand(remote: remote) }
+    public static func existsCommand(_ remote: String) -> String { davExistsCommand(remote: remote) }
+
+    /// Временный файл для GET/PUT в приватном (0700) каталоге процесса.
+    public static func tempFile() throws -> URL { URL(fileURLWithPath: try davTempFile()) }
+
+    /// Удалить каталог временных файлов процесса — при выходе из приложения.
+    public static func tempCleanup() throws { try davTempCleanup() }
 }

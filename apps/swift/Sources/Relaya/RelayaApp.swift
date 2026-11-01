@@ -156,6 +156,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         !(model?.tunnels.anyRunning ?? false)
     }
+
+    /// Временные файлы диска WebDAV (каталог процесса 0700) — удалить при выходе.
+    func applicationWillTerminate(_ notification: Notification) {
+        do { try WebDAV.tempCleanup() } catch {
+            NSLog("Relaya WebDAV: временные файлы не удалены: \(error.localizedDescription)")
+        }
+    }
 }
 
 /// Меню значка в строке меню: туннели с переключением и быстрый переход в Relaya.

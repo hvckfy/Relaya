@@ -25,15 +25,7 @@ final class WebDAVBridge {
     init(host: SSHHost, remoteRoot: String, sftp: SFTPClient, ssh: SSHInvocation) {
         self.host = host
         self.remoteRoot = remoteRoot
-        server = DAVServer(volumeName: Self.volumeName(alias: host.alias, path: remoteRoot), root: remoteRoot, sftp: sftp, ssh: ssh)
-    }
-
-    /// Имя диска в Finder: хост, а для вложенной папки — «хост · папка».
-    static func volumeName(alias: String, path: String) -> String {
-        let last = (path as NSString).lastPathComponent
-        let name = path == "/" || path.isEmpty || last.isEmpty || last == "/" ? alias
-            : path == "~" ? "\(alias) · ~" : "\(alias) · \(last)"
-        return name.replacingOccurrences(of: "/", with: "-")
+        server = DAVServer(volumeName: WebDAV.volumeName(alias: host.alias, path: remoteRoot), root: remoteRoot, sftp: sftp, ssh: ssh)
     }
 
     /// Поднять сервер, подключить диск и открыть его в Finder.
@@ -62,7 +54,7 @@ final class WebDAVBridge {
         }
         self.listener = listener
         guard let url = URL(string: "http://127.0.0.1:\(port)\(server.prefix)") else { return }
-        let mp = try await Self.mount(url, password: server.password)
+        let mp = try await Self.mount(url, user: server.user, password: server.password)
         mountPoint = mp
         // Открыть в Finder — не из главного потока: обращение к диску идёт к нашему же серверу.
         if let mp { DispatchQueue.global().async { NSWorkspace.shared.open(mp) } }
@@ -82,7 +74,7 @@ final class WebDAVBridge {
         DispatchQueue.global().async { NSWorkspace.shared.open(mp) }
     }
 
-    private static func mount(_ url: URL, password: String) async throws -> URL? {
+    private static func mount(_ url: URL, user: String, password: String) async throws -> URL? {
         try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global().async {
                 let open = NSMutableDictionary()
@@ -90,7 +82,7 @@ final class WebDAVBridge {
                 // Не гостем: сервер требует Basic-аутентификацию со случайным паролем этого подключения,
                 // иначе к диску мог бы обратиться любой локальный процесс, узнавший порт и путь.
                 var points: Unmanaged<CFArray>?
-                let status = NetFSMountURLSync(url as CFURL, nil, DAVServer.user as CFString, password as CFString,
+                let status = NetFSMountURLSync(url as CFURL, nil, user as CFString, password as CFString,
                                                open, nil, &points)
                 if status == 0, let list = points?.takeRetainedValue() as? [String], let first = list.first {
                     cont.resume(returning: URL(fileURLWithPath: first))
@@ -103,12 +95,13 @@ final class WebDAVBridge {
     }
 }
 
-/// Обработка запросов WebDAV: состояние моста (кэш списков, служебные файлы Finder) — внутри актора.
+/// Обработка запросов WebDAV: решение по запросу — в ядре (`WebDAV.decide`), здесь — только sftp/ssh и состояние
+/// моста (кэш списков, служебные файлы Finder) внутри актора.
 actor DAVServer {
+    /// Путь `/<uuid>/<имя диска>` и Basic-пароль — случайные на каждое подключение.
     nonisolated let prefix: String
-    /// Basic-аутентификация моста: пароль случайный на каждое подключение диска.
-    nonisolated static let user = "relaya"
-    nonisolated let password = UUID().uuidString + UUID().uuidString
+    nonisolated let user: String
+    nonisolated let password: String
     private let volumeName: String
     private let sftp: SFTPClient
     private let ssh: SSHInvocation
@@ -124,126 +117,108 @@ actor DAVServer {
         requestedRoot = root
         self.sftp = sftp
         self.ssh = ssh
-        prefix = "/\(UUID().uuidString.lowercased())/\(volumeName)"
+        let secrets = WebDAV.newSecrets(volumeName: volumeName)
+        prefix = secrets.prefix
+        user = secrets.user
+        password = secrets.password
     }
 
-    /// Проверить папку: `~` и пустое — домашняя, `~/x` — внутри домашней; несуществующая — ошибка.
+    /// Проверить папку: корень разрешает ядро (`~`, `~/x`, абсолютный; `..` — ошибка), несуществующая — ошибка.
     func prepare() async throws {
-        let r = requestedRoot.trimmingCharacters(in: .whitespaces)
-        if r.isEmpty || r == "~" {
-            root = try await sftp.home()
-        } else if r.hasPrefix("~/") {
-            root = SFTPClient.join(try await sftp.home(), String(r.dropFirst(2)))
-        } else {
-            root = r.hasPrefix("/") ? r : "/" + r
-        }
+        let home = WebDAV.rootNeedsHome(requestedRoot) ? try await sftp.home() : ""
+        root = try WebDAV.resolveRoot(requestedRoot, home: home)
         _ = try await sftp.list(root)
     }
 
     // MARK: - Запросы
 
-    /// Путь запроса → путь на сервере. Только внутри префикса (с границей `/`) и без `.`/`..` в компонентах,
-    /// чтобы ни запрос, ни Destination у MOVE/COPY не вышли за корень диска.
-    func remotePath(_ path: String) -> String? {
-        guard path == prefix || path.hasPrefix(prefix + "/") else { return nil }
-        let parts = path.dropFirst(prefix.count).split(separator: "/", omittingEmptySubsequences: true)
-        guard !parts.contains(where: { $0 == ".." || $0 == "." }) else { return nil }
-        return parts.isEmpty ? root : SFTPClient.join(root, parts.joined(separator: "/"))
-    }
-
-    private var expectedAuthorization: String {
-        "Basic " + Data("\(Self.user):\(password)".utf8).base64EncodedString()
-    }
-
     func handle(_ req: WebDAV.Request) async -> Data {
-        guard req.header("authorization") == expectedAuthorization else {
+        guard WebDAV.isAuthorized(req.header("authorization"), password: password) else {
             return WebDAV.response(401, "Unauthorized", headers: ["WWW-Authenticate": "Basic realm=\"Relaya\""])
         }
-        guard let remote = remotePath(req.path) else { return WebDAV.response(404, "Not Found") }
-        if remote == root, ["DELETE", "MOVE"].contains(req.method) { return WebDAV.response(403, "Forbidden") }
-        let name = (remote as NSString).lastPathComponent
         do {
-            switch req.method {
-            case "OPTIONS":
+            switch WebDAV.decide(req, prefix: prefix, root: root) {
+            case let .reply(status, reason):
+                return WebDAV.response(Int(status), reason)
+            case .options:
                 return WebDAV.response(200, "OK", headers: ["Allow": "OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, MOVE, COPY, PROPFIND, PROPPATCH, LOCK, UNLOCK"])
-            case "PROPFIND":
-                return try await propfind(req, remote: remote)
-            case "PROPPATCH":
+            case let .propfind(remote, isJunk):
+                return try await propfind(req, remote: remote, isJunk: isJunk)
+            case .proppatch:
                 return WebDAV.response(207, "Multi-Status", headers: ["Content-Type": "application/xml; charset=utf-8"],
                                        body: WebDAV.multistatus([]))
-            case "LOCK":
+            case .lock:
                 let token = "opaquelocktoken:\(UUID().uuidString)"
                 return WebDAV.response(200, "OK", headers: ["Content-Type": "application/xml; charset=utf-8",
                                                             "Lock-Token": "<\(token)>"],
                                        body: WebDAV.lockResponse(token: token, path: req.path))
-            case "UNLOCK":
+            case .unlock:
                 return WebDAV.response(204, "No Content")
-            case "GET", "HEAD":
-                if WebDAV.isFinderJunk(name) {
+            case let .get(remote, isJunk), let .head(remote, isJunk):
+                let isHead = req.method == "HEAD"
+                if isJunk {
                     guard let d = junk[remote] else { return WebDAV.response(404, "Not Found") }
-                    return WebDAV.response(200, "OK", body: req.method == "HEAD" ? Data() : d)
+                    return WebDAV.response(200, "OK", body: isHead ? Data() : d)
                 }
-                if req.method == "HEAD" {
+                if isHead {
                     guard let f = try await stat(remote) else { return WebDAV.response(404, "Not Found") }
                     return WebDAV.response(200, "OK", headers: ["Content-Length": "\(f.size)"])
                 }
-                let tmp = FileManager.default.temporaryDirectory.appending(path: "relaya-dav-\(UUID().uuidString)")
-                defer { try? FileManager.default.removeItem(at: tmp) }
+                let tmp = try WebDAV.tempFile()
+                defer { removeTemp(tmp) }
                 try await StreamTransfer.download(ssh, remotePath: remote, to: tmp) { _ in }
                 return WebDAV.response(200, "OK", headers: ["Content-Type": "application/octet-stream"],
                                        body: try Data(contentsOf: tmp))
-            case "PUT":
-                if WebDAV.isFinderJunk(name) { junk[remote] = req.body; return WebDAV.response(201, "Created") }
-                let tmp = FileManager.default.temporaryDirectory.appending(path: "relaya-dav-\(UUID().uuidString)")
-                defer { try? FileManager.default.removeItem(at: tmp) }
+            case let .put(remote, isJunk):
+                if isJunk { junk[remote] = req.body; return WebDAV.response(201, "Created") }
+                let tmp = try WebDAV.tempFile()
+                defer { removeTemp(tmp) }
                 try req.body.write(to: tmp)
                 try await StreamTransfer.upload(ssh, localURL: tmp, remoteDirectory: SFTPClient.parent(of: remote),
-                                                name: name) { _ in }
+                                                name: (remote as NSString).lastPathComponent) { _ in }
                 invalidate(remote)
                 return WebDAV.response(201, "Created")
-            case "MKCOL":
+            case let .mkcol(remote):
                 try await sftp.makeDirectory(remote)
                 invalidate(remote)
                 return WebDAV.response(201, "Created")
-            case "DELETE":
-                if WebDAV.isFinderJunk(name) { junk[remote] = nil; return WebDAV.response(204, "No Content") }
+            case let .delete(remote, isJunk):
+                if isJunk { junk[remote] = nil; return WebDAV.response(204, "No Content") }
                 // Finder сам спрашивает «Удалить сразу?» — папки удаляются целиком, как на любом сетевом диске.
-                try await shell("rm -rf -- \(StreamTransfer.quote(remote))")
+                try await shell(WebDAV.deleteCommand(remote))
                 invalidate(remote)
                 return WebDAV.response(204, "No Content")
-            case "MOVE", "COPY":
-                guard let dest = WebDAV.destinationPath(req.header("destination")).flatMap(remotePath) else {
-                    return WebDAV.response(400, "Bad Request")
-                }
-                if WebDAV.isFinderJunk(name) {
-                    junk[dest] = junk[remote]
-                    if req.method == "MOVE" { junk[remote] = nil }
+            case let .transfer(source, destination, isMove, overwrite, isJunk):
+                if isJunk {
+                    junk[destination] = junk[source]
+                    if isMove { junk[source] = nil }
                     return WebDAV.response(201, "Created")
                 }
-                let overwrite = req.header("overwrite")?.uppercased() != "F"
-                // Overwrite: F и цель уже есть — 412 Precondition Failed (RFC 4918 9.9.3); `mv -n` молча ничего
-                // не сделал бы, а клиент получил бы 201 и решил, что переименование прошло.
-                if !overwrite, try await exists(dest) { return WebDAV.response(412, "Precondition Failed") }
-                let existed = overwrite ? try await exists(dest) : false
-                let tool = req.method == "MOVE" ? "mv" : "cp -a"
-                let d = StreamTransfer.quote(dest)
-                // Замена существующей цели: по RFC 4918 9.9.3 сначала удаляется она — иначе mv/cp положили бы
-                // папку внутрь папки (dest/src), а мост ответил бы «заменено».
-                let clear = existed ? "{ ! test -d \(d) || rm -rf -- \(d); } && " : ""
-                try await shell("\(clear)\(tool) -- \(StreamTransfer.quote(remote)) \(d)")
-                invalidate(remote)
-                invalidate(dest)
-                // 204 — цель заменена, 201 — создана (RFC 4918 9.9.4).
-                return existed ? WebDAV.response(204, "No Content") : WebDAV.response(201, "Created")
-            default:
-                return WebDAV.response(405, "Method Not Allowed")
+                let existed = try await exists(destination)
+                switch WebDAV.transferPlan(source: source, destination: destination, isMove: isMove,
+                                           overwrite: overwrite, destinationExists: existed) {
+                case let .reply(status, reason):
+                    return WebDAV.response(Int(status), reason)
+                case let .run(command, status, reason):
+                    try await shell(command)
+                    invalidate(source)
+                    invalidate(destination)
+                    return WebDAV.response(Int(status), reason)
+                }
             }
         } catch {
             return WebDAV.response(500, "Internal Server Error", body: Data(error.localizedDescription.utf8))
         }
     }
 
-    private func propfind(_ req: WebDAV.Request, remote: String) async throws -> Data {
+    /// Временный файл удаляется сразу после запроса; не удалось — ошибка в журнал, ответ уже собран.
+    private func removeTemp(_ url: URL) {
+        do { try FileManager.default.removeItem(at: url) } catch let e as CocoaError where e.code == .fileNoSuchFile {
+            // Файла уже нет (download не успел его создать) — удалять нечего.
+        } catch { NSLog("Relaya WebDAV: временный файл не удалён: \(error.localizedDescription)") }
+    }
+
+    private func propfind(_ req: WebDAV.Request, remote: String, isJunk: Bool) async throws -> Data {
         let href = req.path
         let isRoot = remote == root
         let selfEntry: WebDAV.Entry
@@ -251,7 +226,7 @@ actor DAVServer {
             selfEntry = .init(href: href, name: volumeName, isDirectory: true, size: 0, modified: Date())
         } else {
             let name = (remote as NSString).lastPathComponent
-            if WebDAV.isFinderJunk(name) {
+            if isJunk {
                 guard let d = junk[remote] else { return WebDAV.response(404, "Not Found") }
                 selfEntry = .init(href: href, name: name, isDirectory: false, size: Int64(d.count), modified: Date())
             } else {
@@ -294,8 +269,7 @@ actor DAVServer {
 
     /// Есть ли путь на сервере (файл, папка или ссылка).
     private func exists(_ path: String) async throws -> Bool {
-        let q = StreamTransfer.quote(path)
-        let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, "test -e \(q) || test -L \(q)"],
+        let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, WebDAV.existsCommand(path)],
                                             environment: ssh.environment, timeout: .seconds(60))
         if r.status == 0 { return true }
         if r.status == 1 { return false }
