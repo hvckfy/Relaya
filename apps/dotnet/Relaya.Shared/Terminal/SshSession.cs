@@ -28,6 +28,25 @@ internal sealed class SshSession : IDisposable
     /// После входа удалённая программа (su, sudo, mysql…) спросила пароль — вкладка предлагает подставить пароль хоста.
     public event Action? PasswordRequested;
 
+    /// Первое подключение: ssh спрашивает, доверять ли ключу сервера; аргумент — отпечаток (SHA256:…).
+    public event Action<string>? HostKeyRequested;
+
+    /// Ответ на вопрос о ключе сервера — в ту же сессию.
+    public void AnswerHostKey(bool trust)
+    {
+        if (!ended) console?.Write(Encoding.UTF8.GetBytes(trust ? "yes\r" : "no\r"));
+    }
+
+    // Отпечаток из «… key fingerprint is SHA256:abc.» — как SessionController.fingerprint на Mac.
+    private static string? Fingerprint(string text)
+    {
+        var i = text.LastIndexOf("key fingerprint is ", StringComparison.Ordinal);
+        if (i < 0) return null;
+        var rest = text[(i + "key fingerprint is ".Length)..];
+        var end = rest.IndexOfAny(new[] { ' ', '\n', '\t' });
+        return (end < 0 ? rest : rest[..end]).TrimEnd('.');
+    }
+
     private IPty? asked;
     // Последняя строка вывода — запрос пароля: такой ввод не рассылается в другие терминалы.
     private volatile bool secretPrompt;
@@ -116,6 +135,14 @@ internal sealed class SshSession : IDisposable
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
             if (!loggedIn && view.Emulator.LoginReady()) loggedIn = true;
+            // Вопрос о ключе сервера при первом подключении — окно с отпечатком, а не ввод «yes» вслепую.
+            if (!loggedIn && text.Contains("Are you sure you want to continue connecting") && text.TrimEnd().EndsWith('?'))
+            {
+                var fp = Fingerprint(text) ?? L("неизвестен");
+                tail.Clear();
+                try { HostKeyRequested?.Invoke(fp); }
+                catch (Exception e) { Relaya.Terminal.TerminalView.Trace("HostKeyRequested: " + e.GetType().Name); }
+            }
             secretPrompt = PasswordPrompt.Matches(text) || PasswordPrompt.IsAnyPasswordPrompt(text);
             NotePorts(new string(chars));
             if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)

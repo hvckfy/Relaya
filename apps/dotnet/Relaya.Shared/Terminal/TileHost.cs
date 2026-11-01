@@ -206,6 +206,31 @@ internal sealed class TileHost : UserControl, IDisposable
         put.Click += (_, _) => { ask.IsOpen = false; session.SendPassword(); view.Focus(FocusState.Programmatic); };
         no.Click += (_, _) => { ask.IsOpen = false; view.Focus(FocusState.Programmatic); };
         session.PasswordRequested += () => ui.TryEnqueue(() => ask.IsOpen = true);
+        // Ключ сервера при первом подключении (как окно на Mac): ContentDialog с отпечатком, по умолчанию «Отмена».
+        session.HostKeyRequested += fp => ui.TryEnqueue(async () =>
+        {
+            if (XamlRoot == null) { session.AnswerHostKey(false); return; }
+            var dialog = new ContentDialog
+            {
+                Title = L("Первое подключение к %@", alias),
+                Content = new StackPanel
+                {
+                    Spacing = 8,
+                    Children =
+                    {
+                        Pages.Ui.Secondary(L("Сверьте отпечаток ключа сервера с тем, что показывает сам сервер (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub).")),
+                        new TextBlock { Text = fp, IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
+                            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas") },
+                    },
+                },
+                PrimaryButtonText = L("Подключиться"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+            };
+            bool trust;
+            try { trust = await dialog.ShowAsync() == ContentDialogResult.Primary; }
+            catch (Exception) { trust = false; } // уже открыт другой диалог — безопасный ответ
+            session.AnswerHostKey(trust);
+            view.Focus(FocusState.Programmatic);
+        });
         // Начальная команда (сниппет, tmux attach) не дождалась входа — не вводим сами, предлагаем вставить.
         var pending = new InfoBar
         {

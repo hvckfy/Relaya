@@ -1162,3 +1162,5 @@
 "Шлюз" = "Gateway";
 "как у сервера" = "same as server";
 "Переподключение через %@ с (попытка %@ из %@)" = "Reconnecting in %@ s (attempt %@ of %@)";
+"Первое подключение к %@" = "First connection to %@";
+"Сверьте отпечаток ключа сервера с тем, что показывает сам сервер (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub)." = "Compare the server key fingerprint with what the server itself shows (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub).";
