@@ -54,7 +54,7 @@ runs:
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: ${{ runner.temp }}/royalvnc-out
-        key: royalvnc-${{ inputs.commit }}-swift-${{ inputs.swift }}-${{ runner.os }}
+        key: royalvnc-${{ inputs.commit }}-swift-${{ inputs.swift }}-${{ runner.os }}-macos15
     - name: Build RoyalVNCKit
       if: steps.cache.outputs.cache-hit != 'true'
       shell: pwsh
@@ -68,7 +68,11 @@ runs:
         if ($IsLinux) {
           swift build -c release --product RoyalVNCKit -Xswiftc -static-stdlib
         } elseif ($IsMacOS) {
-          # По архитектуре с явным minos 15 (в манифесте RoyalVNC — macOS 11), потом lipo в одну dylib.
+          # minos берётся из platforms манифеста (там macOS 11), а не из --triple: поднять до 15 (минимум Relaya).
+          $manifest = Get-Content Package.swift -Raw
+          if ($manifest -notmatch '\.macOS\(\.v11\)') { Write-Error "Package.swift: .macOS(.v11) not found"; exit 1 }
+          $manifest.Replace('.macOS(.v11)', '.macOS(.v15)') | Set-Content Package.swift -NoNewline
+          # По архитектуре, потом lipo в одну dylib.
           foreach ($arch in "arm64", "x86_64") {
             swift build -c release --product RoyalVNCKit --triple "$arch-apple-macosx15.0"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -84,7 +88,9 @@ runs:
             "$src/.build/x86_64-apple-macosx/release/libRoyalVNCKit.dylib" -output "$out/libRoyalVNCKit.dylib"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           lipo -info "$out/libRoyalVNCKit.dylib"
-          otool -l "$out/libRoyalVNCKit.dylib" | grep -A3 LC_BUILD_VERSION | grep minos
+          $minos = otool -l "$out/libRoyalVNCKit.dylib" | Select-String 'minos' | ForEach-Object { $_.Line.Trim() } | Sort-Object -Unique
+          $minos
+          if ($minos -ne 'minos 15.0') { Write-Error "RoyalVNCKit minos is not 15.0"; exit 1 }
           otool -D "$out/libRoyalVNCKit.dylib"
         }
         Get-ChildItem "$src/.build/release" -File | Where-Object { $_.Name -match '^(lib)?RoyalVNCKit\.(so|dll|lib)$' } |
