@@ -561,10 +561,10 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     private void DrawFrame(IPainter ds)
     {
         if (!measured) Measure();
-        var bg = Theme.Background;
+        var clear = Theme.Background;
         // Картинка фона под сессиями (12.2): фон терминала полупрозрачный, ячейки с цветом — как есть.
-        bg.A = (byte)(bg.A * Platform.Appearance.SessionOpacity);
-        ds.Clear(bg);
+        clear.A = (byte)(clear.A * Platform.Appearance.SessionOpacity);
+        ds.Clear(clear);
         var s = CurrentScreen();
         var highlight = !s.altScreen && Platform.Settings.Get("terminal.highlight", "1") == "1";
         var run = new StringBuilder();
