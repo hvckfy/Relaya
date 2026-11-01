@@ -28,6 +28,7 @@ jobs:
   build:
     # 24.04: toolchain Swift для RoyalVNCKit собран под неё (libxml2.so.2).
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     # Две сборки, как у Mac и Windows (ADR-002): язык интерфейса задаётся при сборке.
     strategy:
       fail-fast: false
@@ -93,6 +94,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:
