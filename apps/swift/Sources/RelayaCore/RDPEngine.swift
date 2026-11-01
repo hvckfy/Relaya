@@ -6,8 +6,8 @@ public typealias CertNode = RelayaRust.CertNode
 public typealias CertRole = RelayaRust.CertRole
 // Запись ядра из строки, порта и перечисления — значение без ссылок, безопасно передавать между потоками
 // (колбэк ядра → главный поток).
-extension RelayaRust.CertNode: @retroactive @unchecked Sendable {}
-extension RelayaRust.CertRole: @retroactive @unchecked Sendable {}
+extension RelayaRust.CertNode: @unchecked Sendable {}
+extension RelayaRust.CertRole: @unchecked Sendable {}
 
 /// Встроенный RDP ядра (FreeRDP 3): Swift-фасад над `RemoteSession`. Колбэки приходят с потока сессии ядра —
 /// перенос в главный поток делает вызывающий.
