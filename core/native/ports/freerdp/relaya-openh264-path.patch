@@ -1,0 +1,28 @@
+--- a/libfreerdp/codec/h264_openh264.c
++++ b/libfreerdp/codec/h264_openh264.c
+@@ -20,6 +20,8 @@
+  */
+ #include <freerdp/config.h>
+ 
++#include <stdlib.h>
++
+ #include <winpr/winpr.h>
+ #include <winpr/library.h>
+ #include <winpr/assert.h>
+@@ -544,8 +546,15 @@
+ 	h264->pSystemData = (void*)sysContexts;
+ #if defined(WITH_OPENH264_LOADING)
+ 
+-	for (size_t i = 0; i < ARRAYSIZE(openh264_library_names); i++)
+ 	{
++		/* Relaya: path to the verified OpenH264 copy (relaya-core checked_copy); when set, only that file is loaded. */
++		const char* relaya_path = getenv("RELAYA_OPENH264_LIBRARY");
++		if (relaya_path && relaya_path[0])
++			success = openh264_load_functionpointers(h264, relaya_path);
++	}
++
++	for (size_t i = 0; !success && !getenv("RELAYA_OPENH264_LIBRARY") && i < ARRAYSIZE(openh264_library_names); i++)
++	{
+ 		const char* current = openh264_library_names[i];
+ 		success = openh264_load_functionpointers(h264, current);
+ 

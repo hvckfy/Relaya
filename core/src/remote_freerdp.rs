@@ -214,6 +214,12 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
         return;
     }
     let c = session.config().clone();
+    // 9.12: OpenH264 от Cisco (macOS, Linux) — только проверенная копия в приватном каталоге, хеш сразу перед загрузкой;
+    // FreeRDP берёт путь из RELAYA_OPENH264_LIBRARY (патч overlay-порта). Не прошла проверку — без H.264, не ошибка.
+    match c.h264_library_path.as_deref().filter(|p| !p.is_empty()).and_then(crate::openh264::checked_copy) {
+        Some(copy) => std::env::set_var("RELAYA_OPENH264_LIBRARY", copy),
+        None => std::env::remove_var("RELAYA_OPENH264_LIBRARY"),
+    }
     let (host, user, password) = (cstr(&c.host), cstr(&c.user), cstr(&c.password));
     let (domain, gw_host, gw_user, gw_password, gw_domain) =
         (opt(&c.domain), opt(&c.gateway_host), opt(&c.gateway_user), opt(&c.gateway_password), opt(&c.gateway_domain));

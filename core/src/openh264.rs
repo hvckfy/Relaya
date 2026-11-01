@@ -130,7 +130,7 @@ pub fn openh264_verify(path: String) -> bool {
 
 /// Скопировать библиотеку в приватный каталог (0700, только этот процесс) и проверить хеш копии. Вернуть путь копии
 /// для dlopen; None — файл не тот или копия не удалась. Вызывать непосредственно перед загрузкой кодека.
-#[allow(dead_code)]
+#[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
 pub(crate) fn checked_copy(path: &str) -> Option<std::path::PathBuf> {
     let platform = openh264_current_platform()?;
     let dir = std::env::temp_dir().join(format!("relaya-openh264-{}-{}", std::process::id(), crate::models::new_id()));
