@@ -69,49 +69,12 @@ public sealed partial class MainWindow : Window
         {
             new Microsoft.UI.Xaml.Media.Animation.EntranceThemeTransition { FromHorizontalOffset = 0, FromVerticalOffset = 28 },
         };
-        // Вкладку можно перетащить на край терминала другой вкладки — режим плиток.
-        // Порядок вкладок меняется перетаскиванием, как на Mac.
+        // Порядок вкладок меняется перетаскиванием (TabView), как на Mac. В плитки вкладку переносят своей ручкой
+        // на панели терминала или пунктом «Разместить рядом» в меню вкладки: TabView выбирает вкладку уже на нажатии,
+        // и перетаскивание самой вкладки в плитки с этим не уживалось (0.17.6).
         Tabs.CanDragTabs = true;
         Tabs.CanReorderTabs = true;
         Tabs.AllowDrop = true;
-        // Перетаскивание вкладки в плитки (0.17.2): TabView выбирает вкладку уже на нажатии, до TabDragStarting, и бороться
-        // с выбором бесполезно. Поэтому мышью вкладка показывается по отпусканию, а не по нажатию: обычный щелчок
-        // переключает при отпускании, при перетаскивании экран не меняется — на нём плитки, куда бросают.
-        Tabs.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) =>
-        {
-            pointerDown = true;
-            underBeforePress = shownTab;
-            pendingShow = null;
-        }), true);
-        var up = new PointerEventHandler((_, _) => ReleaseTabPointer());
-        Tabs.AddHandler(UIElement.PointerReleasedEvent, up, true);
-        Tabs.AddHandler(UIElement.PointerCaptureLostEvent, up, true);
-        Tabs.AddHandler(UIElement.PointerCanceledEvent, up, true);
-        Tabs.TabDragStarting += (_, e) =>
-        {
-            dragging = true;
-            pendingShow = null;
-            DraggedTiles = (e.Tab.Tag as Tab)?.Content as Terminal.TileHost;
-            var under = underBeforePress;
-            dragUnder = under != null && under != e.Tab && Tabs.TabItems.Contains(under) ? under : null;
-            if (dragUnder?.Tag is Tab t) Show(t.Content); // на случай, если выбор уже успел показать перетаскиваемую
-            e.Data.SetText("relaya-tab");
-            e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-        };
-        // Бросок в плитки забирает вкладку (Adopt закрывает её) — остаётся вкладка, на которую бросили;
-        // осталась — была перестановка или бросок мимо: выбрана и видна перетащенная.
-        Tabs.TabDragCompleted += (_, e) =>
-        {
-            DraggedTiles = null;
-            dragging = false;
-            pointerDown = false;
-            var under = dragUnder;
-            dragUnder = null;
-            var target = Tabs.TabItems.Contains(e.Tab) ? e.Tab : under != null && Tabs.TabItems.Contains(under) ? under : null;
-            if (target == null) return;
-            Tabs.SelectedItem = target;
-            if (target.Tag is Tab t) Show(t.Content); // выбор мог уже стоять на ней — SelectionChanged тогда не придёт
-        };
         TabHost.ChildrenTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Nav.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Current = this;
@@ -577,12 +540,52 @@ public sealed partial class MainWindow : Window
         };
         content.Visibility = Visibility.Collapsed;
         TabHost.Children.Add(content);
+        if (content is Terminal.TileHost tiles) AddTileTargets(tab, tiles);
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
         return tab;
     }
 
     private sealed record Tab(UIElement Content, IDisposable? Owner);
+
+    /// Вкладка терминала как цель для плиток: ручку с панели другой вкладки задержали над заголовком — вкладка
+    /// показывается, и плитки бросают на её холст; меню вкладки «Разместить рядом» делает то же без мыши.
+    private void AddTileTargets(TabViewItem tab, Terminal.TileHost tiles)
+    {
+        tab.AllowDrop = true;
+        var hover = ui.CreateTimer();
+        hover.Interval = TimeSpan.FromMilliseconds(500);
+        hover.IsRepeating = false;
+        hover.Tick += (_, _) => { if (DraggedTiles is { } src && src != tiles) Tabs.SelectedItem = tab; };
+        tab.DragEnter += (_, _) => { if (DraggedTiles is { } src && src != tiles) hover.Start(); };
+        tab.DragLeave += (_, _) => hover.Stop();
+        var menu = new MenuFlyout();
+        var beside = new MenuFlyoutSubItem { Text = L("Разместить рядом") };
+        menu.Items.Add(beside);
+        // Список других терминальных вкладок собирается при открытии меню: вкладки открываются и закрываются.
+        menu.Opening += (_, _) =>
+        {
+            beside.Items.Clear();
+            foreach (var other in Tabs.TabItems.OfType<TabViewItem>().Where(t => t != tab))
+            {
+                if ((other.Tag as Tab)?.Content is not Terminal.TileHost target) continue;
+                var item = new MenuFlyoutSubItem { Text = other.Header?.ToString() ?? "" };
+                foreach (var (edge, text) in new[]
+                {
+                    (uniffi.relaya_core.Edge.Left, L("Слева")), (uniffi.relaya_core.Edge.Right, L("Справа")),
+                    (uniffi.relaya_core.Edge.Top, L("Сверху")), (uniffi.relaya_core.Edge.Bottom, L("Снизу")),
+                })
+                {
+                    var place = new MenuFlyoutItem { Text = text };
+                    place.Click += (_, _) => { Tabs.SelectedItem = other; target.Adopt(tiles, edge, null); };
+                    item.Items.Add(place);
+                }
+                beside.Items.Add(item);
+            }
+            beside.IsEnabled = beside.Items.Count > 0;
+        };
+        tab.ContextFlyout = menu;
+    }
 
     /// tmux-сессии всех открытых вкладок: уборка старых сессий их не трогает (К10).
     internal List<string> OpenTmuxNames => Tabs.TabItems.OfType<TabViewItem>()
@@ -607,25 +610,11 @@ public sealed partial class MainWindow : Window
 
     // Вкладка, чьи плитки на экране, пока перетаскивают другую (null — перетаскивания нет).
     // Вкладка на экране; вкладка, чьи плитки на экране во время перетаскивания другой; ожидающая показа после отпускания.
-    private TabViewItem? shownTab, dragUnder, underBeforePress, pendingShow;
-    private bool pointerDown, dragging;
-
-    private void ReleaseTabPointer()
-    {
-        if (!pointerDown) return;
-        pointerDown = false;
-        if (dragging) return;
-        var show = pendingShow;
-        pendingShow = null;
-        if (show != null && Tabs.SelectedItem == show && show.Tag is Tab t) { Nav.SelectedItem = null; Show(t.Content); }
-    }
+    private TabViewItem? shownTab;
 
     private void OnTabSelected(object sender, SelectionChangedEventArgs e)
     {
-        if (dragging) return; // идёт перетаскивание: экран не переключаем, previousTab не трогаем
         if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem removed) previousTab = removed;
-        // Выбор мышью — показать при отпускании (может начаться перетаскивание); клавиатура и код — сразу.
-        if (pointerDown && Tabs.SelectedItem is TabViewItem pressed) { pendingShow = pressed; return; }
         if ((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t)
         {
             Nav.SelectedItem = null;
