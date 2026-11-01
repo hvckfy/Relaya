@@ -154,7 +154,7 @@ struct DesktopEditor: View {
                         Text(L("100% — мельче, больше места")).tag(false)
                     }
                     Toggle(L("Во весь экран"), isOn: $desktop.fullScreen)
-                        .help(L("Только для открытия во внешнем Windows App"))
+                        .help(L("Окно Relaya разворачивается во весь экран при подключении"))
                     // Редкая настройка — в раскрывающейся группе, как дополнительные параметры в настройках macOS.
                     DisclosureGroup(L("RD Gateway"), isExpanded: $showGateway) {
                         TextField(L("Шлюз"), text: optional(\.gatewayHost), prompt: Text("gateway.example.com:443"))

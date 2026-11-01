@@ -93,6 +93,12 @@ struct RDPContent: View {
                 ResolutionMenu(session: session)
             }
             ToolbarItem {
+                Button { session.toggleFullScreen() } label: {
+                    Label(L("Во весь экран"), systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .help(L("Во весь экран (⌃⌘F)"))
+            }
+            ToolbarItem {
                 Menu {
                     Button(L("Ctrl+Alt+Del")) { session.sendCtrlAltDel() }
                     Button(L("Клавиша Windows")) { session.sendWindowsKey() }

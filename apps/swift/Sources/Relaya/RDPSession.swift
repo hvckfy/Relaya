@@ -112,6 +112,9 @@ final class RDPSession {
         if let i = model.desktops.firstIndex(where: { $0.id == desktop.id }) { change(&model.desktops[i]) }
     }
 
+    /// Во весь экран и обратно (кнопка панели, чек-лист 9.11).
+    func toggleFullScreen() { canvas.window?.toggleFullScreen(nil) }
+
     /// Меню окна: сочетания, которые Mac не отдаёт приложению.
     func sendCtrlAltDel() { canvas.send(RDPCanvasView.ctrlAltDel) }
     func sendWindowsKey() { canvas.send(RDPCanvasView.windowsKey) }
@@ -278,6 +281,8 @@ final class RDPSession {
         pendingSave = nil
         canvas.reset(width: width, height: height)
         phase = .connected
+        // «Во весь экран» из настроек стола — один раз при первом подключении (как К11 на Windows).
+        if desktop.fullScreen, let w = canvas.window, !w.styleMask.contains(.fullScreen) { w.toggleFullScreen(nil) }
         canvas.window?.makeFirstResponder(canvas)
         sendLocalClipboard()
         scheduleResize(delay: .milliseconds(200))
