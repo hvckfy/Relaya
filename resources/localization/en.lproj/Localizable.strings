@@ -1358,3 +1358,4 @@
 "Нет текстового редактора — файл %@ не открыт, чтобы не запустить его." = "No text editor — %@ wasn't opened so it doesn't run.";
 "Сниппеты: вставить в терминал" = "Snippets: insert into the terminal";
 "Масштаб экрана — крупный интерфейс" = "Display scale — larger interface";
+"↑↓ — выбрать · Enter — вставить · Esc — закрыть" = "↑↓ — choose · Enter — insert · Esc — close";

@@ -33,7 +33,8 @@ internal static class CommandPalette
         var box = new TextBox { PlaceholderText = snippetsOnly ? L("Сниппет…") : L("Хост, действие, сниппет…") };
         AutomationProperties.SetName(box, L("Палитра команд"));
         var list = new ListView { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 360, IsItemClickEnabled = true };
-        var hint = Ui.Secondary(L("↑↓ — выбрать · Enter — открыть · Ctrl+Enter — файлы · Esc — закрыть"));
+        var hint = Ui.Secondary(snippetsOnly ? L("↑↓ — выбрать · Enter — вставить · Esc — закрыть")
+            : L("↑↓ — выбрать · Enter — открыть · Ctrl+Enter — файлы · Esc — закрыть"));
         hint.Margin = new Thickness(4, 8, 4, 0);
         var flyout = new Flyout
         {
