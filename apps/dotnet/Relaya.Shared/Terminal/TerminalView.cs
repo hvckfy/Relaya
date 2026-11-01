@@ -62,7 +62,6 @@ internal sealed partial class TerminalView : UserControl, IDisposable
 
     // UI-очередь снимается в конструкторе (UI-поток): Feed приходит из фонового потока ConPTY/pty.
     private readonly Microsoft.UI.Dispatching.DispatcherQueue ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-    private readonly object feedLock = new();
 
     // Диагностика пустого экрана: %APPDATA%\Relaya\terminal.log — сбои Feed/OnDraw больше не немые.
     // Только факты и размеры (содержимое терминала — лишь в selftest-сборке); размер — настройка logs.maxKB.
@@ -421,10 +420,11 @@ internal sealed partial class TerminalView : UserControl, IDisposable
 
     private bool fedOnce;
 
-    /// Из фонового потока ConPTY: эмулятор под замком, перерисовка — через UI-очередь, снятую в конструкторе.
+    /// Из фонового потока ConPTY, перерисовка — через UI-очередь, снятую в конструкторе. Своего замка нет (П-1):
+    /// эмулятор ядра сам под Mutex, а кадр рисуется из копии экрана UI-потока — Feed не ждёт отрисовку.
     public void Feed(byte[] data)
     {
-        lock (feedLock) Emulator.Feed(data);
+        Emulator.Feed(data);
         Announce();
         if (!fedOnce) { fedOnce = true; Trace($"Feed: first {data.Length} bytes"); }
         Redraw();
@@ -467,13 +467,26 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     // Подсветка считается один раз на текст строки (П3): кадр без изменений не гоняет регулярки заново.
     private readonly System.Collections.Generic.Dictionary<string, (int Color, bool Bold)?[]?> highlightCache = new();
 
+    // Подсветка строки по номеру (П-2): строка без изменений (нет в Damage) берёт прошлую разметку,
+    // текст строки и словарь собираются только для изменённых строк.
+    private (int Color, bool Bold)?[]?[] rowMarks = Array.Empty<(int Color, bool Bold)?[]?>();
+    private bool[] rowDirty = Array.Empty<bool>();
+
     private (int Color, bool Bold)?[]? Highlights(Screen s, int row)
+    {
+        if (rowMarks.Length != s.rows) { rowMarks = new (int Color, bool Bold)?[]?[s.rows]; rowDirty = new bool[s.rows]; Array.Fill(rowDirty, true); }
+        if (Platform.Settings.Get(HighlightRules.Key, "") != rulesJson) { RefreshRules(); highlightCache.Clear(); Array.Fill(rowDirty, true); }
+        if (!rowDirty[row]) return rowMarks[row];
+        rowDirty[row] = false;
+        return rowMarks[row] = LineHighlights(s, row);
+    }
+
+    private (int Color, bool Bold)?[]? LineHighlights(Screen s, int row)
     {
         var text = new StringBuilder((int)s.cols);
         for (var c = 0; c < s.cols; c++) text.Append(s.cells[row * (int)s.cols + c]?.ch is { Length: > 0 } ch ? ch[0] : ' ');
         var line = text.ToString();
-        if (line.Trim().Length == 0) return null;
-        if (Platform.Settings.Get(HighlightRules.Key, "") != rulesJson) { RefreshRules(); highlightCache.Clear(); }
+        if (string.IsNullOrWhiteSpace(line)) return null;
         if (highlightCache.TryGetValue(line, out var cached)) return cached;
         if (highlightCache.Count > 512) highlightCache.Clear();
         return highlightCache[line] = HighlightLine(line, (int)s.cols);
@@ -511,7 +524,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         try
         {
-            lock (feedLock) DrawFrame(painter);
+            DrawFrame(painter);
             if (!drawnText && Emulator.ScreenText().FirstOrDefault(l => l.Trim().Length > 0) is { } first)
             {
                 drawnText = true;
@@ -555,10 +568,12 @@ internal sealed partial class TerminalView : UserControl, IDisposable
             screen.cols = c.cols;
             screen.rows = c.rows;
             screen.cells = new TermCell[c.cols * c.rows];
+            Array.Fill(rowDirty, true);
         }
         foreach (var line in d.lines)
         {
             if (line.row >= screen.rows) continue;
+            if (line.row < rowDirty.Length) rowDirty[line.row] = true;
             var n = Math.Min(line.cells.Count, (int)screen.cols);
             for (var i = 0; i < n; i++) screen.cells[line.row * screen.cols + i] = line.cells[i];
         }
@@ -572,12 +587,13 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     private void DrawFrame(IPainter ds)
     {
         if (!measured) Measure();
-        var clear = Theme.Background;
+        var theme = Theme;
+        var clear = theme.Background;
         // Картинка фона под сессиями (12.2): фон терминала полупрозрачный, ячейки с цветом — как есть.
         clear.A = (byte)(clear.A * Platform.Appearance.SessionOpacity);
         ds.Clear(clear);
         var s = CurrentScreen();
-        var highlight = !s.altScreen && !Theme.Monochrome && Platform.Settings.Get("terminal.highlight", "1") == "1";
+        var highlight = !s.altScreen && !theme.Monochrome && Platform.Settings.Get("terminal.highlight", "1") == "1";
         var run = new StringBuilder();
         for (var r = 0; r < s.rows; r++)
         {
@@ -595,17 +611,18 @@ internal sealed partial class TerminalView : UserControl, IDisposable
                 var cell = s.cells[r * (int)s.cols + c];
                 if (cell == null) continue;
                 var inverse = (cell.flags & 8) != 0;
+                uint cellFg = cell.fg, flags = cell.flags;
                 // Подсветка (как на Mac) — только текста цвета по умолчанию: раскрашенное сервером не трогаем.
-                if (marks?[c] is { } mark && cell.fg == 0 && !inverse) cell = cell with { fg = 0x0200_0000u | (uint)mark.Color, flags = (ushort)(cell.flags | (mark.Bold ? 1 : 0)) };
-                var fg = Theme.Resolve(inverse ? cell.bg : cell.fg, !inverse, (cell.flags & 1) != 0);
-                var bg = Theme.Resolve(inverse ? cell.fg : cell.bg, inverse, false);
+                // Без копии ячейки (П-2): меняются локальные цвет и флаги.
+                if (marks?[c] is { } mark && cellFg == 0 && !inverse) { cellFg = 0x0200_0000u | (uint)mark.Color; if (mark.Bold) flags |= 1; }
+                var fg = theme.Resolve(inverse ? cell.bg : cellFg, !inverse, (flags & 1) != 0);
                 var x = Pad + c * cellW;
-                var width = (cell.flags & 64) != 0 ? cellW * 2 : cellW;
-                if (cell.bg != 0 || inverse) ds.Fill(x, y, width, cellH, bg);
-                if (Selected(r, c)) ds.Fill(x, y, cellW, cellH, Theme.Selection);
-                if ((cell.flags & 16) != 0) fg.A = 160;
-                bool bold = (cell.flags & 1) != 0, italic = (cell.flags & 2) != 0;
-                var ascii = cell.ch.Length == 1 && cell.ch[0] is >= ' ' and < (char)127 && (cell.flags & 64) == 0;
+                var width = (flags & 64) != 0 ? cellW * 2 : cellW;
+                if (cell.bg != 0 || inverse) ds.Fill(x, y, width, cellH, theme.Resolve(inverse ? cellFg : cell.bg, inverse, false));
+                if (Selected(r, c)) ds.Fill(x, y, cellW, cellH, theme.Selection);
+                if ((flags & 16) != 0) fg.A = 160;
+                bool bold = (flags & 1) != 0, italic = (flags & 2) != 0;
+                var ascii = cell.ch.Length == 1 && cell.ch[0] is >= ' ' and < (char)127 && (flags & 64) == 0;
                 if (ascii && run.Length > 0 && fg == runFg && bold == runBold && italic == runItalic) run.Append(cell.ch[0]);
                 else
                 {
@@ -614,8 +631,8 @@ internal sealed partial class TerminalView : UserControl, IDisposable
                     else if (ascii) { run.Append(cell.ch[0]); runX = x; runFg = fg; runBold = bold; runItalic = italic; }
                     else ds.Text(cell.ch, x, y, fg, bold, italic);
                 }
-                if ((cell.flags & 4) != 0) ds.Line(x, y + cellH - 1, x + width, y + cellH - 1, fg);
-                if ((cell.flags & 32) != 0) ds.Line(x, y + cellH / 2, x + width, y + cellH / 2, fg);
+                if ((flags & 4) != 0) ds.Line(x, y + cellH - 1, x + width, y + cellH - 1, fg);
+                if ((flags & 32) != 0) ds.Line(x, y + cellH / 2, x + width, y + cellH / 2, fg);
             }
             Flush();
         }
@@ -623,7 +640,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         {
             var cx = Pad + s.cursorCol * cellW;
             var cy = Pad + s.cursorRow * cellH;
-            ds.Fill(cx, cy, cellW, cellH, Theme.Cursor with { A = 170 });
+            ds.Fill(cx, cy, cellW, cellH, theme.Cursor with { A = 170 });
         }
     }
 }
