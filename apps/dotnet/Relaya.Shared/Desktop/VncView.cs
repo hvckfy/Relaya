@@ -141,13 +141,14 @@ internal sealed class VncView : UserControl, IDisposable
                 Title = L("Вход на %@", desktop.name), Content = panel,
                 PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
             };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary || box.Password.Length == 0)
+            // Пустой пароль допустим, как в RDP (#32): сервер VNC может пускать без него.
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             {
                 s.CancelCredentials();
                 return;
             }
             // Пароль сохраняется только после успешного входа (как К12 у RDP).
-            if (save.IsChecked == true) pendingSave = box.Password;
+            if (save.IsChecked == true && box.Password.Length > 0) pendingSave = box.Password;
             s.ProvideCredentials(needsUser ? user.Text.Trim() : null, box.Password);
         }
         catch (Exception e)

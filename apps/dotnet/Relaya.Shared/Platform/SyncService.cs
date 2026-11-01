@@ -70,15 +70,34 @@ internal sealed class SyncService
     public (State State, string? Message) StateOf(SyncProfile p) => states.GetValueOrDefault(p.id, (State.Idle, null));
     public IReadOnlyList<SyncConflict> ConflictsOf(SyncProfile p) => conflicts.GetValueOrDefault(p.id) ?? new();
 
-    public bool HasPassphrase => CredentialStore.Has(PassphraseAccount);
+    // #32, как на Mac: ключи можно синхронизировать без пароля шифрования — только после явного предупреждения.
+    // Флаг — в настройках (это не секрет), ядро получает пустой пароль и шифрует им.
+    private const string WithoutPassphraseSetting = "sync.keysWithoutPassword";
+
+    public bool KeysWithoutPassphrase => Platform.Settings.Get(WithoutPassphraseSetting, "0") == "1";
+
+    public bool HasPassphrase => KeysWithoutPassphrase || CredentialStore.Has(PassphraseAccount);
+
+    /// Пароль для ядра: сохранённый; без него — "" при включённом флаге, иначе null (ключи не выгружаются).
+    private static string? Passphrase() =>
+        CredentialStore.Read(PassphraseAccount) ?? (Platform.Settings.Get(WithoutPassphraseSetting, "0") == "1" ? "" : null);
 
     /// П3: что последняя выгрузка ключей не смогла отдать (нет пароля, нет файла ключа); держится до следующей.
     public UnexportedKeys Unexported => RelayaCoreMethods.SyncUnexportedKeys(Paths);
 
+    /// Непустой пароль снимает флаг «без пароля».
     public void SetPassphrase(string value)
     {
-        if (value.Length == 0) CredentialStore.Delete(PassphraseAccount);
-        else CredentialStore.Write(PassphraseAccount, value);
+        if (value.Length == 0) { CredentialStore.Delete(PassphraseAccount); return; }
+        CredentialStore.Write(PassphraseAccount, value);
+        Platform.Settings.Set(WithoutPassphraseSetting, "0");
+    }
+
+    /// Подтверждено предупреждение: синхронизировать ключи без пароля.
+    public void SyncKeysWithoutPassphrase()
+    {
+        CredentialStore.Delete(PassphraseAccount);
+        Platform.Settings.Set(WithoutPassphraseSetting, "1");
     }
 
     public SyncProfile Add()
@@ -138,7 +157,7 @@ internal sealed class SyncService
     private async Task SyncLocked(SyncProfile p)
     {
         Set(p, State.Syncing, null);
-        var pass = CredentialStore.Read(PassphraseAccount);
+        var pass = Passphrase();
         try
         {
             List<SyncItem> imported;
@@ -206,14 +225,14 @@ internal sealed class SyncService
             if (p.backend == SyncBackend.Git)
             {
                 imported = await Task.Run(() =>
-                    RelayaCoreMethods.GitResolve(RepoDir(p), choices, p, Paths, CredentialStore.Read(PassphraseAccount)));
+                    RelayaCoreMethods.GitResolve(RepoDir(p), choices, p, Paths, Passphrase()));
                 resolved = true; // git — потом обычная синхронизация (push)
             }
             else
             {
                 // Папка: повторный merge с выбором и есть синхронизация.
                 var outcome = await Task.Run(() =>
-                    RelayaCoreMethods.FolderSyncMerge(p, Paths, CredentialStore.Read(PassphraseAccount), p.remote, choices));
+                    RelayaCoreMethods.FolderSyncMerge(p, Paths, Passphrase(), p.remote, choices));
                 if (outcome is SyncOutcome.Conflict c)
                 {
                     conflicts[id] = c.conflicts.ToList();
