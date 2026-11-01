@@ -113,7 +113,7 @@ internal sealed class SyncPage : UserControl
         {
             Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(0, 8, 0, 0),
             Title = L("Синхронизировать ключи без пароля?"),
-            Message = L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы."),
+            Message = L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы. Из истории git их уже не убрать — если передумаете, ключи придётся заменить."),
         };
         var withoutButton = new Button { Content = L("Синхронизировать без пароля") };
         var cancelEmpty = new Button { Content = L("Отмена") };
