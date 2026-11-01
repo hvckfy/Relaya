@@ -75,6 +75,8 @@ public sealed partial class MainWindow : Window
             ui.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.AgentEscalationsDialog.Show(root, list); });
         Platform.SyncService.Shared.DeletionsPending += pending =>
             ui.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.DeletionsDialog.Show(root, pending); });
+        Platform.SyncService.Shared.Changed += () => ui.TryEnqueue(UpdateSyncButton);
+        UpdateSyncButton();
         Platform.SyncService.Shared.ScheduleAuto();
         Platform.TunnelManager.Shared.StartAuto();
         Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
@@ -496,6 +498,33 @@ public sealed partial class MainWindow : Window
     private void OnNextTabKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; NextTab(1); }
     private void OnPrevTabKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; NextTab(-1); }
     private void OnSearchKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; FocusSearch(); }
+
+    // Кнопка синхронизации в панели (11.9): видна при включённых профилях, во время синхронизации — кольцо,
+    // при ошибке или конфликте подсказка ведёт в «Синхронизацию».
+    private void UpdateSyncButton()
+    {
+        var sync = Platform.SyncService.Shared;
+        var active = sync.Profiles.Where(p => p.enabled).ToList();
+        SyncButton.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var states = active.Select(p => sync.StateOf(p).State).ToList();
+        var busy = states.Contains(Platform.SyncService.State.Syncing);
+        SyncRing.IsActive = busy;
+        SyncRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        SyncIcon.Visibility = busy ? Visibility.Collapsed : Visibility.Visible;
+        SyncButton.IsEnabled = !busy;
+        var problem = states.Contains(Platform.SyncService.State.Conflict) || states.Contains(Platform.SyncService.State.Failed);
+        SyncIcon.Glyph = problem ? "\uE7BA" : "\uE895";
+        SyncText.Text = busy ? L("синхронизация…") : problem ? L("Синхронизация: нужна проверка") : L("Синхронизировать");
+        ToolTipService.SetToolTip(SyncButton, problem ? L("Ошибка или конфликт — откройте «Синхронизацию» в параметрах") : L("Синхронизировать сейчас"));
+    }
+
+    private async void OnSyncNow(object sender, RoutedEventArgs e)
+    {
+        var sync = Platform.SyncService.Shared;
+        var problem = sync.Profiles.Where(p => p.enabled).Any(p => sync.StateOf(p).State is Platform.SyncService.State.Conflict or Platform.SyncService.State.Failed);
+        if (problem) { ShowPage(settingsPage ??= new Pages.SettingsPage()); return; }
+        await sync.SyncAll();
+    }
     private void OnPaletteKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; Pages.CommandPalette.Show(this); }
 
     public void FocusSearch() => Search.Focus(FocusState.Keyboard);
