@@ -57,14 +57,15 @@ final class SyncManager {
         didSet { UserDefaults.standard.set(keysWithoutPassword, forKey: "syncKeysWithoutPassword") }
     }
 
-    func setPassphrase(_ value: String) {
-        if value.isEmpty { try? keychain.deletePassword(for: Self.passphraseAccount) }
-        else { try? keychain.setPassword(value, for: Self.passphraseAccount) }
+    /// Ошибка Keychain — наверх, в форму: иначе пользователь думал бы, что пароль сохранён.
+    func setPassphrase(_ value: String) throws {
+        if value.isEmpty { try keychain.deletePassword(for: Self.passphraseAccount) }
+        else { try keychain.setPassword(value, for: Self.passphraseAccount) }
         keysWithoutPassword = false
     }
 
-    func allowKeysWithoutPassword() {
-        try? keychain.deletePassword(for: Self.passphraseAccount)
+    func allowKeysWithoutPassword() throws {
+        try keychain.deletePassword(for: Self.passphraseAccount)
         keysWithoutPassword = true
     }
 
@@ -125,7 +126,11 @@ final class SyncManager {
         if !SecretGate.shared.isUnlocked {
             guard interactive, await SecretGate.shared.authorize(L("Синхронизировать SSH-ключи")) else { return nil }
         }
-        return try? keychain.password(for: Self.passphraseAccount)
+        do { return try keychain.password(for: Self.passphraseAccount) } catch {
+            // Пароль не прочитан — ключи в этот раз не синхронизируются; сказать почему.
+            skippedKeysNotice = L("Не удалось прочитать пароль ключей из Keychain: %@", error.localizedDescription)
+            return nil
+        }
     }
 
     func sync(_ id: Sync.Profile.ID, interactive: Bool = true) async {
