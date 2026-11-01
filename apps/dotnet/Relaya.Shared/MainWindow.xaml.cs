@@ -71,18 +71,27 @@ public sealed partial class MainWindow : Window
         Tabs.CanDragTabs = true;
         Tabs.CanReorderTabs = true;
         Tabs.AllowDrop = true;
-        // Перетаскивание вкладки: выбор не трогаем — TabView с перестановкой (CanReorderTabs) сам выбирает
-        // перетаскиваемую, и подмена SelectedItem откатывалась. На экране держим вкладку, открытую до нажатия:
-        // на её плитки и бросают; OnTabSelected на это время ничего не показывает.
+        // Перетаскивание вкладки в плитки (0.17.2): TabView выбирает вкладку уже на нажатии, до TabDragStarting, и бороться
+        // с выбором бесполезно. Поэтому мышью вкладка показывается по отпусканию, а не по нажатию: обычный щелчок
+        // переключает при отпускании, при перетаскивании экран не меняется — на нём плитки, куда бросают.
+        Tabs.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) =>
+        {
+            pointerDown = true;
+            underBeforePress = shownTab;
+            pendingShow = null;
+        }), true);
+        var up = new PointerEventHandler((_, _) => ReleaseTabPointer());
+        Tabs.AddHandler(UIElement.PointerReleasedEvent, up, true);
+        Tabs.AddHandler(UIElement.PointerCaptureLostEvent, up, true);
+        Tabs.AddHandler(UIElement.PointerCanceledEvent, up, true);
         Tabs.TabDragStarting += (_, e) =>
         {
+            dragging = true;
+            pendingShow = null;
             DraggedTiles = (e.Tab.Tag as Tab)?.Content as Terminal.TileHost;
-            var under = Tabs.SelectedItem is TabViewItem sel && sel != e.Tab ? sel : previousTab;
-            if (under != null && under != e.Tab && Tabs.TabItems.Contains(under) && under.Tag is Tab t)
-            {
-                dragUnder = under;
-                Show(t.Content);
-            }
+            var under = underBeforePress;
+            dragUnder = under != null && under != e.Tab && Tabs.TabItems.Contains(under) ? under : null;
+            if (dragUnder?.Tag is Tab t) Show(t.Content); // на случай, если выбор уже успел показать перетаскиваемую
             e.Data.SetText("relaya-tab");
             e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
         };
@@ -91,6 +100,8 @@ public sealed partial class MainWindow : Window
         Tabs.TabDragCompleted += (_, e) =>
         {
             DraggedTiles = null;
+            dragging = false;
+            pointerDown = false;
             var under = dragUnder;
             dragUnder = null;
             var target = Tabs.TabItems.Contains(e.Tab) ? e.Tab : under != null && Tabs.TabItems.Contains(under) ? under : null;
@@ -416,6 +427,7 @@ public sealed partial class MainWindow : Window
 
     private void Show(UIElement? page)
     {
+        shownTab = page == null ? null : Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(i => (i.Tag as Tab)?.Content == page);
         if (ShowGrid()) return;
         // Вкладки не вынимаются из дерева (иначе Win2D теряет Canvas) — показывается одна, остальные свёрнуты.
         var tab = page != null && TabHost.Children.Contains(page);
@@ -585,12 +597,26 @@ public sealed partial class MainWindow : Window
     private TabViewItem? previousTab;
 
     // Вкладка, чьи плитки на экране, пока перетаскивают другую (null — перетаскивания нет).
-    private TabViewItem? dragUnder;
+    // Вкладка на экране; вкладка, чьи плитки на экране во время перетаскивания другой; ожидающая показа после отпускания.
+    private TabViewItem? shownTab, dragUnder, underBeforePress, pendingShow;
+    private bool pointerDown, dragging;
+
+    private void ReleaseTabPointer()
+    {
+        if (!pointerDown) return;
+        pointerDown = false;
+        if (dragging) return;
+        var show = pendingShow;
+        pendingShow = null;
+        if (show != null && Tabs.SelectedItem == show && show.Tag is Tab t) { Nav.SelectedItem = null; Show(t.Content); }
+    }
 
     private void OnTabSelected(object sender, SelectionChangedEventArgs e)
     {
-        if (dragUnder != null) return; // идёт перетаскивание: экран не переключаем, previousTab не трогаем
+        if (dragging) return; // идёт перетаскивание: экран не переключаем, previousTab не трогаем
         if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem removed) previousTab = removed;
+        // Выбор мышью — показать при отпускании (может начаться перетаскивание); клавиатура и код — сразу.
+        if (pointerDown && Tabs.SelectedItem is TabViewItem pressed) { pendingShow = pressed; return; }
         if ((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t)
         {
             Nav.SelectedItem = null;
