@@ -72,6 +72,9 @@ internal sealed class SyncService
 
     public bool HasPassphrase => CredentialStore.Has(PassphraseAccount);
 
+    /// П3: что последняя выгрузка ключей не смогла отдать (нет пароля, нет файла ключа); держится до следующей.
+    public UnexportedKeys Unexported => RelayaCoreMethods.SyncUnexportedKeys(Paths);
+
     public void SetPassphrase(string value)
     {
         if (value.Length == 0) CredentialStore.Delete(PassphraseAccount);
