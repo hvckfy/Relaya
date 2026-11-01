@@ -68,6 +68,15 @@ public struct MCPPolicy: Codable, Equatable, Sendable {
     /// Можно ли выполнить команду в режиме «только чтение».
     public static func isReadOnly(_ command: String) -> Bool { mcpIsReadOnly(command: command) }
 
+    init(rust p: McpPolicy) {
+        enabled = p.enabled
+        defaultMode = Mode(rust: p.defaultMode)
+        hosts = p.hosts.mapValues(Mode.init(rust:))
+        allow = p.allow
+        deny = p.deny
+        grants = p.grants?.mapValues { Grant(mode: Mode(rust: $0.mode), until: Date(timeIntervalSinceReferenceDate: $0.until)) }
+    }
+
     /// Та же политика в Rust-ядре.
     var rust: McpPolicy {
         McpPolicy(enabled: enabled, defaultMode: defaultMode.rust, hosts: hosts.mapValues(\.rust), allow: allow, deny: deny,
@@ -107,26 +116,20 @@ public struct MCPPolicyStore: Sendable {
     }
 
     /// Нет файла — политика по умолчанию. Файл есть, но не читается — доступ агентов выключен (fail-closed):
-    /// повреждённая политика не должна снимать ограничения.
+    /// повреждённая политика не должна снимать ограничения. Разбор — в ядре (А1), общий с Windows и Linux.
     public func load() -> MCPPolicy {
-        guard let data = try? Data(contentsOf: url) else { return MCPPolicy() }
-        if let p = try? JSONDecoder().decode(MCPPolicy.self, from: data) { return p }
-        var closed = MCPPolicy()
-        closed.enabled = false
-        return closed
+        MCPPolicy(rust: mcpPolicyDecode(json: text))
     }
 
     /// Файл политики есть, но не читается.
-    public var isUnreadable: Bool {
-        guard let data = try? Data(contentsOf: url) else { return false }
-        return (try? JSONDecoder().decode(MCPPolicy.self, from: data)) == nil
-    }
+    public var isUnreadable: Bool { mcpPolicyIsUnreadable(json: text) }
+
+    /// Текст файла; нет файла — пусто (ядро понимает это как «политика по умолчанию»).
+    private var text: String { (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
 
     public func save(_ policy: MCPPolicy) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(policy).write(to: url, options: .atomic)
+        try Data(mcpPolicyEncode(policy: policy.rust).utf8).write(to: url, options: .atomic)
     }
 }
 
