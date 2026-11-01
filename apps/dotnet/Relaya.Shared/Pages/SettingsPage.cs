@@ -207,6 +207,7 @@ internal sealed class SettingsPage : UserControl
             ("Ctrl+Shift+T, Ctrl+Shift+O", L("Новая вкладка к хосту, файлы хоста")),
             ("Ctrl+Shift+R, Ctrl+Alt+1…9", L("Переподключить, вкладка по номеру")),
             ("Ctrl+Shift+G", L("Сетка: все терминалы сразу")),
+            ("Ctrl+Shift+Enter", L("Развернуть плитку")),
         })
             list.Children.Add(Ui.Row(null, k, d));
         return page;

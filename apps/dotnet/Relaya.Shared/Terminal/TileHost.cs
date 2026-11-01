@@ -198,6 +198,7 @@ internal sealed class TileHost : UserControl, IDisposable
         KeyboardAccelerators.Add(Accel(VirtualKey.L, () => active?.Session.ToggleRecording()));
         KeyboardAccelerators.Add(Accel(VirtualKey.D, () => Split(Edge.Right)));
         KeyboardAccelerators.Add(Accel(VirtualKey.E, () => Split(Edge.Bottom)));
+        KeyboardAccelerators.Add(Accel(VirtualKey.Enter, ToggleZoom));
         foreach (var (key, edge) in new[] { (VirtualKey.Left, Edge.Left), (VirtualKey.Right, Edge.Right), (VirtualKey.Up, Edge.Top), (VirtualKey.Down, Edge.Bottom) })
         {
             var a = new KeyboardAccelerator { Key = key, Modifiers = VirtualKeyModifiers.Control | VirtualKeyModifiers.Menu };
@@ -226,6 +227,7 @@ internal sealed class TileHost : UserControl, IDisposable
     /// Та же сессия (тот же хост) рядом с активной плиткой.
     public void Split(Edge edge)
     {
+        zoomed = null; // новая плитка видна рядом
         if (active is { } a) Add(a.Alias, null, edge, a.Id);
     }
 
@@ -271,8 +273,11 @@ internal sealed class TileHost : UserControl, IDisposable
         var session = new SshSession(view, alias);
         var title = new TextBlock { Text = alias, Style = Pages.Ui.Style("CaptionTextBlockStyle"), Margin = new Thickness(8, 2, 8, 2) };
         var close = Pages.Ui.IconButton("", L("Закрыть плитку (Ctrl+Shift+W)"), () => { });
-        var header = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } }, Children = { title } };
-        Grid.SetColumn(close, 1);
+        var expand = Pages.Ui.IconButton("\uE740", L("Развернуть плитку (Ctrl+Shift+Enter)"), () => { });
+        var header = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto }, new() { Width = GridLength.Auto } }, Children = { title } };
+        Grid.SetColumn(expand, 1);
+        header.Children.Add(expand);
+        Grid.SetColumn(close, 2);
         header.Children.Add(close);
         // Запрос пароля после входа: InfoBar над терминалом, ввод не блокируется.
         var ask = new InfoBar
@@ -416,6 +421,7 @@ internal sealed class TileHost : UserControl, IDisposable
         var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(4) };
         var pane = new Pane(id, view, session, alias, frame, title) { Owner = this };
         close.Click += (_, _) => pane.Owner.Close(pane);
+        expand.Click += (_, _) => { pane.Owner.Activate(pane); pane.Owner.ToggleZoom(); };
         view.GotFocus += (_, _) => pane.Owner.Activate(pane);
         session.StateChanged += alive => pane.Owner.AliveChanged?.Invoke(alive);
         session.RecordingChanged += () => pane.Owner.ui.TryEnqueue(() => { if (pane.Owner.active == pane) pane.Owner.UpdateRecording(); });
@@ -541,12 +547,31 @@ internal sealed class TileHost : UserControl, IDisposable
 
     // Раскладка — по дереву ядра: Row — колонки, Column — строки, между ними разделители; заголовки плиток видны,
     // только когда плиток больше одной.
+    // 4.3: развёрнутая плитка занимает всю вкладку; остальные живут и возвращаются тем же сочетанием.
+    private Pane? zoomed;
+
+    public void ToggleZoom()
+    {
+        zoomed = zoomed == null && panes.Count > 1 ? active : null;
+        Layout();
+        active?.View.Focus(FocusState.Programmatic);
+    }
+
     private void Layout()
     {
         foreach (var p in panes) (p.Frame.Parent as Panel)?.Children.Remove(p.Frame);
         grid.Children.Clear();
         if (panes.Count == 0 || layout == null) return;
         layout = RelayaCoreMethods.TilesSynced(layout, panes.Select(p => p.Id).ToList()) ?? layout;
+        if (zoomed != null && !panes.Contains(zoomed)) zoomed = null;
+        if (zoomed != null)
+        {
+            ((Grid)((Grid)zoomed.Frame.Child).Children[0]).Visibility = Visibility.Visible; // заголовок — чтобы свернуть мышью
+            zoomed.Frame.BorderThickness = new Thickness(0);
+            zoomed.Frame.Margin = new Thickness(0);
+            grid.Children.Add(zoomed.Frame);
+            return;
+        }
         var many = panes.Count > 1;
         foreach (var p in panes)
         {
