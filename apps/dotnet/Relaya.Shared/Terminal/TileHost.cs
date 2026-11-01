@@ -30,7 +30,7 @@ internal sealed class TileHost : UserControl, IDisposable
 
     private readonly List<Pane> panes = new();
     private readonly Grid grid = new();
-    // Подсветка будущего места плитки при перетаскивании вкладки.
+    // Подсветка будущего места плитки при перетаскивании вкладки или плитки.
     private readonly Border dropHint = new()
     {
         Background = Pages.Ui.Brush("AccentFillColorDefaultBrush"), Opacity = 0.25, CornerRadius = new CornerRadius(8),
@@ -38,7 +38,9 @@ internal sealed class TileHost : UserControl, IDisposable
         HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
     };
     private string? layout; // TileLayout JSON ядра
-    private (Edge Edge, string? Target)? drop;
+    private DropTarget? drop;
+    // Плитку тащат за заголовок: хост и id (переставить внутри сетки, как на Mac).
+    private static (TileHost Host, string Id)? draggedPane;
     private readonly AutoSuggestBox search = new() { Width = 260, QueryIcon = new SymbolIcon(Symbol.Find), Visibility = Visibility.Collapsed };
     private Pane? active;
     private int searchFrom = int.MaxValue;
@@ -161,7 +163,7 @@ internal sealed class TileHost : UserControl, IDisposable
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0),
-                Children = { DragGrip(), connectionInfo, disconnected, portsPanel, search },
+                Children = { connectionInfo, disconnected, portsPanel, search },
             },
         };
         foreach (var c in new ICommandBarElement[]
@@ -193,21 +195,25 @@ internal sealed class TileHost : UserControl, IDisposable
         Grid.SetRow(stage, 2);
         root.Children.Add(stage);
         Content = root;
-        // Вкладку перетаскивают на этот холст (MainWindow.DraggedTiles): край плитки или всего холста.
+        // Цель перетаскивания, как на Mac: вкладка (MainWindow.DraggedTiles) или заголовок плитки этой сетки.
+        // Зоны и подсветку считает ядро (tiles_drop_target) — одним правилом на всех платформах.
         AllowDrop = true;
         DragOver += (_, e) =>
         {
-            if (MainWindow.DraggedTiles is not { } src || src == this || panes.Count == 0) { e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None; HideHint(); return; }
+            drop = Target(e.GetPosition(grid));
+            if (drop == null) { e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.None; HideHint(); return; }
             e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
             e.DragUIOverride.IsCaptionVisible = false;
-            drop = Zone(e.GetPosition(grid));
-            ShowHint(drop.Value);
+            ShowHint(drop.hint);
         };
         DragLeave += (_, _) => HideHint();
         Drop += (_, e) =>
         {
+            var d = drop;
             HideHint();
-            if (MainWindow.DraggedTiles is { } src && src != this && drop is { } d) Adopt(src, d.Edge, d.Target);
+            if (d == null) return;
+            if (draggedPane is { } dp && dp.Host == this) MovePane(dp.Id, d);
+            else if (MainWindow.DraggedTiles is { } src && src != this && d.edge is { } edge) Adopt(src, edge, d.target);
         };
         KeyboardAccelerators.Add(Accel(VirtualKey.F, () => OpenSearch()));
         KeyboardAccelerators.Add(Accel(VirtualKey.L, () => active?.Session.ToggleRecording()));
@@ -289,7 +295,19 @@ internal sealed class TileHost : UserControl, IDisposable
         var title = new TextBlock { Text = alias, Style = Pages.Ui.Style("CaptionTextBlockStyle"), Margin = new Thickness(8, 2, 8, 2) };
         var close = Pages.Ui.IconButton("", L("Закрыть плитку (Ctrl+Shift+W)"), () => { });
         var expand = Pages.Ui.IconButton("\uE740", L("Развернуть плитку (Ctrl+Shift+Enter)"), () => { });
-        var header = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto }, new() { Width = GridLength.Auto } }, Children = { title } };
+        var header = new Grid
+        {
+            ColumnDefinitions = { new(), new() { Width = GridLength.Auto }, new() { Width = GridLength.Auto } }, Children = { title },
+            // За заголовок плитку переставляют внутри сетки, как на Mac; прозрачный фон — чтобы ловить нажатие.
+            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"), CanDrag = true,
+        };
+        header.DragStarting += (_, e) =>
+        {
+            draggedPane = (this, id);
+            e.Data.SetText("relaya-tile");
+            e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        };
+        header.DropCompleted += (_, _) => draggedPane = null;
         Grid.SetColumn(expand, 1);
         header.Children.Add(expand);
         Grid.SetColumn(close, 2);
@@ -462,31 +480,8 @@ internal sealed class TileHost : UserControl, IDisposable
         return id;
     }
 
-    /// Ручка «Перетащить в плитки»: тянут на заголовок другой вкладки, ждут показа и бросают на край её плитки.
-    private Border DragGrip()
-    {
-        var label = L("Перетащить в плитки другой вкладки");
-        var grip = new Border
-        {
-            CanDrag = true, Padding = new Thickness(4, 8, 4, 8), VerticalAlignment = VerticalAlignment.Center,
-            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"),
-            Child = new FontIcon { Glyph = "\uE7C2", FontSize = Pages.Ui.IconMedium },
-        };
-        ToolTipService.SetToolTip(grip, label);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(grip, label);
-        grip.DragStarting += (_, e) =>
-        {
-            MainWindow.DraggedTiles = this;
-            e.Data.SetText("relaya-tiles");
-            e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-        };
-        grip.DropCompleted += (_, _) => MainWindow.DraggedTiles = null;
-        return grip;
-    }
-
-    // Плитки другой вкладки переезжают сюда (ручка или «Разместить рядом»): первая — к краю цели
-    // (null — край всего холста), остальные — рядом с ней.
-    internal void Adopt(TileHost source, Edge edge, string? target)
+    // Плитки перетащенной вкладки переезжают сюда: первая — к краю цели (null — край всего холста), остальные — рядом с ней.
+    private void Adopt(TileHost source, Edge edge, string? target)
     {
         var moving = source.panes.ToList();
         source.panes.Clear();
@@ -688,22 +683,39 @@ internal sealed class TileHost : UserControl, IDisposable
     }
 
     // Куда ляжет перетаскиваемая вкладка: у края холста — на всю ширину/высоту, иначе — ближайший край плитки по третям.
-    private (Edge Edge, string? Target) Zone(Windows.Foundation.Point at)
+    // Цель в точке холста: перетаскивают плитку этой сетки или чужую вкладку; иначе — ничего.
+    private DropTarget? Target(Windows.Foundation.Point at)
     {
-        double w = grid.ActualWidth, h = grid.ActualHeight, band = 24;
-        if (at.X < band) return (Edge.Left, null);
-        if (at.X > w - band) return (Edge.Right, null);
-        if (at.Y < band) return (Edge.Top, null);
-        if (at.Y > h - band) return (Edge.Bottom, null);
-        foreach (var p in panes)
+        string? dragged;
+        if (draggedPane is { } dp && dp.Host == this) dragged = dp.Id;
+        else if (MainWindow.DraggedTiles is { } src && src != this && panes.Count > 0) dragged = null;
+        else return null;
+        var bounds = new Rect(0, 0, grid.ActualWidth, grid.ActualHeight);
+        // Одна плитка — рамка холста с отступом полосы краёв, как на Mac (DockTarget).
+        var frames = panes.Count == 1
+            ? new List<TileFrame> { new(panes[0].Id, new Rect(28, 28, Math.Max(0, bounds.w - 56), Math.Max(0, bounds.h - 56))) }
+            : panes.Where(p => p.Frame.Visibility == Visibility.Visible).Select(p =>
+            {
+                var r = Bounds(p.Frame);
+                return new TileFrame(p.Id, new Rect(r.X, r.Y, r.Width, r.Height));
+            }).ToList();
+        return RelayaCoreMethods.TilesDropTarget(bounds, frames, at.X, at.Y, dragged);
+    }
+
+    // Плитку этой сетки переставили: к краю цели (вынуть и вставить) или поменять местами с ней.
+    private void MovePane(string id, DropTarget d)
+    {
+        if (layout == null) return;
+        if (d.edge is { } edge)
         {
-            var r = Bounds(p.Frame);
-            if (!r.Contains(at)) continue;
-            var dx = (at.X - r.X) / r.Width; var dy = (at.Y - r.Y) / r.Height;
-            var edges = new[] { (dx, Edge.Left), (1 - dx, Edge.Right), (dy, Edge.Top), (1 - dy, Edge.Bottom) };
-            return (edges.MinBy(t => t.Item1).Item2, p.Id);
+            if (RelayaCoreMethods.TilesRemoving(layout, id) is not { } rest) return;
+            layout = RelayaCoreMethods.TilesInserting(rest, id, edge, d.target) ?? layout;
         }
-        return (Edge.Right, null);
+        else if (d.target is { } other)
+        {
+            layout = RelayaCoreMethods.TilesSwapping(layout, id, other) ?? layout;
+        }
+        Layout();
     }
 
     private Windows.Foundation.Rect Bounds(FrameworkElement e)
@@ -712,20 +724,11 @@ internal sealed class TileHost : UserControl, IDisposable
         return new Windows.Foundation.Rect(origin.X, origin.Y, e.ActualWidth, e.ActualHeight);
     }
 
-    private void ShowHint((Edge Edge, string? Target) zone)
+    private void ShowHint(Rect r)
     {
-        var r = zone.Target is { } id && panes.FirstOrDefault(p => p.Id == id) is { } p
-            ? Bounds(p.Frame) : new Windows.Foundation.Rect(0, 0, grid.ActualWidth, grid.ActualHeight);
-        var (x, y, w, h) = zone.Edge switch
-        {
-            Edge.Left => (r.X, r.Y, r.Width / 2, r.Height),
-            Edge.Right => (r.X + r.Width / 2, r.Y, r.Width / 2, r.Height),
-            Edge.Top => (r.X, r.Y, r.Width, r.Height / 2),
-            _ => (r.X, r.Y + r.Height / 2, r.Width, r.Height / 2),
-        };
-        dropHint.Margin = new Thickness(x, y, 0, 0);
-        dropHint.Width = Math.Max(0, w);
-        dropHint.Height = Math.Max(0, h);
+        dropHint.Margin = new Thickness(r.x, r.y, 0, 0);
+        dropHint.Width = Math.Max(0, r.w);
+        dropHint.Height = Math.Max(0, r.h);
         dropHint.Visibility = Visibility.Visible;
     }
 
