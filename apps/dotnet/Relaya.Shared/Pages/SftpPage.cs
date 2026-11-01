@@ -124,13 +124,14 @@ internal sealed class SftpPage : UserControl
 
     // Аргумент sftp-батча в кавычках: сначала обратные слэши, потом кавычки (К24) — иначе `C:\dir\` ломает команду.
     // Путь в команде sftp — только через правило ядра (П-9): кавычки, экранирование шаблонов; управляющий символ
-    // в имени — отказ всей команды (иначе имя вписало бы лишнюю команду). Отказ видит Run.
-    private string? rejectedPath;
+    // в имени — отказ всей команды (иначе имя вписало бы лишнюю команду). Отклонённый путь помечается NUL
+    // (в настоящих путях его быть не может), и Run отказывает именно той команде, где он стоит.
+    private const char Rejected = '\0';
 
-    private string Q(string s)
+    private static string Q(string s)
     {
         try { return RelayaCoreMethods.SftpBatchPath(s); }
-        catch (CoreException) { rejectedPath = s; return "\"\""; }
+        catch (CoreException) { return Rejected + s; }
     }
 
     // Навигация и мелкие операции — 60 с; передачи файлов ограничены только ConnectTimeout и ServerAlive (Н6):
@@ -173,10 +174,10 @@ internal sealed class SftpPage : UserControl
 
     private async Task<AppState.Result> Run(int timeoutSeconds, string[] commands, System.Threading.CancellationToken cancel = default, bool transfer = false)
     {
-        if (rejectedPath is { } bad)
+        if (commands.FirstOrDefault(c => c.Contains(Rejected)) is { } bad)
         {
-            rejectedPath = null;
-            status.Text = L("Имя содержит управляющие символы: %@", bad.Replace("\n", "␤").Replace("\r", "␍"));
+            var name = bad[(bad.IndexOf(Rejected) + 1)..];
+            status.Text = L("Имя содержит управляющие символы: %@", name.Replace("\n", "␤").Replace("\r", "␍"));
             return new AppState.Result(-1, "", status.Text);
         }
         if (transferCancel == null) busy.Visibility = Visibility.Visible;
