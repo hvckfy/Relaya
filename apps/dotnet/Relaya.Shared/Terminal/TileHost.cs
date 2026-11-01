@@ -279,6 +279,13 @@ internal sealed class TileHost : UserControl, IDisposable
         never.Click += (_, _) => { Platform.Settings.Set("terminal.offerKeySetup", "0"); offer.IsOpen = false; view.Focus(FocusState.Programmatic); };
         session.KeySetupOffered += () => ui.TryEnqueue(() => { login.IsOpen = false; offer.IsOpen = true; });
         // Ключ сервера при первом подключении (как окно на Mac): ContentDialog с отпечатком, по умолчанию «Отмена».
+        // 4.19, как на Mac: ключ сервера изменился — ssh отказал; ничего не удаляем за пользователя.
+        var keyChanged = new InfoBar
+        {
+            Severity = InfoBarSeverity.Error, IsClosable = true, Margin = new Thickness(4, 0, 4, 4),
+            Message = L("Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts."),
+        };
+        session.HostKeyChanged += () => ui.TryEnqueue(() => keyChanged.IsOpen = true);
         session.HostKeyRequested += fp => ui.TryEnqueue(async () =>
         {
             if (XamlRoot == null) { session.AnswerHostKey(false); return; }
@@ -317,17 +324,18 @@ internal sealed class TileHost : UserControl, IDisposable
             if (pending.Tag is string text) { if (text.EndsWith('\r')) view.Type(text); else view.Paste(text); }
             view.Focus(FocusState.Programmatic);
         };
-        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
+        var body = new Grid();
         body.Children.Add(header);
-        Grid.SetRow(ask, 1);
-        body.Children.Add(ask);
-        Grid.SetRow(offer, 2);
-        body.Children.Add(offer);
-        Grid.SetRow(login, 3);
-        body.Children.Add(login);
-        Grid.SetRow(pending, 4);
-        body.Children.Add(pending);
-        Grid.SetRow(view, 5);
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        // Баннеры — каждый в своей строке, чтобы не накладывались; терминал — в последней.
+        foreach (var bar in new FrameworkElement[] { keyChanged, ask, offer, login, pending })
+        {
+            body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(bar, body.RowDefinitions.Count - 1);
+            body.Children.Add(bar);
+        }
+        body.RowDefinitions.Add(new RowDefinition());
+        Grid.SetRow(view, body.RowDefinitions.Count - 1);
         body.Children.Add(view);
         var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(4) };
         var pane = new Pane(id, view, session, alias, frame, title) { Owner = this };

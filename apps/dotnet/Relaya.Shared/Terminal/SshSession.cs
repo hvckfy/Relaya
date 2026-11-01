@@ -33,6 +33,8 @@ internal sealed class SshSession : IDisposable
 
     /// Первое подключение: ssh спрашивает, доверять ли ключу сервера; аргумент — отпечаток (SHA256:…).
     public event Action<string>? HostKeyRequested;
+    /// Ключ сервера не совпал с known_hosts (4.19): ssh не подключится — показать предупреждение, как на Mac.
+    public event Action? HostKeyChanged;
 
     /// Ответ на вопрос о ключе сервера — в ту же сессию.
     public void AnswerHostKey(bool trust)
@@ -133,6 +135,7 @@ internal sealed class SshSession : IDisposable
         console = pc;
         var passwordSent = false;
         var offeredLoginPassword = false;
+        var warnedKeyChanged = false;
         var autofill = Askpass.CanAutofill(alias); // M8-1: не для хостов с ProxyCommand/LocalCommand
         var loggedIn = false;
         var sawPasswordPrompt = false;
@@ -162,6 +165,12 @@ internal sealed class SshSession : IDisposable
                     try { KeySetupOffered?.Invoke(); }
                     catch (Exception e) { Relaya.Terminal.TerminalView.Trace("KeySetupOffered: " + e.GetType().Name); }
                 }
+            }
+            if (!loggedIn && !warnedKeyChanged && text.Contains("REMOTE HOST IDENTIFICATION HAS CHANGED"))
+            {
+                warnedKeyChanged = true;
+                try { HostKeyChanged?.Invoke(); }
+                catch (Exception e) { Relaya.Terminal.TerminalView.Trace("HostKeyChanged: " + e.GetType().Name); }
             }
             // Вопрос о ключе сервера при первом подключении — окно с отпечатком, а не ввод «yes» вслепую.
             if (!loggedIn && text.Contains("Are you sure you want to continue connecting") && text.TrimEnd().EndsWith('?'))
