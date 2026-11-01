@@ -250,6 +250,77 @@ pub fn tiles_neighbor(layout: String, id: String, edge: Edge) -> Option<String> 
     from_json(&layout)?.neighbor(&id, edge)
 }
 
+/// Плитка и её рамка в координатах области броска.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TileFrame {
+    pub id: String,
+    pub rect: Rect,
+}
+
+/// Куда ляжет брошенная плитка: `edge` с `target` — к краю плитки (`target` = None — к краю всей области),
+/// `edge` = None — поменять местами с `target`. `hint` — прямоугольник подсветки.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct DropTarget {
+    pub edge: Option<Edge>,
+    pub target: Option<String>,
+    pub hint: Rect,
+}
+
+/// Полоса у краёв области, где бросок прикрепляет к стороне всей сетки (точки).
+pub const DROP_EDGE_BAND: f64 = 28.0;
+/// Доля плитки от края, где бросок делит плитку, а не меняет местами.
+pub const DROP_SPLIT_FRACTION: f64 = 0.28;
+
+/// Цель броска в точке (x, y), как на Mac (TileDropDelegate):
+/// полоса `DROP_EDGE_BAND` у краёв `bounds` — край всей области, подсветка — треть области;
+/// внутри плитки ближайший край ближе `DROP_SPLIT_FRACTION` её размера — делить плитку, подсветка — половина;
+/// иначе — поменять местами, подсветка — вся плитка. Своя плитка (`dragged`) и точка вне плиток — None.
+/// При равных расстояниях выигрывает край в порядке: левый, правый, верхний, нижний.
+#[uniffi::export]
+pub fn tiles_drop_target(bounds: Rect, frames: Vec<TileFrame>, x: f64, y: f64, dragged: Option<String>) -> Option<DropTarget> {
+    let b = DROP_EDGE_BAND;
+    let (w, h) = (bounds.w, bounds.h);
+    let (px, py) = (x - bounds.x, y - bounds.y);
+    let side = |edge, hint| Some(DropTarget { edge: Some(edge), target: None, hint });
+    if px < b {
+        return side(Edge::Left, Rect { x: bounds.x, y: bounds.y, w: w / 3.0, h });
+    }
+    if px > w - b {
+        return side(Edge::Right, Rect { x: bounds.x + w * 2.0 / 3.0, y: bounds.y, w: w / 3.0, h });
+    }
+    if py < b {
+        return side(Edge::Top, Rect { x: bounds.x, y: bounds.y, w, h: h / 3.0 });
+    }
+    if py > h - b {
+        return side(Edge::Bottom, Rect { x: bounds.x, y: bounds.y + h * 2.0 / 3.0, w, h: h / 3.0 });
+    }
+    let f = frames.iter().find(|f| {
+        let r = f.rect;
+        r.w > 0.0 && r.h > 0.0 && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
+    })?;
+    if dragged.as_deref() == Some(f.id.as_str()) {
+        return None;
+    }
+    let r = f.rect;
+    let (fx, fy) = ((x - r.x) / r.w, (y - r.y) / r.h);
+    let edges = [
+        (fx, Edge::Left, Rect { x: r.x, y: r.y, w: r.w / 2.0, h: r.h }),
+        (1.0 - fx, Edge::Right, Rect { x: r.x + r.w / 2.0, y: r.y, w: r.w / 2.0, h: r.h }),
+        (fy, Edge::Top, Rect { x: r.x, y: r.y, w: r.w, h: r.h / 2.0 }),
+        (1.0 - fy, Edge::Bottom, Rect { x: r.x, y: r.y + r.h / 2.0, w: r.w, h: r.h / 2.0 }),
+    ];
+    let mut nearest = edges[0];
+    for e in &edges[1..] {
+        if e.0 < nearest.0 {
+            nearest = *e;
+        }
+    }
+    if nearest.0 < DROP_SPLIT_FRACTION {
+        return Some(DropTarget { edge: Some(nearest.1), target: Some(f.id.clone()), hint: nearest.2 });
+    }
+    Some(DropTarget { edge: None, target: Some(f.id.clone()), hint: r })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,5 +355,34 @@ mod tests {
         assert_eq!(c.neighbor("3", Edge::Bottom), None);
         let json = tiles_automatic(ids(&["a", "b"])).unwrap();
         assert_eq!(tiles_ids(json), ids(&["a", "b"]));
+    }
+
+    #[test]
+    fn drop_target_zones() {
+        let bounds = Rect { x: 0.0, y: 0.0, w: 300.0, h: 200.0 };
+        let frames = vec![
+            TileFrame { id: "a".into(), rect: Rect { x: 0.0, y: 0.0, w: 150.0, h: 200.0 } },
+            TileFrame { id: "b".into(), rect: Rect { x: 150.0, y: 0.0, w: 150.0, h: 200.0 } },
+        ];
+        let t = |x, y, d: Option<&str>| tiles_drop_target(bounds, frames.clone(), x, y, d.map(String::from));
+        // Полоса у края — к стороне всей области, подсветка — треть.
+        let left = t(10.0, 100.0, None).unwrap();
+        assert_eq!((left.edge, left.target), (Some(Edge::Left), None));
+        assert_eq!(left.hint, Rect { x: 0.0, y: 0.0, w: 100.0, h: 200.0 });
+        assert_eq!(t(100.0, 190.0, Some("a")).unwrap().edge, Some(Edge::Bottom));
+        // Край плитки — разделить её, подсветка — половина.
+        let split = t(160.0, 100.0, Some("a")).unwrap();
+        assert_eq!((split.edge, split.target.as_deref()), (Some(Edge::Left), Some("b")));
+        assert_eq!(split.hint, Rect { x: 150.0, y: 0.0, w: 75.0, h: 200.0 });
+        // Центр — поменять местами, подсветка — вся плитка.
+        let swap = t(225.0, 100.0, Some("a")).unwrap();
+        assert_eq!((swap.edge, swap.target.as_deref()), (None, Some("b")));
+        // Своя плитка и точка вне плиток — ничего.
+        assert_eq!(t(75.0, 100.0, Some("a")), None);
+        assert_eq!(tiles_drop_target(bounds, vec![], 150.0, 100.0, None), None);
+        // Равные расстояния: левый край раньше верхнего.
+        let sq = vec![TileFrame { id: "s".into(), rect: Rect { x: 50.0, y: 50.0, w: 100.0, h: 100.0 } }];
+        let corner = tiles_drop_target(bounds, sq, 60.0, 60.0, None).unwrap();
+        assert_eq!(corner.edge, Some(Edge::Left));
     }
 }
