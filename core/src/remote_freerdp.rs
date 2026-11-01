@@ -365,6 +365,6 @@ mod tests {
         std::fs::write(&store, b"x").unwrap();
         let mut message = "closed".to_string();
         with_cleanup_error(&mut message, &Some(store.clone()));
-        assert!(message.starts_with("closed\n") && message.contains("/s") || message.contains("\\s"), "{message}");
+        assert!(message.starts_with("closed\n") && message.contains(&store.display().to_string()), "{message}");
     }
 }
