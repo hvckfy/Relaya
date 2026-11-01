@@ -680,9 +680,10 @@ public sealed partial class MainWindow : Window
             "light" => ElementTheme.Light, "dark" => ElementTheme.Dark, _ => ElementTheme.Default,
         };
         // Кисти ThemeResource перечитывают акцент только при смене темы: переключаем на противоположную и обратно.
+        // В два такта: две смены в одном такте схлопываются, и элементы ничего не перечитывают.
         var actual = theme == ElementTheme.Default ? (Application.Current.RequestedTheme == ApplicationTheme.Dark ? ElementTheme.Dark : ElementTheme.Light) : theme;
         root.RequestedTheme = actual == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
-        root.RequestedTheme = theme;
+        ui.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => root.RequestedTheme = theme);
     }
 
     private void AddShortcuts()
