@@ -1320,3 +1320,5 @@
 "Хостов пока нет — добавьте первый кнопкой «Новый хост…» внизу панели." = "No hosts yet — add the first one with New Host… at the bottom of the pane.";
 "Пароли" = "Passwords";
 "Подключения идут через системный OpenSSH — ~/.ssh/config, ssh-agent и ProxyJump работают как в терминале." = "Connections go through the system OpenSSH — ~/.ssh/config, ssh-agent and ProxyJump work as in a terminal.";
+"Новый блок в конце ~/.ssh/config" = "New block at the end of ~/.ssh/config";
+"Изменения в ~/.ssh/config" = "Changes to ~/.ssh/config";

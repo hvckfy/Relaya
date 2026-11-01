@@ -113,11 +113,9 @@ internal static class HostEditor
         // Keepalive (ServerAliveInterval, секунды; пусто — как в конфиге): ssh шлёт пинги и рвёт мёртвое соединение.
         var keepalive = Field(L("Keepalive, секунд (ServerAliveInterval)"), source?.serverAliveInterval?.ToString(), L("необязательно"));
         var tmux = new ToggleSwitch { Header = L("Сессии в tmux (переживают разрыв связи)"), IsOn = source?.tmux == true };
-        var preview = new TextBlock
-        {
-            FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
-            Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
-        };
+        // Превью — diff текущего блока и того, что будет записано (1.2, 2.6, как на Mac): «+» добавится, «−» уйдёт.
+        var preview = new StackPanel();
+        var location = Ui.Secondary("");
         var error = new TextBlock { Foreground = Ui.Brush("SystemFillColorCriticalBrush"), TextWrapping = TextWrapping.Wrap };
 
         string? Opt(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
@@ -153,8 +151,21 @@ internal static class HostEditor
         {
             var h = Build(out var problem);
             error.Text = problem ?? "";
-            preview.Text = h == null ? "" : string.Join("\n",
-                RelayaCoreMethods.ConfigRenderedLines(AppState.ConfigText(), h, editing ? source!.alias : null));
+            preview.Children.Clear();
+            var text = AppState.ConfigText();
+            var block = editing ? RelayaCoreMethods.ConfigBlock(text, source!.alias) : null;
+            location.Text = block is { } b ? L("~/.ssh/config : строка %@", (b.hostLine + 1).ToString()) : L("Новый блок в конце ~/.ssh/config");
+            if (h == null) return;
+            var before = editing ? RelayaCoreMethods.ConfigCurrentLines(text, source!.alias) : new List<string>();
+            var after = RelayaCoreMethods.ConfigRenderedLines(text, h, editing ? source!.alias : null);
+            foreach (var line in RelayaCoreMethods.LineDiff(before, after))
+                preview.Children.Add(new TextBlock
+                {
+                    Text = (line.kind == DiffKind.Added ? "+ " : line.kind == DiffKind.Removed ? "− " : "  ") + line.text,
+                    FontFamily = new FontFamily("Cascadia Mono, Consolas, monospace"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                    Foreground = Ui.Brush(line.kind == DiffKind.Added ? "SystemFillColorSuccessBrush"
+                        : line.kind == DiffKind.Removed ? "SystemFillColorCriticalBrush" : "TextFillColorSecondaryBrush"),
+                });
         }
         foreach (var t in new[] { alias, address, user, port, tags, keyList, keepalive }) t.TextChanged += (_, _) => Update();
         foreach (var c in new[] { jump, group }) { c.SelectionChanged += (_, _) => Update(); c.TextSubmitted += (_, _) => Update(); }
@@ -196,7 +207,8 @@ internal static class HostEditor
         var form = new StackPanel { Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
         foreach (var c in new UIElement[] { alias, address, user, port, password, passwordNote, keyList, addKey, jump, group, tags, color, os, agent, compression, keepalive, tmux })
             form.Children.Add(c);
-        form.Children.Add(Ui.Section(L("Будет записано в ~/.ssh/config")));
+        form.Children.Add(Ui.Section(L("Изменения в ~/.ssh/config")));
+        form.Children.Add(location);
         form.Children.Add(Ui.Card(preview));
         form.Children.Add(error);
         body.Children.Add(form);
