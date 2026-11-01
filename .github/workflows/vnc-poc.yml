@@ -1,0 +1,141 @@
+name: VNC PoC
+
+# Проверка RoyalVNCKit (MIT) через C API для встроенного VNC на Windows и Linux: сборка, вход по паролю,
+# первый кадр и смена размера (ExtendedDesktopSize), размер рантайма Swift. Шаг 1 — только CI, ядро не трогает.
+on:
+  push:
+    branches: ["**"]
+    paths: [".github/workflows/vnc-poc.yml", "scripts/vnc-poc/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ROYALVNC_REPO: https://github.com/royalapplications/royalvnc
+  ROYALVNC_COMMIT: 090b96eddeee183e9fec293c5cd881d302a4349d
+  SWIFT_VERSION: "6.2.4"
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Fetch RoyalVNC
+        run: |
+          git init -q royalvnc && cd royalvnc
+          git fetch -q --depth 1 "$ROYALVNC_REPO" "$ROYALVNC_COMMIT" && git checkout -q FETCH_HEAD
+      - name: Swift
+        run: |
+          curl -fsSL https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz | tar xz
+          ./swiftly init --quiet-shell-followup --assume-yes --skip-install
+          . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
+          swiftly install --use "$SWIFT_VERSION"
+          echo "$(dirname "$(swiftly use --print-location)")/usr/bin" >> "$GITHUB_PATH" || true
+          echo "${SWIFTLY_BIN_DIR:-$HOME/.local/share/swiftly/bin}" >> "$GITHUB_PATH"
+      - name: Build (dynamic Swift runtime)
+        working-directory: royalvnc
+        run: |
+          swift --version
+          time swift build -c release --product RoyalVNCKit
+          ls -la .build/release/libRoyalVNCKit.so
+          echo "== dependencies"; ldd .build/release/libRoyalVNCKit.so | tee ../ldd-dynamic.txt
+      - name: Runtime size (dynamic)
+        run: |
+          total=0
+          for lib in $(awk '/swift|Foundation|dispatch|BlocksRuntime|icu/ {print $3}' ldd-dynamic.txt | sort -u); do
+            s=$(stat -c %s "$lib"); total=$((total+s)); printf "%10d %s\n" "$s" "$lib"
+          done
+          echo "SWIFT_RUNTIME_BYTES=$total"; echo "LIB_BYTES=$(stat -c %s royalvnc/.build/release/libRoyalVNCKit.so)"
+      - name: Build (-static-stdlib)
+        working-directory: royalvnc
+        continue-on-error: true
+        run: |
+          swift build -c release --product RoyalVNCKit -Xswiftc -static-stdlib --build-path .build-static
+          ls -la .build-static/release/libRoyalVNCKit.so && ldd .build-static/release/libRoyalVNCKit.so
+      - name: Probe
+        run: |
+          inc=royalvnc/Sources/RoyalVNCKitC/include
+          clang -O1 -I "$inc" scripts/vnc-poc/probe.c -L royalvnc/.build/release -lRoyalVNCKit \
+            -Wl,-rpath,"$PWD/royalvnc/.build/release" -o probe
+      - name: Xvnc (TigerVNC) with password
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq tigervnc-standalone-server x11-xserver-utils x11-apps >/dev/null
+          mkdir -p ~/.vnc && echo relaya123 | vncpasswd -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd
+          Xvnc :1 -geometry 1024x768 -depth 24 -rfbport 5901 -SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd -AcceptSetDesktopSize=1 &
+          sleep 2
+          DISPLAY=:1 xsetroot -solid "#3366aa"
+          (DISPLAY=:1 xclock -geometry 300x300+10+10 &)
+      - name: Connect, first frame, ExtendedDesktopSize
+        env:
+          VNC_PASSWORD: relaya123
+          EXPECT_RESIZE: "1"
+        run: |
+          ./probe 127.0.0.1 5901 > probe.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 60); do grep -q FIRST_FRAME probe.log && break; sleep 1; done
+          DISPLAY=:1 xrandr --fb 1280x800 || DISPLAY=:1 xrandr -s 1280x800 || true
+          DISPLAY=:1 xsetroot -solid "#aa6633"
+          wait $pid; rc=$?
+          cat probe.log
+          exit $rc
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: compnerd/gha-setup-vsdevenv@f1ba60d553a3216ce1b89abe0201213536bc7557
+      - uses: compnerd/gha-setup-swift@581df1ffa3f3e786ddc73ff37364ee231f9644c5
+        with:
+          branch: swift-${{ env.SWIFT_VERSION }}-release
+          tag: ${{ env.SWIFT_VERSION }}-RELEASE
+      - name: Fetch RoyalVNC
+        run: |
+          git init -q royalvnc; cd royalvnc
+          git fetch -q --depth 1 $env:ROYALVNC_REPO $env:ROYALVNC_COMMIT; git checkout -q FETCH_HEAD
+      - name: Build
+        working-directory: royalvnc
+        run: |
+          swift --version
+          $t = Measure-Command { swift build -c release --product RoyalVNCKit | Out-Host }
+          "BUILD_SECONDS=$([int]$t.TotalSeconds)"
+          Get-ChildItem .build/release -Filter *.dll | ForEach-Object { "{0,10:N0}  {1}" -f $_.Length, $_.Name }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Runtime size
+        run: |
+          $dll = "royalvnc/.build/release/RoyalVNCKit.dll"
+          $runtime = Split-Path (Get-Command swiftCore.dll -ErrorAction SilentlyContinue).Source
+          "RUNTIME_DIR=$runtime"
+          $seen = @{}; $queue = [System.Collections.Queue]::new(); $queue.Enqueue($dll)
+          while ($queue.Count) {
+            $f = $queue.Dequeue()
+            foreach ($dep in (dumpbin /nologo /dependents $f | Select-String '^\s+(\S+\.dll)$' | ForEach-Object { $_.Matches[0].Groups[1].Value })) {
+              $p = Join-Path $runtime $dep
+              if ((Test-Path $p) -and -not $seen.ContainsKey($dep)) { $seen[$dep] = (Get-Item $p).Length; $queue.Enqueue($p) }
+            }
+          }
+          $seen.GetEnumerator() | Sort-Object Name | ForEach-Object { "{0,10:N0}  {1}" -f $_.Value, $_.Name }
+          "SWIFT_RUNTIME_BYTES=$(($seen.Values | Measure-Object -Sum).Sum)"
+          "LIB_BYTES=$((Get-Item $dll).Length)"
+      - name: Probe
+        run: |
+          clang -O1 -I royalvnc/Sources/RoyalVNCKitC/include scripts/vnc-poc/probe.c royalvnc/.build/release/RoyalVNCKit.lib -o probe.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: TightVNC server (best effort)
+        id: tight
+        continue-on-error: true
+        run: |
+          choco install tightvnc -y --no-progress --installargs '"SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=1 SET_PASSWORD=1 VALUE_OF_PASSWORD=relaya12"'
+          Start-Sleep 5
+          Get-Service tvnserver | Format-List Name,Status
+      - name: Connect to TightVNC (best effort)
+        if: steps.tight.outcome == 'success'
+        continue-on-error: true
+        env:
+          VNC_PASSWORD: relaya12
+        run: |
+          Copy-Item royalvnc/.build/release/*.dll .
+          ./probe.exe 127.0.0.1 5900
