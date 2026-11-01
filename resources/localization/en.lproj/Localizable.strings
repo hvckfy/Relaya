@@ -1196,3 +1196,5 @@
 "после успешной проверки — IdentityFile и IdentitiesOnly yes в ~/.ssh/config (копия config.relaya.bak)" = "after a successful check — IdentityFile and IdentitiesOnly yes in ~/.ssh/config (backup config.relaya.bak)";
 "проверить вход только этим ключом" = "check sign-in with this key only";
 "создать ключ %@ (ed25519)" = "create the key %@ (ed25519)";
+"Без пароля и надёжнее: Relaya создаст ключ, добавит его на сервер и проверит вход." = "No password and safer: Relaya creates a key, adds it to the server and checks the sign-in.";
+"Настроить вход по ключу?" = "Set up key sign-in?";

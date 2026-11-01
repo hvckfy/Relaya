@@ -206,6 +206,24 @@ internal sealed class TileHost : UserControl, IDisposable
         put.Click += (_, _) => { ask.IsOpen = false; session.SendPassword(); view.Focus(FocusState.Programmatic); };
         no.Click += (_, _) => { ask.IsOpen = false; view.Focus(FocusState.Programmatic); };
         session.PasswordRequested += () => ui.TryEnqueue(() => ask.IsOpen = true);
+        // Вошли по паролю — предложить ключ: «Настроить», «Не сейчас», «Больше не предлагать».
+        var offer = new InfoBar
+        {
+            Title = L("Настроить вход по ключу?"), Message = L("Без пароля и надёжнее: Relaya создаст ключ, добавит его на сервер и проверит вход."),
+            Severity = InfoBarSeverity.Informational, IsClosable = false, Margin = new Thickness(4, 0, 4, 4),
+        };
+        var setup = new Button { Content = L("Настроить"), Style = Pages.Ui.Style("AccentButtonStyle") };
+        var later = new Button { Content = L("Не сейчас") };
+        var never = new Button { Content = L("Больше не предлагать") };
+        offer.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8), Children = { setup, later, never } };
+        setup.Click += (_, _) =>
+        {
+            offer.IsOpen = false;
+            if (AppState.Host(alias) is { } h) MainWindow.Current?.ShowPage(new Pages.KeyWizardPage(h));
+        };
+        later.Click += (_, _) => { offer.IsOpen = false; view.Focus(FocusState.Programmatic); };
+        never.Click += (_, _) => { Platform.Settings.Set("terminal.offerKeySetup", "0"); offer.IsOpen = false; view.Focus(FocusState.Programmatic); };
+        session.KeySetupOffered += () => ui.TryEnqueue(() => offer.IsOpen = true);
         // Ключ сервера при первом подключении (как окно на Mac): ContentDialog с отпечатком, по умолчанию «Отмена».
         session.HostKeyRequested += fp => ui.TryEnqueue(async () =>
         {
@@ -245,13 +263,15 @@ internal sealed class TileHost : UserControl, IDisposable
             if (pending.Tag is string text) { if (text.EndsWith('\r')) view.Type(text); else view.Paste(text); }
             view.Focus(FocusState.Programmatic);
         };
-        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
+        var body = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new() } };
         body.Children.Add(header);
         Grid.SetRow(ask, 1);
         body.Children.Add(ask);
-        Grid.SetRow(pending, 2);
+        Grid.SetRow(offer, 2);
+        body.Children.Add(offer);
+        Grid.SetRow(pending, 3);
         body.Children.Add(pending);
-        Grid.SetRow(view, 3);
+        Grid.SetRow(view, 4);
         body.Children.Add(view);
         var frame = new Border { Child = body, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(4) };
         var pane = new Pane(id, view, session, alias, frame, title) { Owner = this };

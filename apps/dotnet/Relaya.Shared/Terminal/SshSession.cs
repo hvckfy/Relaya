@@ -28,6 +28,9 @@ internal sealed class SshSession : IDisposable
     /// После входа удалённая программа (su, sudo, mysql…) спросила пароль — вкладка предлагает подставить пароль хоста.
     public event Action? PasswordRequested;
 
+    /// Вошли по паролю, а ключа у хоста нет — предложить «Настроить вход по ключу» (как на Mac).
+    public event Action? KeySetupOffered;
+
     /// Первое подключение: ssh спрашивает, доверять ли ключу сервера; аргумент — отпечаток (SHA256:…).
     public event Action<string>? HostKeyRequested;
 
@@ -121,6 +124,7 @@ internal sealed class SshSession : IDisposable
         var passwordSent = false;
         var autofill = Askpass.CanAutofill(alias); // M8-1: не для хостов с ProxyCommand/LocalCommand
         var loggedIn = false;
+        var sawPasswordPrompt = false;
         var tail = new StringBuilder();
         var decoder = Encoding.UTF8.GetDecoder();
         pc.Output += data =>
@@ -137,7 +141,17 @@ internal sealed class SshSession : IDisposable
             view.Feed(data);
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
-            if (!loggedIn && view.Emulator.LoginReady()) loggedIn = true;
+            if (!loggedIn && PasswordPrompt.Matches(text)) sawPasswordPrompt = true;
+            if (!loggedIn && view.Emulator.LoginReady())
+            {
+                loggedIn = true;
+                if (sawPasswordPrompt && Relaya.Data.AppState.Host(alias)?.identityFile == null
+                    && Relaya.Platform.Settings.Get("terminal.offerKeySetup", "1") == "1")
+                {
+                    try { KeySetupOffered?.Invoke(); }
+                    catch (Exception e) { Relaya.Terminal.TerminalView.Trace("KeySetupOffered: " + e.GetType().Name); }
+                }
+            }
             // Вопрос о ключе сервера при первом подключении — окно с отпечатком, а не ввод «yes» вслепую.
             if (!loggedIn && text.Contains("Are you sure you want to continue connecting") && text.TrimEnd().EndsWith('?'))
             {
