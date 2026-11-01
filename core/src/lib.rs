@@ -34,6 +34,8 @@ pub mod tmux;
 pub mod tmux_control;
 pub mod webdav;
 pub mod webdav_policy;
+#[cfg(windows)]
+mod win_acl;
 
 pub use error::CoreError;
 

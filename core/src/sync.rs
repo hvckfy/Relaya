@@ -321,20 +321,34 @@ fn export_inner(
             write_if_changed(dir, "relaya/mcp.json", encode_sorted(&out).as_bytes(), &mut changed)?;
         }
     }
-    if let (true, Some(pass)) = (items.contains(&SyncItem::Keys), passphrase) {
+    if items.contains(&SyncItem::Keys) {
         // `~` раскрывается через папку .ssh из SyncPaths (на Windows HOME обычно не задан), разделители и регистр — как у Windows.
-        let used: HashSet<String> = hosts
-            .iter()
-            .flat_map(|h| {
-                if h.identity_files.is_empty() {
-                    h.identity_file.clone().into_iter().collect()
-                } else {
-                    h.identity_files.clone()
-                }
-            })
-            .map(|p| key_path_norm(&paths.ssh, &p))
-            .collect();
-        changed.extend(keys_export(&paths.ssh, &pass, Some(&used), dir)?);
+        let mut named = HashSet::new();
+        let mut defaults = false;
+        for h in &hosts {
+            let files: Vec<String> = if h.identity_files.is_empty() {
+                h.identity_file.clone().into_iter().collect()
+            } else {
+                h.identity_files.clone()
+            };
+            // Без IdentityFile ssh пробует ключи по умолчанию — их и выгружаем, если они есть.
+            defaults |= files.is_empty();
+            named.extend(files.iter().map(|p| key_path_norm(&paths.ssh, p)));
+        }
+        let mut used = named.clone();
+        if defaults {
+            used.extend(DEFAULT_KEYS.iter().map(|k| key_path_norm(&paths.ssh, &format!("~/.ssh/{k}"))));
+        }
+        let mut missing: Vec<String> =
+            named.iter().filter(|p| !Path::new(p.as_str()).is_file()).map(|p| base_name(p).to_string()).collect();
+        missing.sort();
+        let no_passphrase = passphrase.is_none() && !used.is_empty();
+        if let Some(pass) = passphrase {
+            changed.extend(keys_export(&paths.ssh, &pass, Some(&used), dir)?);
+        }
+        remember_unexported(&paths, UnexportedKeys { no_passphrase, missing })?;
+    } else {
+        remember_unexported(&paths, UnexportedKeys::default())?;
     }
     Ok(changed)
 }
@@ -421,7 +435,7 @@ fn import_inner(
                 if paths.config().exists() {
                     let bak = Path::new(&paths.ssh).join("config.bak");
                     fs::copy(paths.config(), &bak).map_err(|e| CoreError::Io(format!("config.bak: {e}")))?;
-                    set_private(&bak);
+                    set_private(&bak)?;
                 }
                 write_private_atomic(&paths.config(), merged.as_bytes())?;
                 changed.push(SyncItem::SshConfig);
@@ -569,7 +583,10 @@ fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
     let tmp = dest
         .with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
     fs::write(&tmp, data)?;
-    set_private(&tmp);
+    if let Err(e) = set_private(&tmp) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
     if let Err(e) = fs::rename(&tmp, dest) {
         let _ = fs::remove_file(&tmp);
         return Err(e.into());
@@ -577,13 +594,24 @@ fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// Только владелец: на Unix 0600. Ошибка — не молча: ключ с открытыми правами ssh откажется читать.
 #[cfg(unix)]
-fn set_private(p: &Path) {
+fn set_private(p: &Path) -> Result<(), CoreError> {
     use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
+    fs::set_permissions(p, fs::Permissions::from_mode(0o600))?;
+    Ok(())
 }
-#[cfg(not(unix))]
-fn set_private(_p: &Path) {}
+
+/// Windows: DACL без наследования — полный доступ только владельцу и SYSTEM, как ждёт OpenSSH-Windows
+/// (иначе ключ наследует ACL папки и ssh отвечает «UNPROTECTED PRIVATE KEY FILE»).
+#[cfg(windows)]
+fn set_private(p: &Path) -> Result<(), CoreError> {
+    crate::win_acl::owner_only(p).map_err(|e| CoreError::Io(format!("{}: {e}", p.display())))
+}
+#[cfg(not(any(unix, windows)))]
+fn set_private(_p: &Path) -> Result<(), CoreError> {
+    Ok(())
+}
 
 // MARK: - Ключи
 
@@ -647,12 +675,19 @@ fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path
     let keys_dir = dir.join("keys");
     let mut changed = Vec::new();
     let Ok(entries) = fs::read_dir(ssh) else { return Ok(changed) };
-    let mut names: Vec<String> =
-        entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).filter(|n| n.ends_with(".pub")).collect();
-    names.sort();
-    for name in names {
-        let base = name.trim_end_matches(".pub").to_string();
+    let files: Vec<String> = entries.filter_map(|e| e.ok()?.file_name().into_string().ok()).collect();
+    // С фильтром — любой файл из IdentityFile (.pub рядом не обязателен); без фильтра — файлы с парой .pub.
+    let mut bases: Vec<String> = match only {
+        Some(_) => files.iter().filter(|n| !n.ends_with(".pub")).cloned().collect(),
+        None => files.iter().filter_map(|n| n.strip_suffix(".pub")).map(String::from).collect(),
+    };
+    bases.sort();
+    for base in bases {
+        let name = format!("{base}.pub");
         let private = Path::new(ssh).join(&base);
+        if !private.is_file() {
+            continue;
+        }
         if let Some(only) = only {
             if !only.contains(&key_path_norm(ssh, &private.to_string_lossy())) {
                 continue;
@@ -667,10 +702,52 @@ fn keys_export(ssh: &str, pass: &str, only: Option<&HashSet<String>>, dir: &Path
             }
         }
         fs::write(&out, key_encrypt(key, pass.into(), 600_000))?;
-        fs::copy(Path::new(ssh).join(&name), keys_dir.join(&name))?;
+        let public = Path::new(ssh).join(&name);
+        if public.exists() {
+            fs::copy(public, keys_dir.join(&name))?;
+        }
         changed.push(format!("keys/{base}"));
     }
     Ok(changed)
+}
+
+/// Ключи, которые ssh пробует без IdentityFile (порядок OpenSSH не важен: выгружаются все, что есть).
+const DEFAULT_KEYS: &[&str] = &["id_rsa", "id_ecdsa", "id_ecdsa_sk", "id_ed25519", "id_ed25519_sk", "id_dsa"];
+
+fn base_name(p: &str) -> &str {
+    p.rsplit('/').next().unwrap_or(p)
+}
+
+/// Что последняя выгрузка не смогла отдать в синхронизацию: нет пароля шифрования ключей или файла ключа
+/// из IdentityFile нет на этой машине. Пусто — всё выгружено (или ключи не синхронизируются).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(rename_all = "camelCase")]
+pub struct UnexportedKeys {
+    pub no_passphrase: bool,
+    pub missing: Vec<String>,
+}
+
+fn unexported_file(paths: &SyncPaths) -> PathBuf {
+    paths.support("sync-unexported-keys.json")
+}
+
+fn remember_unexported(paths: &SyncPaths, state: UnexportedKeys) -> Result<(), CoreError> {
+    if state == UnexportedKeys::default() {
+        match fs::remove_file(unexported_file(paths)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+            _ => return Ok(()),
+        }
+    }
+    fs::create_dir_all(&paths.support)?;
+    fs::write(unexported_file(paths), encode_sorted(&state))?;
+    Ok(())
+}
+
+/// Итог последней выгрузки ключей (`sync_export` / `git_sync`): клиент показывает «ключи не выгружены».
+/// Состояние держится до следующей выгрузки.
+#[uniffi::export]
+pub fn sync_unexported_keys(paths: SyncPaths) -> UnexportedKeys {
+    fs::read_to_string(unexported_file(&paths)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
 }
 
 /// Ключ из синхронизации не встал под своим именем: там уже лежит другой ключ.
@@ -779,6 +856,14 @@ fn remember_skipped(paths: &SyncPaths, skipped: Vec<SkippedKey>) {
     }
     let _ = fs::create_dir_all(&paths.support);
     let _ = fs::write(skipped_file(paths), encode_sorted(&skipped));
+}
+
+/// Пропустил ли последний импорт ключ из-за неверного пароля (список не забирается — его ещё покажет клиент).
+fn wrong_passphrase_skipped(paths: &SyncPaths) -> bool {
+    fs::read_to_string(skipped_file(paths))
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<SkippedKey>>(&s).ok())
+        .is_some_and(|l| l.iter().any(|k| k.reason == KeySkipReason::WrongPassphrase))
 }
 
 /// Ключи, которые последний импорт не смог положить в ~/.ssh: нет пароля шифрования ключей или он неверный.
@@ -1070,9 +1155,11 @@ impl Git {
         if fs::read_to_string(self.marker()).ok().map(|m| m.trim() == head).unwrap_or(false) {
             return Ok(vec![]);
         }
-        let keys_pending = profile.effective_items().contains(&SyncItem::Keys) && passphrase.is_none();
-        let imported = sync_import(profile, paths, passphrase, self.repo.to_string_lossy().into_owned())?;
-        // Ключи без пароля синхронизации пропущены — импорт повторится, когда пароль появится.
+        let keys_on = profile.effective_items().contains(&SyncItem::Keys);
+        let imported =
+            sync_import(profile, paths.clone(), passphrase.clone(), self.repo.to_string_lossy().into_owned())?;
+        // Ключи без пароля или с неверным паролем пропущены — импорт повторится, когда пароль появится или исправится.
+        let keys_pending = keys_on && (passphrase.is_none() || wrong_passphrase_skipped(&paths));
         if !keys_pending {
             let _ = fs::write(self.marker(), &head);
         }
@@ -1678,6 +1765,65 @@ mod tests {
         assert_eq!(sync_take_skipped_keys(paths(a.path()))[0].reason, KeySkipReason::WrongPassphrase);
         sync_import(p, paths(a.path()), Some("right".into()), d).unwrap();
         assert!(sync_take_skipped_keys(paths(a.path())).is_empty());
+        assert_eq!(fs::read(a.path().join("id_x")).unwrap(), b"KEY");
+    }
+
+    #[test]
+    fn default_and_publess_keys_are_exported() {
+        let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        fs::write(a.path().join("config"), "Host plain\n    HostName 1\n\nHost named\n    IdentityFile ~/.ssh/work\n")
+            .unwrap();
+        fs::write(a.path().join("id_ed25519"), b"DEFAULT").unwrap();
+        fs::write(a.path().join("work"), b"WORK").unwrap(); // без work.pub
+        fs::write(a.path().join("stray"), b"STRAY").unwrap();
+        let mut p = sync_new_profile("all".into());
+        p.items.push(SyncItem::Keys);
+        let d = dir.path().to_string_lossy().to_string();
+        sync_export(p.clone(), paths(a.path()), Some("pw".into()), d.clone()).unwrap();
+        let keys = dir.path().join("keys");
+        assert!(keys.join("id_ed25519.relaya-key").exists(), "ключ по умолчанию для хоста без IdentityFile");
+        assert!(keys.join("work.relaya-key").exists(), ".pub рядом не обязателен");
+        assert!(!keys.join("work.pub").exists());
+        assert!(!keys.join("stray.relaya-key").exists(), "ключ, которым не пользуется ни один хост, не выгружается");
+        assert_eq!(sync_unexported_keys(paths(a.path())), UnexportedKeys::default());
+    }
+
+    #[test]
+    fn unexported_keys_are_reported() {
+        let (a, dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        fs::write(a.path().join("config"), "Host h\n    IdentityFile ~/.ssh/gone\n").unwrap();
+        let mut p = sync_new_profile("all".into());
+        p.items.push(SyncItem::Keys);
+        let d = dir.path().to_string_lossy().to_string();
+        sync_export(p.clone(), paths(a.path()), None, d.clone()).unwrap();
+        assert_eq!(
+            sync_unexported_keys(paths(a.path())),
+            UnexportedKeys { no_passphrase: true, missing: vec!["gone".into()] }
+        );
+        fs::write(a.path().join("gone"), b"K").unwrap();
+        sync_export(p, paths(a.path()), Some("pw".into()), d).unwrap();
+        assert_eq!(sync_unexported_keys(paths(a.path())), UnexportedKeys::default());
+    }
+
+    #[test]
+    fn wrong_passphrase_keeps_import_pending() {
+        let (a, repo) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let git = |args: &[&str]| {
+            assert!(std::process::Command::new("git").arg("-C").arg(repo.path()).args(args).status().unwrap().success())
+        };
+        git(&["init", "-q"]);
+        fs::create_dir_all(repo.path().join("keys")).unwrap();
+        fs::write(repo.path().join("keys/id_x.relaya-key"), key_encrypt(b"KEY".to_vec(), "right".into(), MIN_ROUNDS))
+            .unwrap();
+        git(&["add", "-A"]);
+        git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "k"]);
+        let mut p = sync_new_profile("all".into());
+        p.items.push(SyncItem::Keys);
+        let g = Git { repo: repo.path().to_path_buf() };
+        g.import_if_new(p.clone(), paths(a.path()), Some("wrong".into())).unwrap();
+        assert!(!g.marker().exists(), "неверный пароль — импорт не помечается выполненным");
+        g.import_if_new(p, paths(a.path()), Some("right".into())).unwrap();
+        assert!(g.marker().exists());
         assert_eq!(fs::read(a.path().join("id_x")).unwrap(), b"KEY");
     }
 
@@ -2301,7 +2447,7 @@ pub(crate) mod tombstones {
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let bak = path.with_file_name(format!("{name}.{stamp}.bak"));
         fs::copy(path, &bak).map_err(|e| CoreError::Io(format!("{}: {e}", bak.display())))?;
-        set_private(&bak);
+        set_private(&bak)?;
         if let Some(dir) = path.parent() {
             let mut old: Vec<PathBuf> = fs::read_dir(dir)
                 .map(|r| {
@@ -2346,7 +2492,7 @@ pub(crate) mod tombstones {
                 }
                 let bak = Path::new(&paths.ssh).join("config.bak");
                 fs::copy(paths.config(), &bak).map_err(|e| CoreError::Io(format!("config.bak: {e}")))?;
-                set_private(&bak);
+                set_private(&bak)?;
                 dated_backup(&paths.config())?;
                 write_private_atomic(&paths.config(), doc.text().as_bytes())?;
                 changed.push(SyncItem::SshConfig);
