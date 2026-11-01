@@ -161,6 +161,12 @@ internal sealed class HostPage : UserControl
     // Привилегированный порт (< 1024) на Linux без root не открыть — локально берём порт + 8000, как на Mac.
     private void Forward(string name, long remotePort, TunnelKind kind)
     {
+        // Повторный щелчок по той же заготовке запускает уже созданный туннель, а не второй такой же.
+        if (AppState.Tunnels.FirstOrDefault(x => x.hostAlias == host.alias && x.kind == kind && x.targetPort == remotePort) is { } existing)
+        {
+            Platform.TunnelManager.Shared.Start(existing);
+            return;
+        }
         var local = remotePort < 1024 ? remotePort + 8000 : remotePort;
         var t = new Tunnel(RelayaCoreMethods.CoreNewId(), kind == TunnelKind.Dynamic ? L("SOCKS-прокси") : name, host.alias, kind,
             local, "localhost", remotePort, false);
