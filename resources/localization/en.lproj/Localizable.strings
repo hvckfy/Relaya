@@ -1296,3 +1296,6 @@
 "По одному шаблону в строке, как в shell: systemctl restart *, docker logs *. Запрет сильнее разрешения." = "One pattern per line, like in a shell: systemctl restart *, docker logs *. A deny rule beats an allow rule.";
 "Синхронизация: нужна проверка" = "Sync needs attention";
 "Ошибка или конфликт — откройте «Синхронизацию» в параметрах" = "Error or conflict — open Sync in Settings";
+"спрашивать каждый раз" = "ask every time";
+"%@ мин" = "%@ min";
+"После подтверждения сохранённый пароль какое-то время выдаётся без нового вопроса" = "After you confirm, the saved password is handed out without asking again for a while";

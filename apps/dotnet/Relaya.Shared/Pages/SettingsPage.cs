@@ -108,6 +108,19 @@ internal sealed class SettingsPage : UserControl
         confirm.Toggled += (_, _) => Platform.Settings.Set("security.confirmPassword", confirm.IsOn ? "1" : "0");
         list.Children.Add(Ui.Row("\uE72E", L("Подтверждать каждое использование пароля"),
             L("Перед тем как фоновый ssh (туннель, SFTP, панели хоста, агенты) получит сохранённый пароль, Relaya спросит вас"), confirm));
+        // 12.4: не спрашивать повторно N минут после подтверждения (как Touch ID на Mac).
+        var grace = new ComboBox { MinWidth = 160 };
+        var graceValues = new[] { 0, 1, 5, 15, 30 };
+        foreach (var v in graceValues) grace.Items.Add(v == 0 ? L("спрашивать каждый раз") : L("%@ мин", v.ToString()));
+        var current = int.TryParse(Platform.Settings.Get(Platform.ConsentGrace.Key, "0"), out var gm) ? gm : 0;
+        grace.SelectedIndex = Math.Max(0, Array.IndexOf(graceValues, current));
+        grace.SelectionChanged += (_, _) =>
+        {
+            Platform.Settings.Set(Platform.ConsentGrace.Key, graceValues[grace.SelectedIndex].ToString());
+            Platform.ConsentGrace.Reset();
+        };
+        list.Children.Add(Ui.Row("\uE916", L("Не спрашивать повторно"),
+            L("После подтверждения сохранённый пароль какое-то время выдаётся без нового вопроса"), grace));
         var offerKey = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.offerKeySetup", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         offerKey.Toggled += (_, _) => Platform.Settings.Set("terminal.offerKeySetup", offerKey.IsOn ? "1" : "0");
         list.Children.Add(Ui.Row("\uE8D7", L("Предлагать вход по ключу"),

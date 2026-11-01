@@ -125,7 +125,7 @@ internal static class AskpassBroker
         grants.TryRemove(token, out _);
         // Настройка «Подтверждать каждое использование пароля»: системный вопрос с «Нет» по умолчанию.
         if (Settings.GetFresh("security.confirmPassword", "0") == "1"
-            && !Consent.Ask(Strings.L("ssh просит пароль %@:", g.Account) + "\n\n" + prompt)) return null;
+            && !ConsentGrace.Confirm(() => Consent.Ask(Strings.L("ssh просит пароль %@:", g.Account) + "\n\n" + prompt))) return null;
         return CredentialStore.Read(g.Account);
     }
 
