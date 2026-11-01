@@ -42,6 +42,10 @@ internal sealed class TunnelsPage : UserControl
             toggle.Toggled += (_, _) => { if (toggle.IsOn) TunnelManager.Shared.Start(t); else TunnelManager.Shared.Stop(t.id); };
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { toggle } };
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(t)));
+            // Локальный туннель — открыть в браузере (Е.14), как на Mac.
+            if (t.kind == TunnelKind.Local)
+                actions.Children.Add(Ui.IconButton("\uE774", L("Открыть http://localhost:%@", t.listenPort),
+                    () => _ = Windows.System.Launcher.LaunchUriAsync(new Uri($"http://localhost:{t.listenPort}"))));
             // Та же команда, что запускает Relaya (аргументы ядра), — для терминала или скрипта (8.2).
             actions.Children.Add(Ui.IconButton("\uE8C8", L("Копировать ssh-команду"), () =>
                 Ui.Copy("ssh " + string.Join(" ", RelayaCoreMethods.TunnelSshArguments(t, false).Select(a => a.Contains(' ') ? $"\"{a}\"" : a)))));
