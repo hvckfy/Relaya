@@ -303,7 +303,9 @@ fn cert_node(config: &RdpConfig, host: &str, port: u16, gateway: bool) -> CertNo
 #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужно движку FreeRDP
 fn cert_trusted(config: &RdpConfig, node: &CertNode, sha256: &str) -> bool {
     let by_node = config.trusted_certs.iter().any(|t| {
-        t.host.trim().to_lowercase() == node.host && t.port == node.port && t.sha256.eq_ignore_ascii_case(sha256)
+        t.host.trim().trim_end_matches('.').to_lowercase() == node.host
+            && t.port == node.port
+            && t.sha256.eq_ignore_ascii_case(sha256)
     });
     let legacy = node.role == CertRole::Target
         && config.trusted_cert_sha256.as_deref().is_some_and(|t| t.eq_ignore_ascii_case(sha256));
