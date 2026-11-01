@@ -32,5 +32,8 @@
   <ItemGroup>
     <None Include="..\..\..\core\target\release\librelaya_core.so" Link="librelaya_core.so"
           CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\librelaya_core.so')" />
+    <!-- VNC на RoyalVNCKit: рядом с ядром (ядро ищет её через rpath $ORIGIN). -->
+    <None Include="..\..\..\core\target\release\libRoyalVNCKit.so" Link="libRoyalVNCKit.so"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\..\core\target\release\libRoyalVNCKit.so')" />
   </ItemGroup>
 </Project>

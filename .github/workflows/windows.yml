@@ -46,6 +46,9 @@ jobs:
           $run = gh run list -R ${{ github.repository }} --workflow freerdp.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId'
           gh run download $run -R ${{ github.repository }} -n freerdp-x64-windows -D "$env:RUNNER_TEMP/freerdp"
           "FREERDP_DIR=$env:RUNNER_TEMP/freerdp".Replace('\','/') | Out-File -Append $env:GITHUB_ENV
+      # VNC на RoyalVNCKit: закреплённый коммит, кэш; скрипт ядра включит vnc-royal и положит DLL рядом.
+      - name: RoyalVNCKit
+        uses: ./.github/actions/royalvnc
       # Unit-тесты чистой логики Shared (Т4) — без ядра и WinUI, до долгой сборки.
       - name: Shared unit tests
         shell: pwsh

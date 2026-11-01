@@ -13,6 +13,10 @@ fn royalvnc() {
     let dir = std::env::var("ROYALVNC_DIR").expect("ROYALVNC_DIR: каталог с RoyalVNCKit (.github/actions/royalvnc)");
     println!("cargo:rustc-link-search=native={dir}");
     println!("cargo:rustc-link-lib=dylib=RoyalVNCKit");
+    // Linux: libRoyalVNCKit.so лежит рядом с librelaya_core.so — искать её там.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
+    }
 }
 
 #[cfg(feature = "rdp-freerdp")]

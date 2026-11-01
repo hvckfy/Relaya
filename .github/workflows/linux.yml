@@ -47,6 +47,9 @@ jobs:
             ~/.nuget/packages
           key: linux-${{ hashFiles('core/Cargo.lock', 'apps/dotnet/**/*.csproj') }}
           restore-keys: linux-
+      # VNC на RoyalVNCKit (.so с -static-stdlib): скрипт ядра включит vnc-royal и положит её рядом с ядром.
+      - name: RoyalVNCKit
+        uses: ./.github/actions/royalvnc
       - name: Build Rust core + C# bindings
         run: scripts/build-core-linux.sh
       # pty: вывод, управляющий терминал, размер окна, ввод, ssh из PATH.
