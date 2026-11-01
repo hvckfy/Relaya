@@ -23,6 +23,13 @@ struct MainView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                // Е.8: деление плитки кнопками в панели, как на Windows и Linux (меню и ⌘D / ⇧⌘D остаются).
+                if model.activeSession?.host != nil {
+                    Button { model.splitActive(.right) } label: { Label(L("Разделить вправо"), systemImage: "rectangle.split.2x1") }
+                        .help(L("Разделить вправо (⌘D)"))
+                    Button { model.splitActive(.bottom) } label: { Label(L("Разделить вниз"), systemImage: "rectangle.split.1x2") }
+                        .help(L("Разделить вниз (⇧⌘D)"))
+                }
                 if !model.sync.activeProfiles.isEmpty { SyncToolbarButton() }
                 if !model.allTags.isEmpty {
                     Menu {
