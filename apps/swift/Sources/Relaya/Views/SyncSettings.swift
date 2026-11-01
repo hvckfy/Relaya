@@ -192,6 +192,22 @@ private struct ProfileForm: View {
                         .disabled(hostless && !profile.scope.allHosts)
                         .help(hostless && !profile.scope.allHosts ? L("Только для профиля «все хосты»") : "")
                 }
+                // П4: ключи лежат в репозитории, но этот профиль их не берёт — сказать почему и предложить включить.
+                if sync.remoteHasKeys(profile), !profile.items.contains(.keys) || !sync.hasPassphrase {
+                    Label {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(profile.items.contains(.keys)
+                                 ? L("Пароль шифрования ключей не задан — ключи не загружаются. Задайте тот же пароль, что на другой машине.")
+                                 : L("Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине."))
+                            if !profile.items.contains(.keys) {
+                                Button(L("Включить")) { profile.items.insert(.keys) }
+                            }
+                        }
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                            .accessibilityLabel(L("Предупреждение"))
+                    }
+                }
                 if profile.items.contains(.keys) {
                     LabeledContent(L("Пароль ключей")) {
                         HStack {
