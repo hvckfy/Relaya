@@ -113,15 +113,17 @@ public sealed partial class MainWindow : Window
                 Width = Math.Min(rect.Width, work.Width), Height = Math.Min(rect.Height, work.Height),
             });
         }
+#else
+        // В Uno нет DisplayArea для проверки экранов; за край экрана окно вернёт оконный менеджер X11 (Е.5).
+        if (restored) AppWindow.MoveAndResize(rect);
+        else AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = rect.Width, Height = rect.Height });
+#endif
         AppWindow.Changed += (w, e) =>
         {
             if (!(e.DidSizeChange || e.DidPositionChange) || w.Presenter is Microsoft.UI.Windowing.OverlappedPresenter { State: not Microsoft.UI.Windowing.OverlappedPresenterState.Restored })
                 return;
             Platform.Settings.Set("window.bounds", $"{w.Position.X},{w.Position.Y},{w.Size.Width},{w.Size.Height}");
         };
-#else
-        AppWindow.Resize(new Windows.Graphics.SizeInt32 { Width = rect.Width, Height = rect.Height });
-#endif
     }
 
     /// Группы из ~/.ssh/config — настройки синхронизации отличают по ним группы от хостов.
