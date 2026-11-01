@@ -20,7 +20,7 @@ internal sealed class SyncPage : UserControl
 
     private readonly SyncService sync = SyncService.Shared;
     private readonly StackPanel root = new() { Spacing = 4, MaxWidth = 1000, Margin = new Thickness(36, 24, 36, 36) };
-    private readonly Dictionary<string, (TextBlock Status, ProgressRing Ring, StackPanel Conflict)> rows = new();
+    private readonly Dictionary<string, (TextBlock Status, ProgressRing Ring, StackPanel Conflict, Button TrustKey)> rows = new();
 
     private static readonly (SyncItem Item, string Title)[] Items =
     {
@@ -229,7 +229,13 @@ internal sealed class SyncPage : UserControl
         var conflict = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = Visibility.Collapsed,
             Children = { keepMine, takeTheirs, pick } };
 
-        rows[id] = (status, ring, conflict);
+        // 11.10: git-сервер ещё не знаком — терминал к нему, отпечаток подтверждается в окне первого подключения.
+        var trustKey = new Button { Content = L("Подтвердить ключ сервера…"), Visibility = Visibility.Collapsed };
+        trustKey.Click += (_, _) =>
+        {
+            if (RepoDestination(Current().remote) is { } dest) MainWindow.Current?.OpenSession(dest);
+        };
+        rows[id] = (status, ring, conflict, trustKey);
 
         var header = new Grid { ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } } };
         var icon = new FontIcon { Glyph = "\uE895", FontSize = Pages.Ui.IconLarge, Margin = new Thickness(0, 0, 16, 0) };
@@ -253,7 +259,7 @@ internal sealed class SyncPage : UserControl
                 Spacing = 12,
                 Children =
                 {
-                    name, backend, remote, allHosts, groups, items, auto, conflict,
+                    name, backend, remote, allHosts, groups, items, auto, conflict, trustKey,
                     new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { syncNow, delete } },
                 },
             },
@@ -276,7 +282,22 @@ internal sealed class SyncPage : UserControl
             row.Status.Foreground = state is SyncService.State.Failed or SyncService.State.Conflict
                 ? Brush("SystemFillColorCriticalBrush") : Brush("TextFillColorSecondaryBrush");
             row.Conflict.Visibility = state == SyncService.State.Conflict ? Visibility.Visible : Visibility.Collapsed;
+            row.TrustKey.Visibility = state == SyncService.State.Failed && p.backend == SyncBackend.Git
+                && message?.Contains(L("Сервер ещё не знаком")) == true ? Visibility.Visible : Visibility.Collapsed;
         }
+    }
+
+    // Куда ssh: `git@host:path` → `git@host`; `ssh://user@host:port/path` → `ssh://user@host:port`.
+    private static string? RepoDestination(string remote)
+    {
+        var r = remote.Trim();
+        if (r.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase))
+        {
+            var slash = r.IndexOf('/', "ssh://".Length);
+            return slash > 0 ? r[..slash] : r;
+        }
+        var colon = r.IndexOf(':');
+        return colon > 0 && !r.Contains("://") ? r[..colon] : null;
     }
 
     private static Border Card(string title, string description, UIElement control)
