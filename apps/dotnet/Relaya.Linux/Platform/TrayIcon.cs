@@ -154,7 +154,7 @@ internal sealed class TrayMenu : IDBusMenu
             foreach (var t in tunnels)
             {
                 var running = TunnelManager.Shared.StatusOf(t).State is TunnelManager.State.Running or TunnelManager.State.Starting;
-                Item($"{t.name} · {t.listenPort} → {t.targetHost}:{t.targetPort}",
+                Item($"{t.name} · {uniffi.relaya_core.RelayaCoreMethods.TunnelSpec(t)}",
                     () => { if (running) TunnelManager.Shared.Stop(t.id); else TunnelManager.Shared.Start(t); }, running);
             }
         }
@@ -171,7 +171,12 @@ internal sealed class TrayMenu : IDBusMenu
         }
         Separator();
         Item(L("Открыть Relaya"), TrayIcon.ShowWindow);
-        Item(L("Выйти из Relaya"), () => Application.Current.Exit());
+        Item(L("Выйти из Relaya"), () =>
+        {
+            // Exit() может пройти без Window.Closed — туннели останавливаем сами, как stopAll на Mac.
+            TunnelManager.Shared.StopAll();
+            Application.Current.Exit();
+        });
 
         Action<(uint, int)>? notify;
         uint rev;
@@ -229,8 +234,9 @@ internal sealed class TrayMenu : IDBusMenu
 
     public Task<IDisposable> WatchLayoutUpdatedAsync(Action<(uint revision, int parent)> handler, Action<Exception>? onError = null)
     {
-        lock (gate) layoutUpdated += h => handler(h);
-        return Task.FromResult<IDisposable>(new Unsubscribe());
+        Action<(uint, int)> wrapped = h => handler(h);
+        lock (gate) layoutUpdated += wrapped;
+        return Task.FromResult<IDisposable>(new Unsubscribe(() => { lock (gate) layoutUpdated -= wrapped; }));
     }
 
     public Task<object> GetAsync(string prop) => Task.FromResult<object>(prop switch
@@ -246,7 +252,7 @@ internal sealed class TrayMenu : IDBusMenu
 
     public Task SetAsync(string prop, object val) => Task.CompletedTask;
 
-    public Task<IDisposable> WatchPropertiesAsync(Action<PropertyChanges> handler) => Task.FromResult<IDisposable>(new Unsubscribe());
+    public Task<IDisposable> WatchPropertiesAsync(Action<PropertyChanges> handler) => Task.FromResult<IDisposable>(new Unsubscribe(() => { }));
 
-    private sealed class Unsubscribe : IDisposable { public void Dispose() { } }
+    private sealed class Unsubscribe(Action dispose) : IDisposable { public void Dispose() => dispose(); }
 }
