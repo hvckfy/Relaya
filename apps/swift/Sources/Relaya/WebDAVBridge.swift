@@ -60,12 +60,34 @@ final class WebDAVBridge {
         if let mp { DispatchQueue.global().async { NSWorkspace.shared.open(mp) } }
     }
 
-    func stop() {
-        if let mountPoint { FileManager.default.unmountVolume(at: mountPoint, options: []) { _ in } }
+    /// Отключить диск и остановить сервер. Отключение — не из главного потока: система перед ним обращается к диску,
+    /// то есть к этому же серверу, и ожидание в главном потоке подвешивало Relaya. Сервер работает, пока диск не отключён.
+    /// `wait` — сколько ждать отключения (выход из приложения); 0 — не ждать.
+    func stop(wait: Duration = .zero) {
+        let mp = mountPoint
+        let listener = self.listener
         mountPoint = nil
-        listener?.cancel()
-        listener = nil
+        self.listener = nil
         onStopped?()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            if let mp { Self.unmount(mp) }
+            listener?.cancel()
+            done.signal()
+        }
+        if wait > .zero {
+            let (sec, atto) = wait.components
+            _ = done.wait(timeout: .now() + .nanoseconds(Int(sec) * 1_000_000_000 + Int(atto / 1_000_000_000)))
+        }
+    }
+
+    /// unmount(2), а не FileManager: тот сначала читает атрибуты тома. Занят (открытый файл) — принудительно,
+    /// иначе диск остался бы подключённым к уже остановленному серверу.
+    nonisolated private static func unmount(_ mp: URL) {
+        guard Darwin.unmount(mp.path, 0) != 0 else { return }
+        if Darwin.unmount(mp.path, MNT_FORCE) != 0 {
+            NSLog("Relaya WebDAV: диск %@ не отключён: %@", mp.path, String(cString: strerror(errno)))
+        }
     }
 
     /// Открыть уже подключённый диск в Finder.
