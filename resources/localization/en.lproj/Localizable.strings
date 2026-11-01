@@ -1203,3 +1203,5 @@
 "Переименовать раскладку" = "Rename Layout";
 "Удалить раскладку «%@»?" = "Delete layout “%@”?";
 "Хосты и туннели не удаляются — только сохранённое расположение плиток." = "Hosts and tunnels stay — only the saved tile arrangement is deleted.";
+"Файл %@ не JSON-объект — не меняю его. Добавьте конфиг вручную." = "%@ isn't a JSON object — left unchanged. Add the config by hand.";
+"Не удалось изменить %@: %@" = "Couldn't change %@: %@";

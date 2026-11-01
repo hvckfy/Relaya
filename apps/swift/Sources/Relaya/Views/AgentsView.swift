@@ -14,6 +14,33 @@ struct AgentsView: View {
 
     private var command: String { model.askpassExecutable }
 
+    @State private var addResult: String?
+
+    /// Прописать Relaya в конфиг Claude Desktop (паритет с Windows/Linux, чек-лист 10.6): остальные серверы и
+    /// настройки сохраняются; нечитаемый файл не перезаписывается.
+    private func addToClaudeDesktop() -> String {
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/Claude")
+        let file = dir.appending(path: "claude_desktop_config.json")
+        do {
+            var root: [String: Any] = [:]
+            if let data = try? Data(contentsOf: file), !data.isEmpty {
+                guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return L("Файл %@ не JSON-объект — не меняю его. Добавьте конфиг вручную.", file.path)
+                }
+                root = obj
+            }
+            var servers = root["mcpServers"] as? [String: Any] ?? [:]
+            servers["relaya"] = ["command": command, "args": ["--mcp"]]
+            root["mcpServers"] = servers
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+                .write(to: file, options: .atomic)
+            return L("Готово. Перезапустите Claude Desktop — Relaya появится в списке инструментов.")
+        } catch {
+            return L("Не удалось изменить %@: %@", file.path, error.localizedDescription)
+        }
+    }
+
     private var configJSON: String {
         """
         {
@@ -61,6 +88,9 @@ struct AgentsView: View {
                 }
 
                 card(title: L("Подключить к клиенту")) {
+                    if let addResult {
+                        Text(addResult).font(.system(size: 12)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(L("Добавьте в настройки MCP-клиента (например, ~/Library/Application Support/Claude/claude_desktop_config.json) и перезапустите его:"))
                         .font(.system(size: 12)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
                     Text(configJSON)
@@ -70,12 +100,14 @@ struct AgentsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.bg, in: .rect(cornerRadius: 8, style: .continuous))
                     HStack {
+                        Button(L("Добавить в Claude Desktop")) { addResult = addToClaudeDesktop() }
+                            .buttonStyle(.relayaPrimary)
                         Button(copied ? L("Скопировано") : L("Скопировать конфиг")) {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(configJSON, forType: .string)
                             copied = true
                         }
-                        .buttonStyle(.relayaPrimary)
+                        .buttonStyle(.relaya)
                         Text(L("Путь указывает на это приложение — держите Relaya в «Программах»."))
                             .font(.system(size: 11)).foregroundStyle(Theme.tx2)
                     }
