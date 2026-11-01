@@ -69,6 +69,18 @@ internal sealed partial class DavBridge
         finally { bridge.listener?.Stop(); }
     }
 
+    /// Выход из приложения: отключить все диски, иначе в файловом менеджере останется мёртвое подключение.
+    /// gio живёт отдельным процессом — ждём недолго.
+    public static void UnmountAll()
+    {
+        List<DavBridge> all;
+        lock (bridges) { all = bridges.Values.ToList(); bridges.Clear(); }
+        if (all.Count == 0) return;
+        try { Task.WaitAll(all.Select(b => UnmountVolumeAsync(b.Url)).ToArray(), TimeSpan.FromSeconds(2)); }
+        catch (Exception e) { Terminal.TerminalView.Trace("dav unmount: " + e.Message); }
+        foreach (var b in all) b.listener?.Stop();
+    }
+
     // Платформа: подключить WebDAV-адрес как диск (пароль — не в аргументах), отключить, открыть.
     private static partial Task MountVolumeAsync(string url, string user, string password);
     private static partial Task UnmountVolumeAsync(string url);
@@ -224,6 +236,8 @@ internal sealed partial class DavBridge
                         return Response(201, "Created");
                     }
                     var overwrite = Header(req, "overwrite")?.ToUpperInvariant() != "F";
+                    // Без перезаписи и цель есть — 412: gvfs превращает его в «уже существует», а `mv -n` молча вышел бы с 0.
+                    if (!overwrite && await StatAsync(dest) != null) return Response(412, "Precondition Failed");
                     var tool = req.method == "MOVE" ? "mv" : "cp -a";
                     await ShellAsync($"{tool} {(overwrite ? "" : "-n ")}-- {RelayaCoreMethods.CoreShellQuote(remote)} {RelayaCoreMethods.CoreShellQuote(dest)}");
                     Invalidate(remote);

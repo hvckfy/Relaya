@@ -226,6 +226,7 @@ internal sealed class TrayMenu : IDBusMenu
         {
             // Exit() может пройти без Window.Closed — туннели останавливаем сами, как stopAll на Mac.
             TunnelManager.Shared.StopAll();
+            DavBridge.UnmountAll();
             Application.Current.Exit();
         });
 

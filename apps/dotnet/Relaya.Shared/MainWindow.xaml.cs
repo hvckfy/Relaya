@@ -85,7 +85,7 @@ public sealed partial class MainWindow : Window
         Platform.TunnelManager.Shared.StartAuto();
         // Пока работают туннели и есть значок в трее, закрытие прячет окно (8.6, как на Mac).
         AppWindow.Closing += (_, a) => { if (HideToTray()) a.Cancel = true; };
-        Closed += (_, _) => Platform.TunnelManager.Shared.StopAll();
+        Closed += (_, _) => { Platform.TunnelManager.Shared.StopAll(); Platform.DavBridge.UnmountAll(); };
         // Свёрнутые группы запоминаются, как на Mac.
         Nav.Expanding += (_, a) => { if (a.ExpandingItemContainer?.Tag is string t && t.StartsWith("group:")) Platform.Settings.Set(t.Replace("group:", "group."), "1"); };
         Nav.Collapsed += (_, a) => { if (a.CollapsedItemContainer?.Tag is string t && t.StartsWith("group:")) Platform.Settings.Set(t.Replace("group:", "group."), "0"); };
