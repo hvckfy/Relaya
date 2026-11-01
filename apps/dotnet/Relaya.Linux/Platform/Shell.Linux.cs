@@ -38,8 +38,14 @@ internal static partial class Shell
         try
         {
             using var q = Process.Start(query)!;
-            app = q.StandardOutput.ReadToEnd().Trim();
-            q.WaitForExit(5000);
+            // ReadToEnd ждал бы зависший xdg-mime бесконечно; ответ мгновенный, поэтому ждём не дольше 2 с.
+            var read = q.StandardOutput.ReadToEndAsync();
+            if (!read.Wait(2000))
+            {
+                q.Kill();
+                throw new IOException(Relaya.Strings.L("xdg-mime не ответил."));
+            }
+            app = read.Result.Trim();
         }
         catch (System.Exception e) { throw new IOException(e.Message, e); }
         if (app.Length == 0 || Dialogs.Which("gtk-launch") is not { } launch)

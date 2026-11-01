@@ -1354,3 +1354,4 @@
 "Не удалось открыть файл" = "Could not open the file";
 "Сниппет…" = "Snippet…";
 "Нет текстового редактора по умолчанию (xdg-mime text/plain, gtk-launch)." = "No default text editor (xdg-mime text/plain, gtk-launch).";
+"xdg-mime не ответил." = "xdg-mime did not respond.";
