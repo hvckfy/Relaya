@@ -1400,3 +1400,4 @@
 "Шлюз RD Gateway %@" = "RD Gateway %@";
 "Перенаправленный сервер %@ — сюда перенаправил брокер; неожиданный адрес — повод насторожиться" = "Redirected server %@ — the broker sent you here; an unexpected address is a reason for caution";
 "Сервер %@" = "Server %@";
+"Имя содержит управляющие символы: %@" = "The name contains control characters: %@";

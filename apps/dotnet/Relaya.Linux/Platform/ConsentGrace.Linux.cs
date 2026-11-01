@@ -25,7 +25,10 @@ internal static partial class ConsentGrace
             while ((line = reader.ReadLine()) != null)
             {
                 if (line.Contains("org.freedesktop.login1.Session.Lock") || line.Contains("PrepareForSleep (true"))
-                    Reset();
+                    {
+                        Reset();
+                        SshMux.CloseAll(); // общие соединения хостов (П-9) не переживают блокировку и сон
+                    }
             }
         }) { IsBackground = true, Name = "logind lock monitor" }.Start();
         AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { monitor?.Kill(); } catch (InvalidOperationException) { } };
