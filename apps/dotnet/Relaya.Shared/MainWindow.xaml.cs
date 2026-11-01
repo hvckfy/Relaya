@@ -279,7 +279,7 @@ public sealed partial class MainWindow : Window
             // Группы столов и контекстное меню (Е.13): подключить, внешний клиент, изменить, удалить.
             NavigationViewItem DesktopItem(RemoteDesktop d)
             {
-                var item = new NavigationViewItem { Content = d.name, Tag = d, Icon = new FontIcon { Glyph = d.kind == DesktopKind.Rdp ? "" : "" } };
+                var item = new NavigationViewItem { Content = d.name, Tag = d, SelectsOnInvoked = false, Icon = new FontIcon { Glyph = d.kind == DesktopKind.Rdp ? "" : "" } };
                 var menu = new MenuFlyout();
                 void Add(string text, Action act) { var mi = new MenuFlyoutItem { Text = text }; mi.Click += (_, _) => act(); menu.Items.Add(mi); }
                 Add(L("Подключить"), () => Platform.DesktopLauncher.Open(d, Content.XamlRoot));
@@ -359,7 +359,12 @@ public sealed partial class MainWindow : Window
             // Второй щелчок двойного клика тоже приходит как ItemInvoked — не уводим с только что открытого терминала.
             case SshHost h when openedByDoubleTap is { } t && t.Alias == h.alias && Environment.TickCount64 - t.At < 700: break;
             case SshHost h: ShowPage(new Pages.HostPage(h)); break;
-            case RemoteDesktop d: Platform.DesktopLauncher.Open(d, Content.XamlRoot); break;
+            // Пункт внутри группы WinUI присылает ItemInvoked дважды на один щелчок — второй стол не открываем.
+            case RemoteDesktop d when openedDesktop is { } o && o.Id == d.id && Environment.TickCount64 - o.At < 700: break;
+            case RemoteDesktop d:
+                openedDesktop = (d.id, Environment.TickCount64);
+                Platform.DesktopLauncher.Open(d, Content.XamlRoot);
+                break;
             case "keys": ShowPage(new Pages.KeysPage()); break;
             case "tunnels": ShowPage(new Pages.TunnelsPage()); break;
             case "snippets": ShowPage(new Pages.SnippetsPage()); break;
@@ -371,6 +376,7 @@ public sealed partial class MainWindow : Window
 
     private Pages.SettingsPage? settingsPage;
     private (string Alias, long At)? openedByDoubleTap;
+    private (string Id, long At)? openedDesktop;
 
     /// Пустая область «Выберите хост слева» (например, отмена «Нового хоста»).
     internal void ShowNothing()
