@@ -26,7 +26,9 @@ internal sealed class SnippetsPage : UserControl
         foreach (var s in list)
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            actions.Children.Add(Ui.Button(L("Вставить"), async () => await Insert(s)));
+            actions.Children.Add(Ui.Button(L("Вставить"), async () => await Insert(s, run: false)));
+            // «Выполнить» — вставить и нажать Enter (5.3), как на Mac.
+            actions.Children.Add(Ui.Button(L("Выполнить"), async () => await Insert(s, run: true)));
             actions.Children.Add(Ui.IconButton("", L("Копировать"), () => Ui.Copy(s.command)));
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(s)));
             actions.Children.Add(Ui.IconButton("", L("Удалить"), async () =>
@@ -39,7 +41,7 @@ internal sealed class SnippetsPage : UserControl
         }
     }
 
-    private async Task Insert(Snippet s)
+    private async Task Insert(Snippet s, bool run)
     {
         var terminal = MainWindow.Current?.LastTerminal;
         if (terminal == null)
@@ -63,7 +65,7 @@ internal sealed class SnippetsPage : UserControl
             command = RelayaCoreMethods.SnippetFilled(command, variables.Zip(boxes).ToDictionary(x => x.First, x => x.Second.Text));
         }
         MainWindow.Current!.SelectTerminal(terminal);
-        terminal.Paste(command);
+        if (run) terminal.Type(command.TrimEnd('\r', '\n') + "\r"); else terminal.Paste(command);
     }
 
     private async Task Edit(Snippet? s)
