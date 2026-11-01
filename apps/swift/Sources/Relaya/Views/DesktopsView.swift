@@ -115,6 +115,12 @@ struct DesktopEditor: View {
                           prompt: Text(useSSH ? "localhost" : "192.168.1.10"))
                 TextField(L("Порт"), text: $portText)
                 TextField(L("Пользователь"), text: $desktop.user, prompt: Text(L("необязательно")))
+                if desktop.kind == .vnc, !useSSH {
+                    // V-SEC-1: VNC не проверяет сервер и не шифрует трафик — без SSH-туннеля его можно подслушать.
+                    Label(L("VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Включите «Через SSH-туннель», если сеть не доверенная."),
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 if desktop.kind == .rdp {
                     Picker(L("Разрешение"), selection: Binding(
                         get: { desktop.rdpWidth.flatMap { w in desktop.rdpHeight.map { "\(w)x\($0)" } } ?? "fit" },
