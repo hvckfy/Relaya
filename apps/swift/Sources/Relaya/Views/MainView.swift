@@ -130,6 +130,11 @@ struct MainView: View {
         } message: { host in
             Text(L("Какую папку на %@ подключить как диск? / — весь сервер, ~ — домашняя папка.", host.alias))
         }
+        .alert(L("Переименовать раскладку"),
+               isPresented: Binding(get: { model.renamingLayout != nil }, set: { if !$0 { model.renamingLayout = nil } }),
+               presenting: model.renamingLayout) { saved in
+            RenameLayoutActions(saved: saved)
+        }
         .alert(L("Сохранить раскладку"), isPresented: $model.savingLayout) {
             SaveLayoutActions()
         } message: {
@@ -254,6 +259,23 @@ private struct SaveLayoutActions: View {
         TextField(L("Например: прод"), text: $name)
         Button(L("Сохранить")) { model.saveLayout(named: name.trimmingCharacters(in: .whitespaces)) }
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+        Button(L("Отмена"), role: .cancel) {}
+    }
+}
+
+private struct RenameLayoutActions: View {
+    @Environment(AppModel.self) private var model
+    let saved: SavedLayout
+    @State private var name = ""
+
+    var body: some View {
+        TextField(L("Имя"), text: $name)
+            .onAppear { name = saved.name }
+        Button(L("Переименовать")) {
+            let n = name.trimmingCharacters(in: .whitespaces)
+            if let i = model.savedLayouts.firstIndex(where: { $0.id == saved.id }) { model.savedLayouts[i].name = n }
+        }
+        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
         Button(L("Отмена"), role: .cancel) {}
     }
 }

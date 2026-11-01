@@ -206,6 +206,8 @@ final class AppModel {
         var layout: TileLayout<String>
     }
     var savingLayout = false
+    /// Раскладка, которую переименовывают (меню «Раскладки» → «Переименовать»).
+    var renamingLayout: SavedLayout?
 
     /// Плитки терминалов → раскладка по алиасам хостов (файлы и рабочие столы не сохраняются).
     var layoutToSave: TileLayout<String>? {

@@ -97,9 +97,19 @@ struct RelayaApp: App {
                     Button(L("Сохранить текущие плитки…")) { model.savingLayout = true }
                         .disabled(!model.gridMode || (model.layoutToSave?.ids.count ?? 0) < 2)
                     if !model.savedLayouts.isEmpty {
+                        Menu(L("Переименовать")) {
+                            ForEach(model.savedLayouts) { saved in
+                                Button(saved.name) { model.renamingLayout = saved }
+                            }
+                        }
                         Menu(L("Удалить")) {
                             ForEach(model.savedLayouts) { saved in
-                                Button(saved.name) { model.savedLayouts.removeAll { $0.id == saved.id } }
+                                Button(saved.name) {
+                                    model.pendingDelete = PendingDelete(title: L("Удалить раскладку «%@»?", saved.name),
+                                                                        message: L("Хосты и туннели не удаляются — только сохранённое расположение плиток.")) {
+                                        model.savedLayouts.removeAll { $0.id == saved.id }
+                                    }
+                                }
                             }
                         }
                     }
