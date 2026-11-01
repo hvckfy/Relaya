@@ -80,6 +80,10 @@ internal sealed class DesktopsPage : UserControl
             Severity = InfoBarSeverity.Warning, IsClosable = false,
             Message = L("VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Выберите SSH-хост в «Через SSH-хост», если сеть не доверенная."),
         };
+        // Сброс доверия сертификату RDP (9.4) — только если оно сохранено.
+        var trust = Ui.Button(L("Сбросить доверие"), () => { if (d != null) Desktop.RdpView.ForgetTrust(d.id); });
+        trust.Visibility = d != null && d.kind == DesktopKind.Rdp && Desktop.RdpView.HasTrust(d.id) ? Visibility.Visible : Visibility.Collapsed;
+        ToolTipService.SetToolTip(trust, L("При следующем подключении Relaya снова покажет сертификат сервера"));
         void SyncVnc() => vncWarning.IsOpen = kind.SelectedIndex == 1 && via.SelectedIndex <= 0;
         kind.SelectionChanged += (_, _) => SyncVnc();
         via.SelectionChanged += (_, _) => SyncVnc();
@@ -109,7 +113,7 @@ internal sealed class DesktopsPage : UserControl
         body.Children.Add(new StackPanel
         {
             Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
-            Children = { name, kind, address, port, user, via, vncWarning, full, gateway, error },
+            Children = { name, kind, address, port, user, via, vncWarning, full, gateway, trust, error },
         });
         Content = page;
     }

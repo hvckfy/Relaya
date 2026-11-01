@@ -260,6 +260,17 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
     private string? TrustedCert() => LoadTrust().GetValueOrDefault(TrustKey);
 
+    /// Есть ли сохранённое доверие сертификату для стола (любой путь — напрямую или через SSH-хост).
+    public static bool HasTrust(string desktopId) => LoadTrust().Keys.Any(k => k.StartsWith(desktopId + "|"));
+
+    /// «Сбросить доверие» (9.4): при следующем подключении сертификат спросят снова.
+    public static void ForgetTrust(string desktopId)
+    {
+        var map = LoadTrust();
+        foreach (var k in map.Keys.Where(k => k.StartsWith(desktopId + "|")).ToList()) map.Remove(k);
+        AtomicFile.Write(TrustFile, JsonSerializer.Serialize(map));
+    }
+
     private void Trust(string sha256)
     {
         var map = LoadTrust();
