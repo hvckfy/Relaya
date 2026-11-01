@@ -74,6 +74,16 @@ internal sealed class DesktopsPage : UserControl
         };
         // Форма на всю страницу вместо ContentDialog (UI-W3): «Отмена» и «Сохранить» в заголовке.
         var error = new TextBlock { Foreground = Ui.Brush("SystemFillColorCriticalBrush"), TextWrapping = TextWrapping.Wrap };
+        // V-SEC-1: VNC напрямую не шифрует экран и ввод и не проверяет сервер — предупреждаем, не запрещаем.
+        var vncWarning = new InfoBar
+        {
+            Severity = InfoBarSeverity.Warning, IsClosable = false,
+            Message = L("VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Выберите SSH-хост в «Через SSH-хост», если сеть не доверенная."),
+        };
+        void SyncVnc() => vncWarning.IsOpen = kind.SelectedIndex == 1 && via.SelectedIndex <= 0;
+        kind.SelectionChanged += (_, _) => SyncVnc();
+        via.SelectionChanged += (_, _) => SyncVnc();
+        SyncVnc();
         async Task SaveAsync()
         {
             if (address.Text.Trim().Length == 0) { error.Text = L("Укажите адрес"); return; }
@@ -99,7 +109,7 @@ internal sealed class DesktopsPage : UserControl
         body.Children.Add(new StackPanel
         {
             Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
-            Children = { name, kind, address, port, user, via, full, gateway, error },
+            Children = { name, kind, address, port, user, via, vncWarning, full, gateway, error },
         });
         Content = page;
     }

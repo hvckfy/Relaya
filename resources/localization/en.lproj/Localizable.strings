@@ -1199,3 +1199,4 @@
 "Без пароля и надёжнее: Relaya создаст ключ, добавит его на сервер и проверит вход." = "No password and safer: Relaya creates a key, adds it to the server and checks the sign-in.";
 "Настроить вход по ключу?" = "Set up key sign-in?";
 "VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Включите «Через SSH-туннель», если сеть не доверенная." = "VNC without an SSH tunnel doesn't encrypt the screen or input and doesn't verify the server. Turn on “Via SSH tunnel” on an untrusted network.";
+"VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Выберите SSH-хост в «Через SSH-хост», если сеть не доверенная." = "VNC without an SSH tunnel doesn’t encrypt the screen and input and doesn’t verify that it’s the right server. Choose an SSH host in “Through SSH host” if the network isn’t trusted.";
