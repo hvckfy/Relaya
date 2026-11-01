@@ -1138,3 +1138,4 @@
 "Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):" = "The certificate of %@ has changed since the last connection. Trust it only if the server was reinstalled. New fingerprint (SHA-256):";
 "Ctrl+Alt+Del" = "Ctrl+Alt+Del";
 "Клавиша Windows" = "Windows key";
+"Только сейчас" = "This Time Only";

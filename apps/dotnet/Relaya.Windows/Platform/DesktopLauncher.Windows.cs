@@ -32,6 +32,9 @@ internal static partial class DesktopLauncher
         return VncViewer() is { } viewer ? new ProcessStartInfo(viewer, $"{host}::{port}") { UseShellExecute = false } : null;
     }
 
+    // mstsc и VNC-клиенты Windows показывают свои окна сами — вывод не ведём.
+    private static partial void Started(Process client, Microsoft.UI.Xaml.XamlRoot root) { }
+
     private static string? VncViewer()
     {
         var pf = new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) };

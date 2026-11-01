@@ -22,6 +22,9 @@ internal static partial class DesktopLauncher
     /// tempFile — временный файл клиента (.rdp), удаляется при выходе клиента (аудит Н11).
     private static partial ProcessStartInfo? Client(RemoteDesktop d, string host, long port, out string missing, out string? tempFile);
 
+    /// Клиент запущен: приложение может вести его вывод (вопрос о сертификате, ошибки входа).
+    private static partial void Started(Process client, XamlRoot root);
+
     /// Встроенная вкладка, если есть; иначе внешний клиент.
     public static void Open(RemoteDesktop d, XamlRoot root)
     {
@@ -46,7 +49,12 @@ internal static partial class DesktopLauncher
             await Message(root, missing);
             return;
         }
-        try { StopWithClient(Process.Start(info), tunnelId, tempFile); }
+        try
+        {
+            var client = Process.Start(info);
+            StopWithClient(client, tunnelId, tempFile);
+            if (client != null) Started(client, root);
+        }
         catch (Exception e)
         {
             if (tunnelId != null) TunnelManager.Shared.Stop(tunnelId);

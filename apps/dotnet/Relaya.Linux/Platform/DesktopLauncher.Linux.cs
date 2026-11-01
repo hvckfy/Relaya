@@ -1,5 +1,10 @@
 using System;
 using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using uniffi.relaya_core;
 using static Relaya.Strings;
 
@@ -32,7 +37,11 @@ internal static partial class DesktopLauncher
     {
         if ((Dialogs.Which("xfreerdp3") ?? Dialogs.Which("xfreerdp")) is { } freerdp)
         {
-            var info = new ProcessStartInfo(freerdp) { UseShellExecute = false };
+            // Вывод и ввод — через Relaya (Л6): из меню у xfreerdp нет терминала, и вопрос о сертификате повис бы.
+            var info = new ProcessStartInfo(freerdp)
+            {
+                UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            };
             info.ArgumentList.Add($"/v:{host}:{port}");
             if (d.user.Length > 0) info.ArgumentList.Add("/u:" + d.user);
             info.ArgumentList.Add(d.fullScreen ? "/f" : "/dynamic-resolution");
@@ -40,6 +49,98 @@ internal static partial class DesktopLauncher
             return info;
         }
         return Remmina($"rdp://{(d.user.Length > 0 ? Uri.EscapeDataString(d.user) + "@" : "")}{host}:{port}");
+    }
+
+    // --- xfreerdp: вопрос о сертификате — диалогом, как у встроенного RDP; ошибки — понятным текстом ---
+
+    private const string TrustQuestion = "Do you trust the above certificate?";
+
+    private static partial void Started(Process client, XamlRoot root)
+    {
+        if (!client.StartInfo.RedirectStandardOutput) return;
+        var ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        var log = new StringBuilder();
+        var gate = new object();
+        async Task Pump(StreamReader reader)
+        {
+            var buf = new char[4096];
+            int n;
+            while ((n = await reader.ReadAsync(buf, 0, buf.Length)) > 0)
+            {
+                string text;
+                lock (gate)
+                {
+                    log.Append(buf, 0, n);
+                    if (log.Length > 16384) log.Remove(0, log.Length - 16384);
+                    text = log.ToString();
+                }
+                // Вопрос печатается без перевода строки — ищем его в накопленном выводе, а не построчно.
+                var at = text.LastIndexOf(TrustQuestion, StringComparison.Ordinal);
+                if (at < 0) continue;
+                var block = text[..at];
+                lock (gate) log.Clear();
+                ui.TryEnqueue(() => _ = AskCertAsync(client, block, root));
+            }
+        }
+        _ = Pump(client.StandardOutput);
+        _ = Pump(client.StandardError);
+        client.EnableRaisingEvents = true;
+        client.Exited += (_, _) =>
+        {
+            string tail;
+            lock (gate) tail = log.ToString();
+            Trace.WriteLine("xfreerdp: " + tail);
+            if (client.ExitCode == 0 || tail.Trim().Length == 0) return;
+            var explained = RelayaCoreMethods.RemoteExplain(RemoteProtocol.Rdp, tail);
+            ui.TryEnqueue(() => _ = Message(root, explained is { } p ? L(p.title) + "\n\n" + L(p.hint) : Last(tail, 600)));
+        };
+    }
+
+    private static string Last(string text, int max) => text.Length <= max ? text.Trim() : "…" + text[^max..].Trim();
+
+    // Блок «Certificate details …» xfreerdp: отпечаток, имя, издатель; «has changed» — сертификат сменился.
+    private static async Task AskCertAsync(Process client, string block, XamlRoot root)
+    {
+        var start = block.LastIndexOf("Certificate details", StringComparison.OrdinalIgnoreCase);
+        var details = (start >= 0 ? block[start..] : Last(block, 1200)).Trim();
+        var changed = block.Contains("has changed", StringComparison.OrdinalIgnoreCase)
+            || block.Contains("does not match", StringComparison.OrdinalIgnoreCase);
+        var content = new StackPanel { Spacing = 8 };
+        if (changed)
+            content.Children.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false,
+                Title = L("Отпечаток изменился"), Message = L("Раньше у этого сервера был другой сертификат. Убедитесь, что подключаетесь к нужному серверу."),
+            });
+        content.Children.Add(new TextBlock
+        {
+            Text = details, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("monospace"),
+        });
+        var dialog = new ContentDialog
+        {
+            Title = L("Проверьте сертификат сервера"), Content = new ScrollViewer { Content = content, MaxHeight = 420 },
+            PrimaryButtonText = L("Доверять"), SecondaryButtonText = L("Только сейчас"), CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Close, XamlRoot = root,
+        };
+        string answer;
+        try
+        {
+            answer = await dialog.ShowAsync() switch
+            {
+                ContentDialogResult.Primary => "Y",
+                ContentDialogResult.Secondary => "T",
+                _ => "N",
+            };
+        }
+        catch (Exception) { answer = "N"; } // другой диалог уже открыт — безопасный отказ
+        try
+        {
+            if (client.HasExited) return;
+            await client.StandardInput.WriteLineAsync(answer);
+            await client.StandardInput.FlushAsync();
+        }
+        catch (Exception e) { Trace.WriteLine("xfreerdp stdin: " + e.Message); }
     }
 
     private static ProcessStartInfo? Vnc(string host, long port)
