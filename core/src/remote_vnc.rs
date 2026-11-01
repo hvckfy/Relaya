@@ -161,7 +161,10 @@ fn sessions() -> &'static Mutex<HashMap<usize, Weak<Shared>>> {
 fn session_register(shared: &Arc<Shared>) -> usize {
     static NEXT: AtomicUsize = AtomicUsize::new(1);
     let key = NEXT.fetch_add(1, Ordering::Relaxed);
-    sessions().locked().insert(key, Arc::downgrade(shared));
+    let mut map = sessions().locked();
+    // Drop убирает свой ключ сам; здесь — страховка от записей сессий, освобождённых без Drop (утечка клиента).
+    map.retain(|_, w| w.strong_count() > 0);
+    map.insert(key, Arc::downgrade(shared));
     key
 }
 
