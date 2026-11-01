@@ -143,9 +143,10 @@ internal static class AppState
 
     public sealed record Result(int Status, string Stdout, string Stderr);
 
-    /// Команда на хосте: `ssh alias -- command`. Пароль — через askpass из Credential Manager.
+    /// Служебная команда на хосте: `ssh alias -- command` (статистика, карточка хоста, диск). Пароль — через askpass
+    /// из Credential Manager; на Linux — через общее соединение хоста (П-9, SshMux).
     public static Task<Result> RunOnHost(string alias, string command, int timeoutSeconds = 30) =>
-        Run(SshExe, new[] { "-o", "ConnectTimeout=10", alias, "--", command }, alias, null, timeoutSeconds);
+        Run(SshExe, Platform.SshMux.SshOptions(alias).Concat(new[] { "-o", "ConnectTimeout=10", alias, "--", command }), alias, null, timeoutSeconds);
 
     public static async Task<Result> Run(string exe, IEnumerable<string> args, string? askpassAlias, string? stdin, int timeoutSeconds = 60,
         System.Threading.CancellationToken cancel = default)

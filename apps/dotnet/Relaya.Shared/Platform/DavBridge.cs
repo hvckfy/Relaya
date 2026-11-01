@@ -315,9 +315,7 @@ internal sealed partial class DavBridge
 
     private async Task<AppState.Result> SftpAsync(string command)
     {
-        var r = await AppState.Run(AppState.SftpExe,
-            new[] { "-o", "BatchMode=no", "-b", "-", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", alias },
-            alias, command + "\n", 7 * 24 * 3600);
+        var r = await SshMux.Sftp(alias, command + "\n", 7 * 24 * 3600);
         if (r.Status != 0) throw new IOException(SshErrors.Describe(r.Stderr, L("Ошибка sftp")));
         return r;
     }
@@ -329,7 +327,12 @@ internal sealed partial class DavBridge
     }
 
     // Аргумент команды sftp -b: в кавычках, с экранированием, как в SftpPage.
-    private static string Q(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+    // Путь в команде sftp — только через правило ядра (П-9); управляющий символ в имени — отказ операции.
+    private static string Q(string s)
+    {
+        try { return RelayaCoreMethods.SftpBatchPath(s); }
+        catch (CoreException e) { throw new IOException(e.Message); }
+    }
 
     private static string Parent(string path)
     {
