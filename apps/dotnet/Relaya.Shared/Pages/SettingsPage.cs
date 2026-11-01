@@ -141,7 +141,10 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("\uE895", L("Переподключаться после обрыва соединения"), null, reconnect));
         var highlight = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.highlight", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         highlight.Toggled += (_, _) => Platform.Settings.Set("terminal.highlight", highlight.IsOn ? "1" : "0");
-        list.Children.Add(Ui.Row("\uE7E6", L("Подсветка вывода"), L("Ошибки, предупреждения, успех, IP-адреса и ссылки — цветами темы; полноэкранные программы не трогаются"), highlight));
+        var highlightRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        highlightRow.Children.Add(Ui.Button(L("Правила…"), () => MainWindow.Current?.ShowPage(new HighlightRulesPage())));
+        highlightRow.Children.Add(highlight);
+        list.Children.Add(Ui.Row("\uE7E6", L("Подсветка вывода"), L("Ошибки, предупреждения, успех, IP-адреса и ссылки — цветами темы; полноэкранные программы не трогаются"), highlightRow));
 
         var idle = new NumberBox { Minimum = 1, Maximum = 10080, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
             Value = double.TryParse(Platform.Settings.Get("tmux.idle", "60"), out var t) ? t : 60 };

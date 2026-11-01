@@ -1331,3 +1331,15 @@
 "Вставить сохранённую команду" = "Insert a saved command";
 "Сниппетов нет" = "No snippets";
 "Система не определена — откройте карточку хоста" = "System not detected — open the host card";
+"Правила подсветки" = "Highlight Rules";
+"Правила — сверху вниз, первое совпадение важнее. Цвета берутся из темы терминала." = "Rules apply top to bottom; the first match wins. Colors come from the terminal theme.";
+"Сбросить правила подсветки?" = "Reset highlight rules?";
+"Свои правила будут удалены, вернутся стандартные." = "Your rules will be removed and the defaults restored.";
+"Сбросить" = "Reset";
+"Включено" = "On";
+"Текст или регулярное выражение" = "Text or regular expression";
+"Неверное регулярное выражение — правило не применяется." = "Invalid regular expression — the rule is not applied.";
+"Удалить правило «%@»?" = "Delete rule “%@”?";
+"Подсветка по нему пропадёт." = "Its highlighting will be gone.";
+"Правила…" = "Rules…";
+"Ярко-чёрный" = "Bright black";

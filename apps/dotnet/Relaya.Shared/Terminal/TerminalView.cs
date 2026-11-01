@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using System.Linq;
 using Microsoft.UI.Xaml;
@@ -449,17 +450,17 @@ internal sealed partial class TerminalView : UserControl, IDisposable
 
     private const double Pad = 8;
 
-    private sealed record Rule(System.Text.RegularExpressions.Regex Pattern, int Color, bool Bold);
+    // Правила подсветки — из настроек (4.8), общие для всех терминалов; перечитываются при изменении настроек.
+    private static List<(System.Text.RegularExpressions.Regex Pattern, int Color, bool Bold)> Rules = HighlightRules.Compile(HighlightRules.Load());
+    private static string rulesJson = Platform.Settings.Get(HighlightRules.Key, "");
 
-    // Правила по умолчанию — те же, что на Mac (TerminalHighlighter): цвета — индексы ANSI, подходят к любой теме.
-    private static readonly Rule[] Rules =
+    private static void RefreshRules()
     {
-        new(new(@"\b(error|errors|failed|failure|fatal|panic|denied|refused|critical|exception)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), 9, true),
-        new(new(@"\b(warn|warning|warnings|deprecated)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), 11, false),
-        new(new(@"\b(ok|success|successful|succeeded|done|passed|active \(running\))\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), 10, false),
-        new(new(@"\b(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?\b"), 14, false),
-        new(new(@"\bhttps?://[^\s'""<>]+"), 12, false),
-    };
+        var json = Platform.Settings.Get(HighlightRules.Key, "");
+        if (json == rulesJson) return;
+        rulesJson = json;
+        Rules = HighlightRules.Compile(HighlightRules.Load());
+    }
 
     // Подсветка считается один раз на текст строки (П3): кадр без изменений не гоняет регулярки заново.
     private readonly System.Collections.Generic.Dictionary<string, (int Color, bool Bold)?[]?> highlightCache = new();
@@ -470,6 +471,7 @@ internal sealed partial class TerminalView : UserControl, IDisposable
         for (var c = 0; c < s.cols; c++) text.Append(s.cells[row * (int)s.cols + c]?.ch is { Length: > 0 } ch ? ch[0] : ' ');
         var line = text.ToString();
         if (line.Trim().Length == 0) return null;
+        if (Platform.Settings.Get(HighlightRules.Key, "") != rulesJson) { RefreshRules(); highlightCache.Clear(); }
         if (highlightCache.TryGetValue(line, out var cached)) return cached;
         if (highlightCache.Count > 512) highlightCache.Clear();
         return highlightCache[line] = HighlightLine(line, (int)s.cols);
@@ -479,12 +481,19 @@ internal sealed partial class TerminalView : UserControl, IDisposable
     {
         (int, bool)?[]? marks = null;
         foreach (var rule in Rules)
-            foreach (System.Text.RegularExpressions.Match m in rule.Pattern.Matches(line))
+            foreach (System.Text.RegularExpressions.Match m in SafeMatches(rule.Pattern, line))
             {
                 marks ??= new (int, bool)?[cols];
                 for (var i = m.Index; i < m.Index + m.Length && i < marks.Length; i++) marks[i] ??= (rule.Color, rule.Bold);
             }
         return marks;
+    }
+
+    // Пользовательская регулярка с катастрофическим откатом не должна вешать отрисовку: таймаут 50 мс — строка без подсветки.
+    private static System.Text.RegularExpressions.Match[] SafeMatches(System.Text.RegularExpressions.Regex re, string line)
+    {
+        try { return re.Matches(line).ToArray(); }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException) { return System.Array.Empty<System.Text.RegularExpressions.Match>(); }
     }
 
     private bool drawnText;
