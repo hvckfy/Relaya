@@ -1299,3 +1299,5 @@
 "спрашивать каждый раз" = "ask every time";
 "%@ мин" = "%@ min";
 "После подтверждения сохранённый пароль какое-то время выдаётся без нового вопроса" = "After you confirm, the saved password is handed out without asking again for a while";
+"Значок туннелей в области уведомлений" = "Tunnels icon in the notification area";
+"Показывается, когда есть туннели" = "Shown when there are tunnels";

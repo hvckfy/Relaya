@@ -103,6 +103,13 @@ internal sealed class SettingsPage : UserControl
         // H.264 для встроенного RDP (9.12): только где ядро на FreeRDP и не Windows (там Media Foundation).
         if (Platform.OpenH264.Available) list.Children.Add(H264Row());
 
+#if HAS_UNO
+        // Значок туннелей (12.5), как «Значок туннелей в строке меню» на Mac; на Windows трея пока нет.
+        var tray = new ToggleSwitch { IsOn = Platform.TrayIcon.Enabled, OnContent = "", OffContent = "", MinWidth = 0 };
+        tray.Toggled += (_, _) => { Platform.Settings.Set("tray.enabled", tray.IsOn ? "1" : "0"); Platform.TrayIcon.Refresh(); };
+        list.Children.Add(Ui.Row("\uE8A7", L("Значок туннелей в области уведомлений"), L("Показывается, когда есть туннели"), tray));
+#endif
+
         list.Children.Add(Ui.Section(L("Безопасность")));
         var confirm = new ToggleSwitch { IsOn = Platform.Settings.Get("security.confirmPassword", "0") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         confirm.Toggled += (_, _) => Platform.Settings.Set("security.confirmPassword", confirm.IsOn ? "1" : "0");

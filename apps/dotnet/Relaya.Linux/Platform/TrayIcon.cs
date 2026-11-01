@@ -30,16 +30,26 @@ internal static class TrayIcon
             await conn.ConnectAsync();
             var service = $"org.kde.StatusNotifierItem-{Environment.ProcessId}-1";
             var menu = new TrayMenu(ui);
-            await conn.RegisterObjectAsync(new StatusNotifierItem(ui));
+            item = new StatusNotifierItem(ui);
+            await conn.RegisterObjectAsync(item);
             await conn.RegisterObjectAsync(menu);
             await conn.RegisterServiceAsync(service);
             var watcher = conn.CreateProxy<IStatusNotifierWatcher>("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher");
             await watcher.RegisterStatusNotifierItemAsync(service);
-            TunnelManager.Shared.Changed += () => ui.TryEnqueue(menu.Rebuild);
+            TunnelManager.Shared.Changed += () => ui.TryEnqueue(() => { menu.Rebuild(); Refresh(); });
             connection = conn;
+            Refresh();
         }
         catch (Exception e) { Terminal.TerminalView.Trace("tray: " + e.Message); }
     }
+
+    private static StatusNotifierItem? item;
+
+    /// Настройка tray.enabled (12.5) и правило Mac: значок виден, только когда есть туннели; иначе — Passive.
+    public static bool Enabled => Settings.Get("tray.enabled", "1") == "1";
+
+    public static void Refresh() =>
+        item?.SetStatus(Enabled && (Data.AppState.Tunnels.Count > 0 || TunnelManager.Shared.Temporary.Count > 0) ? "Active" : "Passive");
 
     internal static void ShowWindow() => MainWindow.Current?.Activate();
 }
@@ -61,6 +71,7 @@ internal interface IStatusNotifierItem : IDBusObject
     Task<IDictionary<string, object>> GetAllAsync();
     Task SetAsync(string prop, object val);
     Task<IDisposable> WatchPropertiesAsync(Action<PropertyChanges> handler);
+    Task<IDisposable> WatchNewStatusAsync(Action<string> handler, Action<Exception>? onError = null);
 }
 
 internal sealed class StatusNotifierItem(DispatcherQueue ui) : IStatusNotifierItem
@@ -79,16 +90,39 @@ internal sealed class StatusNotifierItem(DispatcherQueue ui) : IStatusNotifierIt
 
     public Task SetAsync(string prop, object val) => Task.CompletedTask;
 
-    public Task<IDisposable> WatchPropertiesAsync(Action<PropertyChanges> handler) => Task.FromResult<IDisposable>(new Nothing());
+    public Task<IDisposable> WatchPropertiesAsync(Action<PropertyChanges> handler) => Task.FromResult<IDisposable>(new Nothing(() => { }));
 
-    private static Dictionary<string, object> Properties()
+    private readonly object gate = new();
+    private string status = "Passive";
+    private Action<string>? newStatus;
+
+    public void SetStatus(string value)
+    {
+        Action<string>? notify;
+        lock (gate)
+        {
+            if (status == value) return;
+            status = value;
+            notify = newStatus;
+        }
+        notify?.Invoke(value);
+    }
+
+    public Task<IDisposable> WatchNewStatusAsync(Action<string> handler, Action<Exception>? onError = null)
+    {
+        Action<string> wrapped = h => handler(h);
+        lock (gate) newStatus += wrapped;
+        return Task.FromResult<IDisposable>(new Nothing(() => { lock (gate) newStatus -= wrapped; }));
+    }
+
+    private Dictionary<string, object> Properties()
     {
         var p = new Dictionary<string, object>
         {
             ["Category"] = "ApplicationStatus",
             ["Id"] = "relaya",
             ["Title"] = "Relaya",
-            ["Status"] = "Active",
+            ["Status"] = status,
             ["IconName"] = "relaya",
             ["ItemIsMenu"] = false,
             ["Menu"] = new ObjectPath("/MenuBar"),
@@ -99,7 +133,7 @@ internal sealed class StatusNotifierItem(DispatcherQueue ui) : IStatusNotifierIt
         return p;
     }
 
-    private sealed class Nothing : IDisposable { public void Dispose() { } }
+    private sealed class Nothing(Action dispose) : IDisposable { public void Dispose() => dispose(); }
 }
 
 [DBusInterface("com.canonical.dbusmenu")]
