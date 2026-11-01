@@ -77,7 +77,11 @@ extern "C" {
 
 const STATUS_DISCONNECTED: i32 = 0;
 const STATUS_CONNECTED: i32 = 2;
+/// RVNC_INPUTMODE_*: 0 (NONE) выключает отправку мыши и клавиатуры — RoyalVNCKit молча отбрасывает ввод.
+#[cfg(test)]
 const INPUT_MODE_NONE: i32 = 0;
+/// RVNC_INPUTMODE_FORWARDKEYBOARDSHORTCUTSIFNOTINUSELOCALLY: ввод идёт на сервер.
+const INPUT_MODE_FORWARD: i32 = 1;
 const COLOR_DEPTH_24: i32 = 24;
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -361,7 +365,7 @@ impl VncSession {
                 c.shared,
                 false,
                 false,
-                INPUT_MODE_NONE,
+                INPUT_MODE_FORWARD,
                 false,
                 COLOR_DEPTH_24,
                 std::ptr::null_mut(),
@@ -481,6 +485,13 @@ impl Drop for VncSession {
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn settings_forward_input() {
+        // С NONE в v0.17.0 кадры шли, а мышь и клавиатура — нет (Mac и Windows).
+        assert_ne!(INPUT_MODE_FORWARD, INPUT_MODE_NONE);
+        assert_eq!(INPUT_MODE_FORWARD, 1);
+    }
 
     #[test]
     fn keysyms_for_characters() {
