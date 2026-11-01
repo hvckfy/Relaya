@@ -127,6 +127,7 @@ private struct ProfileForm: View {
     @State private var showConflict = false
     /// Подтверждение «синхронизировать ключи без пароля» — прямо в форме, без отдельного окна.
     @State private var confirmEmptyPassphrase = false
+    @State private var passphraseError: String?
     @FocusState private var passphraseFocused: Bool
 
     var body: some View {
@@ -222,10 +223,16 @@ private struct ProfileForm: View {
                             // Пустое поле — синхронизация без пароля, но только после подтверждения ниже.
                             Button(L("Сохранить")) {
                                 if passphrase.isEmpty { confirmEmptyPassphrase = true }
-                                else { sync.setPassphrase(passphrase); passphrase = "" }
+                                else {
+                                    do { try sync.setPassphrase(passphrase); passphrase = ""; passphraseError = nil }
+                                    catch { passphraseError = error.localizedDescription }
+                                }
                             }
                             .disabled(passphrase.isEmpty && sync.keysWithoutPassword)
                         }
+                    }
+                    if let passphraseError {
+                        Text(passphraseError).foregroundStyle(.red).textSelection(.enabled)
                     }
                     if confirmEmptyPassphrase {
                         Label {
@@ -236,7 +243,8 @@ private struct ProfileForm: View {
                                     Button(L("Отмена")) { confirmEmptyPassphrase = false; passphraseFocused = true }
                                         .keyboardShortcut(.cancelAction)
                                     Button(L("Синхронизировать без пароля"), role: .destructive) {
-                                        sync.allowKeysWithoutPassword()
+                                        do { try sync.allowKeysWithoutPassword(); passphraseError = nil }
+                                        catch { passphraseError = error.localizedDescription }
                                         confirmEmptyPassphrase = false
                                     }
                                 }
