@@ -39,6 +39,10 @@ final class VNCSession {
     @ObservationIgnored private var pendingSave: (user: String?, password: String)?
     @ObservationIgnored private var tunnel: Tunnel?
     @ObservationIgnored private var triedSaved = false
+    /// V-3: причина повторного входа — показать в форме после немедленного переподключения.
+    @ObservationIgnored private var retryReason: String?
+    /// V-3: форму входа отменили — следующий отказ показать карточкой, без нового круга.
+    @ObservationIgnored private var credentialsCancelled = false
 
     init(desktop: RemoteDesktop, model: AppModel) {
         self.desktop = desktop
@@ -78,7 +82,8 @@ final class VNCSession {
 
     func connect() async {
         guard !closed, engine == nil else { return }
-        credentialError = nil
+        credentialError = retryReason
+        retryReason = nil
         var host = desktop.address
         var port = desktop.port
         if let t = desktop.tunnel(localPort: RemoteDesktop.freeLocalPort()) {
@@ -103,6 +108,7 @@ final class VNCSession {
 
         phase = .connecting
         triedSaved = false
+        credentialsCancelled = false
         let owner = WeakVNC(self)
         var events = VNCEngine.Events()
         events.connected = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.connected(w, h) } } }
@@ -140,6 +146,7 @@ final class VNCSession {
     }
 
     func cancelCredentials() {
+        credentialsCancelled = true
         credentialRequest = nil
         engine?.cancelCredentials()
     }
@@ -184,9 +191,20 @@ final class VNCSession {
         case .closedByUser: phase = .disconnected(nil)
         case .authFailed:
             pendingSave = nil
-            if triedSaved { try? keychain.deletePassword(for: account) }
-            credentialError = L("Неверное имя пользователя или пароль.")
-            phase = .disconnected(credentialError)
+            if triedSaved {
+                do { try keychain.deletePassword(for: account) } catch {
+                    NSLog("Relaya VNC: пароль из Keychain не удалён: \(error.localizedDescription)")
+                }
+            }
+            let reason = L("Неверное имя пользователя или пароль.")
+            if credentialsCancelled {
+                credentialError = reason
+                phase = .disconnected(reason)
+            } else {
+                // V-3: сразу новое подключение — сервер снова спросит, а форма покажет причину.
+                retryReason = reason
+                Task { await connect() }
+            }
         default:
             phase = .disconnected(message.isEmpty ? nil : SSHErrorText.describeRemote(.vnc, message))
         }
