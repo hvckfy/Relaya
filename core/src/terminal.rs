@@ -70,6 +70,34 @@ pub struct TermRow {
     pub cells: Vec<TermCell>,
 }
 
+/// Строка экрана компактно (П-5): массивы по колонкам вместо объекта со строкой на каждую ячейку — через FFI
+/// идёт несколько буферов на строку, а не `cols` аллокаций. `chars[i]` — кодпойнт символа (0 у хвоста широкого);
+/// `fg`/`bg` — как в `TermCell`; `flags` — те же биты. Символы с комбинируемыми знаками — в `extras`.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TermRowCompact {
+    pub row: u32,
+    pub chars: Vec<u32>,
+    pub fg: Vec<u32>,
+    pub bg: Vec<u32>,
+    pub flags: Vec<u16>,
+    pub extras: Vec<TermCellText>,
+}
+
+/// Полный текст ячейки `col`, когда к символу добавлены комбинируемые знаки (é из e + ◌́, флаги эмодзи).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TermCellText {
+    pub col: u32,
+    pub text: String,
+}
+
+/// Как `TermDamage`, но строки компактные (П-5).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct TermDamageCompact {
+    pub full: bool,
+    pub lines: Vec<TermRowCompact>,
+    pub cursor: TermCursor,
+}
+
 /// Что изменилось с прошлого `damage()`: все строки (`full`) или только перечисленные; курсор — всегда.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct TermDamage {
@@ -235,6 +263,26 @@ impl TerminalEmulator {
         TermDamage { full: rows_dirty.is_none(), lines, cursor: cursor_of(term, &self.listener) }
     }
 
+    /// То же, что `damage`, но компактными строками (П-5): клиенту не нужно создавать объект на каждую ячейку.
+    pub fn damage_compact(&self) -> TermDamageCompact {
+        let mut g = self.inner.locked();
+        let rows_dirty: Option<Vec<usize>> = match g.term.damage() {
+            alacritty_terminal::term::TermDamage::Full => None,
+            alacritty_terminal::term::TermDamage::Partial(it) => Some(it.map(|d| d.line).collect()),
+        };
+        g.term.reset_damage();
+        let term = &g.term;
+        let rows = term.grid().screen_lines();
+        let mut list: Vec<usize> = match &rows_dirty {
+            None => (0..rows).collect(),
+            Some(l) => l.iter().copied().filter(|r| *r < rows).collect(),
+        };
+        list.sort_unstable();
+        list.dedup();
+        let lines = list.into_iter().map(|r| row_compact(term, r)).collect();
+        TermDamageCompact { full: rows_dirty.is_none(), lines, cursor: cursor_of(term, &self.listener) }
+    }
+
     /// Курсор, режимы и заголовок без ячеек.
     pub fn cursor_state(&self) -> TermCursor {
         let g = self.inner.locked();
@@ -252,21 +300,7 @@ impl TerminalEmulator {
             for c in 0..cols {
                 let cell = &grid[Point::new(Line(r as i32 - offset), Column(c))];
                 let f = cell.flags;
-                let mut flags = 0u16;
-                for (bit, flag) in [
-                    (1, Flags::BOLD),
-                    (2, Flags::ITALIC),
-                    (4, Flags::UNDERLINE),
-                    (8, Flags::INVERSE),
-                    (16, Flags::DIM),
-                    (32, Flags::STRIKEOUT),
-                    (64, Flags::WIDE_CHAR),
-                    (128, Flags::WIDE_CHAR_SPACER),
-                ] {
-                    if f.contains(flag) {
-                        flags |= bit;
-                    }
-                }
+                let flags = cell_flags(f);
                 let ch = if f.contains(Flags::WIDE_CHAR_SPACER) {
                     String::new()
                 } else {
@@ -306,21 +340,7 @@ fn row_cells(term: &Term<Listen>, r: usize) -> Vec<TermCell> {
         .map(|c| {
             let cell = &grid[Point::new(Line(r as i32 - offset), Column(c))];
             let f = cell.flags;
-            let mut flags = 0u16;
-            for (bit, flag) in [
-                (1, Flags::BOLD),
-                (2, Flags::ITALIC),
-                (4, Flags::UNDERLINE),
-                (8, Flags::INVERSE),
-                (16, Flags::DIM),
-                (32, Flags::STRIKEOUT),
-                (64, Flags::WIDE_CHAR),
-                (128, Flags::WIDE_CHAR_SPACER),
-            ] {
-                if f.contains(flag) {
-                    flags |= bit;
-                }
-            }
+            let flags = cell_flags(f);
             let ch = if f.contains(Flags::WIDE_CHAR_SPACER) {
                 String::new()
             } else {
@@ -333,6 +353,53 @@ fn row_cells(term: &Term<Listen>, r: usize) -> Vec<TermCell> {
             TermCell { ch, fg: encode(cell.fg), bg: encode(cell.bg), flags }
         })
         .collect()
+}
+
+fn cell_flags(f: Flags) -> u16 {
+    let mut flags = 0u16;
+    for (bit, flag) in [
+        (1, Flags::BOLD),
+        (2, Flags::ITALIC),
+        (4, Flags::UNDERLINE),
+        (8, Flags::INVERSE),
+        (16, Flags::DIM),
+        (32, Flags::STRIKEOUT),
+        (64, Flags::WIDE_CHAR),
+        (128, Flags::WIDE_CHAR_SPACER),
+    ] {
+        if f.contains(flag) {
+            flags |= bit;
+        }
+    }
+    flags
+}
+
+fn row_compact(term: &Term<Listen>, r: usize) -> TermRowCompact {
+    let grid = term.grid();
+    let offset = grid.display_offset() as i32;
+    let cols = grid.columns();
+    let mut row = TermRowCompact {
+        row: r as u32,
+        chars: Vec::with_capacity(cols),
+        fg: Vec::with_capacity(cols),
+        bg: Vec::with_capacity(cols),
+        flags: Vec::with_capacity(cols),
+        extras: Vec::new(),
+    };
+    for c in 0..cols {
+        let cell = &grid[Point::new(Line(r as i32 - offset), Column(c))];
+        let spacer = cell.flags.contains(Flags::WIDE_CHAR_SPACER);
+        row.chars.push(if spacer { 0 } else { cell.c as u32 });
+        row.fg.push(encode(cell.fg));
+        row.bg.push(encode(cell.bg));
+        row.flags.push(cell_flags(cell.flags));
+        if let (false, Some(extra)) = (spacer, cell.zerowidth()) {
+            let mut text = cell.c.to_string();
+            text.extend(extra);
+            row.extras.push(TermCellText { col: c as u32, text });
+        }
+    }
+    row
 }
 
 fn cursor_of(term: &Term<Listen>, listener: &Listener) -> TermCursor {
@@ -385,6 +452,24 @@ fn rows_text(snap: &TermSnapshot) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_damage_matches_cells() {
+        let t = TerminalEmulator::new(10, 3, 0);
+        t.feed("a\u{1b}[1;31mb\u{1b}[0m界e\u{301}".as_bytes().to_vec());
+        let full = t.snapshot();
+        let compact = t.damage_compact();
+        assert!(compact.full);
+        let row = &compact.lines[0];
+        for (c, cell) in full.cells[..10].iter().enumerate() {
+            let text = row.extras.iter().find(|x| x.col == c as u32).map(|x| x.text.clone()).unwrap_or_else(|| {
+                char::from_u32(row.chars[c]).filter(|ch| *ch != '\0').map(String::from).unwrap_or_default()
+            });
+            assert_eq!(text, cell.ch, "col {c}");
+            assert_eq!((row.fg[c], row.bg[c], row.flags[c]), (cell.fg, cell.bg, cell.flags), "col {c}");
+        }
+        assert!(row.extras.iter().any(|x| x.text == "e\u{301}"));
+    }
 
     #[test]
     fn damage_reports_only_changed_rows() {
