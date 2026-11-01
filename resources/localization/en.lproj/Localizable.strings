@@ -1376,3 +1376,4 @@
 "Синхронизировать без пароля" = "Sync Without Password";
 "Ключи синхронизируются без пароля — в репозитории они фактически открыты. Чтобы защитить их, введите пароль и сохраните." = "Keys sync without a password, so they're effectively unprotected in the repository. To protect them, enter a password and save.";
 "Не удалось прочитать пароль ключей из Keychain: %@" = "Couldn't read the key password from Keychain: %@";
+"из %@" = "of %@";
