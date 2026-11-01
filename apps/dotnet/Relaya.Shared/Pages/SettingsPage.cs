@@ -62,6 +62,42 @@ internal sealed class SettingsPage : UserControl
             MainWindow.Current?.ApplyTheme();
         };
         list.Children.Add(Ui.Row("\uE790", L("Оформление"), L("Цвета окна Relaya"), appTheme));
+        // Картинка фона (12.2), как на Mac: одна на всё окно, терминалы и разделы просвечивают её.
+        var imageName = new TextBlock { VerticalAlignment = VerticalAlignment.Center, MaxWidth = 200, TextTrimming = TextTrimming.CharacterEllipsis };
+        var pick = new Button { Content = L("Выбрать…") };
+        var clear = new Button { Content = L("Убрать") };
+        list.Children.Add(Ui.Row("\uEB9F", L("Картинка фона"), L("Одна картинка на всё окно: при плитках терминалы и файлы просвечивают её как общий фон."),
+            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { imageName, pick, clear } }));
+        ToggleSwitch Switch(string key) => new() { IsOn = Platform.Settings.Get(key, "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
+        var underSessions = Switch("app.backgroundUnderSessions");
+        var underInterface = Switch("app.backgroundUnderInterface");
+        underSessions.Toggled += (_, _) => Platform.Settings.Set("app.backgroundUnderSessions", underSessions.IsOn ? "1" : "0");
+        underInterface.Toggled += (_, _) => Platform.Settings.Set("app.backgroundUnderInterface", underInterface.IsOn ? "1" : "0");
+        var opacity = new Slider { Minimum = Platform.Appearance.MinOpacity * 100, Maximum = 100, StepFrequency = 5, Width = 200, Value = Platform.Appearance.PanelOpacity * 100 };
+        opacity.ValueChanged += (_, e) => Platform.Settings.Set("app.backgroundOpacity", (e.NewValue / 100).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var options = new UIElement[]
+        {
+            Ui.Row(null, L("Под терминалами и файлами"), null, underSessions),
+            Ui.Row(null, L("Под карточками и разделами"), null, underInterface),
+            Ui.Row(null, L("Непрозрачность панелей"), null, opacity),
+        };
+        foreach (var o in options) list.Children.Add(o);
+        void ShowImage()
+        {
+            var path = Platform.Appearance.ImagePath;
+            imageName.Text = path == null ? L("нет") : System.IO.Path.GetFileName(path);
+            clear.Visibility = path == null ? Visibility.Collapsed : Visibility.Visible;
+            foreach (var o in options) o.Visibility = clear.Visibility;
+        }
+        ShowImage();
+        pick.Click += async (_, _) =>
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            foreach (var ext in new[] { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp" }) picker.FileTypeFilter.Add(ext);
+            SftpPage.Attach(picker);
+            if (await picker.PickSingleFileAsync() is { } file) { Platform.Settings.Set("app.backgroundImage", file.Path); ShowImage(); }
+        };
+        clear.Click += (_, _) => { Platform.Settings.Set("app.backgroundImage", ""); ShowImage(); };
         var theme = new ComboBox { MinWidth = 220 };
         foreach (var n in TerminalTheme.Names) theme.Items.Add(n);
         theme.SelectedItem = Platform.Settings.Get("terminal.theme", "Relaya");

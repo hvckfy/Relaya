@@ -72,6 +72,7 @@ public sealed partial class MainWindow : Window
         Search.PlaceholderText = L("Поиск хостов");
         NewHostText.Text = L("Новый хост…");
         AppState.HostsChanged += () => ui.TryEnqueue(() => Render(Search.Text.Trim()));
+        Platform.Settings.Changed += () => ui.TryEnqueue(ApplyBackground);
         AppState.LoadHosts();
         Platform.SyncService.Shared.Imported += () => ui.TryEnqueue(AppState.LoadHosts);
         Platform.SyncService.Shared.AgentEscalationsPending += list =>
@@ -303,6 +304,26 @@ public sealed partial class MainWindow : Window
         Page.Content = tab ? null : page;
         Page.Visibility = tab ? Visibility.Collapsed : Visibility.Visible;
         Empty.Visibility = page is null ? Visibility.Visible : Visibility.Collapsed;
+        ApplyBackground();
+    }
+
+    private string? backgroundLoaded;
+
+    /// Картинка фона (12.2): под вкладкой — если «под терминалами», под разделом — если «под разделами».
+    /// Терминал сам делает свой фон полупрозрачным (Appearance.SessionOpacity); разделам непрозрачность даёт вуаль.
+    internal void ApplyBackground()
+    {
+        var path = Platform.Appearance.ImagePath;
+        if (path != backgroundLoaded)
+        {
+            backgroundLoaded = path;
+            BackgroundImage.Source = path == null ? null : new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
+        }
+        var tab = Page.Visibility == Visibility.Collapsed;
+        var show = path != null && (tab ? Platform.Appearance.UnderSessions : Page.Content != null && Platform.Appearance.UnderInterface);
+        BackgroundImage.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        BackgroundVeil.Visibility = show && !tab ? Visibility.Visible : Visibility.Collapsed;
+        BackgroundVeil.Opacity = Platform.Appearance.PanelOpacity;
     }
 
     // --- Вкладки: терминалы (с плитками) и SFTP. Вкладка в заголовке, содержимое — в основной области. ---

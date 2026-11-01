@@ -183,7 +183,8 @@ internal sealed class SftpPage : UserControl
     }
 
     // Windows: пикер привязывается к окну; на Linux (Uno) этого не нужно.
-    private static void Attach(object picker)
+    /// Окно-владелец для системных диалогов выбора файла (WinUI без окна их не показывает).
+    internal static void Attach(object picker)
     {
 #if !HAS_UNO
         WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Current!));
