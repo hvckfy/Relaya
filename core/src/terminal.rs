@@ -478,6 +478,63 @@ mod tests {
     }
 }
 
+/// Слова запроса секрета (L-SEC-1); короткие (≤ 3 символов) — только отдельным словом.
+const SECRET_WORDS: &[&str] = &[
+    "password",
+    "passphrase",
+    "passcode",
+    "pin",
+    "token",
+    "secret",
+    "otp",
+    "one-time",
+    "verification code",
+    "authenticator",
+    "пароль",
+    "парольн",
+    "пин-код",
+    "код подтверждения",
+    "одноразов",
+    "токен",
+    "passwort",
+    "kennwort",
+    "contraseña",
+    "mot de passe",
+    "senha",
+    "parola",
+    "hasło",
+    "heslo",
+    "wachtwoord",
+    "lösenord",
+    "密码",
+    "口令",
+    "パスワード",
+    "암호",
+    "비밀번호",
+];
+
+/// Последняя строка вывода — запрос пароля, кода или токена (L-SEC-1): рассылку ввода на все вкладки на ней
+/// нужно остановить. Пустая строка или длиннее 200 символов — нет. Двоеточие в конце не требуется
+/// («Password for alice?», «Enter PIN >»): ложная пауза безопаснее утечки секрета.
+#[uniffi::export]
+pub fn terminal_secret_prompt(tail: String) -> bool {
+    let Some(line) = tail.lines().map(str::trim).rfind(|l| !l.is_empty()) else { return false };
+    let line = line.to_lowercase();
+    if line.chars().count() > 200 {
+        return false;
+    }
+    SECRET_WORDS.iter().any(|w| {
+        if w.chars().count() > 3 {
+            return line.contains(w);
+        }
+        line.match_indices(w).any(|(i, _)| {
+            let before = line[..i].chars().next_back();
+            let after = line[i + w.len()..].chars().next();
+            !before.map(char::is_alphabetic).unwrap_or(false) && !after.map(char::is_alphabetic).unwrap_or(false)
+        })
+    })
+}
+
 /// Похоже ли, что вход выполнен и shell ждёт команду: последняя непустая строка — приглашение (`$`, `#`, `>`, `%`, `❯`, `»`
 /// в конце), курсор стоит на ней сразу после приглашения, и на экране нет активного запроса пароля, passphrase, кода
 /// или подтверждения ключа сервера. Клиенты начальную команду сами не вводят: по `true` предлагают кнопку «Вставить».
@@ -518,6 +575,77 @@ pub fn terminal_login_ready(lines: Vec<String>, cursor_row: u32, cursor_col: u32
 #[cfg(test)]
 mod login_tests {
     use super::*;
+
+    /// Кейсы Relaya-linux (бывший PasswordPromptTests.cs) — остаются здесь после удаления C#-копии.
+    #[test]
+    fn secret_prompts_from_shared() {
+        for yes in [
+            "user@host's password:",
+            "[sudo] password for admin:",
+            "Enter passphrase for key '/home/u/.ssh/id_ed25519':",
+            "Пароль:",
+            "Введите код подтверждения",
+            "Verification code:",
+            "Enter PIN >",
+            "Token:",
+            "Secret?",
+            "Passwort:",
+            "Mot de passe :",
+            "Contraseña:",
+            "密码：",
+            "some output\nPassword for alice?",
+        ] {
+            assert!(terminal_secret_prompt(yes.into()), "{yes}");
+        }
+        for no in [
+            "user@host:~$ ",
+            "root@server:/etc# ",
+            "spinning up containers...",
+            "shopping cart ready",
+            "password changed\nuser@host:~$ ",
+            "",
+        ] {
+            assert!(!terminal_secret_prompt(no.into()), "{no}");
+        }
+    }
+
+    #[test]
+    fn secret_prompts() {
+        for yes in [
+            "Password:",
+            "[sudo] password for alice:",
+            "Password for alice?",
+            "Enter PIN >",
+            "Enter passphrase for key '/k':",
+            "Verification code: ",
+            "OTP:",
+            "Пароль:",
+            "Введите пин-код",
+            "Код подтверждения:",
+            "Kennwort:",
+            "Mot de passe :",
+            "密码：",
+            "パスワード:",
+            "비밀번호:",
+            "out\nout\nToken:",
+            "Hasło:",
+        ] {
+            assert!(terminal_secret_prompt(yes.into()), "{yes}");
+        }
+        for no in [
+            "",
+            "   ",
+            "spinning up",
+            "shopping list",
+            "root@web:~#",
+            "printing",
+            "options: -o",
+            &"password ".repeat(30),
+            "Password:\nroot@web:~#",
+        ] {
+            assert!(!terminal_secret_prompt(no.into()), "{no}");
+        }
+    }
     fn screen(l: &[&str]) -> Vec<String> {
         l.iter().map(|s| s.to_string()).collect()
     }
