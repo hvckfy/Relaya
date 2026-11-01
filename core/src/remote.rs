@@ -290,12 +290,18 @@ impl RemoteSession {
     }
 }
 
+/// Адрес для сравнения: без пробелов, квадратных скобок IPv6 (`[fe80::1]` = `fe80::1`), точки в конце, в нижнем
+/// регистре — иначе один и тот же узел спрашивался бы заново.
+fn norm_host(host: &str) -> String {
+    host.trim().trim_start_matches('[').trim_end_matches(']').trim_end_matches('.').to_lowercase()
+}
+
 /// Узел с нормализованным адресом (нижний регистр, без точки в конце) и ролью.
 fn cert_node(config: &RdpConfig, host: &str, port: u16, gateway: bool) -> CertNode {
-    let host = host.trim().trim_end_matches('.').to_lowercase();
+    let host = norm_host(host);
     let role = if gateway {
         CertRole::Gateway
-    } else if host == config.host.trim().trim_end_matches('.').to_lowercase() && port == config.port {
+    } else if host == norm_host(&config.host) && port == config.port {
         CertRole::Target
     } else {
         CertRole::Redirect
@@ -307,11 +313,10 @@ fn cert_node(config: &RdpConfig, host: &str, port: u16, gateway: bool) -> CertNo
 /// относится к цели из настроек и не распространяется на шлюз и перенаправление.
 #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужно движку FreeRDP
 fn cert_trusted(config: &RdpConfig, node: &CertNode, sha256: &str) -> bool {
-    let by_node = config.trusted_certs.iter().any(|t| {
-        t.host.trim().trim_end_matches('.').to_lowercase() == node.host
-            && t.port == node.port
-            && t.sha256.eq_ignore_ascii_case(sha256)
-    });
+    let by_node = config
+        .trusted_certs
+        .iter()
+        .any(|t| norm_host(&t.host) == node.host && t.port == node.port && t.sha256.eq_ignore_ascii_case(sha256));
     let legacy = node.role == CertRole::Target
         && config.trusted_cert_sha256.as_deref().is_some_and(|t| t.eq_ignore_ascii_case(sha256));
     by_node || legacy
@@ -393,6 +398,14 @@ mod tests {
         let redirect = cert_node(&c, "other.example", 3389, false);
         assert_eq!(redirect.role, CertRole::Redirect);
         assert!(!cert_trusted(&c, &redirect, "aa"));
+        // IPv6 в скобках и без — один узел.
+        let mut v6 = c.clone();
+        v6.host = "fe80::1".into();
+        v6.port = 3389;
+        v6.trusted_certs = vec![TrustedCert { host: "[FE80::1]".into(), port: 3390, sha256: "cc".into() }];
+        let n = cert_node(&v6, "[fe80::1]", 3389, false);
+        assert_eq!((n.role, n.host.as_str()), (CertRole::Target, "fe80::1"));
+        assert!(cert_trusted(&v6, &cert_node(&v6, "fe80::1", 3390, false), "cc"));
         // Тот же хост, другой порт — другой узел.
         assert!(!cert_trusted(&c, &cert_node(&c, "gw.example", 3389, false), "bb"));
     }
