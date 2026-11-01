@@ -105,6 +105,15 @@ struct HostEditorView: View {
             FieldRow(L("Метки")) {
                 TagEditor(tags: $host.tags, suggestions: model.allTags)
             }
+            // Е.17: ОС можно задать вручную, если определение не сработало (OpenWrt без /etc/os-release и т. п.).
+            FieldRow(L("ОС")) {
+                Picker(L("ОС"), selection: $host.os) {
+                    Text(L("определить автоматически")).tag(ServerOS?.none)
+                    ForEach(ServerOS.allCases, id: \.self) { Text($0.title).tag(ServerOS?.some($0)) }
+                }
+                .labelsHidden()
+                .frame(width: 300)
+            }
             FieldRow(L("Цвет"), last: true) {
                 HStack(spacing: 8) {
                     ColorDot(color: nil, label: L("Без цвета"), selected: host.color == nil) { host.color = nil }

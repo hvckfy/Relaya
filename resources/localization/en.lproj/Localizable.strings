@@ -1279,3 +1279,5 @@
 "Мельче" = "Smaller";
 "Обычный размер" = "Actual Size";
 "Подключение к рабочему столу и его сохранённые пароли будут удалены." = "The remote desktop connection and its saved passwords will be deleted.";
+"ОС" = "OS";
+"определить автоматически" = "detect automatically";
