@@ -40,10 +40,10 @@ internal sealed class VncView : UserControl, IDisposable
         fit = new AppBarToggleButton
         {
             Label = L("Вписать"), Icon = new FontIcon { Glyph = "" },
-            IsChecked = Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
+            IsChecked = Platform.Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
         };
         screen.Fit = fit.IsChecked == true;
-        fit.Click += (_, _) => { Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); screen.Fit = fit.IsChecked == true; };
+        fit.Click += (_, _) => { Platform.Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); screen.Fit = fit.IsChecked == true; };
         var keys = new MenuFlyout();
         void Combo(string title, params uint[] keysyms)
         {

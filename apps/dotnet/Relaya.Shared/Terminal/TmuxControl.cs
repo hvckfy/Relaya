@@ -47,7 +47,7 @@ internal sealed class TmuxControlClient
         if (clients.FirstOrDefault(c => c.SessionName == name && !c.Ended) is { } existing) { existing.NewWindow(); return; }
         try
         {
-            var ttl = long.TryParse(Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
+            var ttl = long.TryParse(Platform.Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
             var r = await AppState.RunOnHost(alias, RelayaCoreMethods.TmuxPrepareControlCommand(name, ttl));
             if (r.Stdout.Contains("RELAYA_NO_TMUX")) { await DesktopLauncher.Message(root, L("На %@ не установлен tmux.", alias)); return; }
             if (r.Status != 0) { await DesktopLauncher.Message(root, r.Stderr.Trim().Length > 0 ? r.Stderr.Trim() : L("Команда не выполнена.")); return; }

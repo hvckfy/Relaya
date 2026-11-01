@@ -48,9 +48,9 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
                     format = f;
                     if (input is { } stream)
                     {
-                        var q = new System.Collections.Concurrent.BlockingCollection<byte[]>(QueueChunks);
-                        queue = q;
-                        new System.Threading.Thread(() => Writer(q, stream)) { IsBackground = true, Name = "RDP audio" }.Start();
+                        var created = new System.Collections.Concurrent.BlockingCollection<byte[]>(QueueChunks);
+                        queue = created;
+                        new System.Threading.Thread(() => Writer(created, stream)) { IsBackground = true, Name = "RDP audio" }.Start();
                     }
                 }
                 catch (Exception e)
