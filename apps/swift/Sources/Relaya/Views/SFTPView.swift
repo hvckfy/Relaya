@@ -358,7 +358,7 @@ struct SFTPView: View {
                 }
             }
             edits.append(session)
-            Self.openForEditing(local)
+            do { try Self.openForEditing(local) } catch { self.error = error.localizedDescription }
         }
     }
 
@@ -370,12 +370,15 @@ struct SFTPView: View {
 
     /// «Открыть в редакторе» не должно запускать присланный сервером файл (находка аудита по 6.6): исполняемый
     /// бит снимается, запускаемые типы открываются текстовым редактором по умолчанию, остальные — своим приложением.
-    static func openForEditing(_ local: URL) {
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: local.path)
-        guard runnable.contains(local.pathExtension.lowercased()),
-              let editor = NSWorkspace.shared.urlForApplication(toOpen: .plainText) else {
+    static func openForEditing(_ local: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: local.path)
+        guard runnable.contains(local.pathExtension.lowercased()) else {
             NSWorkspace.shared.open(local)
             return
+        }
+        // Запускаемый тип без текстового редактора — не открываем вовсе: обычное «открыть» его бы запустило.
+        guard let editor = NSWorkspace.shared.urlForApplication(toOpen: .plainText) else {
+            throw StreamTransfer.Failure(message: L("Нет текстового редактора — файл %@ не открыт, чтобы не запустить его.", local.lastPathComponent))
         }
         NSWorkspace.shared.open([local], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration())
     }
