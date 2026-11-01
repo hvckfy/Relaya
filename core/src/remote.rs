@@ -86,6 +86,11 @@ pub enum RemoteCloseKind {
     CertRejected,
     Protocol,
     ClosedByUser,
+    /// Нужны логин и пароль (сервер требует NLA, имени нет): клиент открывает форму входа, а не карточку ошибки.
+    CredentialsRequired,
+    /// Учётная запись не пускает (заблокирована, отключена, пароль истёк, нет права удалённого входа): сохранённый
+    /// пароль не стирать — он может быть верным.
+    AccountProblem,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]

@@ -24,8 +24,9 @@ pub struct Snippet {
     pub tags: Vec<String>,
 }
 
-fn variable_regex() -> Regex {
-    Regex::new(r"\{\{\s*([\p{L}_][^{}\s]*)\s*\}\}").unwrap()
+fn variable_regex() -> &'static Regex {
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\{\{\s*([\p{L}_][^{}\s]*)\s*\}\}").expect("постоянный шаблон"))
 }
 
 /// Имена переменных `{{имя}}` в порядке появления, без повторов.
@@ -364,7 +365,10 @@ pub struct RemoteFile {
 /// `drwxr-xr-x  2 root root 4096 Oct 29 12:00 name with spaces` → файлы; папки сверху, по имени.
 #[uniffi::export]
 pub fn sftp_parse_listing(output: String) -> Vec<RemoteFile> {
-    let re = Regex::new(r"^([-dlcbps]\S*)\s+\S+\s+\S+\s+\S+\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s(.+)$").unwrap();
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| {
+        Regex::new(r"^([-dlcbps]\S*)\s+\S+\s+\S+\s+\S+\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s(.+)$").expect("постоянный шаблон")
+    });
     let mut files: Vec<RemoteFile> = output
         .lines()
         .filter_map(|line| {

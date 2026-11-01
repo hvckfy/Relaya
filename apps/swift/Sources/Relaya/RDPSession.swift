@@ -329,7 +329,14 @@ final class RDPSession {
             phase = .disconnected(nil)
         case .authFailed:
             pendingSave = nil
-            try? keychain.deletePassword(for: account)
+            // Неверный пароль — только он стирается; ошибку Keychain показываем, а не глотаем.
+            do { try keychain.deletePassword(for: account) } catch {
+                NSLog("Relaya RDP: пароль из Keychain не удалён: \(error.localizedDescription)")
+            }
+            phase = .needsCredentials
+        case .credentialsRequired:
+            // R-2, R-5: сервер требует логин и пароль — форма входа, как в mstsc; сохранённый пароль не трогаем.
+            pendingSave = nil
             phase = .needsCredentials
         case .certRejected:
             phase = certificateMismatch

@@ -37,7 +37,11 @@ enum relaya_rdp_close
 	RELAYA_CLOSE_NETWORK = 2,
 	RELAYA_CLOSE_SERVER = 3,
 	RELAYA_CLOSE_CERT = 4,
-	RELAYA_CLOSE_PROTOCOL = 5
+	RELAYA_CLOSE_PROTOCOL = 5,
+	/* Нужны логин и пароль: сервер требует NLA или имени нет — клиент открывает форму входа. */
+	RELAYA_CLOSE_CREDENTIALS = 6,
+	/* Пароль верный, но учётная запись не пускает: заблокирована, отключена, пароль истёк — пароль не стирать. */
+	RELAYA_CLOSE_ACCOUNT = 7
 };
 
 /* Все колбэки — из потока relaya_rdp_run. */

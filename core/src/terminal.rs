@@ -199,17 +199,21 @@ impl TerminalEmulator {
 
     /// Строки экрана как текст (без хвостовых пробелов) — для копирования и тестов.
     pub fn screen_text(&self) -> Vec<String> {
-        let snap = self.snapshot();
+        Self::rows_text(&self.snapshot())
+    }
+
+    fn rows_text(snap: &TermSnapshot) -> Vec<String> {
         snap.cells
-            .chunks(snap.cols as usize)
+            .chunks(snap.cols.max(1) as usize)
             .map(|row| row.iter().map(|c| c.ch.as_str()).collect::<String>().trim_end().to_string())
             .collect()
     }
 
-    /// Вход выполнен и shell ждёт команду (C23): см. `terminal_login_ready`.
+    /// Вход выполнен и shell ждёт команду (C23): см. `terminal_login_ready`. Один снимок экрана, а не два
+    /// (П-6): вызывается на каждый кусок вывода, пока вход не распознан.
     pub fn login_ready(&self) -> bool {
         let snap = self.snapshot();
-        terminal_login_ready(self.screen_text(), snap.cursor_row, snap.cursor_col, snap.alt_screen)
+        terminal_login_ready(Self::rows_text(&snap), snap.cursor_row, snap.cursor_col, snap.alt_screen)
     }
 
     /// Изменения экрана с прошлого вызова (П1): вместо полного снимка на каждый кадр — только изменённые строки.
