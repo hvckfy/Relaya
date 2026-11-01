@@ -24,6 +24,8 @@ internal sealed class TileHost : UserControl, IDisposable
     private sealed record Pane(string Id, TerminalView View, SshSession Session, string Alias, Border Frame, TextBlock Title)
     {
         public TileHost Owner { get; set; } = null!;
+        /// Сессия жива (StateChanged); false — показываем «отключён» в панели (4.24).
+        public bool Alive { get; set; } = true;
     }
 
     private readonly List<Pane> panes = new();
@@ -54,6 +56,11 @@ internal sealed class TileHost : UserControl, IDisposable
     };
     // Порты сервера из вывода активной плитки: «:3000» — открыть в браузере через туннель.
     private readonly StackPanel portsPanel = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
+    // Состояние активной плитки рядом с портами, как строка состояния на Mac (4.24).
+    private readonly TextBlock disconnected = new()
+    {
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0), Visibility = Visibility.Collapsed,
+    };
 
     public event Action<string>? TitleChanged;
     public event Action<bool>? AliveChanged;
@@ -108,6 +115,7 @@ internal sealed class TileHost : UserControl, IDisposable
             Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 8, 4),
             Children =
             {
+                disconnected,
                 portsPanel,
                 search,
                 recordToggle,
@@ -427,7 +435,15 @@ internal sealed class TileHost : UserControl, IDisposable
         close.Click += (_, _) => pane.Owner.Close(pane);
         expand.Click += (_, _) => { pane.Owner.Activate(pane); pane.Owner.ToggleZoom(); };
         view.GotFocus += (_, _) => pane.Owner.Activate(pane);
-        session.StateChanged += alive => pane.Owner.AliveChanged?.Invoke(alive);
+        session.StateChanged += alive =>
+        {
+            pane.Owner.AliveChanged?.Invoke(alive);
+            pane.Owner.ui.TryEnqueue(() =>
+            {
+                pane.Alive = alive;
+                if (pane.Owner.active == pane) pane.Owner.UpdateState();
+            });
+        };
         session.RecordingChanged += () => pane.Owner.ui.TryEnqueue(() => { if (pane.Owner.active == pane) pane.Owner.UpdateRecording(); });
         session.PortsChanged += () => pane.Owner.ui.TryEnqueue(() => { if (pane.Owner.active == pane) pane.Owner.UpdatePorts(); });
         var started = false;
@@ -500,6 +516,13 @@ internal sealed class TileHost : UserControl, IDisposable
         broadcastHere.IsChecked = active == null || Broadcast.Includes(active.Session);
     }
 
+    private void UpdateState()
+    {
+        disconnected.Text = L("отключён");
+        disconnected.Foreground = Pages.Ui.Brush("SystemFillColorCriticalBrush");
+        disconnected.Visibility = active is { Alive: false } ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void UpdatePorts()
     {
         portsPanel.Children.Clear();
@@ -534,6 +557,7 @@ internal sealed class TileHost : UserControl, IDisposable
         UpdateBroadcast();
         UpdateRecording();
         UpdatePorts();
+        UpdateState();
         foreach (var p in panes)
             p.Frame.BorderBrush = p == pane && panes.Count > 1 ? Pages.Ui.Brush("AccentFillColorDefaultBrush") : Pages.Ui.Brush("CardStrokeColorDefaultBrush");
         TitleChanged?.Invoke(panes.Count > 1 ? string.Join(" · ", panes.Select(p => p.Alias)) : pane.Alias);
