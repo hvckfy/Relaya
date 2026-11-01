@@ -89,18 +89,26 @@ internal sealed class TunnelsPage : UserControl
         void Sync() => target.IsEnabled = targetPort.IsEnabled = kind.SelectedIndex != 2;
         kind.SelectionChanged += (_, _) => Sync();
         Sync();
-        var d = new ContentDialog
+        // Форма на всю страницу вместо ContentDialog (UI-W3): «Отмена» и «Сохранить» в заголовке.
+        var error = new TextBlock { Foreground = Ui.Brush("SystemFillColorCriticalBrush"), TextWrapping = TextWrapping.Wrap };
+        void Save()
         {
-            Title = t == null ? L("Новый туннель") : L("Изменить туннель"),
-            Content = new ScrollViewer { Content = new StackPanel { Spacing = 12, MinWidth = 400, Children = { name, host, kind, listen, target, targetPort, auto } } },
-            PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
-        };
-        if (await d.ShowAsync() != ContentDialogResult.Primary || host.SelectedItem is not string alias) return;
-        var item = new Tunnel(t?.id ?? RelayaCoreMethods.CoreNewId(),
-            name.Text.Trim().Length > 0 ? name.Text.Trim() : $"{alias}:{(long)listen.Value}", alias, (TunnelKind)kind.SelectedIndex,
-            (long)listen.Value, target.Text.Trim(), (long)targetPort.Value, auto.IsOn);
-        if (t != null) TunnelManager.Shared.Stop(t.id);
-        AppState.Tunnels = AppState.Tunnels.Where(x => x.id != item.id).Append(item).ToList();
-        Build();
+            if (host.SelectedItem is not string alias) { error.Text = L("Выберите хост"); return; }
+            var item = new Tunnel(t?.id ?? RelayaCoreMethods.CoreNewId(),
+                name.Text.Trim().Length > 0 ? name.Text.Trim() : $"{alias}:{(long)listen.Value}", alias, (TunnelKind)kind.SelectedIndex,
+                (long)listen.Value, target.Text.Trim(), (long)targetPort.Value, auto.IsOn);
+            if (t != null) TunnelManager.Shared.Stop(t.id);
+            AppState.Tunnels = AppState.Tunnels.Where(x => x.id != item.id).Append(item).ToList();
+            Build();
+        }
+        var (page, body) = Ui.Scaffold(t == null ? L("Новый туннель") : L("Изменить туннель"),
+            Ui.Button(L("Отмена"), Build), Ui.Button(L("Сохранить"), Save, accent: true));
+        body.Children.Add(new StackPanel
+        {
+            Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
+            Children = { name, host, kind, listen, target, targetPort, auto, error },
+        });
+        Content = page;
+        await Task.CompletedTask;
     }
 }

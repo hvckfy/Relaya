@@ -72,28 +72,35 @@ internal sealed class DesktopsPage : UserControl
             IsExpanded = d?.gatewayHost is { Length: > 0 },
             Content = new StackPanel { Spacing = 8, Children = { gwHost, gwUser, gwDomain, gwPass } },
         };
-        var dialog = new ContentDialog
+        // Форма на всю страницу вместо ContentDialog (UI-W3): «Отмена» и «Сохранить» в заголовке.
+        var error = new TextBlock { Foreground = Ui.Brush("SystemFillColorCriticalBrush"), TextWrapping = TextWrapping.Wrap };
+        async void Save()
         {
-            Title = d == null ? L("Новый удалённый стол") : L("Изменить стол"),
-            Content = new ScrollViewer { Content = new StackPanel { Spacing = 12, MinWidth = 400, Children = { name, kind, address, port, user, via, full, gateway } } },
-            PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary || address.Text.Trim().Length == 0) return;
-        var item = new RemoteDesktop(d?.id ?? RelayaCoreMethods.CoreNewId(),
-            name.Text.Trim().Length > 0 ? name.Text.Trim() : address.Text.Trim(), kind.SelectedIndex == 0 ? DesktopKind.Rdp : DesktopKind.Vnc,
-            address.Text.Trim(), (long)port.Value, user.Text.Trim(), via.SelectedIndex > 0 ? via.SelectedItem as string : null, full.IsOn,
-            d?.scaleToFit, d?.rdpWidth, d?.rdpHeight, d?.rdpRetina, d?.group,
-            gatewayHost: gwHost.Text.Trim() is { Length: > 0 } gh ? gh : null,
-            gatewayUser: gwUser.Text.Trim() is { Length: > 0 } gu ? gu : null,
-            gatewayDomain: gwDomain.Text.Trim() is { Length: > 0 } gd ? gd : null);
-        try
-        {
-            if (gwPass.Password.Length > 0) Platform.CredentialStore.Write("desktop-gateway:" + item.id, gwPass.Password);
-            else if (item.gatewayHost == null) Platform.CredentialStore.Delete("desktop-gateway:" + item.id);
+            if (address.Text.Trim().Length == 0) { error.Text = L("Укажите адрес"); return; }
+            var item = new RemoteDesktop(d?.id ?? RelayaCoreMethods.CoreNewId(),
+                name.Text.Trim().Length > 0 ? name.Text.Trim() : address.Text.Trim(), kind.SelectedIndex == 0 ? DesktopKind.Rdp : DesktopKind.Vnc,
+                address.Text.Trim(), (long)port.Value, user.Text.Trim(), via.SelectedIndex > 0 ? via.SelectedItem as string : null, full.IsOn,
+                d?.scaleToFit, d?.rdpWidth, d?.rdpHeight, d?.rdpRetina, d?.group,
+                gatewayHost: gwHost.Text.Trim() is { Length: > 0 } gh ? gh : null,
+                gatewayUser: gwUser.Text.Trim() is { Length: > 0 } gu ? gu : null,
+                gatewayDomain: gwDomain.Text.Trim() is { Length: > 0 } gd ? gd : null);
+            try
+            {
+                if (gwPass.Password.Length > 0) Platform.CredentialStore.Write("desktop-gateway:" + item.id, gwPass.Password);
+                else if (item.gatewayHost == null) Platform.CredentialStore.Delete("desktop-gateway:" + item.id);
+            }
+            catch (Exception e) { await Ui.ShowError(XamlRoot, L("Не удалось сохранить пароль"), e.Message); }
+            AppState.Desktops = AppState.Desktops.Where(x => x.id != item.id).Append(item).ToList();
+            AppState.LoadHosts();
+            Build();
         }
-        catch (Exception e) { await Ui.ShowError(XamlRoot, L("Не удалось сохранить пароль"), e.Message); }
-        AppState.Desktops = AppState.Desktops.Where(x => x.id != item.id).Append(item).ToList();
-        AppState.LoadHosts();
-        Build();
+        var (page, body) = Ui.Scaffold(d == null ? L("Новый удалённый стол") : L("Изменить стол"),
+            Ui.Button(L("Отмена"), Build), Ui.Button(L("Сохранить"), Save, accent: true));
+        body.Children.Add(new StackPanel
+        {
+            Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
+            Children = { name, kind, address, port, user, via, full, gateway, error },
+        });
+        Content = page;
     }
 }
