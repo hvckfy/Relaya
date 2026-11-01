@@ -632,6 +632,17 @@ final class AppModel {
         if let activeSession { close(activeSession) }
     }
 
+    /// Удалить стол вместе с его паролями в Keychain — подключения, шлюза и старой записи (Е.21).
+    func deleteDesktop(_ d: RemoteDesktop) {
+        desktops.removeAll { $0.id == d.id }
+        if selectedDesktopID == d.id { selectedDesktopID = nil }
+        let service = d.kind == .vnc ? "app.relaya.vnc-password" : "app.relaya.rdp-password"
+        let store = KeychainStore(service: service)
+        for account in [d.keychainAccount, d.legacyKeychainAccount, d.gatewayKeychainAccount] {
+            try? store.deletePassword(for: account)
+        }
+    }
+
     /// Соседняя вкладка по кругу (⌃Tab / ⌃⇧Tab).
     func selectAdjacentSession(_ step: Int) {
         guard !sessions.isEmpty else { return }
