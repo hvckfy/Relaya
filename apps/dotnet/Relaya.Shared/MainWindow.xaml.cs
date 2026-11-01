@@ -143,7 +143,7 @@ public sealed partial class MainWindow : Window
         var button = new Button
         {
             Content = new FontIcon { Glyph = "\uE71C", FontSize = Pages.Ui.IconSmall }, Flyout = menu, Padding = new Thickness(4),
-            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0),
+            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"), BorderThickness = new Thickness(0),
         };
         ToolTipService.SetToolTip(button, L("Фильтр по меткам"));
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, L("Фильтр по меткам"));
