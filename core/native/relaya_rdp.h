@@ -55,7 +55,8 @@ typedef struct
 	void (*on_frame_end)(void* user);
 	void (*on_resize)(void* user, uint32_t width, uint32_t height);
 	/* sha256 сертификата (hex без двоеточий) и subject; вернуть 1 — принять, 0 — отказ. Может ждать ответа UI. */
-	int (*on_cert)(void* user, const char* sha256, const char* subject);
+	/* host/port — узел, чей сертификат проверяется (R-4); gateway — это RD Gateway (VERIFY_CERT_FLAG_GATEWAY). */
+	int (*on_cert)(void* user, const char* sha256, const char* subject, const char* host, uint16_t port, int gateway);
 	/* NULL — обмен буфером выключен: текст с сервера не запрашивается. */
 	void (*on_clipboard)(void* user, const char* utf8);
 	void (*on_audio)(void* user, uint32_t rate, uint16_t channels, uint16_t bits, uint32_t timestamp, const uint8_t* pcm,

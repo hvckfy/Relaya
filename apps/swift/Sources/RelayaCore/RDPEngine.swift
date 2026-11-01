@@ -1,6 +1,10 @@
 import Foundation
 import RelayaRust
 
+/// Узел RDP, чей сертификат проверяется (R-4): адрес, порт, роль — шлюз, сервер, перенаправление.
+public typealias CertNode = RelayaRust.CertNode
+public typealias CertRole = RelayaRust.CertRole
+
 /// Встроенный RDP ядра (FreeRDP 3): Swift-фасад над `RemoteSession`. Колбэки приходят с потока сессии ядра —
 /// перенос в главный поток делает вызывающий.
 public final class RDPEngine: @unchecked Sendable {
@@ -14,8 +18,10 @@ public final class RDPEngine: @unchecked Sendable {
         public var height: Int
         /// Масштаб рабочего стола на сервере, 100 — без масштаба.
         public var scalePercent: Int
-        /// SHA-256 сертификата, которому пользователь уже доверился.
+        /// SHA-256 сертификата, которому пользователь уже доверился (сервер из настроек).
         public var trustedCertificate: String?
+        /// Доверие по узлам (R-4): `host:port` → SHA-256 — шлюз и серверы после перенаправления.
+        public var trustedNodes: [String: String] = [:]
         /// RD Gateway; nil — напрямую. Пустые учётные данные шлюза — те же, что для сервера.
         public var gatewayHost: String?
         public var gatewayUser: String?
@@ -26,11 +32,13 @@ public final class RDPEngine: @unchecked Sendable {
 
         public init(host: String, port: Int, user: String, password: String, domain: String?,
                     width: Int, height: Int, scalePercent: Int, trustedCertificate: String?,
+                    trustedNodes: [String: String] = [:],
                     gatewayHost: String? = nil, gatewayUser: String? = nil, gatewayPassword: String? = nil,
                     gatewayDomain: String? = nil, h264LibraryPath: String? = nil) {
             self.host = host; self.port = port; self.user = user; self.password = password; self.domain = domain
             self.width = width; self.height = height; self.scalePercent = scalePercent
             self.trustedCertificate = trustedCertificate
+            self.trustedNodes = trustedNodes
             self.gatewayHost = gatewayHost; self.gatewayUser = gatewayUser
             self.gatewayPassword = gatewayPassword; self.gatewayDomain = gatewayDomain
             self.h264LibraryPath = h264LibraryPath
@@ -58,7 +66,7 @@ public final class RDPEngine: @unchecked Sendable {
         public var frame: @Sendable ([Rect]) -> Void = { _ in }
         public var resized: @Sendable (Int, Int) -> Void = { _, _ in }
         /// Сертификат не тот, которому доверились: ответ — `acceptCertificate`. Без ответа — отказ.
-        public var certificate: @Sendable (_ sha256: String, _ subject: String) -> Void = { _, _ in }
+        public var certificate: @Sendable (_ sha256: String, _ subject: String, _ node: CertNode) -> Void = { _, _, _ in }
         public var closed: @Sendable (CloseKind, String) -> Void = { _, _ in }
         public var clipboard: @Sendable (String) -> Void = { _ in }
         public var audio: @Sendable (AudioFormat, Data) -> Void = { _, _ in }
@@ -75,6 +83,10 @@ public final class RDPEngine: @unchecked Sendable {
             config: RdpConfig(host: c.host, port: UInt16(clamping: c.port), user: c.user, password: c.password, domain: c.domain,
                               width: UInt16(clamping: c.width), height: UInt16(clamping: c.height),
                               scalePercent: UInt32(clamping: c.scalePercent), trustedCertSha256: c.trustedCertificate,
+                              trustedCerts: c.trustedNodes.compactMap { key, sha in
+                                  guard let i = key.lastIndex(of: ":"), let port = UInt16(key[key.index(after: i)...]) else { return nil }
+                                  return TrustedCert(host: String(key[..<i]), port: port, sha256: sha)
+                              },
                               gatewayHost: c.gatewayHost, gatewayUser: c.gatewayUser, gatewayPassword: c.gatewayPassword,
                               gatewayDomain: c.gatewayDomain,
                               h264LibraryPath: c.h264LibraryPath),
@@ -107,7 +119,7 @@ public final class RDPEngine: @unchecked Sendable {
             events.frame(rects.map { Rect(x: Int($0.x), y: Int($0.y), width: Int($0.width), height: Int($0.height), bgra: $0.bgra) })
         }
         func onResize(width: UInt16, height: UInt16) { events.resized(Int(width), Int(height)) }
-        func onCert(sha256: String, subject: String) { events.certificate(sha256, subject) }
+        func onCert(sha256: String, subject: String, node: CertNode) { events.certificate(sha256, subject, node) }
         func onClosed(close: RemoteClose) {
             let kind: CloseKind = switch close.kind {
             case .authFailed: .authFailed

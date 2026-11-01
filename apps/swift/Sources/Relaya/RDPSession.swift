@@ -25,12 +25,20 @@ final class RDPSession {
     /// Отпечаток ждёт решения пользователя (alert в окне); `changed` — раньше доверяли другому.
     private(set) var trustPrompt: String?
     private(set) var trustPromptChanged = false
+    /// Узел, о котором вопрос (R-4): шлюз, сервер или сервер после перенаправления брокером.
+    private(set) var trustNode: CertNode?
 
     /// Ответ на «доверять сертификату?»: ядро ждёт его до отправки учётных данных.
     func answerTrust(_ trust: Bool) {
         if trust, let fp = trustPrompt {
-            UserDefaults.standard.set(fp, forKey: certificateKey)
-            certificate = fp
+            if let node = trustNode, node.role != .target {
+                var nodes = trustedNodes
+                nodes[Self.nodeKey(node)] = fp
+                UserDefaults.standard.set(nodes, forKey: nodesKey)
+            } else {
+                UserDefaults.standard.set(fp, forKey: certificateKey)
+                certificate = fp
+            }
         }
         if !trust, trustPromptChanged { certificateMismatch = true }
         trustPrompt = nil
@@ -173,6 +181,13 @@ final class RDPSession {
         try? keychain.setPassword(old, for: account)
         return old
     }
+    /// Доверие к шлюзу и серверам после перенаправления: `host:port` → SHA-256, по столу (R-4).
+    private var nodesKey: String { "rdp.certificates.\(desktop.id.uuidString)" }
+    private var trustedNodes: [String: String] {
+        UserDefaults.standard.dictionary(forKey: nodesKey) as? [String: String] ?? [:]
+    }
+    private static func nodeKey(_ node: CertNode) -> String { "\(node.host):\(node.port)" }
+
     private var certificateKey: String {
         "rdp.certificate.\(desktop.address):\(desktop.port)" + (desktop.viaSSHHost.flatMap { $0.isEmpty ? nil : " via \($0)" } ?? "")
     }
@@ -250,6 +265,7 @@ final class RDPSession {
 
     func forgetCertificate() {
         UserDefaults.standard.removeObject(forKey: certificateKey)
+        UserDefaults.standard.removeObject(forKey: nodesKey)
     }
 
     // MARK: - Сессия
@@ -273,7 +289,9 @@ final class RDPSession {
         events.connected = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.connected(w, h) } } }
         events.resized = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.reset(width: w, height: h) } } }
         events.frame = { rects in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.apply(rects) } } }
-        events.certificate = { sha, _ in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.askTrust(sha) } } }
+        events.certificate = { sha, _, node in
+            DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.askTrust(sha, node: node) } }
+        }
         events.closed = { kind, message in
             DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.finished(kind, message) } }
         }
@@ -288,6 +306,7 @@ final class RDPSession {
         let engine = RDPEngine(config: .init(host: target.host, port: target.port, user: name, password: password,
                                              domain: domain?.trimmingCharacters(in: .whitespaces), width: size.0, height: size.1,
                                              scalePercent: scalePercent, trustedCertificate: trusted,
+                                             trustedNodes: trustedNodes,
                                              gatewayHost: desktop.gatewayHost.flatMap { $0.isEmpty ? nil : $0 },
                                              gatewayUser: desktop.gatewayUser.flatMap { $0.isEmpty ? nil : $0 },
                                              gatewayPassword: try? keychain.password(for: desktop.gatewayKeychainAccount),
@@ -299,8 +318,12 @@ final class RDPSession {
         engine.connect()
     }
 
-    private func askTrust(_ fingerprint: String) {
-        trustPromptChanged = UserDefaults.standard.string(forKey: certificateKey) != nil
+    private func askTrust(_ fingerprint: String, node: CertNode) {
+        // «Изменился» — только если этому же узлу раньше доверяли; шлюз и перенаправление — свои первые вопросы.
+        trustPromptChanged = node.role == .target
+            ? UserDefaults.standard.string(forKey: certificateKey) != nil
+            : trustedNodes[Self.nodeKey(node)] != nil
+        trustNode = node
         trustPrompt = fingerprint
     }
 

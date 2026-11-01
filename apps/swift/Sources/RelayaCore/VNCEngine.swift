@@ -49,7 +49,7 @@ public final class VNCEngine: @unchecked Sendable {
             events.frame(rects.map { RDPEngine.Rect(x: Int($0.x), y: Int($0.y), width: Int($0.width), height: Int($0.height), bgra: $0.bgra) })
         }
         func onResize(width: UInt16, height: UInt16) { events.resized(Int(width), Int(height)) }
-        func onCert(sha256: String, subject: String) {}
+        func onCert(sha256: String, subject: String, node: CertNode) {}
         func onClosed(close: RemoteClose) {
             let kind: RDPEngine.CloseKind = switch close.kind {
             case .authFailed: .authFailed

@@ -49,8 +49,12 @@ pub struct RdpConfig {
     pub height: u16,
     /// Масштаб рабочего стола на сервере, 100 — без масштаба.
     pub scale_percent: u32,
-    /// SHA-256 сертификата сервера (hex), которому пользователь уже доверился.
+    /// SHA-256 сертификата сервера (hex), которому пользователь уже доверился (только узел `host:port` подключения;
+    /// прежний формат — один слот на стол).
     pub trusted_cert_sha256: Option<String>,
+    /// Доверие по узлам (R-4): шлюз, сервер и сервер после перенаправления брокером — каждый со своим отпечатком.
+    #[uniffi(default = [])]
+    pub trusted_certs: Vec<TrustedCert>,
     /// RD Gateway (`host` или `host:port`); пусто — подключение напрямую. Используется движком FreeRDP.
     #[uniffi(default = None)]
     pub gateway_host: Option<String>,
@@ -66,6 +70,33 @@ pub struct RdpConfig {
     /// `openh264::checked_copy` (хеш копии сразу перед dlopen). Пусто — системный декодер (Windows) или без H.264.
     #[uniffi(default = None)]
     pub h264_library_path: Option<String>,
+}
+
+/// Роль узла, чей сертификат проверяется: для текста вопроса. Ключ доверия — `host:port`, не роль.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum CertRole {
+    /// Сервер, указанный в настройках стола.
+    Target,
+    /// RD Gateway.
+    Gateway,
+    /// Сервер, куда перенаправил брокер: адрес пришёл от сервера — отдельный первый вопрос, не наследует доверие цели.
+    Redirect,
+}
+
+/// Узел, чей сертификат проверяется: `host` в нижнем регистре, явный порт.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CertNode {
+    pub host: String,
+    pub port: u16,
+    pub role: CertRole,
+}
+
+/// Отпечаток, которому доверились, для узла `host:port`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TrustedCert {
+    pub host: String,
+    pub port: u16,
+    pub sha256: String,
 }
 
 /// Изменившийся прямоугольник экрана, пиксели BGRA построчно без отступов.
@@ -108,8 +139,8 @@ pub trait RemoteListener: Send + Sync {
     fn on_frame(&self, rects: Vec<FrameRect>);
     /// Сервер сменил размер рабочего стола (после resize или реактивации); следом — полный кадр.
     fn on_resize(&self, width: u16, height: u16);
-    /// Сертификат не тот, которому доверились: ответ — `RemoteSession::accept_cert`. Без ответа — отказ.
-    fn on_cert(&self, sha256: String, subject: String);
+    /// Сертификат узла `node` не тот, которому доверились: ответ — `RemoteSession::accept_cert`. Без ответа — отказ.
+    fn on_cert(&self, sha256: String, subject: String, node: CertNode);
     fn on_closed(&self, close: RemoteClose);
 }
 
@@ -446,6 +477,31 @@ impl RemoteSession {
     }
 }
 
+/// Узел с нормализованным адресом (нижний регистр, без точки в конце) и ролью.
+fn cert_node(config: &RdpConfig, host: &str, port: u16, gateway: bool) -> CertNode {
+    let host = host.trim().trim_end_matches('.').to_lowercase();
+    let role = if gateway {
+        CertRole::Gateway
+    } else if host == config.host.trim().trim_end_matches('.').to_lowercase() && port == config.port {
+        CertRole::Target
+    } else {
+        CertRole::Redirect
+    };
+    CertNode { host, port, role }
+}
+
+/// Тихое доверие — только точное совпадение отпечатка для этого `host:port`. Старый слот `trusted_cert_sha256`
+/// относится к цели из настроек и не распространяется на шлюз и перенаправление.
+fn cert_trusted(config: &RdpConfig, node: &CertNode, sha256: &str) -> bool {
+    let by_node = config
+        .trusted_certs
+        .iter()
+        .any(|t| t.host.trim().to_lowercase() == node.host && t.port == node.port && t.sha256.eq_ignore_ascii_case(sha256));
+    let legacy = node.role == CertRole::Target
+        && config.trusted_cert_sha256.as_deref().is_some_and(|t| t.eq_ignore_ascii_case(sha256));
+    by_node || legacy
+}
+
 fn close(kind: RemoteCloseKind, message: impl ToString) -> RemoteClose {
     RemoteClose { kind, message: message.to_string() }
 }
@@ -534,14 +590,20 @@ impl ironrdp::connector::sspi::network_client::NetworkClient for NoNetwork {
 impl RemoteSession {
     /// Доверять ли сертификату: совпал с сохранённым отпечатком — да; иначе спросить клиента и ждать `accept_cert`.
     /// Ждёт поток сессии, а не поток FFI.
-    pub(crate) fn ask_cert(&self, sha256: String, subject: String) -> bool {
-        if self.config.trusted_cert_sha256.as_deref().map(|t| t.eq_ignore_ascii_case(&sha256)) == Some(true) {
+    pub(crate) fn ask_cert(&self, sha256: String, subject: String, node: CertNode) -> bool {
+        if cert_trusted(&self.config, &node, &sha256) {
             return true;
         }
         let (tx, rx) = mpsc::channel();
         *self.cert_answer.locked() = Some(tx);
-        self.listener.on_cert(sha256, subject);
+        self.listener.on_cert(sha256, subject, node);
         matches!(rx.recv_timeout(CERT_TIMEOUT), Ok(true))
+    }
+
+    /// Узел по адресу из FreeRDP: шлюз — по флагу, совпадение с настройками — цель, иначе — перенаправление.
+    #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
+    pub(crate) fn cert_node(&self, host: &str, port: u16, gateway: bool) -> CertNode {
+        cert_node(&self.config, host, port, gateway)
     }
 
     #[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))] // нужны движку FreeRDP
@@ -642,7 +704,8 @@ impl RemoteSession {
             .ok_or_else(|| close(RemoteCloseKind::Protocol, "bad server public key"))?
             .to_vec();
 
-        if !self.ask_cert(sha256_hex(&cert), parsed.tbs_certificate.subject.to_string()) {
+        let node = cert_node(&self.config, &self.config.host.clone(), self.config.port, false);
+        if !self.ask_cert(sha256_hex(&cert), parsed.tbs_certificate.subject.to_string(), node) {
             return Err(close(RemoteCloseKind::CertRejected, "certificate not accepted"));
         }
         Ok((tls, public_key))
@@ -938,6 +1001,44 @@ mod danger {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cert_trust_is_per_node() {
+        let mut c = RdpConfig {
+            host: String::new(),
+            port: 0,
+            user: "u".into(),
+            password: String::new(),
+            domain: None,
+            width: 800,
+            height: 600,
+            scale_percent: 100,
+            trusted_cert_sha256: None,
+            trusted_certs: vec![],
+            gateway_host: None,
+            gateway_user: None,
+            gateway_password: None,
+            gateway_domain: None,
+            h264_library_path: None,
+        };
+        c.host = "Win.Example.".into();
+        c.port = 3389;
+        c.trusted_cert_sha256 = Some("AA".into());
+        c.trusted_certs = vec![TrustedCert { host: "gw.example".into(), port: 443, sha256: "bb".into() }];
+        let target = cert_node(&c, "win.example", 3389, false);
+        assert_eq!(target.role, CertRole::Target);
+        assert!(cert_trusted(&c, &target, "aa"));
+        // Старый слот цели не распространяется на шлюз и перенаправление.
+        let gw = cert_node(&c, "GW.example", 443, true);
+        assert_eq!((gw.role, gw.host.as_str()), (CertRole::Gateway, "gw.example"));
+        assert!(cert_trusted(&c, &gw, "BB"));
+        assert!(!cert_trusted(&c, &gw, "aa"));
+        let redirect = cert_node(&c, "other.example", 3389, false);
+        assert_eq!(redirect.role, CertRole::Redirect);
+        assert!(!cert_trusted(&c, &redirect, "aa"));
+        // Тот же хост, другой порт — другой узел.
+        assert!(!cert_trusted(&c, &cert_node(&c, "gw.example", 3389, false), "bb"));
+    }
+
     use super::*;
 
     fn r(l: u16, t: u16, rt: u16, b: u16) -> InclusiveRectangle {
@@ -995,7 +1096,7 @@ mod tests {
             fn on_connected(&self, _: u16, _: u16) {}
             fn on_frame(&self, _: Vec<FrameRect>) {}
             fn on_resize(&self, _: u16, _: u16) {}
-            fn on_cert(&self, _: String, _: String) {}
+            fn on_cert(&self, _: String, _: String, _: CertNode) {}
             fn on_closed(&self, c: RemoteClose) {
                 *self.0.locked() = Some(c);
             }
@@ -1011,6 +1112,7 @@ mod tests {
             height: 600,
             scale_percent: 100,
             trusted_cert_sha256: None,
+            trusted_certs: vec![],
             gateway_host: None,
             gateway_user: None,
             gateway_password: None,

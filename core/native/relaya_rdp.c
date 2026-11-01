@@ -450,15 +450,15 @@ static void normalize_fp(const char* in, char* out, size_t cap)
 static DWORD verify_cert(freerdp* instance, const char* host, UINT16 port, const char* common_name, const char* subject,
                          const char* issuer, const char* fingerprint, DWORD flags)
 {
-	WINPR_UNUSED(host);
-	WINPR_UNUSED(port);
 	WINPR_UNUSED(common_name);
 	WINPR_UNUSED(issuer);
-	WINPR_UNUSED(flags);
 	relaya_rdp* r = owner_of(instance->context);
 	char fp[160];
 	normalize_fp(fingerprint, fp, sizeof(fp));
-	int ok = r->cb.on_cert ? r->cb.on_cert(r->cb.user, fp, subject ? subject : "") : 0;
+	/* R-4: узел передаётся дальше — доверие хранится по host:port, шлюз и цель после редиректа спрашиваются отдельно. */
+	int ok = r->cb.on_cert ? r->cb.on_cert(r->cb.user, fp, subject ? subject : "", host ? host : "", port,
+	                                       (flags & VERIFY_CERT_FLAG_GATEWAY) ? 1 : 0)
+	                       : 0;
 	if (!ok)
 		r->cert_rejected = 1;
 	return ok ? 2 : 0; /* 2 — только на эту сессию: доверие хранит Relaya, не FreeRDP */

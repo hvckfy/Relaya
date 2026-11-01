@@ -1397,3 +1397,6 @@
 "Сервер не может проверить доменную учётную запись: проверьте связь сервера с контроллером домена или войдите локальной учётной записью." = "The server can't verify the domain account: check its connection to the domain controller or sign in with a local account.";
 "Срок действия учётной записи истёк" = "The account has expired";
 "Попросите администратора продлить учётную запись." = "Ask the administrator to extend the account.";
+"Шлюз RD Gateway %@" = "RD Gateway %@";
+"Перенаправленный сервер %@ — сюда перенаправил брокер; неожиданный адрес — повод насторожиться" = "Redirected server %@ — the broker sent you here; an unexpected address is a reason for caution";
+"Сервер %@" = "Server %@";
