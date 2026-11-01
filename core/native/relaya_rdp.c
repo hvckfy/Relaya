@@ -528,6 +528,10 @@ static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 	if (!r->password || !r->password[0])
 	{
 		ok &= freerdp_settings_set_bool(s, FreeRDP_NlaSecurity, FALSE);
+		/* HYBRID_EX — тоже CredSSP; без этого nego просит [SSL|HYBRID|HYBRID_EX] и сервер выбирает NLA. */
+		ok &= freerdp_settings_set_bool(s, FreeRDP_ExtSecurity, FALSE);
+		ok &= freerdp_settings_set_bool(s, FreeRDP_RdstlsSecurity, FALSE);
+		ok &= freerdp_settings_set_bool(s, FreeRDP_AadSecurity, FALSE);
 		ok &= freerdp_settings_set_bool(s, FreeRDP_TlsSecurity, TRUE);
 		ok &= freerdp_settings_set_bool(s, FreeRDP_RdpSecurity, FALSE);
 	}
