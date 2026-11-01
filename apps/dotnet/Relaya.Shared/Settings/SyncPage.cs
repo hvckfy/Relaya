@@ -98,7 +98,7 @@ internal sealed class SyncPage : UserControl
         root.Children.Add(new TextBlock { Text = L("Синхронизация"), Style = Style("TitleTextBlockStyle"), Margin = new Thickness(0, 0, 0, 12) });
         root.Children.Add(new TextBlock
         {
-            Text = L("Профиль — ваш git-репозиторий или папка (OneDrive, сетевой диск) и набор хостов. Пароли серверов не синхронизируются никогда."),
+            Text = Platform.PlatformText.SyncProfileHint(),
             TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new Thickness(0, 0, 0, 12),
         });
 
@@ -112,7 +112,7 @@ internal sealed class SyncPage : UserControl
             Build();
         };
         root.Children.Add(Card(L("Пароль шифрования ключей"),
-            L("Нужен, чтобы передавать SSH-ключи. Одинаковый на всех устройствах. Хранится в диспетчере учётных данных Windows."),
+            Platform.PlatformText.SyncPassphraseHint(),
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pass, savePass } }));
 
         // Одноимённые, но другие ключи с другой машины — сохранены рядом, не поверх (ядро, sync_take_renamed_keys).
@@ -171,12 +171,12 @@ internal sealed class SyncPage : UserControl
         var name = new TextBox { Header = L("Название"), Text = initial.name };
         name.LostFocus += (_, _) => Change(p => p with { name = name.Text.Trim().Length > 0 ? name.Text.Trim() : p.name });
 
-        var backend = new ComboBox { Header = L("Где хранить"), Items = { L("Git-репозиторий"), L("Папка (OneDrive, сетевой диск)") },
+        var backend = new ComboBox { Header = L("Где хранить"), Items = { L("Git-репозиторий"), Platform.PlatformText.SyncFolderOption() },
             SelectedIndex = initial.backend == SyncBackend.Git ? 0 : 1, MinWidth = 280 };
         var remote = new TextBox { Text = initial.remote };
         void RemoteHeader() => remote.Header = backend.SelectedIndex == 0
             ? L("Репозиторий (git@server:relaya.git) — доступ вашими ключами из ~/.ssh")
-            : L("Путь к папке, например C:\\Users\\you\\OneDrive\\Relaya");
+            : Platform.PlatformText.SyncFolderPath();
         RemoteHeader();
         backend.SelectionChanged += (_, _) =>
         {

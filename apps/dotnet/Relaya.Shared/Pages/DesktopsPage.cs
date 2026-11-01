@@ -28,7 +28,7 @@ internal sealed class DesktopsPage : UserControl
 #if !HAS_UNO
             // Запасной путь для RDP: системное «Подключение к удалённому рабочему столу» (mstsc).
             if (d.kind == DesktopKind.Rdp)
-                actions.Children.Add(Ui.IconButton("\ue8a7", L("Открыть в Подключении к удалённому рабочему столу"),
+                actions.Children.Add(Ui.IconButton("\ue8a7", Platform.PlatformText.ExternalRdp(),
                     () => Platform.DesktopLauncher.OpenExternal(d, XamlRoot)));
 #endif
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(d)));
