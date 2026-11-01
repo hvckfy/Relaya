@@ -8,7 +8,8 @@ pub fn local_ports_find(text: String) -> Vec<i64> {
     // Вызывается на каждый кусок вывода терминала — регулярка компилируется один раз (AGENTS.md).
     static RE: OnceLock<Regex> = OnceLock::new();
     let re = RE.get_or_init(|| {
-        Regex::new(r"(?i)(?:https?://)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{2,5})\b").expect("постоянный шаблон")
+        Regex::new(r"(?i)(?:https?://)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{2,5})\b")
+            .expect("постоянный шаблон")
     });
     let mut seen = std::collections::HashSet::new();
     re.captures_iter(&text)
