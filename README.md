@@ -61,7 +61,7 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 - **Keyboard splits** like iTerm2: ⌘D splits right, ⇧⌘D splits down, ⌥⌘arrows move between tiles. Save a set of tiles as a **layout** and reopen it in one go.
 - **Session recording** (⌥⌘L) to a plain-text log in `~/Documents/Relaya Logs`.
 - **Links**: ⌘-click opens URLs; `localhost:PORT` links (and ports detected in output) open the *server's* port in your browser through a temporary tunnel.
-- **Broadcast input**: type into several terminals at once (passwords and snippets are never broadcast).
+- **Broadcast input**: type into several terminals at once. Nothing is broadcast before login, at a password, passphrase, PIN or one-time code prompt, or from snippets; a program that silently waits for a secret without a prompt is not detected.
 - **tmux sessions**: reconnect straight back into the same session. Closing a tab ends it; after a dropped connection the server closes it by itself after an idle timeout (1 hour by default), so sessions never pile up. Turn tmux on or off in an open tab, keep a session running on purpose for 24 hours, see and clean up sessions in the host card.
 - **tmux control mode**: show every window of a tmux session on the server as a Relaya tab.
 
