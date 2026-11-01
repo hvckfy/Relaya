@@ -78,6 +78,13 @@ internal sealed class HostPage : UserControl
         }
         body.Children.Add(Ui.Row(OsIcon.Glyph(h.os), L("Система"), osText, osButtons));
 
+        body.Children.Add(Header(L("Порты"), BuildTunnels));
+        body.Children.Add(tunnels);
+        BuildTunnels();
+        var ui = DispatcherQueue;
+        void OnTunnels() => ui.TryEnqueue(BuildTunnels);
+        Platform.TunnelManager.Shared.Changed += OnTunnels;
+        Unloaded += (_, _) => Platform.TunnelManager.Shared.Changed -= OnTunnels;
         body.Children.Add(Header(L("Состояние"), () => _ = LoadStats()));
         body.Children.Add(stats);
         body.Children.Add(Header(L("Docker"), () => _ = LoadDocker()));
@@ -102,6 +109,63 @@ internal sealed class HostPage : UserControl
     private void Refresh()
     {
         if (AppState.Host(host.alias) is { } h) MainWindow.Current?.ShowPage(new HostPage(h));
+    }
+
+    // 3.6, как PortsPanel на Mac: туннели этого хоста с переключателями, быстрый проброс по заготовкам, SOCKS,
+    // «Свой проброс…» и «Все туннели».
+    private static readonly (string Name, long Port, TunnelKind Kind)[] PortPresets =
+    {
+        ("PostgreSQL", 5432, TunnelKind.Local), ("MySQL / MariaDB", 3306, TunnelKind.Local), ("Redis", 6379, TunnelKind.Local),
+        ("MongoDB", 27017, TunnelKind.Local), ("HTTP :80", 80, TunnelKind.Local), ("HTTP :8080", 8080, TunnelKind.Local),
+        ("Grafana :3000", 3000, TunnelKind.Local), ("Prometheus :9090", 9090, TunnelKind.Local), ("SOCKS", 1080, TunnelKind.Dynamic),
+    };
+
+    private readonly StackPanel tunnels = new() { Spacing = 4 };
+
+    private void BuildTunnels()
+    {
+        tunnels.Children.Clear();
+        var own = AppState.Tunnels.Where(t => t.hostAlias == host.alias).ToList();
+        if (own.Count == 0) Note(tunnels, L("Нет пробросов для этого хоста."));
+        foreach (var t in own)
+        {
+            var (state, error) = Platform.TunnelManager.Shared.StatusOf(t);
+            var running = state is Platform.TunnelManager.State.Running or Platform.TunnelManager.State.Starting;
+            var toggle = new ToggleSwitch { IsOn = running, OnContent = "", OffContent = "", MinWidth = 0 };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(toggle, t.name);
+            toggle.Toggled += (_, _) => { if (toggle.IsOn) Platform.TunnelManager.Shared.Start(t); else Platform.TunnelManager.Shared.Stop(t.id); };
+            tunnels.Children.Add(Ui.Row("", t.name, RelayaCoreMethods.TunnelSpec(t) + (error is { Length: > 0 } e ? " · " + e : ""), toggle));
+        }
+        var menu = new MenuFlyout();
+        foreach (var p in PortPresets)
+        {
+            var item = new MenuFlyoutItem { Text = p.Kind == TunnelKind.Dynamic ? L("SOCKS-прокси") : p.Name };
+            item.Click += (_, _) => Forward(p.Name, p.Port, p.Kind);
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var custom = new MenuFlyoutItem { Text = L("Свой проброс…") };
+        custom.Click += (_, _) => MainWindow.Current?.ShowPage(new TunnelsPage(host.alias));
+        menu.Items.Add(custom);
+        tunnels.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8,
+            Children =
+            {
+                new DropDownButton { Content = L("Пробросить порт"), Flyout = menu },
+                Ui.Button(L("Все туннели"), () => MainWindow.Current?.ShowPage(new TunnelsPage())),
+            },
+        });
+    }
+
+    // Привилегированный порт (< 1024) на Linux без root не открыть — локально берём порт + 8000, как на Mac.
+    private void Forward(string name, long remotePort, TunnelKind kind)
+    {
+        var local = remotePort < 1024 ? remotePort + 8000 : remotePort;
+        var t = new Tunnel(RelayaCoreMethods.CoreNewId(), kind == TunnelKind.Dynamic ? L("SOCKS-прокси") : name, host.alias, kind,
+            local, "localhost", remotePort, false);
+        AppState.Tunnels = AppState.Tunnels.Append(t).ToList();
+        Platform.TunnelManager.Shared.Start(t);
     }
 
     private static Grid Header(string title, Action reload, UIElement? extra = null)

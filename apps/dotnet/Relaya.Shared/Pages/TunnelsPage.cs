@@ -24,6 +24,9 @@ internal sealed class TunnelsPage : UserControl
         Build();
     }
 
+    /// Сразу форма нового туннеля для хоста — «Свой проброс…» из карточки хоста (3.6).
+    public TunnelsPage(string newForHost) : this() => _ = Edit(null, newForHost);
+
     private void OnChanged() => ui.TryEnqueue(Build);
 
     private void Build()
@@ -82,12 +85,12 @@ internal sealed class TunnelsPage : UserControl
         }
     }
 
-    private async Task Edit(Tunnel? t)
+    private async Task Edit(Tunnel? t, string? forHost = null)
     {
         var name = new TextBox { Header = L("Название"), Text = t?.name ?? "" };
         var host = new ComboBox { Header = L("Хост"), HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var h in AppState.Hosts) host.Items.Add(h.alias);
-        host.SelectedItem = t?.hostAlias ?? AppState.Hosts.FirstOrDefault()?.alias;
+        host.SelectedItem = t?.hostAlias ?? forHost ?? AppState.Hosts.FirstOrDefault()?.alias;
         var kind = new ComboBox { Header = L("Тип"), HorizontalAlignment = HorizontalAlignment.Stretch,
             Items = { L("Локальный (-L)"), L("Удалённый (-R)"), L("SOCKS-прокси (-D)") }, SelectedIndex = t == null ? 0 : (int)t.kind };
         var listen = new NumberBox { Header = L("Порт у вас"), Value = t?.listenPort ?? 8080, Minimum = 1, Maximum = 65535 };
