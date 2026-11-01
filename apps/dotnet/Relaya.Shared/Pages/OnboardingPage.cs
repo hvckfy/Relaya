@@ -24,6 +24,8 @@ internal static class OnboardingPage
             PrimaryButtonText = L("Продолжить"),
             SecondaryButtonText = L("Назад"),
             IsSecondaryButtonEnabled = false,
+            // Fluent: у ContentDialog всегда есть выход без действия — «Пропустить» (и Esc).
+            CloseButtonText = L("Пропустить"),
             DefaultButton = ContentDialogButton.Primary,
         };
         void Render()
