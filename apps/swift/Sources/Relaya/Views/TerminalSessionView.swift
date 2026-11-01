@@ -44,7 +44,7 @@ private struct SessionTab: View {
     @State private var hovering = false
 
     /// Цвет иконки вкладки: цвет хоста из редактора (Е.10), иначе цвет первой метки.
-    private var tabTint: Color? {
+    private var tabTint: SwiftUI.Color? {
         if let name = session.host?.color, let c = Theme.hostColors.first(where: { $0.name == name }) { return c.color }
         return session.host?.tags.first.map(TagStyle.color)
     }
