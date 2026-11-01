@@ -118,7 +118,7 @@ internal sealed class SettingsPage : UserControl
         // 12.4: не спрашивать повторно N минут после подтверждения (как Touch ID на Mac).
         var grace = new ComboBox { MinWidth = 160 };
         var graceValues = new[] { 0, 1, 5, 15, 30 };
-        foreach (var v in graceValues) grace.Items.Add(v == 0 ? L("спрашивать каждый раз") : L("%@ мин", v.ToString()));
+        foreach (var minutes in graceValues) grace.Items.Add(minutes == 0 ? L("спрашивать каждый раз") : L("%@ мин", minutes.ToString()));
         var current = int.TryParse(Platform.Settings.Get(Platform.ConsentGrace.Key, "0"), out var gm) ? gm : 0;
         grace.SelectedIndex = Math.Max(0, Array.IndexOf(graceValues, current));
         grace.SelectionChanged += (_, _) =>
