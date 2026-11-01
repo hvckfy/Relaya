@@ -23,6 +23,12 @@ final class TunnelManager {
     @ObservationIgnored private var stopping: Set<Tunnel.ID> = []
     /// Туннели, ждущие Touch ID: остановка или удаление отменяют ожидание.
     @ObservationIgnored private var pendingAuth: [Tunnel.ID: Task<Void, Never>] = [:]
+    /// Н4: автозапускаемый туннель, упавший после подъёма (обрыв сети, перезагрузка сервера), перезапускается
+    /// с паузой 5 → 10 → 20 → 40 → 60 с; после 8 неудач подряд — остаётся в ошибке до ручного запуска.
+    @ObservationIgnored private var retries: [Tunnel.ID: Int] = [:]
+    @ObservationIgnored private var retryTasks: [Tunnel.ID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var lastHosts: [SSHHost] = []
+    private static let maxRetries = 8
 
     init(askpassExecutable: String) {
         self.askpassExecutable = askpassExecutable
@@ -77,6 +83,8 @@ final class TunnelManager {
 
     func start(_ tunnel: Tunnel, hosts: [SSHHost]) {
         guard processes[tunnel.id] == nil else { return }
+        lastHosts = hosts
+        retryTasks.removeValue(forKey: tunnel.id)?.cancel()
         let host = hosts.first { $0.alias == tunnel.hostAlias }
         let usePassword = host.map { keychain.hasPassword(for: $0.keychainAccount) && !$0.usesKey } ?? false
         // Пароль из Keychain — только после Touch ID.
@@ -130,10 +138,15 @@ final class TunnelManager {
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))
             if self?.processes[id]?.isRunning == true { self?.status[id] = .running }
+            // Проработал минуту — сеть в порядке, счётчик неудач сбрасывается.
+            try? await Task.sleep(for: .seconds(58))
+            if self?.processes[id]?.isRunning == true { self?.retries[id] = nil }
         }
     }
 
     func stop(_ id: Tunnel.ID) {
+        retryTasks.removeValue(forKey: id)?.cancel()
+        retries[id] = nil
         if let pending = pendingAuth.removeValue(forKey: id) {
             pending.cancel()
             status[id] = .stopped
@@ -153,6 +166,25 @@ final class TunnelManager {
             status[id] = .stopped
             return
         }
-        status[id] = .failed(SSHErrorText.describe(stderr, fallback: L("ssh завершился с кодом %@", "\(code)")))
+        let reason = SSHErrorText.describe(stderr, fallback: L("ssh завершился с кодом %@", "\(code)"))
+        guard let tunnel = tunnels.first(where: { $0.id == id }), tunnel.autoStart else {
+            status[id] = .failed(reason)
+            return
+        }
+        let attempt = (retries[id] ?? 0) + 1
+        guard attempt <= Self.maxRetries else {
+            retries[id] = nil
+            status[id] = .failed(reason)
+            return
+        }
+        retries[id] = attempt
+        let delay = min(60, 5 << (attempt - 1))
+        status[id] = .failed(reason + "\n" + L("Переподключение через %@ с (попытка %@ из %@)", "\(delay)", "\(attempt)", "\(Self.maxRetries)"))
+        retryTasks[id] = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self, let t = self.tunnels.first(where: { $0.id == id }) else { return }
+            self.retryTasks[id] = nil
+            self.start(t, hosts: self.lastHosts)
+        }
     }
 }

@@ -1161,3 +1161,4 @@
 "RD Gateway" = "RD Gateway";
 "Шлюз" = "Gateway";
 "как у сервера" = "same as server";
+"Переподключение через %@ с (попытка %@ из %@)" = "Reconnecting in %@ s (attempt %@ of %@)";
