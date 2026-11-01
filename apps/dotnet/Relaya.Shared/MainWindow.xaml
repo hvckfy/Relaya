@@ -68,8 +68,13 @@
             <Grid Background="{ThemeResource LayerFillColorDefaultBrush}"
                   BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,0,0"
                   CornerRadius="8,0,0,0">
-                <!-- Картинка фона (12.2): под вкладками и разделами; вуаль задаёт непрозрачность разделов. -->
-                <Image x:Name="BackgroundImage" Stretch="UniformToFill" Visibility="Collapsed" />
+                <!-- Картинка фона (12.2): под вкладками и разделами; вуаль задаёт непрозрачность разделов.
+                     Кистью, а не Image: Image с UniformToFill раздувал размер сетки, и страницы вылезали за края окна. -->
+                <Border x:Name="BackgroundImage" Visibility="Collapsed">
+                    <Border.Background>
+                        <ImageBrush x:Name="BackgroundBrush" Stretch="UniformToFill" />
+                    </Border.Background>
+                </Border>
                 <Border x:Name="BackgroundVeil" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" Visibility="Collapsed" />
                 <ContentControl x:Name="Page" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
                 <!-- Содержимое всех вкладок живёт здесь постоянно; переключение — только Visibility. -->

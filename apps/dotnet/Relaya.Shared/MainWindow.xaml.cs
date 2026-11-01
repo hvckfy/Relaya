@@ -448,7 +448,7 @@ public sealed partial class MainWindow : Window
         if (path != backgroundLoaded)
         {
             backgroundLoaded = path;
-            BackgroundImage.Source = path == null ? null : new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
+            BackgroundBrush.ImageSource = path == null ? null : new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
         }
         var tab = Page.Visibility == Visibility.Collapsed;
         var show = path != null && (tab ? Platform.Appearance.UnderSessions : Page.Content != null && Platform.Appearance.UnderInterface);
