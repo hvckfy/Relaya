@@ -31,7 +31,7 @@ namespace Relaya.Desktop;
 /// RdpView.Windows.cs, RdpView.Linux.cs.
 internal sealed partial class RdpView : UserControl, IDisposable
 {
-    private readonly RemoteDesktop desktop;
+    private RemoteDesktop desktop;
     private readonly DispatcherQueue ui = DispatcherQueue.GetForCurrentThread();
     private readonly RemoteScreen screen = new();
 
@@ -108,12 +108,13 @@ internal sealed partial class RdpView : UserControl, IDisposable
             Label = L("Звук"), Icon = new FontIcon { Glyph = "\uE767" },
             Flyout = new Flyout { Content = volume },
         };
+        var resolution = new AppBarButton { Label = L("Разрешение"), Icon = new FontIcon { Glyph = "\uE740" }, Flyout = ResolutionMenu() };
         var stop = new AppBarButton { Label = L("Отключить"), Icon = new FontIcon { Glyph = "" } };
         stop.Click += (_, _) => session?.Disconnect();
         var bar = new CommandBar
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsDynamicOverflowEnabled = true,
-            PrimaryCommands = { fit, clipboard, sound, send, full, stop },
+            PrimaryCommands = { fit, resolution, clipboard, sound, send, full, stop },
         };
 
         connecting = new StackPanel
@@ -183,7 +184,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
         var scale = XamlRoot?.RasterizationScale ?? 1.0;
         var (w, h) = PhysicalSize();
         var (user, domain) = SplitUser(desktop.user);
-        var config = new RdpConfig(host, (ushort)port, user, password, domain, w, h, (uint)Math.Round(scale * 100),
+        var config = new RdpConfig(host, (ushort)port, user, password, domain, w, h, (uint)Math.Round((desktop.rdpRetina == false ? 1.0 : scale) * 100),
             TrustedCert(), desktop.gatewayHost, GatewayUser(), CredentialStore.Read("desktop-gateway:" + desktop.id), GatewayDomain(),
             OpenH264.LibraryPath); // H.264 — только включённый и проверенный кодек (9.12)
         var s = RemoteSession.Rdp(config, new Listener(this));
@@ -195,11 +196,55 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
     private (ushort, ushort) PhysicalSize()
     {
-        var scale = XamlRoot?.RasterizationScale ?? 1.0;
+        // Фиксированное разрешение из настроек стола (9.8, как на Mac); ширина/высота зажимаются в допустимые для RDP.
+        if (desktop.rdpWidth is { } fw && desktop.rdpHeight is { } fh)
+        {
+            var cw = (int)Math.Clamp(fw, 640, 8192);
+            cw -= cw % 2;
+            return ((ushort)cw, (ushort)Math.Clamp(fh, 480, 8192));
+        }
+        // «100%» — пиксели окна без масштаба экрана (больше места), «Retina» — с масштабом (крупнее).
+        var scale = desktop.rdpRetina == false ? 1.0 : XamlRoot?.RasterizationScale ?? 1.0;
         var w = (int)Math.Max(640, ActualWidth * scale);
         var h = (int)Math.Max(480, (ActualHeight - 48) * scale);
         w -= w % 2; // чётная ширина — требование RDP к динамическому разрешению
         return ((ushort)Math.Min(w, 8192), (ushort)Math.Min(h, 8192));
+    }
+
+    private static readonly (int W, int H)[] Presets = { (1280, 720), (1440, 900), (1920, 1080), (2560, 1440), (3840, 2160) };
+
+    /// «Разрешение»: по размеру окна или фиксированное, масштаб Retina/100% — меняется на лету, сохраняется в столе (9.8).
+    private MenuFlyout ResolutionMenu()
+    {
+        var menu = new MenuFlyout();
+        ToggleMenuFlyoutItem Check(string text, bool on, Action apply)
+        {
+            var i = new ToggleMenuFlyoutItem { Text = text, IsChecked = on };
+            i.Click += (_, _) => { apply(); SendResize(); Refresh(); };
+            return i;
+        }
+        void Refresh()
+        {
+            menu.Items.Clear();
+            menu.Items.Add(Check(L("По размеру окна"), desktop.rdpWidth == null, () => Persist(desktop with { rdpWidth = null, rdpHeight = null })));
+            menu.Items.Add(new MenuFlyoutSeparator());
+            foreach (var (pw, ph) in Presets)
+                menu.Items.Add(Check($"{pw} × {ph}", desktop.rdpWidth == pw && desktop.rdpHeight == ph,
+                    () => Persist(desktop with { rdpWidth = pw, rdpHeight = ph })));
+            menu.Items.Add(new MenuFlyoutSeparator());
+            menu.Items.Add(Check(L("Масштаб Retina — крупный интерфейс"), desktop.rdpRetina != false, () => Persist(desktop with { rdpRetina = true })));
+            menu.Items.Add(Check(L("Масштаб 100% — больше места"), desktop.rdpRetina == false, () => Persist(desktop with { rdpRetina = false })));
+        }
+        Refresh();
+        return menu;
+    }
+
+    private void Persist(RemoteDesktop updated)
+    {
+        desktop = updated;
+        var list = AppState.Desktops;
+        var i = list.FindIndex(d => d.id == updated.id);
+        if (i >= 0) { list[i] = updated; AppState.Desktops = list; }
     }
 
     private void SendResize()
