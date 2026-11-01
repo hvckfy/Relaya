@@ -69,12 +69,11 @@ public sealed partial class MainWindow : Window
         {
             new Microsoft.UI.Xaml.Media.Animation.EntranceThemeTransition { FromHorizontalOffset = 0, FromVerticalOffset = 28 },
         };
-        // Порядок вкладок меняется перетаскиванием (TabView), как на Mac. В плитки вкладку переносят своей ручкой
-        // на панели терминала или пунктом «Разместить рядом» в меню вкладки: TabView выбирает вкладку уже на нажатии,
-        // и перетаскивание самой вкладки в плитки с этим не уживалось (0.17.6).
-        Tabs.CanDragTabs = true;
-        Tabs.CanReorderTabs = true;
-        Tabs.AllowDrop = true;
+        // Своя полоса вкладок, как на Mac: щелчок выбирает, перетаскивание внутри полосы меняет порядок,
+        // а на холст другой вкладки — делает плитки; пока тащат, на экране остаётся текущая вкладка.
+        Tabs.SelectionChanged += OnTabSelected;
+        Tabs.TabDragStarting += tab => DraggedTiles = (tab.Tag as Tab)?.Content as Terminal.TileHost;
+        Tabs.TabDragCompleted += () => DraggedTiles = null;
         TabHost.ChildrenTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Nav.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Current = this;
@@ -87,10 +86,9 @@ public sealed partial class MainWindow : Window
         // окно по-прежнему перетаскивают за пустое место заголовка.
         Tabs.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
         // Новая вкладка и смена её заголовка меняют ширину полосы: пересчёт по размеру самих вкладок, а не каждой раскладки.
-        Tabs.TabItemsChanged += (_, e) =>
+        Tabs.TabItems.CollectionChanged += (_, e) =>
         {
-            if (e.CollectionChange == Windows.Foundation.Collections.CollectionChange.ItemInserted
-                && Tabs.TabItems[(int)e.Index] is FrameworkElement tab)
+            foreach (var tab in e.NewItems?.OfType<FrameworkElement>() ?? Enumerable.Empty<FrameworkElement>())
                 tab.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
             DispatcherQueue.TryEnqueue(UpdateTitleBarPassthrough);
         };
@@ -365,7 +363,7 @@ public sealed partial class MainWindow : Window
     internal void ToggleGrid()
     {
         gridMode = !gridMode;
-        Show((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t ? t.Content : null);
+        Show((Tabs.SelectedItem as TabStripItem)?.Tag is Tab t ? t.Content : null);
     }
 
     private bool ShowGrid()
@@ -399,7 +397,7 @@ public sealed partial class MainWindow : Window
 
     private void Show(UIElement? page)
     {
-        shownTab = page == null ? null : Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(i => (i.Tag as Tab)?.Content == page);
+        shownTab = page == null ? null : Tabs.TabItems.OfType<TabStripItem>().FirstOrDefault(i => (i.Tag as Tab)?.Content == page);
         if (ShowGrid()) return;
         // Вкладки не вынимаются из дерева (иначе Win2D теряет Canvas) — показывается одна, остальные свёрнуты.
         var tab = page != null && TabHost.Children.Contains(page);
@@ -511,14 +509,14 @@ public sealed partial class MainWindow : Window
         if (!tiles.Open(saved.Layout)) CloseTab(tab);
     }
 
-    /// Вкладка с плитками, которую сейчас перетаскивают (TabView → холст другой вкладки).
+    /// Вкладка с плитками, которую сейчас перетаскивают (полоса вкладок → холст другой вкладки).
     internal static Terminal.TileHost? DraggedTiles;
 
     /// Плитки вкладки переехали в другую — закрыть опустевшую вкладку.
     /// Закрыть вкладку с этим содержимым (плитки, переехавшие в другую вкладку; окно tmux, закрытое на сервере).
     internal void CloseTabOf(UIElement content)
     {
-        if (Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(t => (t.Tag as Tab)?.Content == content) is { } tab) CloseTab(tab);
+        if (Tabs.TabItems.OfType<TabStripItem>().FirstOrDefault(t => (t.Tag as Tab)?.Content == content) is { } tab) CloseTab(tab);
     }
 
     public void OpenSftp(string alias)
@@ -532,15 +530,16 @@ public sealed partial class MainWindow : Window
     public void OpenTab(string title, string glyph, UIElement content, IDisposable? owner) =>
         AddTab(title, glyph, content, owner ?? content as IDisposable);
 
-    private TabViewItem AddTab(string title, string glyph, UIElement content, IDisposable? owner)
+    private TabStripItem AddTab(string title, string glyph, UIElement content, IDisposable? owner)
     {
-        var tab = new TabViewItem
-        {
-            Header = title, IconSource = new FontIconSource { Glyph = glyph }, Tag = new Tab(content, owner),
-        };
+        var tab = new TabStripItem(title, glyph, new Tab(content, owner), CloseTab);
+        var menu = new MenuFlyout();
+        var close = new MenuFlyoutItem { Text = L("Закрыть вкладку") };
+        close.Click += (_, _) => CloseTab(tab);
+        menu.Items.Add(close);
+        tab.ContextFlyout = menu;
         content.Visibility = Visibility.Collapsed;
         TabHost.Children.Add(content);
-        if (content is Terminal.TileHost tiles) AddTileTargets(tab, tiles);
         Tabs.TabItems.Add(tab);
         Tabs.SelectedItem = tab;
         return tab;
@@ -548,74 +547,35 @@ public sealed partial class MainWindow : Window
 
     private sealed record Tab(UIElement Content, IDisposable? Owner);
 
-    /// Вкладка терминала как цель для плиток: ручку с панели другой вкладки задержали над заголовком — вкладка
-    /// показывается, и плитки бросают на её холст; меню вкладки «Разместить рядом» делает то же без мыши.
-    private void AddTileTargets(TabViewItem tab, Terminal.TileHost tiles)
-    {
-        tab.AllowDrop = true;
-        var hover = ui.CreateTimer();
-        hover.Interval = TimeSpan.FromMilliseconds(500);
-        hover.IsRepeating = false;
-        hover.Tick += (_, _) => { if (DraggedTiles is { } src && src != tiles) Tabs.SelectedItem = tab; };
-        tab.DragEnter += (_, _) => { if (DraggedTiles is { } src && src != tiles) hover.Start(); };
-        tab.DragLeave += (_, _) => hover.Stop();
-        var menu = new MenuFlyout();
-        var beside = new MenuFlyoutSubItem { Text = L("Разместить рядом") };
-        menu.Items.Add(beside);
-        // Список других терминальных вкладок собирается при открытии меню: вкладки открываются и закрываются.
-        menu.Opening += (_, _) =>
-        {
-            beside.Items.Clear();
-            foreach (var other in Tabs.TabItems.OfType<TabViewItem>().Where(t => t != tab))
-            {
-                if ((other.Tag as Tab)?.Content is not Terminal.TileHost target) continue;
-                var item = new MenuFlyoutSubItem { Text = other.Header?.ToString() ?? "" };
-                foreach (var (edge, text) in new[]
-                {
-                    (uniffi.relaya_core.Edge.Left, L("Слева")), (uniffi.relaya_core.Edge.Right, L("Справа")),
-                    (uniffi.relaya_core.Edge.Top, L("Сверху")), (uniffi.relaya_core.Edge.Bottom, L("Снизу")),
-                })
-                {
-                    var place = new MenuFlyoutItem { Text = text };
-                    place.Click += (_, _) => { Tabs.SelectedItem = other; target.Adopt(tiles, edge, null); };
-                    item.Items.Add(place);
-                }
-                beside.Items.Add(item);
-            }
-            beside.IsEnabled = beside.Items.Count > 0;
-        };
-        tab.ContextFlyout = menu;
-    }
-
     /// tmux-сессии всех открытых вкладок: уборка старых сессий их не трогает (К10).
-    internal List<string> OpenTmuxNames => Tabs.TabItems.OfType<TabViewItem>()
+    internal List<string> OpenTmuxNames => Tabs.TabItems.OfType<TabStripItem>()
         .Select(t => (t.Tag as Tab)?.Content).OfType<Terminal.TileHost>().SelectMany(t => t.TmuxNames).ToList();
 
     /// Терминал активной вкладки — для сниппетов и действий ОС.
     internal Terminal.TerminalView? ActiveTerminal =>
-        ((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.Active : null;
+        ((Tabs.SelectedItem as TabStripItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.Active : null;
 
     /// Последняя открытая терминальная вкладка (страница сниппетов закрывает выбор вкладки).
-    internal Terminal.TerminalView? LastTerminal => Tabs.TabItems.OfType<TabViewItem>().Reverse()
+    internal Terminal.TerminalView? LastTerminal => Tabs.TabItems.OfType<TabStripItem>().Reverse()
         .Select(t => (t.Tag as Tab)?.Content).OfType<Terminal.TileHost>().Select(t => t.Active).FirstOrDefault();
 
     internal void SelectTerminal(Terminal.TerminalView view)
     {
-        foreach (var t in Tabs.TabItems.OfType<TabViewItem>())
+        foreach (var t in Tabs.TabItems.OfType<TabStripItem>())
             if ((t.Tag as Tab)?.Content is Terminal.TileHost host && host.Contains(view)) { Tabs.SelectedItem = t; return; }
     }
 
     // Вкладка, выбранная до последнего переключения, — цель перетаскивания вкладки на плитки.
-    private TabViewItem? previousTab;
+    private TabStripItem? previousTab;
 
     // Вкладка, чьи плитки на экране, пока перетаскивают другую (null — перетаскивания нет).
     // Вкладка на экране; вкладка, чьи плитки на экране во время перетаскивания другой; ожидающая показа после отпускания.
-    private TabViewItem? shownTab;
+    private TabStripItem? shownTab;
 
-    private void OnTabSelected(object sender, SelectionChangedEventArgs e)
+    private void OnTabSelected(TabStripItem? removed, TabStripItem? added)
     {
-        if (e.RemovedItems.Count > 0 && e.RemovedItems[0] is TabViewItem removed) previousTab = removed;
-        if ((Tabs.SelectedItem as TabViewItem)?.Tag is Tab t)
+        if (removed != null) previousTab = removed;
+        if (added?.Tag is Tab t)
         {
             Nav.SelectedItem = null;
             Show(t.Content);
@@ -626,9 +586,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnTabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args) => CloseTab(args.Tab);
-
-    private void CloseTab(TabViewItem tab)
+    private void CloseTab(TabStripItem tab)
     {
         if (tab.Tag is Tab t) { t.Owner?.Dispose(); TabHost.Children.Remove(t.Content); }
         Tabs.TabItems.Remove(tab);
@@ -639,7 +597,7 @@ public sealed partial class MainWindow : Window
     // Ctrl+T — новая вкладка к хосту из поиска, Ctrl+W — закрыть, Ctrl+Tab — следующая.
     public void CloseActiveTab()
     {
-        if (Tabs.SelectedItem is TabViewItem t) CloseTab(t);
+        if (Tabs.SelectedItem is TabStripItem t) CloseTab(t);
     }
 
     public void NextTab(int delta)
@@ -655,7 +613,7 @@ public sealed partial class MainWindow : Window
     private SshHost? CurrentHost()
     {
         if (Page.Content is Pages.HostPage hp) return hp.Host;
-        var alias = ((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.ActiveAlias : null;
+        var alias = ((Tabs.SelectedItem as TabStripItem)?.Tag as Tab)?.Content is Terminal.TileHost t ? t.ActiveAlias : null;
         return alias != null ? AppState.Host(alias) : null;
     }
 
@@ -689,7 +647,7 @@ public sealed partial class MainWindow : Window
         Add(Windows.System.VirtualKey.O, cs, () => { if (CurrentHost() is { } h) OpenSftp(h.alias); });
         Add(Windows.System.VirtualKey.R, cs, () =>
         {
-            if (((Tabs.SelectedItem as TabViewItem)?.Tag as Tab)?.Content is Terminal.TileHost t) t.ReconnectActive();
+            if (((Tabs.SelectedItem as TabStripItem)?.Tag as Tab)?.Content is Terminal.TileHost t) t.ReconnectActive();
         });
         for (var i = 1; i <= 9; i++)
         {
