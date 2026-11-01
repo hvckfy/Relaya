@@ -158,21 +158,8 @@ public struct KeyInstaller: Sendable {
         "-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no",
     ]
 
+    /// Понятная ошибка ssh — правила в ядре (ssh_explain), общие с терминалом и Windows/Linux (А2).
     static func explain(_ r: ProcessResult) -> String {
-        let m = r.message
-        if m.contains("Connection refused") {
-            return L("сервер отклонил подключение к SSH (Connection refused). Обычно это значит, что sshd не запущен или ваш IP временно заблокирован после неудачных входов (fail2ban) — подождите 10–60 минут или проверьте сервер через консоль хостинга")
-        }
-        if m.contains("Operation timed out") || m.contains("Connection timed out") {
-            return L("сервер не отвечает (таймаут) — проверьте адрес, порт и файрвол")
-        }
-        if m.contains("Too many authentication failures") {
-            return L("сервер оборвал вход после перебора ключей из ssh-agent (Too many authentication failures). Введите пароль сервера на первом шаге — тогда вход пойдёт сразу по паролю")
-        }
-        if m.contains("Host key verification failed") {
-            return L("сервер ещё не в known_hosts — подключитесь к нему в терминале и подтвердите отпечаток")
-        }
-        if m.contains("Permission denied") { return L("доступ запрещён (неверный пароль или ключ): %@", m) }
-        return m.isEmpty ? L("ssh завершился с кодом %@", "\(r.status)") : m
+        SSHErrorText.describe(r.message, fallback: L("ssh завершился с кодом %@", "\(r.status)"))
     }
 }
