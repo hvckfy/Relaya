@@ -43,7 +43,8 @@ struct RDPContent: View {
                 .alert(L("Сертификат сервера"), isPresented: Binding(get: { session.trustPrompt != nil },
                                                                    set: { _ in })) {
                     Button(L("Доверять")) { session.answerTrust(true) }
-                    Button(L("Отмена"), role: .cancel) { session.answerTrust(false) }
+                    // Return — «Отмена»: доверие сертификату не должно быть действием по умолчанию (HIG, чек-лист безопасности).
+                    Button(L("Отмена"), role: .cancel) { session.answerTrust(false) }.keyboardShortcut(.defaultAction)
                 } message: {
                     Text((session.trustPromptChanged
                           ? L("Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):", session.desktop.summary)

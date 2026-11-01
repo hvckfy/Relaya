@@ -47,6 +47,7 @@ final class RDPSession {
     /// Холст: экран удалённой машины и ввод.
     let canvas = RDPCanvasView(frame: .zero)
     @ObservationIgnored private let audio = RDPAudio()
+    @ObservationIgnored private var pendingSave: (password: String, account: String)?
     @ObservationIgnored private var engine: RDPEngine?
     @ObservationIgnored private var tunnel: Tunnel?
     @ObservationIgnored private var target: (host: String, port: Int) = ("", 0)
@@ -192,12 +193,15 @@ final class RDPSession {
     func provide(user: String, password: String, save: Bool) {
         let parts = user.split(separator: "\\", maxSplits: 1).map(String.init)
         let (name, domain) = parts.count == 2 ? (parts[1], Optional(parts[0])) : (user, nil)
+        // Имя из формы входа становится пользователем подключения; пароль сохраняется под его записью
+        // только после успешного входа (как К12 на Windows), чтобы неверный пароль не попадал в Keychain.
         if save {
-            // Имя из формы входа становится пользователем подключения, пароль — под его записью.
             var updated = desktop
             updated.user = user
-            try? keychain.setPassword(password, for: updated.keychainAccount)
+            pendingSave = (password, updated.keychainAccount)
             if desktop.user != user { persist { $0.user = user } }
+        } else {
+            pendingSave = nil
         }
         launch(user: name, domain: domain, password: password)
     }
@@ -244,8 +248,10 @@ final class RDPSession {
             DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.finished(kind, message) } }
         }
         events.clipboard = { text in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.remoteClipboard(text) } } }
-        events.audio = { format, pcm in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.audio.play(format, pcm) } } }
-        events.audioVolume = { v in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.audio.setServerVolume(v) } } }
+        // Звук — на своей очереди, не через главный поток (иначе пакеты PCM грузят UI и звук заикается).
+        let audio = self.audio
+        events.audio = { format, pcm in audio.play(format, pcm) }
+        events.audioVolume = { v in audio.setServerVolume(v) }
 
         let trusted = UserDefaults.standard.string(forKey: certificateKey)
         certificate = trusted
@@ -268,6 +274,8 @@ final class RDPSession {
     }
 
     private func connected(_ width: Int, _ height: Int) {
+        if let p = pendingSave { try? keychain.setPassword(p.password, for: p.account) }
+        pendingSave = nil
         canvas.reset(width: width, height: height)
         phase = .connected
         canvas.window?.makeFirstResponder(canvas)
@@ -287,6 +295,7 @@ final class RDPSession {
         case .closedByUser:
             phase = .disconnected(nil)
         case .authFailed:
+            pendingSave = nil
             try? keychain.deletePassword(for: account)
             phase = .needsCredentials
         case .certRejected:

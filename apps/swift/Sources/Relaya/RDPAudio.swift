@@ -3,15 +3,14 @@ import RelayaCore
 
 /// Звук удалённой машины: PCM из ядра (16 бит little-endian) → AVAudioEngine. Формат берётся из первого пакета;
 /// смена формата пересоздаёт плеер не чаще раза в секунду (сервер, меняющий формат на каждом пакете, не дёргает звук).
-@MainActor
-final class RDPAudio {
+/// Вся работа — на своей последовательной очереди: пакеты идут прямо с потока сессии ядра, мимо главного потока.
+final class RDPAudio: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "app.relaya.rdp-audio")
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private var format: RDPEngine.AudioFormat?
     private var output: AVAudioFormat?
     private var lastReset = Date.distantPast
-    /// Громкость пользователя (0…1) × громкость сервера.
-    var volume: Float = 1 { didSet { apply() } }
     private var serverVolume: Float = 1
 
     init() {
@@ -19,13 +18,16 @@ final class RDPAudio {
     }
 
     func setServerVolume(_ v: Double) {
-        serverVolume = Float(v)
-        apply()
+        queue.async { self.serverVolume = Float(v); self.apply() }
     }
 
-    private func apply() { player.volume = volume * serverVolume }
+    private func apply() { player.volume = serverVolume }
 
     func play(_ f: RDPEngine.AudioFormat, _ pcm: Data) {
+        queue.async { self.enqueue(f, pcm) }
+    }
+
+    private func enqueue(_ f: RDPEngine.AudioFormat, _ pcm: Data) {
         guard f.bitsPerSample == 16, f.channels > 0, f.sampleRate > 0 else { return }
         if f != format {
             guard Date().timeIntervalSince(lastReset) > 1 else { return }
@@ -66,9 +68,11 @@ final class RDPAudio {
     }
 
     func stop() {
-        player.stop()
-        engine.stop()
-        format = nil
-        output = nil
+        queue.async {
+            self.player.stop()
+            self.engine.stop()
+            self.format = nil
+            self.output = nil
+        }
     }
 }
