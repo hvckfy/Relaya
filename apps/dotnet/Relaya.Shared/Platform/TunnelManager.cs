@@ -64,7 +64,24 @@ internal sealed class TunnelManager
             string message;
             lock (error) message = error.ToString();
             if (running.TryGetValue(t.id, out var cur) && cur.Process == p)
+            {
                 running[t.id] = (p, State.Failed, SshErrors.Describe(message, Strings.L("ssh завершился с кодом %@", p.ExitCode)));
+                // Автоперезапуск (8.4, как на Mac): туннель «вместе с Relaya», который поднимался и упал, —
+                // через 5, 10, 20, 40, 60… с, до 8 попыток подряд. Ручная остановка (Stop) убирает запись — и повтора нет.
+                if (t.autoStart && wasUp.TryRemove(t.id, out _) || t.autoStart && retries.ContainsKey(t.id))
+                {
+                    var attempt = retries.AddOrUpdate(t.id, 1, (_, n) => n + 1);
+                    if (attempt <= 8)
+                    {
+                        var delay = TimeSpan.FromSeconds(Math.Min(60, 5 * Math.Pow(2, attempt - 1)));
+                        _ = System.Threading.Tasks.Task.Delay(delay).ContinueWith(_ =>
+                        {
+                            if (running.TryGetValue(t.id, out var now) && now.Process == p && now.State == State.Failed) Start(t);
+                        });
+                    }
+                    else retries.TryRemove(t.id, out _);
+                }
+            }
             Changed?.Invoke();
         };
         // ExitOnForwardFailure: если через 3 секунды ssh жив — туннель поднят.
@@ -72,6 +89,8 @@ internal sealed class TunnelManager
         {
             if (!p.HasExited && running.TryGetValue(t.id, out var cur) && cur.Process == p)
             {
+                wasUp[t.id] = true;
+                retries.TryRemove(t.id, out _); // поднялся — счётчик попыток с нуля
                 running[t.id] = (p, State.Running, null);
                 Changed?.Invoke();
             }
@@ -79,8 +98,14 @@ internal sealed class TunnelManager
         Changed?.Invoke();
     }
 
+    // Для автоперезапуска: туннель хоть раз поднимался, и сколько попыток подряд уже было.
+    private readonly ConcurrentDictionary<string, bool> wasUp = new();
+    private readonly ConcurrentDictionary<string, int> retries = new();
+
     public void Stop(string id)
     {
+        wasUp.TryRemove(id, out _);
+        retries.TryRemove(id, out _);
         if (running.TryRemove(id, out var r) && r.Process is { HasExited: false } p)
             try { p.Kill(true); } catch (InvalidOperationException) { }
         temporary.TryRemove(id, out _);
