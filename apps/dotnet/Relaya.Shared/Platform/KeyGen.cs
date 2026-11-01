@@ -42,6 +42,29 @@ internal static class KeyGen
         return (ok, ok ? "" : System.Text.RegularExpressions.Regex.Replace(text, "\x1b\\[[0-9;?]*[A-Za-z]", "").Trim());
     }
 
+    /// ssh-add ключа с passphrase: тоже вводом в псевдотерминал (ssh-add не читает passphrase из stdin).
+    public static async Task<bool> AddToAgentAsync(string path, string passphrase)
+    {
+        var exited = new TaskCompletionSource<int>();
+        var output = new StringBuilder();
+        var answered = false;
+        using var pty = Terminal.Pty.Spawn(new[] { Data.AppState.SshAddExe, path }, 120, 30);
+        pty.Output += data =>
+        {
+            string tail;
+            lock (output) { output.Append(Encoding.UTF8.GetString(data)); tail = output.ToString(); }
+            if (!answered && tail.Contains("passphrase", StringComparison.OrdinalIgnoreCase))
+            {
+                answered = true;
+                pty.Write(Encoding.UTF8.GetBytes(passphrase + "\r"));
+            }
+        };
+        pty.Exited += code => exited.TrySetResult(code);
+        pty.Start();
+        var done = await Task.WhenAny(exited.Task, Task.Delay(TimeSpan.FromSeconds(20)));
+        return done == exited.Task && exited.Task.Result == 0;
+    }
+
     private static int Count(string text, string word)
     {
         var n = 0;

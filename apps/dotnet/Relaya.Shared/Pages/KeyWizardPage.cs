@@ -230,8 +230,8 @@ internal sealed class KeyWizardPage : UserControl
             if ((createNew ? passphrase : existingPassphrase).Length > 0)
             {
                 Set(current, "running");
-                var add = await AppState.Run(AppState.SshAddExe, new[] { keyFile }, null, (createNew ? passphrase : existingPassphrase) + "\n", 20);
-                Set(current, add.Status == 0 ? "ok" : "skipped");
+                var added = await Platform.KeyGen.AddToAgentAsync(keyFile, createNew ? passphrase : existingPassphrase);
+                Set(current, added ? "ok" : "skipped");
             }
             else Set(current, "skipped");
 
