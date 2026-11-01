@@ -169,8 +169,11 @@ internal sealed partial class TerminalView
             paint.Color = C(color);
             var baseline = (float)(y - font.Metrics.Ascent);
             if (text.Length == 1 || char.IsSurrogate(text[0])) { canvas.DrawText(text, (float)x, baseline, font, paint); return; }
-            for (var i = 0; i < text.Length; i++)
-                if (text[i] != ' ') canvas.DrawText(text[i].ToString(), (float)(x + i * view.cellW), baseline, font, paint);
+            // Прогон — один SKTextBlob с позицией каждого символа (П-3), без строки на символ.
+            Span<SKPoint> at = text.Length <= 512 ? stackalloc SKPoint[text.Length] : new SKPoint[text.Length];
+            for (var i = 0; i < text.Length; i++) at[i] = new SKPoint((float)(x + i * view.cellW), baseline);
+            using var blob = SKTextBlob.CreatePositioned(text, font, at);
+            if (blob != null) canvas.DrawText(blob, 0, 0, paint);
         }
 
         public void Dispose() => paint.Dispose();
