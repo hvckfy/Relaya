@@ -27,12 +27,9 @@ jobs:
           git fetch -q --depth 1 "$ROYALVNC_REPO" "$ROYALVNC_COMMIT" && git checkout -q FETCH_HEAD
       - name: Swift
         run: |
-          curl -fsSL https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz | tar xz
-          ./swiftly init --quiet-shell-followup --assume-yes --skip-install
-          . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
-          swiftly install --use "$SWIFT_VERSION"
-          echo "$(dirname "$(swiftly use --print-location)")/usr/bin" >> "$GITHUB_PATH" || true
-          echo "${SWIFTLY_BIN_DIR:-$HOME/.local/share/swiftly/bin}" >> "$GITHUB_PATH"
+          v="$SWIFT_VERSION"; os=ubuntu2404; tag="swift-$v-RELEASE"
+          curl -fsSL "https://download.swift.org/swift-$v-release/$os/$tag/$tag-ubuntu24.04.tar.gz" | sudo tar xz -C /opt
+          echo "/opt/$tag-ubuntu24.04/usr/bin" >> "$GITHUB_PATH"
       - name: Build (dynamic Swift runtime)
         working-directory: royalvnc
         run: |
@@ -130,6 +127,10 @@ jobs:
         run: |
           choco install tightvnc -y --no-progress --installargs '"SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=1 SET_PASSWORD=1 VALUE_OF_PASSWORD=relaya12"'
           Start-Sleep 5
+          # По умолчанию TightVNC отклоняет подключения с 127.0.0.1.
+          New-ItemProperty -Path HKLM:\SOFTWARE\TightVNC\Server -Name AllowLoopback -Value 1 -PropertyType DWord -Force | Out-Null
+          Restart-Service tvnserver
+          Start-Sleep 3
           Get-Service tvnserver | Format-List Name,Status
       - name: Connect to TightVNC (best effort)
         if: steps.tight.outcome == 'success'
