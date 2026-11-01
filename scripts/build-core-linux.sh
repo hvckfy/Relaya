@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/core"
 # RDP: с FREERDP_DIR (.github/actions/freerdp, триплет x64-linux-dynamic) — движок FreeRDP, как на Mac и Windows;
-# его .so (и OpenSSL из vcpkg) кладутся рядом с librelaya_core.so, ядро ищет их по rpath $ORIGIN. Без него — IronRDP.
+# его .so (и OpenSSL из vcpkg) кладутся рядом с librelaya_core.so, ядро ищет их по rpath $ORIGIN. Без него встроенного RDP нет.
 # С ROYALVNC_DIR (.github/actions/royalvnc) — ещё VNC на RoyalVNCKit: libRoyalVNCKit.so (с -static-stdlib, без
 # рантайма Swift) тоже кладётся рядом.
 features=remote-desktop

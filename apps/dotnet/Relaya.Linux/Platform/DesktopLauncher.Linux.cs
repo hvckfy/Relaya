@@ -10,7 +10,7 @@ using static Relaya.Strings;
 
 namespace Relaya.Platform;
 
-/// Удалённые столы на Linux: RDP (IronRDP ядра) и VNC (RoyalVNCKit ядра) — во вкладке; запасной путь — внешние клиенты:
+/// Удалённые столы на Linux: RDP (FreeRDP ядра) и VNC (RoyalVNCKit ядра) — во вкладке; запасной путь — внешние клиенты:
 /// FreeRDP (xfreerdp3/xfreerdp) или Remmina, TigerVNC vncviewer или Remmina. Туннель и запуск — в Relaya.Shared.
 internal static partial class DesktopLauncher
 {
