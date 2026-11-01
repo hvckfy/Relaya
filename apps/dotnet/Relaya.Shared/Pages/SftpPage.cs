@@ -79,7 +79,7 @@ internal sealed class SftpPage : UserControl
         void Key(Windows.System.VirtualKey key, Windows.System.VirtualKeyModifiers mods, Action action)
         {
             var k = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = key, Modifiers = mods };
-            k.Invoked += (_, e) => { if (FocusManager.GetFocusedElement(XamlRoot) is TextBox) return; e.Handled = true; action(); };
+            k.Invoked += (_, e) => { if (Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot) is TextBox) return; e.Handled = true; action(); };
             list.KeyboardAccelerators.Add(k);
         }
         var none = Windows.System.VirtualKeyModifiers.None;
