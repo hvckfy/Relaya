@@ -45,6 +45,8 @@
   <ItemGroup>
     <None Include="..\..\..\resources\localization\en.lproj\Localizable.strings" Link="Localization\en.strings"
           CopyToOutputDirectory="PreserveNewest" />
+    <!-- Схемы терминала — общий список с Mac. -->
+    <None Include="..\..\..\resources\terminal\schemes.json" Link="Terminal\schemes.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Rust-ядро: scripts/build-core-windows.ps1 кладёт relaya_core.dll и Relaya.Shared/Core/relaya_core.cs. -->
   <ItemGroup>

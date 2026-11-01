@@ -104,7 +104,7 @@ internal sealed class SettingsPage : UserControl
         var preview = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(12), Margin = new Thickness(0, 4, 0, 0) };
         void Preview()
         {
-            var t = TerminalTheme.Named(theme.SelectedItem as string ?? "Relaya");
+            var t = TerminalTheme.Named(TerminalTheme.CurrentName());
             var lines = new StackPanel();
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             for (var i = 0; i < 16; i++)
@@ -119,7 +119,30 @@ internal sealed class SettingsPage : UserControl
             preview.Child = lines;
         }
         theme.SelectionChanged += (_, _) => { Platform.Settings.Set("terminal.theme", theme.SelectedItem as string ?? "Relaya"); Preview(); };
-        list.Children.Add(Ui.Row("", L("Тема"), L("Цвета терминала во всех вкладках"), theme));
+        var themeRow = Ui.Row("", L("Тема"), L("Цвета терминала во всех вкладках"), theme);
+        // Как в Windows Terminal: пара схем — светлая и тёмная — переключается вместе с темой окна.
+        var follow = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.followTheme", "0") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
+        ComboBox Pair(string key, string fallback, bool dark)
+        {
+            var c = new ComboBox { MinWidth = 220 };
+            foreach (var n in TerminalTheme.Names) if (TerminalTheme.IsDarkScheme(n) == dark) c.Items.Add(n);
+            c.SelectedItem = Platform.Settings.Get(key, fallback);
+            c.SelectionChanged += (_, _) => { Platform.Settings.Set(key, c.SelectedItem as string ?? fallback); Preview(); };
+            return c;
+        }
+        var lightRow = Ui.Row(null, L("Схема для светлой темы"), null, Pair("terminal.themeLight", "One Half Light", false));
+        var darkRow = Ui.Row(null, L("Схема для тёмной темы"), null, Pair("terminal.themeDark", "Campbell", true));
+        void Follow()
+        {
+            themeRow.Visibility = follow.IsOn ? Visibility.Collapsed : Visibility.Visible;
+            lightRow.Visibility = darkRow.Visibility = follow.IsOn ? Visibility.Visible : Visibility.Collapsed;
+        }
+        follow.Toggled += (_, _) => { Platform.Settings.Set("terminal.followTheme", follow.IsOn ? "1" : "0"); Follow(); Preview(); };
+        list.Children.Add(Ui.Row("\uE771", L("Схема по теме окна"), L("Светлая и тёмная схема меняются вместе с оформлением"), follow));
+        list.Children.Add(themeRow);
+        list.Children.Add(lightRow);
+        list.Children.Add(darkRow);
+        Follow();
 
         var font = new ComboBox { MinWidth = 220, IsEditable = true };
         foreach (var f in new[] { "Cascadia Mono", "Cascadia Code", "Consolas", "Lucida Console", "JetBrains Mono", "Fira Code" }) font.Items.Add(f);
