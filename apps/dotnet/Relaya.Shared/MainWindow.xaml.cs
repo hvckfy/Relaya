@@ -80,7 +80,13 @@ public sealed partial class MainWindow : Window
             e.Data.SetText("relaya-tab");
             e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
         };
-        Tabs.TabDragCompleted += (_, _) => DraggedTiles = null;
+        // Бросок в плитки забирает вкладку (Adopt закрывает её); осталась — была перестановка или бросок мимо:
+        // выбранной снова становится перетащенная, а не подменённая на время перетаскивания.
+        Tabs.TabDragCompleted += (_, e) =>
+        {
+            DraggedTiles = null;
+            if (Tabs.TabItems.Contains(e.Tab)) Tabs.SelectedItem = e.Tab;
+        };
         TabHost.ChildrenTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Nav.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         Current = this;
