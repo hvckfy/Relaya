@@ -92,7 +92,7 @@ pub enum RemoteProtocol {
     Vnc,
 }
 
-/// RDP: тексты RDPKit (Mac), IronRDP (`RemoteClose`) и коды Windows. Порядок важен: частные правила раньше общих.
+/// RDP: тексты FreeRDP (`RemoteClose`) и коды Windows. Порядок важен: частные правила раньше общих.
 const RDP_RULES: &[(&[&str], &str, &str)] = &[
     (&["account_locked", "account locked", "account is locked", "account_disabled", "account disabled", "учётная запись заблокирована", "учетная запись заблокирована"],
      "Учётная запись заблокирована или отключена",
@@ -176,7 +176,7 @@ fn explain_with(rules: &[(&[&str], &str, &str)], output: &str) -> Option<SshProb
     None
 }
 
-/// Объяснение ошибки RDP или VNC (RDPKit, RoyalVNC, IronRDP, текст `RemoteClose`), если она известна.
+/// Объяснение ошибки RDP или VNC (FreeRDP, RoyalVNC, текст `RemoteClose`), если она известна.
 /// Как и у `ssh_explain`, `title` и `hint` — ключи локализации.
 #[uniffi::export]
 pub fn remote_explain(protocol: RemoteProtocol, message: String) -> Option<SshProblem> {

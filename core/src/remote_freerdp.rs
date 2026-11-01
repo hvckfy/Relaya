@@ -1,6 +1,6 @@
 //! Движок RDP на FreeRDP 3 (feature `rdp-freerdp`) под тем же API `RemoteSession`: прослойка C `native/relaya_rdp.c`
 //! крутит сессию в своём потоке и зовёт колбэки, здесь они превращаются в события `RemoteListener` и слушателей
-//! буфера обмена и звука. IronRDP при этой feature не используется.
+//! буфера обмена и звука. Единственный движок RDP ядра.
 
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::sync::{Arc, Mutex};
