@@ -41,8 +41,13 @@ internal static class ComponentsPage
                 ToolTipService.SetToolTip(copy, command);
                 trailing = copy;
             }
-            list.Children.Add(Ui.Row(i.Found ? "" : i.Required ? "" : "", i.Name,
-                $"{i.Purpose}\n{state}{(i.Found || i.Install == null ? "" : " · " + i.Install)}", trailing));
+            var row = Ui.Row(i.Found ? "" : i.Required ? "" : "", i.Name,
+                $"{i.Purpose}\n{state}{(i.Found || i.Install == null ? "" : " · " + i.Install)}", trailing);
+            // Статус и цветом глифа (Fluent: системные цвета состояния), и текстом — для глаз и для диктора.
+            if (row.Child is Grid { Children.Count: > 0 } g && g.Children[0] is FontIcon icon)
+                icon.Foreground = Ui.Brush(i.Found ? "SystemFillColorSuccessBrush" : i.Required ? "SystemFillColorCriticalBrush" : "SystemFillColorCautionBrush");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(row, $"{i.Name}: {state}");
+            list.Children.Add(row);
         }
         return page;
     }
