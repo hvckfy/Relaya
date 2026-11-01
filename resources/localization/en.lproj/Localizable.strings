@@ -1369,7 +1369,7 @@
 "Включить" = "Turn On";
 "без пароля" = "no password";
 "Синхронизировать ключи без пароля?" = "Sync keys without a password?";
-"Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы." = "This isn't safe: private keys go to the repository effectively unprotected, and anyone with access to it can sign in to your servers.";
+"Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы. Из истории git их уже не убрать — если передумаете, ключи придётся заменить." = "This isn't safe: private keys go to the repository effectively unprotected, and anyone with access to it can sign in to your servers. They can't be removed from git history — if you change your mind, replace the keys.";
 "Синхронизировать без пароля" = "Sync Without Password";
 "Ключи синхронизируются без пароля — в репозитории они фактически открыты. Чтобы защитить их, введите пароль и сохраните." = "Keys sync without a password, so they're effectively unprotected in the repository. To protect them, enter a password and save.";
 "Не удалось прочитать пароль ключей из Keychain: %@" = "Couldn't read the key password from Keychain: %@";
