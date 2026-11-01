@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -18,7 +19,7 @@ namespace Relaya.Desktop;
 /// сессии — в UI их переносит очередь, снятая в конструкторе, как в RdpView.
 internal sealed class VncView : UserControl, IDisposable
 {
-    private readonly RemoteDesktop desktop;
+    private RemoteDesktop desktop;
     private readonly DispatcherQueue ui = DispatcherQueue.GetForCurrentThread();
     private readonly RemoteScreen screen = new();
     private readonly StackPanel connecting;
@@ -131,6 +132,12 @@ internal sealed class VncView : UserControl, IDisposable
             var box = new PasswordBox { Header = L("Пароль") };
             var save = new CheckBox { Content = L("Сохранить пароль"), IsChecked = true };
             var panel = new StackPanel { Spacing = 8 };
+            // V-3: прошлая попытка отклонена — причина прямо в форме, а не отдельной карточкой.
+            if (authError is { } reason)
+            {
+                authError = null;
+                panel.Children.Add(new InfoBar { Severity = InfoBarSeverity.Error, IsOpen = true, IsClosable = false, Title = reason });
+            }
             if (kind == VncAuthKind.Vnc) panel.Children.Add(Pages.Ui.Secondary(L("Пароль VNC: у классического VNC учитываются только первые 8 символов.")));
             if (kind == VncAuthKind.AppleRemoteDesktop) panel.Children.Add(Pages.Ui.Secondary(L("Имя и пароль пользователя macOS.")));
             if (needsUser) panel.Children.Add(user);
@@ -144,11 +151,15 @@ internal sealed class VncView : UserControl, IDisposable
             // Пустой пароль допустим, как в RDP (#32): сервер VNC может пускать без него.
             if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             {
+                credentialsCancelled = true;
                 s.CancelCredentials();
                 return;
             }
             // Пароль сохраняется только после успешного входа (как К12 у RDP).
             if (save.IsChecked == true && box.Password.Length > 0) pendingSave = box.Password;
+            // V-2: имя для ARD и MS-Logon сохраняется в стол вместе с паролем, как на Mac.
+            pendingUser = save.IsChecked == true && needsUser && user.Text.Trim() is { Length: > 0 } name && name != desktop.user ? name : null;
+            credentialsCancelled = false;
             s.ProvideCredentials(needsUser ? user.Text.Trim() : null, box.Password);
         }
         catch (Exception e)
@@ -157,6 +168,9 @@ internal sealed class VncView : UserControl, IDisposable
             s.CancelCredentials();
         }
     }
+
+    private string? authError, pendingUser;
+    private bool credentialsCancelled;
 
     private void ShowProblem(string title, string message)
     {
@@ -180,6 +194,12 @@ internal sealed class VncView : UserControl, IDisposable
                 try { CredentialStore.Write(PasswordAccount, pass); }
                 catch (Exception e) { Terminal.TerminalView.Trace("VNC password save: " + e.GetType().Name); }
             }
+            if (pendingUser is { } name)
+            {
+                pendingUser = null;
+                desktop = desktop with { user = name };
+                Data.AppState.Desktops = Data.AppState.Desktops.Select(d => d.id == desktop.id ? d with { user = name } : d).ToList();
+            }
             connecting.Visibility = Visibility.Collapsed;
             problem.IsOpen = false;
             Focus(FocusState.Programmatic);
@@ -191,8 +211,16 @@ internal sealed class VncView : UserControl, IDisposable
         connected = false;
         if (disposed) return;
         if (close.kind == RemoteCloseKind.ClosedByUser) { ShowProblem(L("Отключено"), L("Сеанс завершён.")); return; }
-        // Неверный сохранённый пароль: забываем, иначе «Подключить снова» упирается в тот же отказ.
-        if (close.kind == RemoteCloseKind.AuthFailed) CredentialStore.Delete(PasswordAccount);
+        // Неверный пароль: сохранённый забываем и сразу переподключаемся — форма входа покажет причину (V-3, как RDP).
+        // Временная блокировка сервера (AccountProblem, V-1) пароль не стирает — карточка с объяснением.
+        if (close.kind == RemoteCloseKind.AuthFailed)
+        {
+            CredentialStore.Delete(PasswordAccount);
+            authError = RelayaCoreMethods.RemoteExplain(RemoteProtocol.Vnc, close.message) is { } why ? L(why.title) : close.message;
+            // Форму отменили — не спрашиваем по кругу, остаётся карточка.
+            if (!credentialsCancelled) { _ = ConnectAsync(); return; }
+            authError = null;
+        }
         if (RelayaCoreMethods.RemoteExplain(RemoteProtocol.Vnc, close.message) is { } p) ShowProblem(L(p.title), L(p.hint));
         else ShowProblem(L("Соединение закрыто"), close.message);
     });
