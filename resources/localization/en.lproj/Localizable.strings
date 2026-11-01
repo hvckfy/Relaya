@@ -1254,3 +1254,5 @@
 "Открыть во внешнем VNC-клиенте (TightVNC, RealVNC, UltraVNC или TigerVNC)" = "Open in an external VNC client (TightVNC, RealVNC, UltraVNC or TigerVNC)";
 "Открыть во внешнем VNC-клиенте (vncviewer или Remmina)" = "Open in an external VNC client (vncviewer or Remmina)";
 "При следующем подключении Relaya снова покажет сертификат сервера" = "Relaya will show the server certificate again on the next connection";
+"Записывать сессию в файл (Ctrl+Shift+L)" = "Record the session to a file (Ctrl+Shift+L)";
+"Сессия записывается в файл: %@" = "The session is being recorded to: %@";

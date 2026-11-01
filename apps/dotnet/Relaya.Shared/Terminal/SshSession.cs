@@ -164,6 +164,7 @@ internal sealed class SshSession : IDisposable
             // terminal_secret_prompt, общему для Mac, Windows и Linux (L-SEC-1).
             secretPrompt = !loggedIn || uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(text);
             NotePorts(new string(chars));
+            Log(chars);
             if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
                 passwordSent = true;
@@ -226,9 +227,63 @@ internal sealed class SshSession : IDisposable
         if (data.Length == 1 && data[0] == '\r') Start();
     }
 
+    // --- Запись сессии в файл (чек-лист 4.14, как на Mac): очищенный от управляющих последовательностей вывод ---
+
+    private readonly object logLock = new();
+    private FileStream? log;
+
+    /// Файл записи; null — запись выключена.
+    public string? RecordingPath { get; private set; }
+
+    /// Запись включилась или выключилась.
+    public event Action? RecordingChanged;
+
+    /// Папка записей: «Документы/Relaya Logs», как на Mac.
+    public static string RecordingsFolder =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Relaya Logs");
+
+    public void ToggleRecording()
+    {
+        lock (logLock)
+        {
+            if (log != null)
+            {
+                log.Dispose();
+                log = null;
+                RecordingPath = null;
+            }
+            else
+            {
+                Directory.CreateDirectory(RecordingsFolder);
+                // Своё имя у каждой сессии и CreateNew (O_EXCL): две вкладки одного хоста не пишут в один файл; 0600.
+                var path = Path.Combine(RecordingsFolder, $"{alias} {DateTime.Now:yyyy-MM-dd HH-mm-ss} {Guid.NewGuid().ToString("N")[..6]}.log");
+                var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.Read };
+                if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                try { log = new FileStream(path, options); RecordingPath = path; }
+                catch (Exception e) { TerminalView.Trace("recording: " + e.Message); }
+            }
+        }
+        RecordingChanged?.Invoke();
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex Escapes =
+        new(@"\x1B\[[0-9;?]*[ -/]*[@-~]|\x1B\][^\x07\x1B]*(\x07|\x1B\\)|\x1B[()][A-Z0-9]|\x1B[=>]");
+
+    private void Log(char[] chars)
+    {
+        lock (logLock)
+        {
+            if (log == null) return;
+            var text = Escapes.Replace(new string(chars), "").Replace("\r\n", "\n").Replace("\r", "");
+            try { log.Write(Encoding.UTF8.GetBytes(text)); log.Flush(); }
+            catch (Exception e) { TerminalView.Trace("recording: " + e.Message); }
+        }
+    }
+
     public void Dispose()
     {
         Broadcast.Unregister(this);
+        lock (logLock) { log?.Dispose(); log = null; }
         console?.Dispose();
     }
 }

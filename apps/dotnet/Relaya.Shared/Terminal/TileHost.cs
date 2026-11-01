@@ -47,6 +47,11 @@ internal sealed class TileHost : UserControl, IDisposable
     };
     private readonly InfoBar broadcastBar = new() { Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(8, 0, 8, 4) };
     private readonly CheckBox broadcastHere = new();
+    // Запись сессии активной плитки в файл (4.14): переключатель и «Показать файл записи».
+    private readonly Microsoft.UI.Xaml.Controls.Primitives.ToggleButton recordToggle = new()
+    {
+        Content = new FontIcon { Glyph = "\uE7C8", FontSize = 16 }, Padding = new Thickness(8),
+    };
     // Порты сервера из вывода активной плитки: «:3000» — открыть в браузере через туннель.
     private readonly StackPanel portsPanel = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
 
@@ -81,6 +86,15 @@ internal sealed class TileHost : UserControl, IDisposable
         broadcastHere.Click += (_, _) => { if (active != null) Broadcast.SetIncluded(active.Session, broadcastHere.IsChecked == true); };
         broadcastBar.Content = broadcastHere;
         Broadcast.Changed += OnBroadcastChanged;
+        var recordTip = L("Записывать сессию в файл (Ctrl+Shift+L)");
+        ToolTipService.SetToolTip(recordToggle, recordTip);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(recordToggle, recordTip);
+        recordToggle.Click += (_, _) => active?.Session.ToggleRecording();
+        var showRecording = new MenuFlyout();
+        var showItem = new MenuFlyoutItem { Text = L("Показать файл записи") };
+        showItem.Click += (_, _) => Platform.Shell.OpenFolder(SshSession.RecordingsFolder);
+        showRecording.Items.Add(showItem);
+        recordToggle.ContextFlyout = showRecording;
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 8, 4),
@@ -88,6 +102,7 @@ internal sealed class TileHost : UserControl, IDisposable
             {
                 portsPanel,
                 search,
+                recordToggle,
                 broadcastToggle,
                 // Кнопки разделения — тот же путь, что Ctrl+Shift+D/E: на Skia X11 нет перетаскивания вкладок (Л4).
                 Pages.Ui.IconButton("\uE90D", L("Разделить вправо (Ctrl+Shift+D)"), () => Split(Edge.Right)),
@@ -123,6 +138,7 @@ internal sealed class TileHost : UserControl, IDisposable
             if (MainWindow.DraggedTiles is { } src && src != this && drop is { } d) Adopt(src, d.Edge, d.Target);
         };
         KeyboardAccelerators.Add(Accel(VirtualKey.F, () => OpenSearch()));
+        KeyboardAccelerators.Add(Accel(VirtualKey.L, () => active?.Session.ToggleRecording()));
         KeyboardAccelerators.Add(Accel(VirtualKey.D, () => Split(Edge.Right)));
         KeyboardAccelerators.Add(Accel(VirtualKey.E, () => Split(Edge.Bottom)));
         foreach (var (key, edge) in new[] { (VirtualKey.Left, Edge.Left), (VirtualKey.Right, Edge.Right), (VirtualKey.Up, Edge.Top), (VirtualKey.Down, Edge.Bottom) })
@@ -285,6 +301,7 @@ internal sealed class TileHost : UserControl, IDisposable
         close.Click += (_, _) => pane.Owner.Close(pane);
         view.GotFocus += (_, _) => pane.Owner.Activate(pane);
         session.StateChanged += alive => pane.Owner.AliveChanged?.Invoke(alive);
+        session.RecordingChanged += () => pane.Owner.ui.TryEnqueue(() => { if (pane.Owner.active == pane) pane.Owner.UpdateRecording(); });
         session.PortsChanged += () => pane.Owner.ui.TryEnqueue(() => { if (pane.Owner.active == pane) pane.Owner.UpdatePorts(); });
         var started = false;
         view.Loaded += (_, _) =>
@@ -375,10 +392,20 @@ internal sealed class TileHost : UserControl, IDisposable
         }
     }
 
+    private void UpdateRecording()
+    {
+        var path = active?.Session.RecordingPath;
+        recordToggle.IsChecked = path != null;
+        var tip = path != null ? L("Сессия записывается в файл: %@", path) : L("Записывать сессию в файл (Ctrl+Shift+L)");
+        ToolTipService.SetToolTip(recordToggle, tip);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(recordToggle, tip);
+    }
+
     private void Activate(Pane pane)
     {
         active = pane;
         UpdateBroadcast();
+        UpdateRecording();
         UpdatePorts();
         foreach (var p in panes)
             p.Frame.BorderBrush = p == pane && panes.Count > 1 ? Pages.Ui.Brush("AccentFillColorDefaultBrush") : Pages.Ui.Brush("CardStrokeColorDefaultBrush");
