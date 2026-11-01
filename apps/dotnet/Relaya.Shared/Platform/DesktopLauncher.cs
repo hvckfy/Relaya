@@ -99,7 +99,24 @@ internal static partial class DesktopLauncher
             return ("", 0, tunnelId, L("SSH-туннель: %@", status.Error ?? ""));
         if (status.State != TunnelManager.State.Running)
             return ("", 0, tunnelId, L("SSH-туннель не поднялся за 60 секунд."));
-        return ("localhost", tunnel.listenPort, tunnelId, null);
+        // «ssh жив» ещё не значит «порт слушает»: ждём, пока 127.0.0.1:port примет подключение. Адрес — 127.0.0.1, не
+        // localhost: тот может уйти в ::1, а ssh слушает IPv4 (иначе FreeRDP: ERRCONNECT_CONNECT_TRANSPORT_FAILED).
+        while (!await AcceptsAsync(tunnel.listenPort))
+        {
+            if (cancel.IsCancellationRequested) { TunnelManager.Shared.Stop(tunnelId); return ("", 0, null, L("Подключение отменено")); }
+            if (DateTime.UtcNow >= deadline || TunnelManager.Shared.StatusOf(tunnel).State != TunnelManager.State.Running)
+                return ("", 0, tunnelId, L("SSH-туннель не поднялся за 60 секунд."));
+            await Task.Delay(250);
+        }
+        return ("127.0.0.1", tunnel.listenPort, tunnelId, null);
+    }
+
+    private static async Task<bool> AcceptsAsync(long port)
+    {
+        using var probe = new System.Net.Sockets.TcpClient(System.Net.Sockets.AddressFamily.InterNetwork);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        try { await probe.ConnectAsync(System.Net.IPAddress.Loopback, (int)port, timeout.Token); return true; }
+        catch (Exception e) when (e is System.Net.Sockets.SocketException or OperationCanceledException) { return false; }
     }
 
     // Клиент закрыли — туннель и временный файл больше не нужны.
