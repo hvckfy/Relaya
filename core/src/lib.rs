@@ -20,6 +20,8 @@ pub mod openh264;
 pub mod remote;
 #[cfg(feature = "rdp-freerdp")]
 pub mod remote_freerdp;
+#[cfg(feature = "vnc-royal")]
+pub mod remote_vnc;
 pub mod server_os;
 pub mod ssh_commands;
 pub mod ssh_config;

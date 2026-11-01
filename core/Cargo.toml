@@ -21,6 +21,9 @@ remote-desktop = ["dep:ironrdp", "dep:ironrdp-blocking", "dep:rustls", "dep:x509
 # RDP на FreeRDP 3 вместо IronRDP под тем же API. Нужна собранная FreeRDP: FREERDP_DIR с include/ и lib/
 # (артефакт workflow freerdp.yml); прослойка native/relaya_rdp.c собирается крейтом cc.
 rdp-freerdp = ["remote-desktop", "dep:cc"]
+# VNC на RoyalVNCKit (MIT) через её C API. Нужна собранная библиотека: ROYALVNC_DIR с libRoyalVNCKit.so или
+# RoyalVNCKit.lib/.dll (.github/actions/royalvnc).
+vnc-royal = ["remote-desktop"]
 
 [dependencies]
 uniffi = "0.28"

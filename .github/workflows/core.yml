@@ -3,7 +3,7 @@ name: Core (Rust)
 on:
   push:
     branches: ["**"]
-    paths: ["core/**", ".github/workflows/core.yml"]
+    paths: ["core/**", ".github/workflows/core.yml", ".github/actions/**"]
   pull_request:
     paths: ["core/**"]
 
@@ -57,3 +57,10 @@ jobs:
       - name: Test with rdp-freerdp
         if: runner.os == 'Windows'
         run: cargo test --features rdp-freerdp
+      # VNC на RoyalVNCKit: Windows и Linux (на Mac — позже, после того как API устоится).
+      - name: RoyalVNCKit
+        if: runner.os != 'macOS'
+        uses: ./.github/actions/royalvnc
+      - name: Test with vnc-royal
+        if: runner.os != 'macOS'
+        run: cargo test --features vnc-royal

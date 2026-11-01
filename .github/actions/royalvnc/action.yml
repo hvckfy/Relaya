@@ -1,0 +1,85 @@
+name: RoyalVNCKit
+description: >
+  RoyalVNCKit (MIT) с C API для ядра (feature vnc-royal), закреплённый коммит; на Linux — одна .so с
+  -static-stdlib, на Windows — dll и рантайм Swift в PATH. Кэш по коммиту и версии Swift.
+inputs:
+  commit:
+    description: коммит royalapplications/royalvnc (Package.resolved в нём закрепляет CryptoSwift a59b4d9 и Cstb 1.0.6)
+    default: 090b96eddeee183e9fec293c5cd881d302a4349d
+  swift:
+    description: версия Swift
+    default: "6.2.4"
+outputs:
+  dir:
+    description: каталог с библиотекой RoyalVNCKit
+    value: ${{ steps.dir.outputs.dir }}
+runs:
+  using: composite
+  steps:
+    - name: Swift dependencies (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq binutils libc6-dev libcurl4-openssl-dev libedit2 libgcc-13-dev libpython3-dev \
+          libsqlite3-0 libstdc++-13-dev libxml2-dev libncurses-dev libz3-dev pkg-config zlib1g-dev >/dev/null
+    - name: Cache Swift (Linux)
+      if: runner.os == 'Linux'
+      id: swiftcache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ~/swift-toolchain
+        key: swift-${{ inputs.swift }}-${{ runner.os }}-ubuntu24.04
+    - name: Swift (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        tag="swift-${{ inputs.swift }}-RELEASE"
+        if [ ! -x ~/swift-toolchain/usr/bin/swift ]; then
+          mkdir -p ~/swift-toolchain
+          curl -fsSL "https://download.swift.org/swift-${{ inputs.swift }}-release/ubuntu2404/$tag/$tag-ubuntu24.04.tar.gz" \
+            | tar xz -C ~/swift-toolchain --strip-components=1
+        fi
+        echo "$HOME/swift-toolchain/usr/bin" >> "$GITHUB_PATH"
+    - uses: compnerd/gha-setup-vsdevenv@f1ba60d553a3216ce1b89abe0201213536bc7557
+      if: runner.os == 'Windows'
+    - uses: compnerd/gha-setup-swift@581df1ffa3f3e786ddc73ff37364ee231f9644c5
+      if: runner.os == 'Windows'
+      with:
+        branch: swift-${{ inputs.swift }}-release
+        tag: ${{ inputs.swift }}-RELEASE
+    - name: Cache RoyalVNCKit
+      id: cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ${{ runner.temp }}/royalvnc-out
+        key: royalvnc-${{ inputs.commit }}-swift-${{ inputs.swift }}-${{ runner.os }}
+    - name: Build RoyalVNCKit
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $src = Join-Path $env:RUNNER_TEMP "royalvnc"
+        $out = Join-Path $env:RUNNER_TEMP "royalvnc-out"
+        git init -q $src
+        git -C $src fetch -q --depth 1 https://github.com/royalapplications/royalvnc ${{ inputs.commit }}
+        git -C $src checkout -q FETCH_HEAD
+        Push-Location $src
+        if ($IsLinux) {
+          swift build -c release --product RoyalVNCKit -Xswiftc -static-stdlib
+        } else {
+          swift build -c release --product RoyalVNCKit
+        }
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Pop-Location
+        New-Item -ItemType Directory -Force $out | Out-Null
+        Get-ChildItem "$src/.build/release" -File | Where-Object { $_.Name -match '^(lib)?RoyalVNCKit\.(so|dll|lib)$' } |
+          Copy-Item -Destination $out
+        Get-ChildItem $out | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name }
+    - name: Export ROYALVNC_DIR
+      id: dir
+      shell: pwsh
+      run: |
+        $dir = (Join-Path $env:RUNNER_TEMP "royalvnc-out").Replace('\','/')
+        "dir=$dir" | Out-File -Append $env:GITHUB_OUTPUT
+        "ROYALVNC_DIR=$dir" | Out-File -Append $env:GITHUB_ENV
+        if ($IsWindows) { $dir | Out-File -Append $env:GITHUB_PATH } else { "LD_LIBRARY_PATH=$dir" | Out-File -Append $env:GITHUB_ENV }

@@ -2,6 +2,17 @@
 fn main() {
     #[cfg(feature = "rdp-freerdp")]
     freerdp();
+    #[cfg(feature = "vnc-royal")]
+    royalvnc();
+}
+
+/// RoyalVNCKit (feature vnc-royal): только линковка — C API объявлен в remote_vnc.rs.
+#[cfg(feature = "vnc-royal")]
+fn royalvnc() {
+    println!("cargo:rerun-if-env-changed=ROYALVNC_DIR");
+    let dir = std::env::var("ROYALVNC_DIR").expect("ROYALVNC_DIR: каталог с RoyalVNCKit (.github/actions/royalvnc)");
+    println!("cargo:rustc-link-search=native={dir}");
+    println!("cargo:rustc-link-lib=dylib=RoyalVNCKit");
 }
 
 #[cfg(feature = "rdp-freerdp")]
