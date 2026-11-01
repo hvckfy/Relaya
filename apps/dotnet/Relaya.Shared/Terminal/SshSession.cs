@@ -143,7 +143,8 @@ internal sealed class SshSession : IDisposable
                 try { HostKeyRequested?.Invoke(fp); }
                 catch (Exception e) { Relaya.Terminal.TerminalView.Trace("HostKeyRequested: " + e.GetType().Name); }
             }
-            secretPrompt = PasswordPrompt.Matches(text) || PasswordPrompt.IsAnyPasswordPrompt(text);
+            // До входа (запросы самого ssh: пароль, passphrase, 2FA) — рассылки нет вовсе; после — по широкому правилу (L-SEC-1).
+            secretPrompt = !loggedIn || PasswordPrompt.IsSecretPrompt(text);
             NotePorts(new string(chars));
             if (!loggedIn && !passwordSent && PasswordPrompt.Matches(text) && autofill && Relaya.Platform.CredentialStore.Read(alias) is { } password)
             {
