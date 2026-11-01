@@ -102,6 +102,7 @@ struct RDPContent: View {
                 Menu {
                     Button(L("Ctrl+Alt+Del")) { session.sendCtrlAltDel() }
                     Button(L("Клавиша Windows")) { session.sendWindowsKey() }
+                    Button(L("Alt+Tab")) { session.sendAltTab() }
                 } label: { Label(L("Отправить сочетание"), systemImage: "keyboard") }
                 .disabled(session.phase != .connected)
             }

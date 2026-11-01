@@ -118,6 +118,7 @@ final class RDPSession {
     /// Меню окна: сочетания, которые Mac не отдаёт приложению.
     func sendCtrlAltDel() { canvas.send(RDPCanvasView.ctrlAltDel) }
     func sendWindowsKey() { canvas.send(RDPCanvasView.windowsKey) }
+    func sendAltTab() { canvas.send(RDPCanvasView.altTab) }
 
     // MARK: - Буфер обмена
 

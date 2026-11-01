@@ -242,4 +242,5 @@ final class RDPCanvasView: NSView {
 
     static let ctrlAltDel: [UInt16] = [0x1D, 0x38, 0xE053]
     static let windowsKey: [UInt16] = [0xE05B]
+    static let altTab: [UInt16] = [0x38, 0x0F]
 }

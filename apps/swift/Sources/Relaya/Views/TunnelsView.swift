@@ -39,6 +39,23 @@ struct TunnelsView: View {
                         ForEach(manager.tunnels) { t in
                             TunnelRow(tunnel: t, editing: $editing)
                         }
+                        // Временные туннели (порт из вывода, удалённый стол через SSH) — тоже видны и останавливаются (Е.2).
+                        let temporary = manager.transient.values.sorted { $0.name < $1.name }
+                        if !temporary.isEmpty {
+                            Text(L("Временные")).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.tx2)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                            ForEach(temporary) { t in
+                                HStack {
+                                    Image(systemName: "circle.fill").font(.system(size: 7)).foregroundStyle(Theme.grn)
+                                    Text(t.name).fontWeight(.medium)
+                                    Text(t.summary).foregroundStyle(Theme.tx2)
+                                    Spacer()
+                                    Button(L("Остановить")) { manager.stop(t.id) }.buttonStyle(.relaya)
+                                }
+                                .padding(12)
+                                .background(Theme.bg2, in: .rect(cornerRadius: 10, style: .continuous))
+                            }
+                        }
                     }
                     .padding(16)
                 }

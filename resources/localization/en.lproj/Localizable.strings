@@ -1211,3 +1211,5 @@
 "Окно Relaya разворачивается во весь экран при подключении" = "The Relaya window goes full screen when connected";
 "Подтвердить ключ сервера…" = "Confirm Server Key…";
 "Откроет терминал к серверу репозитория: сверьте отпечаток и подтвердите, затем синхронизируйте снова." = "Opens a terminal to the repository server: check the fingerprint, confirm it, then sync again.";
+"Alt+Tab" = "Alt+Tab";
+"У хоста ProxyCommand или LocalCommand — сохранённый пароль Relaya не подставляет, введите его сами." = "This host runs ProxyCommand or LocalCommand — Relaya won't fill in the saved password; type it yourself.";
