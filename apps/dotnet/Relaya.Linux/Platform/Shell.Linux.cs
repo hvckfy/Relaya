@@ -21,11 +21,38 @@ internal static partial class Shell
 
     public static partial void OpenFile(string path)
     {
+        NotExecutable(path);
         var info = new ProcessStartInfo(Dialogs.Which("xdg-open") ?? "xdg-open") { UseShellExecute = false };
         info.ArgumentList.Add(path);
         try { Process.Start(info); }
         catch (System.Exception e) { throw new IOException(e.Message, e); }
     }
+
+    // Редактор text/plain по умолчанию (xdg-mime) через gtk-launch: файл открывается как текст, даже .desktop или .sh.
+    public static partial void OpenAsText(string path)
+    {
+        NotExecutable(path);
+        var query = new ProcessStartInfo(Dialogs.Which("xdg-mime") ?? "xdg-mime") { UseShellExecute = false, RedirectStandardOutput = true };
+        foreach (var a in new[] { "query", "default", "text/plain" }) query.ArgumentList.Add(a);
+        string app;
+        try
+        {
+            using var q = Process.Start(query)!;
+            app = q.StandardOutput.ReadToEnd().Trim();
+            q.WaitForExit(5000);
+        }
+        catch (System.Exception e) { throw new IOException(e.Message, e); }
+        if (app.Length == 0 || Dialogs.Which("gtk-launch") is not { } launch)
+            throw new IOException(Relaya.Strings.L("Нет текстового редактора по умолчанию (xdg-mime text/plain, gtk-launch)."));
+        var info = new ProcessStartInfo(launch) { UseShellExecute = false };
+        info.ArgumentList.Add(app);
+        info.ArgumentList.Add(path);
+        try { Process.Start(info); }
+        catch (System.Exception e) { throw new IOException(e.Message, e); }
+    }
+
+    // Скачанный файл не исполняется ни запуском, ни двойным щелчком: только чтение и запись владельцу.
+    private static void NotExecutable(string path) => File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
 
     public static partial void Reveal(string path) => OpenFolder(Path.GetDirectoryName(path) ?? path);
 

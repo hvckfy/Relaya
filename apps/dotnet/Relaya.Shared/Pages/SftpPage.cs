@@ -404,7 +404,7 @@ internal sealed class SftpPage : UserControl
         });
         watcher.EnableRaisingEvents = true;
         edits.Add(watcher);
-        try { Platform.Shell.OpenFile(local); status.Text = L("Изменения в %@ сохраняются на сервер, пока открыта эта вкладка", name); }
+        try { Platform.Shell.OpenForEditing(local); status.Text = L("Изменения в %@ сохраняются на сервер, пока открыта эта вкладка", name); }
         catch (System.IO.IOException e) { await Ui.ShowError(XamlRoot, L("Не удалось открыть файл"), e.Message); }
     }
 

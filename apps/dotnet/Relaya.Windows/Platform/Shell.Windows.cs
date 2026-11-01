@@ -20,6 +20,16 @@ internal static partial class Shell
         catch (System.Exception e) { throw new System.IO.IOException(e.Message, e); }
     }
 
+    // Блокнот из System32 по полному пути: не ищется по PATH и не зависит от ассоциаций.
+    public static partial void OpenAsText(string path)
+    {
+        var notepad = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.System), "notepad.exe");
+        var info = new ProcessStartInfo(notepad) { UseShellExecute = false };
+        info.ArgumentList.Add(path);
+        try { Process.Start(info); }
+        catch (System.Exception e) { throw new System.IO.IOException(e.Message, e); }
+    }
+
     public static partial void Reveal(string path)
     {
         var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
