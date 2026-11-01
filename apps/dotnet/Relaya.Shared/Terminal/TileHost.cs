@@ -115,6 +115,7 @@ internal sealed class TileHost : UserControl, IDisposable
             Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 8, 4),
             Children =
             {
+                connectionInfo,
                 disconnected,
                 portsPanel,
                 search,
@@ -516,8 +517,19 @@ internal sealed class TileHost : UserControl, IDisposable
         broadcastHere.IsChecked = active == null || Broadcast.Includes(active.Session);
     }
 
+    // Куда и как подключена активная плитка — как строка состояния на Mac (4.24): user@host:port и способ входа.
+    private readonly TextBlock connectionInfo = new()
+    {
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 8, 0), Opacity = 0.7,
+        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"), FontSize = 12,
+    };
+
     private void UpdateState()
     {
+        if (active != null && Data.AppState.Host(active.Alias) is { } h)
+            connectionInfo.Text = RelayaCoreMethods.HostSubtitle(h) + " · " + (h.identityFile != null ? L("ключ") : L("пароль"));
+        else
+            connectionInfo.Text = "";
         disconnected.Text = L("отключён");
         disconnected.Foreground = Pages.Ui.Brush("SystemFillColorCriticalBrush");
         disconnected.Visibility = active is { Alive: false } ? Visibility.Visible : Visibility.Collapsed;

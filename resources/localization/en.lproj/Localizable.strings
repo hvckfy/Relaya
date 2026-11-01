@@ -1356,3 +1356,5 @@
 "Нет текстового редактора по умолчанию (xdg-mime text/plain, gtk-launch)." = "No default text editor (xdg-mime text/plain, gtk-launch).";
 "xdg-mime не ответил." = "xdg-mime did not respond.";
 "Нет текстового редактора — файл %@ не открыт, чтобы не запустить его." = "No text editor — %@ wasn't opened so it doesn't run.";
+"Сниппеты: вставить в терминал" = "Snippets: insert into the terminal";
+"Масштаб экрана — крупный интерфейс" = "Display scale — larger interface";

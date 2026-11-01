@@ -232,7 +232,7 @@ internal sealed partial class RdpView : UserControl, IDisposable
                 menu.Items.Add(Check($"{pw} × {ph}", desktop.rdpWidth == pw && desktop.rdpHeight == ph,
                     () => Persist(desktop with { rdpWidth = pw, rdpHeight = ph })));
             menu.Items.Add(new MenuFlyoutSeparator());
-            menu.Items.Add(Check(L("Масштаб Retina — крупный интерфейс"), desktop.rdpRetina != false, () => Persist(desktop with { rdpRetina = true })));
+            menu.Items.Add(Check(L("Масштаб экрана — крупный интерфейс"), desktop.rdpRetina != false, () => Persist(desktop with { rdpRetina = true })));
             menu.Items.Add(Check(L("Масштаб 100% — больше места"), desktop.rdpRetina == false, () => Persist(desktop with { rdpRetina = false })));
         }
         Refresh();

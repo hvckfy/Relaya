@@ -215,6 +215,9 @@ internal sealed class SettingsPage : UserControl
             ("Ctrl+Shift+R, Ctrl+Alt+1…9", L("Переподключить, вкладка по номеру")),
             ("Ctrl+Shift+G", L("Сетка: все терминалы сразу")),
             ("Ctrl+Shift+Enter", L("Развернуть плитку")),
+            ("Ctrl+Shift+P", L("Палитра команд")),
+            ("Ctrl+Shift+S", L("Сниппеты: вставить в терминал")),
+            ("Ctrl+Shift+L", L("Записывать сессию в файл")),
         })
             list.Children.Add(Ui.Row(null, k, d));
         return page;
