@@ -140,7 +140,7 @@ pub enum DavAction {
 
 /// Решение по запросу (после проверки пароля). Вне корня — 404; DELETE/MOVE самого корня — 403; MOVE/COPY без
 /// Destination или с Destination вне корня — 400; Destination == источник — 403 (RFC 4918 9.8.5);
-/// неизвестный метод — 405. `Overwrite` по умолчанию T; F — только явное `F`.
+/// неизвестный метод — 405. OPTIONS — на любой путь, даже вне префикса. `Overwrite` по умолчанию T; F — только явное `F`.
 #[uniffi::export]
 pub fn dav_decide(
     method: String,
@@ -151,6 +151,10 @@ pub fn dav_decide(
     root: String,
 ) -> DavAction {
     let reply = |status: u16, reason: &str| DavAction::Reply { status, reason: reason.into() };
+    // OPTIONS не раскрывает файлов: WebClient (Windows) спрашивает его у корня сервера, вне секретного пути.
+    if method == "OPTIONS" {
+        return DavAction::Options;
+    }
     let Some(remote) = dav_remote_path(prefix.clone(), root.clone(), path) else { return reply(404, "Not Found") };
     let is_root = remote == root;
     if is_root && (method == "DELETE" || method == "MOVE") {
@@ -400,6 +404,7 @@ mod tests {
     #[test]
     fn decisions() {
         assert_eq!(status(&decide("GET", "/zzz/host/a", None, None)), Some(404));
+        assert_eq!(decide("OPTIONS", "/", None, None), DavAction::Options);
         assert_eq!(status(&decide("DELETE", P, None, None)), Some(403));
         assert_eq!(status(&decide("MOVE", P, Some("/abc/host/x"), None)), Some(403));
         assert_eq!(status(&decide("PUT", P, None, None)), Some(405));
