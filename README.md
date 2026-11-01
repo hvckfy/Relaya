@@ -83,7 +83,7 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 - Snippets with `{{variables}}`: insert with ⇧⌘P or run on several hosts at once.
 
 **Remote desktops**
-- Built-in **VNC** and **RDP** (NLA) viewers in a tab or a separate window, optionally through an SSH tunnel; passwords in Keychain. RDP resolution adapts to the window on the fly.
+- Built-in **VNC** and **RDP** in a tab or a separate window, optionally through an SSH tunnel; passwords in Keychain. Both engines live in the shared core and are the same on macOS, Windows and Linux: RDP on FreeRDP (NLA, sound, shared clipboard, RD Gateway, resolution that follows the window, optional H.264), VNC on RoyalVNCKit (VNC password, macOS user login, MS-Logon).
 
 **AI agents (MCP)**
 - `Relaya --mcp` is a local MCP server for Claude, Cursor and other clients: `list_hosts`, `run_command`, `read_file`.
@@ -124,7 +124,7 @@ Requires macOS 15 Sequoia or later; Liquid Glass needs macOS 26. Universal binar
 2. The installer isn't code-signed yet, so SmartScreen asks once: *More info → Run anyway*.
 3. Needs Windows 10 1809+ (Mica background on Windows 11) and the built-in **OpenSSH Client**. The installer offers it on an *Additional components* page (it asks for administrator rights only for that step) together with [Git for Windows](https://git-scm.com), which is needed only for sync through git — folder sync works without it. If a component can't be installed, the last page says how to add it by hand (*Settings → Apps → Optional features → OpenSSH Client*).
 
-The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, Windows Hello confirmation, a built-in RDP tab on FreeRDP (sound, clipboard, RD Gateway, dynamic resolution; Remote Desktop Connection stays as a fallback) and VNC (via an installed viewer). Not yet on Windows: session recording.
+The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, Windows Hello confirmation, built-in RDP and VNC tabs on the same core engines as macOS (Remote Desktop Connection and an installed VNC viewer stay as fallbacks) and session recording.
 
 ### Linux (in progress)
 
@@ -203,4 +203,4 @@ Issues and pull requests are welcome. Please keep the core idea intact: `~/.ssh`
 
 [MIT](LICENSE) © 2026 hvckfy and Relaya contributors.
 
-Relaya uses [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm), [RoyalVNCKit](https://github.com/royalapplications/royalvnc) and [RDPKit](https://github.com/steelbrain/RDPKit) (MIT) on macOS; [alacritty_terminal](https://github.com/alacritty/alacritty) (Apache-2.0), [FreeRDP](https://github.com/FreeRDP/FreeRDP) (Apache-2.0) and [UniFFI](https://github.com/mozilla/uniffi-rs) (MPL-2.0) in the core; [Win2D](https://github.com/microsoft/Win2D) on Windows and [Uno Platform](https://github.com/unoplatform/uno) on Linux. H.264 on macOS/Linux uses OpenH264 Video Codec provided by Cisco Systems, Inc., downloaded only when you turn it on. Distro logos are from [Simple Icons](https://simpleicons.org) (CC0); they are trademarks of their owners.
+Relaya uses [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (MIT) on macOS; [alacritty_terminal](https://github.com/alacritty/alacritty) (Apache-2.0), [FreeRDP](https://github.com/FreeRDP/FreeRDP) (Apache-2.0), [RoyalVNCKit](https://github.com/royalapplications/royalvnc) (MIT) and [UniFFI](https://github.com/mozilla/uniffi-rs) (MPL-2.0) in the core; [Win2D](https://github.com/microsoft/Win2D) on Windows and [Uno Platform](https://github.com/unoplatform/uno) on Linux. H.264 on macOS/Linux uses OpenH264 Video Codec provided by Cisco Systems, Inc., downloaded only when you turn it on. Distro logos are from [Simple Icons](https://simpleicons.org) (CC0); they are trademarks of their owners.
