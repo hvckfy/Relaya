@@ -15,7 +15,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
   actions: read # артефакт FreeRDP из freerdp.yml
 
 concurrency:
@@ -27,6 +27,9 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write  # публикует релиз по тегу
     # Язык интерфейса задаётся при сборке (ADR-002): две сборки, два установщика.
     strategy:
       fail-fast: false
