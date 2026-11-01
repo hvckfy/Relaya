@@ -82,7 +82,7 @@ internal sealed partial class DavBridge
         // Файлы удаляются после каждого запроса; пустой каталог процесса — при выходе.
         if (tempDir.IsValueCreated)
             try { Directory.Delete(tempDir.Value, true); }
-            catch (IOException e) { Terminal.TerminalView.Trace("dav temp: " + e.Message); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Terminal.TerminalView.Trace("dav temp: " + e.Message); }
     }
 
     // Платформа: подключить WebDAV-адрес как диск (пароль — не в аргументах), отключить, открыть.
