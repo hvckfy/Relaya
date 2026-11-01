@@ -102,18 +102,46 @@ internal sealed class SyncPage : UserControl
             TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new Thickness(0, 0, 0, 12),
         });
 
-        var pass = new PasswordBox { PlaceholderText = sync.HasPassphrase ? L("Задан — введите новый, чтобы сменить") : L("Не задан"), Width = 280 };
+        var pass = new PasswordBox
+        {
+            PlaceholderText = sync.KeysWithoutPassphrase ? L("без пароля") : sync.HasPassphrase ? L("Задан — введите новый, чтобы сменить") : L("Не задан"),
+            Width = 280,
+        };
         var savePass = new Button { Content = L("Сохранить") };
+        // Пустой пароль — не молча: предупреждение прямо под полем, подтверждение — отдельной кнопкой (#32).
+        var confirmEmpty = new InfoBar
+        {
+            Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(0, 8, 0, 0),
+            Title = L("Синхронизировать ключи без пароля?"),
+            Message = L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы."),
+        };
+        var withoutButton = new Button { Content = L("Синхронизировать без пароля") };
+        var cancelEmpty = new Button { Content = L("Отмена") };
+        confirmEmpty.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8), Children = { withoutButton, cancelEmpty } };
+        cancelEmpty.Click += (_, _) => { confirmEmpty.IsOpen = false; pass.Focus(FocusState.Programmatic); };
+        withoutButton.Click += async (_, _) =>
+        {
+            try { sync.SyncKeysWithoutPassphrase(); }
+            catch (Exception e) { await Pages.Ui.ShowError(XamlRoot, L("Не удалось сохранить пароль"), e.Message); return; }
+            Build();
+        };
         savePass.Click += async (_, _) =>
         {
+            if (pass.Password.Length == 0) { confirmEmpty.IsOpen = true; return; }
             try { sync.SetPassphrase(pass.Password); }
             catch (Exception e) { await Pages.Ui.ShowError(XamlRoot, L("Не удалось сохранить пароль"), e.Message); return; }
             pass.Password = "";
             Build();
         };
-        root.Children.Add(Card(L("Пароль шифрования ключей"),
-            Platform.PlatformText.SyncPassphraseHint(),
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pass, savePass } }));
+        var passCard = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pass, savePass } };
+        root.Children.Add(Card(L("Пароль шифрования ключей"), Platform.PlatformText.SyncPassphraseHint(),
+            new StackPanel { Children = { passCard, confirmEmpty } }));
+        if (sync.KeysWithoutPassphrase)
+            root.Children.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false, Margin = new Thickness(0, 8, 0, 0),
+                Message = L("Ключи синхронизируются без пароля — в репозитории они фактически открыты. Чтобы защитить их, введите пароль и сохраните."),
+            });
 
         // Одноимённые, но другие ключи с другой машины — сохранены рядом, не поверх (ядро, sync_take_renamed_keys).
         shownRenamed = sync.RenamedKeys.Count;
