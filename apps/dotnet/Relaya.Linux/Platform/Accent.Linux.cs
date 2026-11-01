@@ -22,7 +22,9 @@ internal static partial class Accent
 
     private static Color? Kde()
     {
-        var file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "kdeglobals");
+        var config = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } x
+            ? x : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+        var file = Path.Combine(config, "kdeglobals");
         try
         {
             if (!File.Exists(file)) return null;
@@ -46,11 +48,18 @@ internal static partial class Accent
         try
         {
             using var p = Process.Start(info)!;
-            var name = p.StandardOutput.ReadToEnd().Trim().Trim('\'');
-            if (!p.WaitForExit(2000) || p.ExitCode != 0) return null; // старый GNOME: ключа нет
+            // Зависший gsettings (мёртвый dconf или D-Bus) не держит окно: читаем асинхронно и ждём не дольше 2 с.
+            var read = p.StandardOutput.ReadToEndAsync();
+            if (!read.Wait(2000) || !p.WaitForExit(500))
+            {
+                try { p.Kill(true); } catch (InvalidOperationException) { } // уже вышел
+                return null;
+            }
+            if (p.ExitCode != 0) return null; // старый GNOME: ключа нет
+            var name = read.Result.Trim().Trim('\'');
             return Gnome.FirstOrDefault(c => c.Name == name) is { Name: not null } hit ? FromRgb(hit.Rgb) : null;
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or AggregateException)
         {
             Terminal.TerminalView.Trace("accent gnome: " + e.Message);
             return null;
