@@ -277,7 +277,13 @@ pub const DROP_SPLIT_FRACTION: f64 = 0.28;
 /// иначе — поменять местами, подсветка — вся плитка. Своя плитка (`dragged`) и точка вне плиток — None.
 /// При равных расстояниях выигрывает край в порядке: левый, правый, верхний, нижний.
 #[uniffi::export]
-pub fn tiles_drop_target(bounds: Rect, frames: Vec<TileFrame>, x: f64, y: f64, dragged: Option<String>) -> Option<DropTarget> {
+pub fn tiles_drop_target(
+    bounds: Rect,
+    frames: Vec<TileFrame>,
+    x: f64,
+    y: f64,
+    dragged: Option<String>,
+) -> Option<DropTarget> {
     let b = DROP_EDGE_BAND;
     let (w, h) = (bounds.w, bounds.h);
     let (px, py) = (x - bounds.x, y - bounds.y);

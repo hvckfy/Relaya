@@ -433,15 +433,11 @@ public sealed partial class MainWindow : Window
     {
         var tiles = new Terminal.TileHost();
         var tab = AddTab(alias, "", tiles, tiles);
-        if (Pages.HostColors.Of(AppState.Host(alias)?.color) is { } tint && tab.IconSource is FontIconSource icon)
-            icon.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(tint);
+        Microsoft.UI.Xaml.Media.Brush? Tint() =>
+            Pages.HostColors.Of(AppState.Host(alias)?.color) is { } c ? new Microsoft.UI.Xaml.Media.SolidColorBrush(c) : null;
+        tab.SetIcon("\uE756", Tint());
         tiles.TitleChanged += t => ui.TryEnqueue(() => tab.Header = t);
-        tiles.AliveChanged += alive => ui.TryEnqueue(() =>
-            tab.IconSource = new FontIconSource
-            {
-                Glyph = alive ? "" : "",
-                Foreground = Pages.HostColors.Of(AppState.Host(alias)?.color) is { } c ? new Microsoft.UI.Xaml.Media.SolidColorBrush(c) : null,
-            });
+        tiles.AliveChanged += alive => ui.TryEnqueue(() => tab.SetIcon(alive ? "\uE756" : "\uE783", Tint()));
         tiles.Add(alias, initialInput);
         // Контекстное меню вкладки: разделить — та же сессия рядом (как Ctrl+Shift+D/E).
         var menu = new MenuFlyout();
@@ -678,7 +674,7 @@ public sealed partial class MainWindow : Window
         SyncIcon.Visibility = busy ? Visibility.Collapsed : Visibility.Visible;
         SyncButton.IsEnabled = !busy;
         var problem = states.Contains(Platform.SyncService.State.Conflict) || states.Contains(Platform.SyncService.State.Failed);
-        SyncIcon.Glyph = problem ? "\uE7BA" : "\uE895";
+        SyncIcon.Glyph = problem ? "\uE783" : "\uE895";
         SyncText.Text = busy ? L("Синхронизация…") : problem ? L("Синхронизация: нужна проверка") : L("Синхронизировать");
         ToolTipService.SetToolTip(SyncButton, problem ? L("Ошибка или конфликт — откройте «Синхронизацию» в параметрах") : L("Синхронизировать сейчас"));
     }
