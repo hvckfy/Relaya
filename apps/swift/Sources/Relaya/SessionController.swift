@@ -99,7 +99,9 @@ final class SessionController {
         if Self.mayMentionLocalPort(text) {
             let ports = LocalPorts.find(in: Self.plainText(text))
             if !ports.isEmpty {
-                detectedPorts = Array((ports.reversed() + detectedPorts.filter { !ports.contains($0) }).prefix(4))
+                // Наблюдаемое поле меняем только при изменении — иначе SwiftUI пересобирает панель на каждый кусок (М-3).
+                let updated = Array((ports.reversed() + detectedPorts.filter { !ports.contains($0) }).prefix(4))
+                if updated != detectedPorts { detectedPorts = updated }
             }
         }
         tail = String((tail + text).suffix(2000))
@@ -123,28 +125,40 @@ final class SessionController {
             return
         }
 
+        // Признаки хвоста — один раз на кусок (М-2): раньше regex-проверки шли по 6 раз на главном потоке.
+        let passwordPrompt = PasswordPrompt.matches(tail)
+        let sudo = PasswordPrompt.isSudo(tail)
+        var readyCache: Bool?
+        func ready() -> Bool {
+            if let readyCache { return readyCache }
+            let r = loginReady()
+            readyCache = r
+            return r
+        }
+
         // До входа весь ввод — ответы ssh (пароль, passphrase, код), после — любой запрос секрета (L-SEC-1).
-        if !loggedIn || PasswordPrompt.matches(tail) || PasswordPrompt.isSudo(tail) || PasswordPrompt.isSecret(tail) {
-            secretPromptActive = true
+        if !loggedIn || passwordPrompt || sudo || PasswordPrompt.isSecret(tail) {
+            if !secretPromptActive { secretPromptActive = true }
         } else if secretPromptActive, text.contains(where: \.isNewline) {
             secretPromptActive = false
         }
 
         // Первое приглашение shell — вход выполнен (по ключу или паролю).
-        if !loggedIn, !PasswordPrompt.matches(tail), loginReady() {
+        if !loggedIn, !passwordPrompt, ready() {
             loggedIn = true
             secretPromptActive = false
             passwordPromptWithoutSaved = false
             if sawPasswordPrompt, !host.usesKey { offerKeySetup = true }
         }
 
-        if PasswordPrompt.isSudo(tail) {
-            sudoPrompt = keychain.hasPassword(for: host.keychainAccount)
+        if sudo {
+            let has = keychain.hasPassword(for: host.keychainAccount)
+            if sudoPrompt != has { sudoPrompt = has }
             return
         }
         if sudoPrompt, text.contains(where: { $0.isLetter || $0.isNewline }) { sudoPrompt = false }
 
-        if PasswordPrompt.matches(tail) {
+        if passwordPrompt {
             // Пароль хоста — только для входа самого ssh. Запрос после входа (su, mysql, другой сервер)
             // не получает его сам: баннер с кнопкой и Touch ID.
             if loggedIn {
@@ -157,7 +171,7 @@ final class SessionController {
         }
         if passwordPromptAfterLogin, text.contains(where: { $0.isLetter || $0.isNewline }) { passwordPromptAfterLogin = false }
 
-        if let cmd = pendingCommand, loginReady() {
+        if let cmd = pendingCommand, ready() {
             pendingCommand = nil
             terminal?.sendQuiet(cmd + "\r")
         }
@@ -402,9 +416,23 @@ final class RelayaTerminalView: LocalProcessTerminalView {
     /// Набор правил, уже переданный в highlighter (чтобы не перекомпилировать на каждом обновлении).
     var appliedRules: [HighlightRule]?
 
+    /// Поток вывода (М-1): при `cat` большого файла подсветка регулярками занимала главный поток. Если за 100 мс
+    /// пришло больше 64 КБ, подсветка выключается до 300 мс затишья — вывод идёт как есть.
+    private var burstStart = Date.distantPast
+    private var burstBytes = 0
+    private var bypassUntil = Date.distantPast
+
+    private func highlightAllowed(_ count: Int) -> Bool {
+        let now = Date()
+        if now.timeIntervalSince(burstStart) > 0.1 { burstStart = now; burstBytes = 0 }
+        burstBytes += count
+        if burstBytes > 64 * 1024 { bypassUntil = now.addingTimeInterval(0.3) }
+        return now >= bypassUntil
+    }
+
     override func dataReceived(slice: ArraySlice<UInt8>) {
         // Подсвечиваем только целые UTF-8 куски; если символ разорван на границе — выводим как есть.
-        if highlighter.isActive, let text = String(bytes: slice, encoding: .utf8) {
+        if highlighter.isActive, highlightAllowed(slice.count), let text = String(bytes: slice, encoding: .utf8) {
             feed(text: highlighter.process(text))
         } else {
             let pending = highlighter.flush()
