@@ -79,7 +79,9 @@ struct RDPContent: View {
                     }
                 }
                 .padding(24)
-                .background(.ultraThinMaterial, in: .rect(cornerRadius: 16, style: .continuous))
+                // Непрозрачная карточка: материал (NSVisualEffectView) поверх холста гасил боковую панель и вкладки окна.
+                // Текст на ней белый, как на чёрном экране стола, поэтому фон — тёмный в любой теме.
+                .background(Color(white: 0.12), in: .rect(cornerRadius: 16, style: .continuous))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
