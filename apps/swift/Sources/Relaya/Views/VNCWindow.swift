@@ -38,7 +38,7 @@ struct VNCContent: View {
     var body: some View {
         ZStack {
             if let view = session.framebufferView {
-                HostedView(view: view, scaleToFit: session.scaleToFit)
+                HostedView(view: view, scaleToFit: session.scaleToFit, remoteSize: session.remoteSize)
             }
             switch session.phase {
             case .idle, .tunneling, .connecting:
@@ -103,6 +103,10 @@ struct VNCContent: View {
                 .help(L("По окну — весь экран удалённой машины вписан в окно; 1:1 — пиксель в пиксель, с прокруткой"))
             }
             ToolbarItem {
+                Button(L("Ctrl+Alt+Del")) { session.sendCtrlAltDel() }
+                    .disabled(session.phase != .connected)
+            }
+            ToolbarItem {
                 Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {
                     Label(L("Во весь экран"), systemImage: "arrow.up.left.and.arrow.down.right")
                 }
@@ -120,6 +124,8 @@ struct VNCContent: View {
 private struct HostedView: NSViewRepresentable {
     let view: NSView
     let scaleToFit: Bool
+    /// Экран сервера в пикселях: в 1:1 вид получает этот размер (в точках — с учётом Retina).
+    let remoteSize: CGSize
 
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView()
@@ -144,9 +150,11 @@ private struct HostedView: NSViewRepresentable {
             if scroll.documentView !== view { scroll.documentView = view }
             view.frame = NSRect(origin: .zero, size: scroll.contentSize)
         } else {
-            // 1:1: размер вида — исходный размер кадра, остальное прокручивается.
+            // 1:1: пиксель сервера — пиксель экрана, остальное прокручивается.
             view.autoresizingMask = []
             if scroll.documentView !== view { scroll.documentView = view }
+            let scale = scroll.window?.backingScaleFactor ?? 2
+            view.frame = NSRect(origin: .zero, size: CGSize(width: remoteSize.width / scale, height: remoteSize.height / scale))
         }
     }
 }

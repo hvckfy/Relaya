@@ -2,11 +2,16 @@ import AppKit
 import Carbon.HIToolbox
 import RelayaCore
 
-/// Экран удалённой машины из кадров ядра (BGRA) и ввод: клавиши — scancode набора 1, мышь, колесо.
+/// Экран удалённой машины из кадров ядра (BGRA) и ввод: RDP — scancode набора 1, VNC — keysym X11; мышь, колесо.
 /// Картинка вписывается в вид с сохранением пропорций; координаты мыши пересчитываются в пиксели сервера.
 final class RDPCanvasView: NSView {
-    /// Ввод уходит сюда (главный поток).
+    /// Ввод уходит сюда (главный поток): RDP или VNC.
     var engine: RDPEngine?
+    var vnc: VNCEngine?
+    /// VNC к Mac (вход ARD): ⌘ уходит как Command (Super), иначе — как Ctrl, чтобы ⌘C/⌘V работали на Linux/Windows.
+    var vncCommandIsSuper = false
+    /// Новый размер рабочего стола — для режима 1:1 (вид получает размер экрана сервера).
+    var onRemoteSize: ((Int, Int) -> Void)?
     /// Размер вида изменился (точки, масштаб экрана) — для «по размеру окна».
     var onSurfaceChange: ((CGSize, CGFloat) -> Void)?
     /// Вид получил фокус — отправить на сервер локальный буфер обмена.
@@ -36,6 +41,7 @@ final class RDPCanvasView: NSView {
     /// Новый размер рабочего стола: буфер пересоздаётся, следом ядро пришлёт полный кадр.
     func reset(width: Int, height: Int) {
         remote = (width, height)
+        onRemoteSize?(width, height)
         pixels = Data(count: width * height * 4)
         image = nil
         layer?.contents = nil
@@ -102,7 +108,7 @@ final class RDPCanvasView: NSView {
     }
 
     private func move(_ event: NSEvent) {
-        if let (x, y) = remotePoint(event) { engine?.pointer(x: x, y: y) }
+        if let (x, y) = remotePoint(event) { engine?.pointer(x: x, y: y); vnc?.pointer(x: x, y: y) }
     }
 
     override func updateTrackingAreas() {
@@ -120,16 +126,21 @@ final class RDPCanvasView: NSView {
         window?.makeFirstResponder(self)
         move(event)
         // Control-клик на Mac — правая кнопка.
-        engine?.button(event.modifierFlags.contains(.control) ? 2 : 0, down: true)
+        press(event.modifierFlags.contains(.control) ? 2 : 0, down: true)
     }
     override func mouseUp(with event: NSEvent) {
         move(event)
-        engine?.button(event.modifierFlags.contains(.control) ? 2 : 0, down: false)
+        press(event.modifierFlags.contains(.control) ? 2 : 0, down: false)
     }
-    override func rightMouseDown(with event: NSEvent) { move(event); engine?.button(2, down: true) }
-    override func rightMouseUp(with event: NSEvent) { move(event); engine?.button(2, down: false) }
-    override func otherMouseDown(with event: NSEvent) { move(event); engine?.button(Self.otherButton(event), down: true) }
-    override func otherMouseUp(with event: NSEvent) { move(event); engine?.button(Self.otherButton(event), down: false) }
+    override func rightMouseDown(with event: NSEvent) { move(event); press(2, down: true) }
+    override func rightMouseUp(with event: NSEvent) { move(event); press(2, down: false) }
+    override func otherMouseDown(with event: NSEvent) { move(event); press(Self.otherButton(event), down: true) }
+    override func otherMouseUp(with event: NSEvent) { move(event); press(Self.otherButton(event), down: false) }
+
+    private func press(_ button: Int, down: Bool) {
+        engine?.button(button, down: down)
+        vnc?.button(button, down: down)
+    }
 
     private static func otherButton(_ event: NSEvent) -> Int {
         switch event.buttonNumber { case 3: 3; case 4: 4; default: 1 }
@@ -140,8 +151,8 @@ final class RDPCanvasView: NSView {
         // Трекпад даёт точные дельты в точках, колесо — строки; приводим к WHEEL_DELTA (120 на щелчок).
         let k: CGFloat = event.hasPreciseScrollingDeltas ? 4 : 120
         let dy = Int((event.scrollingDeltaY * k).rounded()), dx = Int((event.scrollingDeltaX * k).rounded())
-        if dy != 0 { engine?.wheel(dy, vertical: true) }
-        if dx != 0 { engine?.wheel(-dx, vertical: false) }
+        if dy != 0 { engine?.wheel(dy, vertical: true); vnc?.wheel(dy, vertical: true) }
+        if dx != 0 { engine?.wheel(-dx, vertical: false); vnc?.wheel(-dx, vertical: false) }
     }
 
     // MARK: - Клавиатура
@@ -160,6 +171,55 @@ final class RDPCanvasView: NSView {
     func releaseAll() {
         for code in pressed { engine?.key(code, down: false) }
         pressed.removeAll()
+        for sym in vncHeld { vnc?.key(sym, down: false) }
+        vncHeld.removeAll()
+    }
+
+    // MARK: - VNC: keysym X11
+
+    private var vncHeld = Set<UInt32>()
+
+    private func vncModifier(_ keyCode: Int) -> UInt32? {
+        switch keyCode {
+        case kVK_Shift: 0xFFE1
+        case kVK_RightShift: 0xFFE2
+        case kVK_Control: 0xFFE3
+        case kVK_RightControl: 0xFFE4
+        case kVK_Option: 0xFFE9
+        case kVK_RightOption: 0xFFEA
+        case kVK_Command: vncCommandIsSuper ? 0xFFEB : 0xFFE3
+        case kVK_RightCommand: vncCommandIsSuper ? 0xFFEC : 0xFFE4
+        default: nil
+        }
+    }
+
+    /// Служебные клавиши — свои keysym; символы — keysym того, что печатает клавиша (с Shift, без Ctrl/⌘).
+    private func vncKey(_ event: NSEvent, down: Bool) {
+        guard let v = vnc else { return }
+        if let sym = Self.vncSpecial[Int(event.keyCode)] {
+            if down { vncHeld.insert(sym) } else { vncHeld.remove(sym) }
+            v.key(sym, down: down)
+            return
+        }
+        guard let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first else { return }
+        let sym = VNCEngine.keysym(for: scalar)
+        if down { vncHeld.insert(sym) } else { vncHeld.remove(sym) }
+        v.key(sym, down: down)
+    }
+
+    static let vncSpecial: [Int: UInt32] = [
+        kVK_Return: 0xFF0D, kVK_Tab: 0xFF09, kVK_Delete: 0xFF08, kVK_Escape: 0xFF1B, kVK_ForwardDelete: 0xFFFF,
+        kVK_Home: 0xFF50, kVK_End: 0xFF57, kVK_PageUp: 0xFF55, kVK_PageDown: 0xFF56, kVK_Help: 0xFF63,
+        kVK_LeftArrow: 0xFF51, kVK_UpArrow: 0xFF52, kVK_RightArrow: 0xFF53, kVK_DownArrow: 0xFF54,
+        kVK_F1: 0xFFBE, kVK_F2: 0xFFBF, kVK_F3: 0xFFC0, kVK_F4: 0xFFC1, kVK_F5: 0xFFC2, kVK_F6: 0xFFC3,
+        kVK_F7: 0xFFC4, kVK_F8: 0xFFC5, kVK_F9: 0xFFC6, kVK_F10: 0xFFC7, kVK_F11: 0xFFC8, kVK_F12: 0xFFC9,
+        kVK_ANSI_KeypadEnter: 0xFF8D,
+    ]
+
+    /// Ctrl+Alt+Del для VNC (меню окна).
+    func vncSend(_ syms: [UInt32]) {
+        for s in syms { vnc?.key(s, down: true) }
+        for s in syms.reversed() { vnc?.key(s, down: false) }
     }
 
     // ⌘Q, ⌘W и прочие команды Relaya не перехватываем — остальное уходит на сервер.
@@ -174,6 +234,7 @@ final class RDPCanvasView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        if vnc != nil { vncKey(event, down: true); return }
         if let code = Self.scancodes[Int(event.keyCode)] {
             pressed.insert(code)
             engine?.key(code, down: true)
@@ -184,12 +245,27 @@ final class RDPCanvasView: NSView {
     }
 
     override func keyUp(with event: NSEvent) {
+        if vnc != nil { vncKey(event, down: false); return }
         guard let code = Self.scancodes[Int(event.keyCode)] else { return }
         pressed.remove(code)
         engine?.key(code, down: false)
     }
 
     override func flagsChanged(with event: NSEvent) {
+        if let v = vnc {
+            guard let sym = vncModifier(Int(event.keyCode)) else { return }
+            let flag: NSEvent.ModifierFlags = switch Int(event.keyCode) {
+            case kVK_Shift, kVK_RightShift: .shift
+            case kVK_Control, kVK_RightControl: .control
+            case kVK_Option, kVK_RightOption: .option
+            case kVK_CapsLock: .capsLock
+            default: .command
+            }
+            let down = event.modifierFlags.contains(flag)
+            if down { vncHeld.insert(sym) } else { vncHeld.remove(sym) }
+            v.key(sym, down: down)
+            return
+        }
         guard let code = Self.scancodes[Int(event.keyCode)] else { return }
         let flag: NSEvent.ModifierFlags? = switch Int(event.keyCode) {
         case kVK_Shift, kVK_RightShift: .shift

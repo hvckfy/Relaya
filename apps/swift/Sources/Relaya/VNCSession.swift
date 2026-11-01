@@ -1,13 +1,12 @@
 import AppKit
 import Observation
-@preconcurrency import RoyalVNCKit
 import RelayaCore
 
-/// Встроенный VNC-клиент: соединение RoyalVNCKit, авторизация (VNC / Apple Remote Desktop)
-/// с паролем из Keychain, при необходимости — через SSH-туннель.
+/// Встроенный VNC на ядре (VncSession на RoyalVNCKit — тот же движок, что на Windows и Linux): кадры во вкладке,
+/// вход VNC / Apple Remote Desktop / MS-Logon с паролем из Keychain, при необходимости — через SSH-туннель.
 @MainActor
 @Observable
-final class VNCSession: NSObject {
+final class VNCSession {
     enum Phase: Equatable {
         case idle, tunneling, connecting, connected
         case disconnected(String?)
@@ -17,7 +16,6 @@ final class VNCSession: NSObject {
     struct CredentialRequest {
         let needsUsername: Bool
         let isAppleRemoteDesktop: Bool
-        let reply: (VNCCredential?) -> Void
     }
 
     let desktop: RemoteDesktop
@@ -27,12 +25,18 @@ final class VNCSession: NSObject {
     private let keychain = KeychainStore(service: "app.relaya.vnc-password")
 
     private(set) var phase: Phase = .idle
-    private(set) var framebufferView: NSView?
+    /// Холст: экран сервера и ввод (общий с RDP).
+    let canvas = RDPCanvasView(frame: .zero)
+    var framebufferView: NSView? { phase == .connected ? canvas : nil }
+    /// Размер экрана сервера в пикселях — для режима 1:1.
+    private(set) var remoteSize: CGSize = .zero
     var credentialRequest: CredentialRequest?
     /// Почему введённый пароль не отправлен (показывается в окне ввода).
     var credentialError: String?
 
-    @ObservationIgnored private var connection: VNCConnection?
+    @ObservationIgnored private var engine: VNCEngine?
+    /// Пароль, введённый в форме, — сохраняется только после успешного входа.
+    @ObservationIgnored private var pendingSave: (user: String?, password: String)?
     @ObservationIgnored private var tunnel: Tunnel?
     @ObservationIgnored private var triedSaved = false
 
@@ -40,18 +44,18 @@ final class VNCSession: NSObject {
         self.desktop = desktop
         self.model = model
         self.scaleToFit = desktop.scaleToFit ?? true
+        canvas.onRemoteSize = { [weak self] w, h in self?.remoteSize = CGSize(width: w, height: h) }
     }
 
-    /// Переключает масштаб: RoyalVNCKit задаёт его при подключении, поэтому переподключаемся.
+    /// «По окну» или 1:1 — без переподключения: масштаб делает вид, а не сервер.
     func setScaleToFit(_ fit: Bool) async {
         guard fit != scaleToFit else { return }
         scaleToFit = fit
         if let i = model.desktops.firstIndex(where: { $0.id == desktop.id }) { model.desktops[i].scaleToFit = fit }
-        connection?.disconnect()
-        try? await Task.sleep(for: .milliseconds(300))
-        triedSaved = false
-        await connect()
     }
+
+    /// Меню окна: Ctrl+Alt+Del.
+    func sendCtrlAltDel() { canvas.vncSend([0xFFE3, 0xFFE9, 0xFFFF]) }
 
     var account: String { desktop.keychainAccount }
 
@@ -73,7 +77,7 @@ final class VNCSession: NSObject {
     }
 
     func connect() async {
-        guard !closed else { return }
+        guard !closed, engine == nil else { return }
         var host = desktop.address
         var port = desktop.port
         if let t = desktop.tunnel(localPort: RemoteDesktop.freeLocalPort()) {
@@ -96,137 +100,98 @@ final class VNCSession: NSObject {
         }
 
         phase = .connecting
-        let settings = VNCConnection.Settings(isDebugLoggingEnabled: false, hostname: host, port: UInt16(port),
-                                              isShared: true, isScalingEnabled: scaleToFit, useDisplayLink: true,
-                                              inputMode: .forwardKeyboardShortcutsIfNotInUseLocally,
-                                              isClipboardRedirectionEnabled: true, colorDepth: .depth24Bit,
-                                              frameEncodings: .default)
-        let connection = VNCConnection(settings: settings)
-        connection.delegate = self
-        self.connection = connection
-        connection.connect()
+        triedSaved = false
+        let owner = WeakVNC(self)
+        var events = VNCEngine.Events()
+        events.connected = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.connected(w, h) } } }
+        events.resized = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.reset(width: w, height: h) } } }
+        events.frame = { rects in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.apply(rects) } } }
+        events.closed = { kind, message in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.finished(kind, message) } } }
+        events.credentials = { kind, needsUser in
+            DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.needCredential(kind, needsUser: needsUser) } }
+        }
+        let engine = VNCEngine(host: host, port: port, user: nil, password: nil, events: events)
+        self.engine = engine
+        canvas.vnc = engine
+        engine.connect()
     }
 
     func disconnect() {
-        connection?.disconnect()
+        let e = engine
+        engine = nil
+        canvas.releaseAll()
+        canvas.vnc = nil
+        e?.disconnect()
         if let t = tunnel { model.tunnels.stop(t.id) }
         tunnel = nil
+        if phase == .connected || phase == .connecting { phase = .disconnected(nil) }
     }
 
     /// Ответ из окна ввода пароля.
     func provide(username: String, password: String, save: Bool) {
         guard let request = credentialRequest else { return }
-        // Пароль VNC — до 8 байт Latin-1; RoyalVNCKit 1.1.0 падает на не-ASCII символах.
-        if !request.needsUsername, let problem = Self.vncPasswordProblem(password) {
-            credentialError = problem
-            return
-        }
         credentialError = nil
         credentialRequest = nil
-        if save {
+        let user = request.needsUsername ? username : nil
+        pendingSave = save ? (user, password) : nil
+        engine?.provideCredentials(user: user, password: password)
+    }
+
+    func cancelCredentials() {
+        credentialRequest = nil
+        engine?.cancelCredentials()
+    }
+
+    // MARK: - События ядра (уже на главном потоке)
+
+    private func connected(_ width: Int, _ height: Int) {
+        canvas.reset(width: width, height: height)
+        phase = .connected
+        if let p = pendingSave {
             var updated = desktop
-            if request.needsUsername { updated.user = username }
-            try? keychain.setPassword(password, for: updated.keychainAccount)
+            if let u = p.user { updated.user = u }
+            try? keychain.setPassword(p.password, for: updated.keychainAccount)
             if updated.user != desktop.user, let i = model.desktops.firstIndex(where: { $0.id == desktop.id }) {
                 model.desktops[i].user = updated.user
             }
         }
-        request.reply(request.needsUsername
-            ? VNCUsernamePasswordCredential(username: username, password: password)
-            : VNCPasswordCredential(password: password))
+        pendingSave = nil
+        DispatchQueue.main.async { [canvas] in canvas.window?.makeFirstResponder(canvas) }
     }
 
-    /// Почему пароль нельзя отправить как пароль VNC; nil — можно.
-    static func vncPasswordProblem(_ password: String) -> String? {
-        guard password.unicodeScalars.allSatisfy(\.isASCII) else {
-            return L("Пароль VNC может содержать только латинские буквы, цифры и символы ASCII. Проверьте раскладку клавиатуры.")
-        }
-        return nil
-    }
-
-    func cancelCredentials() {
-        credentialRequest?.reply(nil)
-        credentialRequest = nil
-    }
-
-    // MARK: - События соединения (уже на главном потоке)
-
-    fileprivate func stateChanged(_ status: VNCConnection.Status, error: String?) {
-        switch status {
-        case .connecting: phase = .connecting
-        case .connected: phase = .connected
-        case .disconnecting: break
-        case .disconnected:
-            phase = .disconnected(error.map { SSHErrorText.describeRemote(.vnc, $0) })
-            framebufferView = nil
-            if let t = tunnel { model.tunnels.stop(t.id) }
-            tunnel = nil
-        @unknown default: break
-        }
-    }
-
-    fileprivate func needCredential(_ type: VNCAuthenticationType, reply: @escaping (VNCCredential?) -> Void) {
-        let needsUser = type.requiresUsername
+    private func needCredential(_ kind: VNCEngine.AuthKind, needsUser: Bool) {
+        // Mac по ARD: ⌘ уходит как Command, а не как Ctrl.
+        canvas.vncCommandIsSuper = kind == .appleRemoteDesktop
         // Сначала пробуем сохранённый пароль; если сервер его отверг — спросим.
-        if !triedSaved, let saved = savedPassword(), !(needsUser && desktop.user.isEmpty),
-           needsUser || Self.vncPasswordProblem(saved) == nil {
+        if !triedSaved, let saved = savedPassword(), !(needsUser && desktop.user.isEmpty) {
             triedSaved = true
-            reply(needsUser ? VNCUsernamePasswordCredential(username: desktop.user, password: saved)
-                            : VNCPasswordCredential(password: saved))
+            engine?.provideCredentials(user: needsUser ? desktop.user : nil, password: saved)
             return
         }
-        credentialRequest = CredentialRequest(needsUsername: needsUser,
-                                              isAppleRemoteDesktop: type == .appleRemoteDesktop, reply: reply)
+        credentialRequest = CredentialRequest(needsUsername: needsUser, isAppleRemoteDesktop: kind == .appleRemoteDesktop)
     }
 
-    fileprivate func framebufferCreated(_ framebuffer: VNCFramebuffer, connection: VNCConnection) {
-        // Поздний кадр старого подключения (после переключения «1:1» / «По окну») не подменяет вид нового.
-        guard self.connection == nil || self.connection === connection else { return }
-        let view = VNCCAFramebufferView(frame: .init(origin: .zero, size: framebuffer.cgSize),
-                                        framebuffer: framebuffer, connection: connection, connectionDelegate: self)
-        framebufferView = view
-        DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
+    private func finished(_ kind: RDPEngine.CloseKind, _ message: String) {
+        guard engine != nil else { return }
+        engine = nil
+        canvas.vnc = nil
+        credentialRequest = nil
+        if let t = tunnel { model.tunnels.stop(t.id) }
+        tunnel = nil
+        switch kind {
+        case .closedByUser: phase = .disconnected(nil)
+        case .authFailed:
+            pendingSave = nil
+            if triedSaved { try? keychain.deletePassword(for: account) }
+            phase = .disconnected(L("Неверное имя пользователя или пароль."))
+        default:
+            phase = .disconnected(message.isEmpty ? nil : SSHErrorText.describeRemote(.vnc, message))
+        }
     }
 }
 
-// Колбэки RoyalVNCKit приходят с его потоков — переносим на главный.
-extension VNCSession: VNCConnectionDelegate {
-    nonisolated func connection(_ connection: VNCConnection, stateDidChange connectionState: VNCConnection.ConnectionState) {
-        let status = connectionState.status
-        let error = connectionState.error.map { "\($0.localizedDescription)" }
-        nonisolated(unsafe) let connection = connection
-        // Поздний Disconnect старого подключения (после переподключения) не должен сбрасывать новое.
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-                guard self.connection == nil || self.connection === connection else { return }
-                self.stateChanged(status, error: error)
-            }
-        }
-    }
-
-    nonisolated func connection(_ connection: VNCConnection, credentialFor authenticationType: VNCAuthenticationType,
-                                completion: @escaping (VNCCredential?) -> Void) {
-        nonisolated(unsafe) let completion = completion
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated { self.needCredential(authenticationType) { completion($0) } }
-        }
-    }
-
-    nonisolated func connection(_ connection: VNCConnection, didCreateFramebuffer framebuffer: VNCFramebuffer) {
-        nonisolated(unsafe) let framebuffer = framebuffer
-        nonisolated(unsafe) let connection = connection
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.framebufferCreated(framebuffer, connection: connection) } }
-    }
-
-    // Смена размера (ExtendedDesktopSize — TigerVNC шлёт его сразу после подключения, xrandr — посреди сессии):
-    // RoyalVNCKit создаёт НОВЫЙ framebuffer, а вид держит старый слабой ссылкой — без нового вида экран чёрный (К25).
-    nonisolated func connection(_ connection: VNCConnection, didResizeFramebuffer framebuffer: VNCFramebuffer) {
-        nonisolated(unsafe) let framebuffer = framebuffer
-        nonisolated(unsafe) let connection = connection
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.framebufferCreated(framebuffer, connection: connection) } }
-    }
-    // Перерисовку и курсор обрабатывает сам VNCCAFramebufferView.
-    nonisolated func connection(_ connection: VNCConnection, didUpdateFramebuffer framebuffer: VNCFramebuffer,
-                                x: UInt16, y: UInt16, width: UInt16, height: UInt16) {}
-    nonisolated func connection(_ connection: VNCConnection, didUpdateCursor cursor: VNCCursor) {}
+/// Слабая ссылка на сессию для колбэков ядра. Читается только на главном потоке.
+private final class WeakVNC: @unchecked Sendable {
+    weak var value: VNCSession?
+    init(_ value: VNCSession) { self.value = value }
 }
