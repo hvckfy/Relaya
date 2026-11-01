@@ -632,6 +632,13 @@ final class AppModel {
         if let activeSession { close(activeSession) }
     }
 
+    /// Соседняя вкладка по кругу (⌃Tab / ⌃⇧Tab).
+    func selectAdjacentSession(_ step: Int) {
+        guard !sessions.isEmpty else { return }
+        let i = sessions.firstIndex { $0.id == activeSessionID } ?? 0
+        activeSessionID = sessions[(i + step + sessions.count) % sessions.count].id
+    }
+
     func selectSession(at index: Int) {
         guard sessions.indices.contains(index) else { return }
         activeSessionID = sessions[index].id

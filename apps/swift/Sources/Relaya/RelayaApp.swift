@@ -62,6 +62,21 @@ struct RelayaApp: App {
                     Button(L("Вкладка %@", "\(n)")) { model.selectSession(at: n - 1) }
                         .keyboardShortcut(KeyEquivalent(Character(String(n))), modifiers: .command)
                 }
+                // Е.15: перебор вкладок по кругу, как Ctrl+Tab на Windows и Linux.
+                Button(L("Следующая вкладка")) { model.selectAdjacentSession(1) }
+                    .keyboardShortcut(.tab, modifiers: .control)
+                    .disabled(model.sessions.count < 2)
+                Button(L("Предыдущая вкладка")) { model.selectAdjacentSession(-1) }
+                    .keyboardShortcut(.tab, modifiers: [.control, .shift])
+                    .disabled(model.sessions.count < 2)
+                Divider()
+                // Е.16: размер шрифта терминала с клавиатуры (⌘+ / ⌘− / ⌘0), как Ctrl+= / Ctrl+− на Windows и Linux.
+                Button(L("Крупнее")) { model.settings.fontSize = min(24, model.settings.fontSize + 1) }
+                    .keyboardShortcut("+", modifiers: .command)
+                Button(L("Мельче")) { model.settings.fontSize = max(9, model.settings.fontSize - 1) }
+                    .keyboardShortcut("-", modifiers: .command)
+                Button(L("Обычный размер")) { model.settings.fontSize = 12.5 }
+                    .keyboardShortcut("0", modifiers: .command)
                 Divider()
                 Button(L("Сниппеты…")) { model.snippetPalette = true }
                     .keyboardShortcut("p", modifiers: [.command, .shift])

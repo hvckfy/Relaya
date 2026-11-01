@@ -200,6 +200,10 @@ struct HostRow: View {
         Label {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
+                    // Е.10: цвет хоста из редактора — точкой перед именем (на всех платформах).
+                    if let c = Theme.hostColors.first(where: { $0.name == host.color }) {
+                        Circle().fill(c.color).frame(width: 8, height: 8).accessibilityLabel(c.label)
+                    }
                     Text(host.alias)
                     ForEach(host.tags.prefix(2), id: \.self) { tag in
                         Circle().fill(TagStyle.color(tag)).frame(width: 6, height: 6)

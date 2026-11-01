@@ -1273,3 +1273,8 @@
 "ключ добавлен" = "key added";
 "Разложить на хосты" = "Deploy to Hosts";
 "Запасной внешний VNC-клиент; основной VNC — встроенный, во вкладке." = "Fallback external VNC client; the main VNC is built in and opens in a tab.";
+"Следующая вкладка" = "Next Tab";
+"Предыдущая вкладка" = "Previous Tab";
+"Крупнее" = "Bigger";
+"Мельче" = "Smaller";
+"Обычный размер" = "Actual Size";
