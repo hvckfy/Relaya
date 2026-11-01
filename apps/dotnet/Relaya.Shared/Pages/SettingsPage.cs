@@ -13,6 +13,14 @@ internal sealed class SettingsPage : UserControl
 {
     private readonly ContentControl body = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
     private Settings.SyncPage? sync;
+    private SelectorBar? tabs;
+    private SelectorBarItem? syncTab;
+
+    /// Открыть вкладку «Синхронизация» (кнопка синхронизации в панели при ошибке или конфликте).
+    public void ShowSync()
+    {
+        if (tabs != null && syncTab != null) tabs.SelectedItem = syncTab;
+    }
 
     public SettingsPage()
     {
@@ -33,6 +41,8 @@ internal sealed class SettingsPage : UserControl
                 : bar.SelectedItem == components ? ComponentsPage.Build() : Terminal();
         };
         body.Content = Terminal();
+        tabs = bar;
+        syncTab = syncItem;
         var root = new Grid { RowDefinitions = { new() { Height = GridLength.Auto }, new() } };
         root.Children.Add(bar);
         Grid.SetRow(body, 1);
@@ -128,6 +138,13 @@ internal sealed class SettingsPage : UserControl
         };
         list.Children.Add(Ui.Row("\uE916", L("Не спрашивать повторно"),
             L("После подтверждения сохранённый пароль какое-то время выдаётся без нового вопроса"), grace));
+        if (Platform.ConsentGrace.LockWatchMissing)
+            list.Children.Add(new InfoBar
+            {
+                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false,
+                Title = L("Блокировка экрана не сбрасывает подтверждение"),
+                Message = L("Нет gdbus (пакет libglib2.0-bin) — окно доверия закроется только по истечении срока."),
+            });
         var offerKey = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.offerKeySetup", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         offerKey.Toggled += (_, _) => Platform.Settings.Set("terminal.offerKeySetup", offerKey.IsOn ? "1" : "0");
         list.Children.Add(Ui.Row("\uE8D7", L("Предлагать вход по ключу"),

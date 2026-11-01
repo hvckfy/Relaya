@@ -520,7 +520,7 @@ public sealed partial class MainWindow : Window
         SyncButton.IsEnabled = !busy;
         var problem = states.Contains(Platform.SyncService.State.Conflict) || states.Contains(Platform.SyncService.State.Failed);
         SyncIcon.Glyph = problem ? "\uE7BA" : "\uE895";
-        SyncText.Text = busy ? L("синхронизация…") : problem ? L("Синхронизация: нужна проверка") : L("Синхронизировать");
+        SyncText.Text = busy ? L("Синхронизация…") : problem ? L("Синхронизация: нужна проверка") : L("Синхронизировать");
         ToolTipService.SetToolTip(SyncButton, problem ? L("Ошибка или конфликт — откройте «Синхронизацию» в параметрах") : L("Синхронизировать сейчас"));
     }
 
@@ -528,7 +528,13 @@ public sealed partial class MainWindow : Window
     {
         var sync = Platform.SyncService.Shared;
         var problem = sync.Profiles.Where(p => p.enabled).Any(p => sync.StateOf(p).State is Platform.SyncService.State.Conflict or Platform.SyncService.State.Failed);
-        if (problem) { ShowPage(settingsPage ??= new Pages.SettingsPage()); return; }
+        if (problem)
+        {
+            var page = settingsPage ??= new Pages.SettingsPage();
+            ShowPage(page);
+            page.ShowSync();
+            return;
+        }
         await sync.SyncAll();
     }
     private void OnPaletteKey(KeyboardAccelerator s, KeyboardAcceleratorInvokedEventArgs e) { e.Handled = true; Pages.CommandPalette.Show(this); }

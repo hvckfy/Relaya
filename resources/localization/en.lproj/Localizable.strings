@@ -1302,3 +1302,5 @@
 "Значок туннелей в области уведомлений" = "Tunnels icon in the notification area";
 "Показывается, когда есть туннели" = "Shown when there are tunnels";
 "Сбрасывать доверие к сохранённым паролям при блокировке экрана." = "Reset trust in saved passwords when the screen locks.";
+"Блокировка экрана не сбрасывает подтверждение" = "Locking the screen doesn't reset the confirmation";
+"Нет gdbus (пакет libglib2.0-bin) — окно доверия закроется только по истечении срока." = "gdbus is missing (libglib2.0-bin) — the grace window ends only when it expires.";

@@ -16,7 +16,7 @@ internal static partial class ConsentGrace
         var info = new ProcessStartInfo("gdbus") { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var a in new[] { "monitor", "--system", "--dest", "org.freedesktop.login1" }) info.ArgumentList.Add(a);
         try { monitor = Process.Start(info); }
-        catch (Exception e) { Trace.WriteLine($"ConsentGrace: gdbus недоступен — {e.Message}"); return; }
+        catch (Exception e) { Trace.WriteLine($"ConsentGrace: gdbus недоступен — {e.Message}"); LockWatchMissing = true; return; }
         if (monitor == null) return;
         var reader = monitor.StandardOutput;
         new Thread(() =>

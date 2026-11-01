@@ -26,6 +26,9 @@ internal static partial class ConsentGrace
     /// Платформа сбрасывает окно доверия при блокировке сеанса и сне (как SecretGate на Mac, S6).
     public static partial void WatchSessionLock();
 
+    /// Сброс по блокировке недоступен (Linux без gdbus) — Параметры предупреждают, что окно живёт до своего срока.
+    public static bool LockWatchMissing { get; private set; }
+
     /// Сбросить окно доверия (блокировка сеанса, выход).
     public static void Reset()
     {
