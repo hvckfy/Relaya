@@ -21,6 +21,32 @@ public sealed partial class MainWindow : Window
     /// true — окно спрятано в трей вместо закрытия; реализация своя у каждой платформы.
     // 8.6, как на Mac: значок в трее виден и хоть один туннель работает — окно прячется, туннели живут;
     // вернуть — щелчок по значку. TrayIcon — у каждой платформы свой (Windows — Shell_NotifyIcon, Linux — StatusNotifierItem).
+#if !HAS_UNO
+    private Windows.Graphics.RectInt32 passthrough;
+
+    private void UpdateTitleBarPassthrough()
+    {
+        if (Content?.XamlRoot is not { } root || Tabs.ActualWidth <= 0) return;
+        var scale = root.RasterizationScale;
+        var origin = Tabs.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0));
+        // Правый край — последняя вкладка (с кнопками прокрутки полосы), а не вся колонка: справа остаётся место для окна.
+        var right = origin.X;
+        foreach (var item in Tabs.TabItems.OfType<FrameworkElement>())
+            if (item.ActualWidth > 0)
+                right = Math.Max(right, item.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(item.ActualWidth, 0)).X);
+        right = Math.Min(right + 48, origin.X + Tabs.ActualWidth); // запас под кнопки прокрутки и перетаскивание в конец
+        var rect = new Windows.Graphics.RectInt32
+        {
+            X = (int)(origin.X * scale), Y = (int)(origin.Y * scale),
+            Width = (int)((right - origin.X) * scale), Height = (int)(Tabs.ActualHeight * scale),
+        };
+        if (rect.Equals(passthrough)) return;
+        passthrough = rect;
+        Microsoft.UI.Input.InputNonClientPointerSource.GetForWindowId(AppWindow.Id)
+            .SetRegionRects(Microsoft.UI.Input.NonClientRegionKind.Passthrough, new[] { rect });
+    }
+#endif
+
     private bool HideToTray()
     {
         if (!Platform.TrayIcon.Visible) return false;
@@ -41,7 +67,10 @@ public sealed partial class MainWindow : Window
         // по хосту, когда сразу открывается вкладка) — показывается сразу, как в Параметрах Windows.
         Page.ContentTransitions = new Microsoft.UI.Xaml.Media.Animation.TransitionCollection();
         // Вкладку можно перетащить на край терминала другой вкладки — режим плиток.
+        // Порядок вкладок меняется перетаскиванием, как на Mac.
         Tabs.CanDragTabs = true;
+        Tabs.CanReorderTabs = true;
+        Tabs.AllowDrop = true;
         Tabs.TabDragStarting += (_, e) =>
         {
             DraggedTiles = (e.Tab.Tag as Tab)?.Content as Terminal.TileHost;
@@ -60,6 +89,9 @@ public sealed partial class MainWindow : Window
         // Windows: вкладки в заголовке, как в Windows Terminal. Linux: заголовок и кнопки окна рисует система (GNOME HIG, SSD).
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
+        // Вкладки в заголовке получают мышь (перетаскивание, порядок): их полоса — Passthrough, как в Windows Terminal;
+        // окно по-прежнему перетаскивают за пустое место заголовка.
+        Tabs.LayoutUpdated += (_, _) => UpdateTitleBarPassthrough();
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Relaya.ico"));
 #endif
         Title = "Relaya";
