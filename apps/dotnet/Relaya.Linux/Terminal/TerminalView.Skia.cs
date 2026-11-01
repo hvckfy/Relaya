@@ -10,7 +10,9 @@ using Windows.UI;
 namespace Relaya.Terminal;
 
 /// Холст терминала на Linux: SkiaSharp через SKCanvasElement Uno (рисует прямо в Skia-сцену окна).
-/// Шрифт по умолчанию — «monospace»: fontconfig отдаёт моноширинный шрифт системы (GNOME HIG).
+/// Шрифт по умолчанию — «monospace» системы (GNOME HIG). SkiaSharp сам алиасы fontconfig не разрешает (Л1),
+/// поэтому семейство выбирается явно: заданное, если оно моноширинное, иначе `fc-match monospace`, иначе список кандидатов.
+/// Текст в любом случае ставится по сетке ячеек — пропорциональный шрифт не сдвигает курсор и рамки.
 internal sealed partial class TerminalView
 {
     private const string DefaultFont = "monospace";
@@ -61,6 +63,41 @@ internal sealed partial class TerminalView
     // Шрифты кэшируются (П12): поиск в fontconfig — на смену шрифта или размера, а не на каждый кадр.
     private readonly Dictionary<(bool, bool), SKFont> fonts = new();
     private (string Family, float Size) fontKey;
+    private string resolvedFamily = "";
+
+    private static readonly string[] MonoCandidates =
+        { "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono", "Source Code Pro", "Hack" };
+
+    // Моноширинное семейство для запрошенного: само, если моноширинное; иначе fc-match monospace; иначе первый кандидат.
+    private static string ResolveFamily(string requested)
+    {
+        static string? Fixed(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            using var t = SKFontManager.Default.MatchFamily(name);
+            return t is { IsFixedPitch: true } ? t.FamilyName : null;
+        }
+        if (requested != DefaultFont && Fixed(requested) is { } chosen) return chosen;
+        if (Fixed(FcMatchMonospace()) is { } system) return system;
+        foreach (var c in MonoCandidates) if (Fixed(c) is { } found) return found;
+        return requested;
+    }
+
+    private static string? FcMatchMonospace()
+    {
+        try
+        {
+            var info = new System.Diagnostics.ProcessStartInfo("fc-match") { UseShellExecute = false, RedirectStandardOutput = true };
+            info.ArgumentList.Add("-f");
+            info.ArgumentList.Add("%{family[0]}");
+            info.ArgumentList.Add("monospace");
+            using var p = System.Diagnostics.Process.Start(info)!;
+            var name = p.StandardOutput.ReadToEnd().Trim();
+            p.WaitForExit(2000);
+            return name.Length > 0 ? name : null;
+        }
+        catch (System.Exception) { return null; }
+    }
 
     private SKFont Font(bool bold = false, bool italic = false)
     {
@@ -69,9 +106,11 @@ internal sealed partial class TerminalView
             foreach (var f in fonts.Values) f.Dispose();
             fonts.Clear();
             fontKey = (fontFamily, fontSize);
+            resolvedFamily = ResolveFamily(fontFamily);
+            Trace($"font: «{fontFamily}» → «{resolvedFamily}» {fontSize}");
         }
         if (!fonts.TryGetValue((bold, italic), out var font))
-            fonts[(bold, italic)] = font = new SKFont(SKTypeface.FromFamilyName(fontFamily,
+            fonts[(bold, italic)] = font = new SKFont(SKTypeface.FromFamilyName(resolvedFamily,
                 bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
                 italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright), fontSize) { Subpixel = true };
         return font;
@@ -115,13 +154,17 @@ internal sealed partial class TerminalView
             canvas.DrawLine((float)x1, (float)y1, (float)x2, (float)y2, paint);
         }
 
-        // y — верх ячейки, как у Win2D; Skia рисует от базовой линии.
+        // y — верх ячейки, как у Win2D; Skia рисует от базовой линии. Прогон ставится по символу в ячейку (x + i·cellW):
+        // даже если шрифт окажется пропорциональным, сетка, рамки и курсор не разъезжаются (Л1).
         public void Text(string text, double x, double y, Color color, bool bold, bool italic)
         {
             var font = view.Font(bold, italic);
             paint.Style = SKPaintStyle.Fill;
             paint.Color = C(color);
-            canvas.DrawText(text, (float)x, (float)(y - font.Metrics.Ascent), font, paint);
+            var baseline = (float)(y - font.Metrics.Ascent);
+            if (text.Length == 1 || char.IsSurrogate(text[0])) { canvas.DrawText(text, (float)x, baseline, font, paint); return; }
+            for (var i = 0; i < text.Length; i++)
+                if (text[i] != ' ') canvas.DrawText(text[i].ToString(), (float)(x + i * view.cellW), baseline, font, paint);
         }
 
         public void Dispose() => paint.Dispose();
