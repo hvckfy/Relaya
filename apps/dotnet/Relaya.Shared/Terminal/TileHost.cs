@@ -60,6 +60,14 @@ internal sealed class TileHost : UserControl, IDisposable
 
     public TerminalView? Active => active?.View;
     public string? ActiveAlias => active?.Alias;
+    public SshSession? ActiveSession => active?.Session;
+    public bool IsEmpty => panes.Count == 0;
+
+    /// Закрыть активную плитку (сессию не завершать — tmux на сервере остаётся).
+    public void CloseActive()
+    {
+        if (active is { } p) Close(p);
+    }
 
     /// Переподключить активную плитку (Ctrl+Shift+R).
     public void ReconnectActive()

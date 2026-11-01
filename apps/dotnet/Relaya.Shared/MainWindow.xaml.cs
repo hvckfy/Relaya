@@ -351,6 +351,29 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(right);
         menu.Items.Add(down);
         menu.Items.Add(new MenuFlyoutSeparator());
+        // Е.11 и 4.16, как на Mac: tmux у открытой вкладки (её активной плитки).
+        var tmux = new ToggleMenuFlyoutItem { Text = L("Сессия tmux") };
+        ToolTipService.SetToolTip(tmux, L("Вкладка переподключится: при включении — внутри tmux, при выключении сессия на сервере закроется."));
+        tmux.Click += (_, _) => tiles.ActiveSession?.SetTmux(tmux.IsChecked);
+        var keep = new MenuFlyoutItem { Text = L("Отсоединить и оставить на сервере") };
+        ToolTipService.SetToolTip(keep, L("Сессия tmux продолжит работать; сервер закроет её через сутки без подключения."));
+        keep.Click += async (_, _) =>
+        {
+            if (tiles.ActiveSession is not { } s) return;
+            var r = await s.KeepTmuxAsync();
+            if (r.Status != 0) { await Pages.Ui.ShowError(Content.XamlRoot, L("Команда не выполнена."), r.Stderr.Trim()); return; }
+            tiles.CloseActive();
+            if (tiles.IsEmpty) CloseTabOf(tiles);
+        };
+        menu.Opening += (_, _) =>
+        {
+            var on = tiles.ActiveSession?.UsesTmux == true;
+            tmux.IsChecked = on;
+            keep.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        };
+        menu.Items.Add(tmux);
+        menu.Items.Add(keep);
+        menu.Items.Add(new MenuFlyoutSeparator());
         var save = new MenuFlyoutItem { Text = L("Сохранить раскладку…") };
         save.Click += async (_, _) => await SaveLayout(tiles);
         menu.Items.Add(save);

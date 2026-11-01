@@ -21,6 +21,28 @@ internal sealed class SshSession : IDisposable
 
     /// Имя tmux-сессии вкладки — чтобы уборка старых сессий не трогала открытые.
     public string TmuxName => tmuxName;
+    // Переключатель вкладки (Е.11) сильнее настройки хоста; null — как в хосте.
+    private bool? tmuxOverride;
+    public bool UsesTmux => tmuxOverride ?? Relaya.Data.AppState.Host(alias)?.tmux == true;
+
+    /// Е.11, как на Mac: вкладка переподключается — при включении внутри tmux, при выключении сессия на сервере закрывается.
+    public void SetTmux(bool on)
+    {
+        if (UsesTmux == on) return;
+        tmuxOverride = on;
+        Start();
+        if (!on) _ = KillTmuxAsync();
+    }
+
+    private async System.Threading.Tasks.Task KillTmuxAsync()
+    {
+        var r = await Relaya.Data.AppState.RunOnHost(alias, uniffi.relaya_core.RelayaCoreMethods.TmuxKillCommand(new() { tmuxName }));
+        if (r.Status != 0) Relaya.Terminal.TerminalView.Trace("tmux kill: " + r.Stderr.Trim());
+    }
+
+    /// 4.16 «Отсоединить и оставить на сервере»: сессия живёт сутки без подключения, уборка её не трогает.
+    public System.Threading.Tasks.Task<Relaya.Data.AppState.Result> KeepTmuxAsync() =>
+        Relaya.Data.AppState.RunOnHost(alias, uniffi.relaya_core.RelayaCoreMethods.TmuxKeepCommand(tmuxName));
 
     /// Сессия завершилась или переподключилась — вкладка меняет иконку.
     public event Action<bool>? StateChanged;
@@ -119,7 +141,7 @@ internal sealed class SshSession : IDisposable
                 ? uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().ToArray()
                 : [];
             string[] argv = [ssh, .. options, alias];
-            if (host?.tmux == true)
+            if (UsesTmux)
             {
                 var ttl = long.TryParse(Relaya.Platform.Settings.Get("tmux.idle", "60"), out var m) ? m : 60;
                 var attach = uniffi.relaya_core.RelayaCoreMethods.TmuxAttachCommand(tmuxName, ttl);
