@@ -54,6 +54,8 @@ public struct SFTPClient: Sendable {
             args += ["-o", "BatchMode=yes"]
         }
         args += ["-b", "-", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"]
+        // Переходы по папкам — через общее соединение хоста, а не новый вход на каждый шаг (П-9).
+        args += SSHMux.options(alias: alias)
         let r = try await ProcessRunner.run("/usr/bin/sftp", args + [alias],
                                             environment: env, input: commands.joined(separator: "\n") + "\n")
         guard r.succeeded else {

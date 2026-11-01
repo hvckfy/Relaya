@@ -676,9 +676,11 @@ final class AppModel {
     }
 
     /// Аргументы и окружение ssh для хоста — общие для exec и потоковых передач SFTP.
-    func invocation(for host: SSHHost, interactive: Bool, reason: String) async -> SSHInvocation {
+    /// `multiplex` — служебный вызов идёт через общее соединение хоста (П-9); окна tmux — своим.
+    func invocation(for host: SSHHost, interactive: Bool, reason: String, multiplex: Bool = true) async -> SSHInvocation {
         let h = current(host)
         var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10"]
+        if multiplex { args += SSHMux.options(alias: h.alias) }
         var env: [String: String] = [:]
         var usePassword = false
         if !h.usesKey, keychain.hasPassword(for: h.keychainAccount) {
@@ -896,7 +898,7 @@ final class AppModel {
             if let e = client.error { self.alertMessage = e }
         }
         tmuxClients.append(client)
-        client.start(await invocation(for: h, interactive: true, reason: L("Открыть tmux на %@", h.alias)))
+        client.start(await invocation(for: h, interactive: true, reason: L("Открыть tmux на %@", h.alias), multiplex: false))
     }
 
     /// Убрать вкладку без побочных действий (окно tmux уже закрыто на сервере).
