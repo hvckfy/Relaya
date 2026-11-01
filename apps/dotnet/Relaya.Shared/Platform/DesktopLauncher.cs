@@ -31,6 +31,21 @@ internal static partial class DesktopLauncher
         if (!OpenInTab(d)) _ = OpenExternal(d, root);
     }
 
+    /// 9.15, как на Mac: стол в отдельном окне — своё подключение, закрытие окна его завершает.
+    public static void OpenInWindow(RemoteDesktop d)
+    {
+        Microsoft.UI.Xaml.Controls.UserControl view;
+        IDisposable owner;
+        var window = new Microsoft.UI.Xaml.Window { Title = d.name };
+        if (d.kind == DesktopKind.Rdp) { var r = new Desktop.RdpView(d) { HostWindow = window }; view = r; owner = r; }
+        else { var v = new Desktop.VncView(d); view = v; owner = v; }
+        // Тема — как у главного окна (12.1).
+        if (MainWindow.Current?.Content is Microsoft.UI.Xaml.FrameworkElement main) view.RequestedTheme = main.RequestedTheme;
+        window.Content = view;
+        window.Closed += (_, _) => owner.Dispose();
+        window.Activate();
+    }
+
     /// Внешний клиент; исключения ловятся здесь и пишутся в трассировку — процесс не падает (аудит Н13, ревью 4).
     /// Task, а не async void: вызывающие кнопки отбрасывают результат явно.
     public static async Task OpenExternal(RemoteDesktop d, XamlRoot root)

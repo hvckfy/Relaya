@@ -215,6 +215,7 @@ public sealed partial class MainWindow : Window
                 var menu = new MenuFlyout();
                 void Add(string text, Action act) { var mi = new MenuFlyoutItem { Text = text }; mi.Click += (_, _) => act(); menu.Items.Add(mi); }
                 Add(L("Подключить"), () => Platform.DesktopLauncher.Open(d, Content.XamlRoot));
+                Add(L("Открыть в отдельном окне"), () => Platform.DesktopLauncher.OpenInWindow(d));
                 Add(d.kind == DesktopKind.Rdp ? Platform.PlatformText.ExternalRdp() : Platform.PlatformText.ExternalVnc(),
                     () => _ = Platform.DesktopLauncher.OpenExternal(d, Content.XamlRoot));
                 menu.Items.Add(new MenuFlyoutSeparator());

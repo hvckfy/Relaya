@@ -443,11 +443,16 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
     // --- Во весь экран: окно Relaya целиком (AppWindow FullScreen), выход — F11 или Ctrl+Alt+Break ---
 
-    private void ToggleFullScreen() =>
-        SetFullScreen(MainWindow.Current?.AppWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen);
+    /// Окно, в котором показан стол (9.15: отдельное окно); по умолчанию — главное.
+    public Microsoft.UI.Xaml.Window? HostWindow { get; set; }
 
-    private static void SetFullScreen(bool on) =>
-        MainWindow.Current?.AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Default);
+    private Microsoft.UI.Windowing.AppWindow? Host => (HostWindow ?? MainWindow.Current)?.AppWindow;
+
+    private void ToggleFullScreen() =>
+        SetFullScreen(Host?.Presenter.Kind != AppWindowPresenterKind.FullScreen);
+
+    private void SetFullScreen(bool on) =>
+        Host?.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Default);
 
     // --- Буфер обмена ---
 

@@ -33,6 +33,7 @@ internal sealed class DesktopsPage : UserControl
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             actions.Children.Add(Ui.Button(L("Открыть"), () => Platform.DesktopLauncher.Open(d, XamlRoot), accent: true));
             // Запасной путь — внешний клиент платформы (mstsc / VNC-клиент Windows, FreeRDP / vncviewer / Remmina на Linux).
+            actions.Children.Add(Ui.IconButton("\uE78B", L("Открыть в отдельном окне"), () => Platform.DesktopLauncher.OpenInWindow(d)));
             actions.Children.Add(Ui.IconButton("\ue8a7", d.kind == DesktopKind.Rdp ? Platform.PlatformText.ExternalRdp() : Platform.PlatformText.ExternalVnc(),
                 () => Platform.DesktopLauncher.OpenExternal(d, XamlRoot)));
             actions.Children.Add(Ui.IconButton("", L("Изменить"), async () => await Edit(d)));
