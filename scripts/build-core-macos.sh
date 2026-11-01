@@ -16,16 +16,20 @@ export MACOSX_DEPLOYMENT_TARGET=15.0
 # Встроенный RDP (FreeRDP 3): с FREERDP_DIR_ARM64 и FREERDP_DIR_X64 (каталоги vcpkg arm64-osx-dynamic и
 # x64-osx-dynamic, см. .github/actions/freerdp) ядро собирается с rdp-freerdp, а dylib FreeRDP/OpenSSL склеиваются
 # в universal и кладутся в $OUT/freerdp — их линкует и встраивает в .app Swift-сборка. Без них — как раньше.
+# VNC на RoyalVNCKit: с ROYALVNC_DIR (.github/actions/royalvnc — universal libRoyalVNCKit.dylib, minos 15) ядро
+# собирается с vnc-royal, dylib кладётся в $OUT/freerdp рядом с FreeRDP (каталог нативных dylib для Contents/Frameworks).
+VNC_FEATURE=""
+[[ -n "${ROYALVNC_DIR:-}" ]] && VNC_FEATURE=",vnc-royal"
 if [[ -n "${FREERDP_DIR_ARM64:-}" && -n "${FREERDP_DIR_X64:-}" ]]; then
   FREERDP_FOR_aarch64_apple_darwin="$FREERDP_DIR_ARM64"
   FREERDP_FOR_x86_64_apple_darwin="$FREERDP_DIR_X64"
   for T in "${TARGETS[@]}"; do
     var="FREERDP_FOR_${T//-/_}"
-    FREERDP_DIR="${!var}" cargo build --release --lib --target "$T" --features rdp-freerdp
+    FREERDP_DIR="${!var}" cargo build --release --lib --target "$T" --features "rdp-freerdp$VNC_FEATURE"
   done
   FREERDP_UNIVERSAL=1
 else
-  for T in "${TARGETS[@]}"; do cargo build --release --lib --target "$T"; done
+  for T in "${TARGETS[@]}"; do cargo build --release --lib --target "$T" ${VNC_FEATURE:+--features "${VNC_FEATURE#,}"}; done
   FREERDP_UNIVERSAL=0
 fi
 
@@ -38,6 +42,7 @@ if [[ "$FREERDP_UNIVERSAL" == 1 ]]; then
     [[ -L "$lib" ]] && { cp -P "$lib" "$OUT/freerdp/"; continue; }
     lipo -create "$lib" "$FREERDP_DIR_X64/lib/$name" -output "$OUT/freerdp/$name"
   done
+  [[ -n "${ROYALVNC_DIR:-}" ]] && cp "$ROYALVNC_DIR/libRoyalVNCKit.dylib" "$OUT/freerdp/"
   echo "freerdp: $OUT/freerdp ($(ls "$OUT/freerdp" | wc -l | tr -d ' ') files)"
 fi
 

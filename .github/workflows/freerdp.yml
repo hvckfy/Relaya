@@ -6,7 +6,7 @@ name: FreeRDP
 on:
   push:
     branches: ["**"]
-    paths: ["core/native/**", ".github/workflows/freerdp.yml", ".github/actions/freerdp/**", "scripts/build-core-macos.sh", "scripts/build-core-linux.sh", "core/build.rs"]
+    paths: ["core/native/**", ".github/workflows/freerdp.yml", ".github/actions/freerdp/**", "scripts/build-core-macos.sh", "scripts/build-core-linux.sh", "core/build.rs", ".github/actions/royalvnc/**"]
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +51,7 @@ jobs:
             core/native/vcpkg_installed/${{ matrix.triplet }}/share/freerdp*
           retention-days: 90
 
-  # Ядро для Mac с движком FreeRDP: обе архитектуры, universal-библиотеки FreeRDP. Swift-сборку не трогает.
+  # Ядро для Mac с движками FreeRDP и RoyalVNC: обе архитектуры, universal-библиотеки FreeRDP и RoyalVNCKit. Swift-сборку не трогает.
   core-macos:
     runs-on: macos-15
     steps:
@@ -66,14 +66,16 @@ jobs:
         uses: ./.github/actions/freerdp
         with:
           triplet: x64-osx-dynamic
-      - name: Build core with rdp-freerdp
+      - name: RoyalVNCKit
+        uses: ./.github/actions/royalvnc
+      - name: Build core with rdp-freerdp and vnc-royal
         env:
           FREERDP_DIR_ARM64: ${{ steps.arm.outputs.dir }}
           FREERDP_DIR_X64: ${{ steps.x64.outputs.dir }}
         run: |
           scripts/build-core-macos.sh
           ls -la core/build/freerdp
-          lipo -info core/build/librelaya_core.a
+          lipo -info core/build/librelaya_core.a core/build/freerdp/libRoyalVNCKit.dylib
           grep -c "class RemoteSession\|func rdp(" apps/swift/Sources/RelayaRust/relaya_core.swift
 
   # Ядро для Linux с движком FreeRDP (и RoyalVNC, как в linux.yml): проверка линковки и привязок C#.

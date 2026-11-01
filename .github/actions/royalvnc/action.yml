@@ -1,7 +1,8 @@
 name: RoyalVNCKit
 description: >
   RoyalVNCKit (MIT) с C API для ядра (feature vnc-royal), закреплённый коммит; на Linux — одна .so с
-  -static-stdlib, на Windows — dll и рантайм Swift в PATH. Кэш по коммиту и версии Swift.
+  -static-stdlib, на Windows — dll и рантайм Swift в PATH, на macOS — universal dylib (arm64 и x86_64, minos 15)
+  на Swift из Xcode (рантайм — в системе). Кэш по коммиту и версии Swift.
 inputs:
   commit:
     description: коммит royalapplications/royalvnc (Package.resolved в нём закрепляет CryptoSwift a59b4d9 и Cstb 1.0.6)
@@ -66,12 +67,26 @@ runs:
         Push-Location $src
         if ($IsLinux) {
           swift build -c release --product RoyalVNCKit -Xswiftc -static-stdlib
+        } elseif ($IsMacOS) {
+          # По архитектуре с явным minos 15 (в манифесте RoyalVNC — macOS 11), потом lipo в одну dylib.
+          foreach ($arch in "arm64", "x86_64") {
+            swift build -c release --product RoyalVNCKit --triple "$arch-apple-macosx15.0"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
         } else {
           swift build -c release --product RoyalVNCKit
         }
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Pop-Location
         New-Item -ItemType Directory -Force $out | Out-Null
+        if ($IsMacOS) {
+          lipo -create "$src/.build/arm64-apple-macosx/release/libRoyalVNCKit.dylib" `
+            "$src/.build/x86_64-apple-macosx/release/libRoyalVNCKit.dylib" -output "$out/libRoyalVNCKit.dylib"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          lipo -info "$out/libRoyalVNCKit.dylib"
+          otool -l "$out/libRoyalVNCKit.dylib" | grep -A3 LC_BUILD_VERSION | grep minos
+          otool -D "$out/libRoyalVNCKit.dylib"
+        }
         Get-ChildItem "$src/.build/release" -File | Where-Object { $_.Name -match '^(lib)?RoyalVNCKit\.(so|dll|lib)$' } |
           Copy-Item -Destination $out
         Get-ChildItem $out | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name }
@@ -82,4 +97,6 @@ runs:
         $dir = (Join-Path $env:RUNNER_TEMP "royalvnc-out").Replace('\','/')
         "dir=$dir" | Out-File -Append $env:GITHUB_OUTPUT
         "ROYALVNC_DIR=$dir" | Out-File -Append $env:GITHUB_ENV
-        if ($IsWindows) { $dir | Out-File -Append $env:GITHUB_PATH } else { "LD_LIBRARY_PATH=$dir" | Out-File -Append $env:GITHUB_ENV }
+        if ($IsWindows) { $dir | Out-File -Append $env:GITHUB_PATH }
+        elseif ($IsMacOS) { "DYLD_LIBRARY_PATH=$dir" | Out-File -Append $env:GITHUB_ENV }
+        else { "LD_LIBRARY_PATH=$dir" | Out-File -Append $env:GITHUB_ENV }
