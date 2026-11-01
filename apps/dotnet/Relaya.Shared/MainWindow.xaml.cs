@@ -97,7 +97,15 @@ public sealed partial class MainWindow : Window
         SetTitleBar(TitleBar);
         // Вкладки в заголовке получают мышь (перетаскивание, порядок): их полоса — Passthrough, как в Windows Terminal;
         // окно по-прежнему перетаскивают за пустое место заголовка.
-        Tabs.LayoutUpdated += (_, _) => UpdateTitleBarPassthrough();
+        Tabs.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
+        // Новая вкладка и смена её заголовка меняют ширину полосы: пересчёт по размеру самих вкладок, а не каждой раскладки.
+        Tabs.TabItemsChanged += (_, e) =>
+        {
+            if (e.CollectionChange == Windows.Foundation.Collections.CollectionChange.ItemInserted
+                && Tabs.TabItems[(int)e.Index] is FrameworkElement tab)
+                tab.SizeChanged += (_, _) => UpdateTitleBarPassthrough();
+            DispatcherQueue.TryEnqueue(UpdateTitleBarPassthrough);
+        };
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Relaya.ico"));
 #endif
         Title = "Relaya";
