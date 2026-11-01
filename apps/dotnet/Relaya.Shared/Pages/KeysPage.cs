@@ -47,6 +47,7 @@ internal sealed class KeysPage : UserControl
                 install.Items.Add(item);
             }
             actions.Children.Add(new DropDownButton { Content = L("Установить на хост"), Flyout = install });
+            actions.Children.Add(Ui.Button(L("Разложить на хосты…"), async () => await Deploy(pub)));
             // «…»: Проводник, ssh-agent, удаление в Корзину (7.3, 7.6, 7.7).
             var keyPath = Path.Combine(AppState.SshDir, name);
             var more = new MenuFlyout();
@@ -149,6 +150,39 @@ internal sealed class KeysPage : UserControl
         var hosts = servers.Children.Concat(gits.Children).OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
         AppState.WriteConfig(RelayaCoreMethods.ConfigBindKey(AppState.ConfigText(), key, hosts));
         await Build();
+    }
+
+    // «Разложить на хосты…» (7.5): ключ в authorized_keys выбранных хостов скриптом ядра, без терминала.
+    // Пароль хоста — через askpass из хранилища; без сохранённого пароля — входом, который уже работает (ключ, агент).
+    private async Task Deploy(string pub)
+    {
+        var boxes = AppState.Hosts.Select(h => new CheckBox { Content = h.alias, Tag = h.alias }).ToList();
+        var list = new StackPanel { Spacing = 4 };
+        boxes.ForEach(list.Children.Add);
+        var ask = new ContentDialog
+        {
+            Title = L("Разложить %@ на хосты", Path.GetFileName(pub)),
+            Content = new StackPanel
+            {
+                Spacing = 8, MinWidth = 420,
+                Children = { Ui.Secondary(L("Открытый ключ допишется в ~/.ssh/authorized_keys на каждом выбранном хосте (без дублей).")), new ScrollViewer { Content = list, MaxHeight = 320 } },
+            },
+            PrimaryButtonText = L("Разложить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+        };
+        if (await ask.ShowAsync() != ContentDialogResult.Primary) return;
+        var key = File.ReadAllText(pub).Trim();
+        var results = await Task.WhenAll(boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Tag).Select(async alias =>
+        {
+            var password = Platform.CredentialStore.Has(alias);
+            var r = await AppState.Run(AppState.SshExe, RelayaCoreMethods.KeyInstallSshArgs(alias, password), password ? alias : null, key + "\n", 60);
+            return (alias, r);
+        }));
+        if (results.Length == 0) return;
+        var report = new StackPanel { Spacing = 8 };
+        foreach (var (alias, r) in results)
+            report.Children.Add(Ui.Row(r.Status == 0 ? "\uE73E" : "\uE711", alias,
+                r.Status == 0 ? L("ключ добавлен") : Platform.SshErrors.Describe(r.Stderr, L("ssh завершился с кодом %@", r.Status))));
+        await new ContentDialog { Title = L("Разложить на хосты"), Content = new ScrollViewer { Content = report, MaxHeight = 480 }, CloseButtonText = L("Закрыть"), XamlRoot = XamlRoot }.ShowAsync();
     }
 
     private async Task ToggleAgent(string keyPath, bool remove)

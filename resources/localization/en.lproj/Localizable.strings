@@ -1270,3 +1270,6 @@
 "Выполнить «%@» на хостах" = "Run “%@” on hosts";
 "готово" = "done";
 "(нет вывода)" = "(no output)";
+"Открытый ключ допишется в ~/.ssh/authorized_keys на каждом выбранном хосте (без дублей)." = "The public key is appended to ~/.ssh/authorized_keys on each selected host (no duplicates).";
+"ключ добавлен" = "key added";
+"Разложить на хосты" = "Deploy to Hosts";
