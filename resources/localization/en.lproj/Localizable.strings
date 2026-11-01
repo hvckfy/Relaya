@@ -1209,3 +1209,5 @@
 "Убрать ключ %@" = "Remove key %@";
 "Добавить ключ" = "Add Key";
 "Окно Relaya разворачивается во весь экран при подключении" = "The Relaya window goes full screen when connected";
+"Подтвердить ключ сервера…" = "Confirm Server Key…";
+"Откроет терминал к серверу репозитория: сверьте отпечаток и подтвердите, затем синхронизируйте снова." = "Opens a terminal to the repository server: check the fingerprint, confirm it, then sync again.";

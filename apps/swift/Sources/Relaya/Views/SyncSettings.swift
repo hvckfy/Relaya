@@ -109,6 +109,19 @@ struct SyncSettings: View {
 
 private struct ProfileForm: View {
     @Environment(AppModel.self) private var model
+
+    /// Сервер из адреса репозитория: `git@host:path`, `ssh://user@host:port/path`. https — без ssh, nil.
+    static func sshTarget(_ remote: String) -> (user: String?, host: String, port: Int?)? {
+        let r = remote.trimmingCharacters(in: .whitespaces)
+        if r.hasPrefix("ssh://") {
+            let rest = r.dropFirst(6).split(separator: "/", maxSplits: 1).first.map(String.init) ?? ""
+            let d = Destination.parse(rest)
+            return d.host.isEmpty ? nil : d
+        }
+        guard !r.contains("://"), let colon = r.firstIndex(of: ":") else { return nil }
+        let d = Destination.parse(String(r[..<colon]))
+        return d.host.isEmpty ? nil : d
+    }
     @Binding var profile: Sync.Profile
     @Binding var passphrase: String
     @State private var showConflict = false
@@ -208,6 +221,17 @@ private struct ProfileForm: View {
                             Button(L("Разобрать…")) { showConflict = true }
                         case .failed(let m):
                             Text(m).foregroundStyle(.red).lineLimit(3).textSelection(.enabled)
+                            // UI-M7: сервер репозитория ещё не в known_hosts — подтвердить его ключ в обычном окне
+                            // первого подключения (отпечаток виден), а не доверять вслепую.
+                            if m.contains(L("Сервер ещё не знаком")), let target = Self.sshTarget(profile.remote) {
+                                Button(L("Подтвердить ключ сервера…")) {
+                                    model.connect(SSHHost(alias: target.host, hostName: target.host, user: target.user, port: target.port))
+                                    NSApp.activate()
+                                    NSApp.windows.first { $0.canBecomeMain && $0.identifier?.rawValue != "com_apple_SwiftUI_Settings_window" }?
+                                        .makeKeyAndOrderFront(nil)
+                                }
+                                .help(L("Откроет терминал к серверу репозитория: сверьте отпечаток и подтвердите, затем синхронизируйте снова."))
+                            }
                         }
                     }
                 }
