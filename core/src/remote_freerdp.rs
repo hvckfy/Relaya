@@ -24,6 +24,7 @@ struct Config {
     gateway_domain: *const c_char,
     audio: c_int,
     h264: c_int,
+    config_path: *const c_char,
 }
 
 #[repr(C)]
@@ -197,6 +198,16 @@ extern "C" fn on_closed(user: *mut c_void, kind: c_int, message: *const c_char) 
 fn cstr(s: &str) -> CString {
     CString::new(s.replace('\0', "")).unwrap_or_default()
 }
+/// Каталог хранилища сертификатов FreeRDP на одну сессию (0700, удаляется после неё). Не создался — None:
+/// FreeRDP возьмёт свой путь по умолчанию, подключение всё равно пойдёт через on_cert.
+fn session_store() -> Option<std::path::PathBuf> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    let dir = crate::openh264::copies_root().join(format!("relaya-rdp-{}-{n}", std::process::id()));
+    crate::webdav_policy::create_private_dir(&dir).ok().map(|_| dir)
+}
+
 fn opt(s: &Option<String>) -> Option<CString> {
     s.as_deref().filter(|v| !v.is_empty()).map(cstr)
 }
@@ -232,6 +243,9 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
         return;
     }
     let c = session.config().clone();
+    // Пустой приватный каталог на сессию: сертификат каждый раз решает on_cert (TOFU ядра), а не файлы FreeRDP.
+    let store = session_store();
+    let store_c = store.as_ref().map(|p| p.to_string_lossy().into_owned()).and_then(|p| CString::new(p).ok());
     let h264 = h264_enabled(c.h264_library_path.as_deref());
     let (host, user, password) = (cstr(&c.host), cstr(&c.user), cstr(&c.password));
     let (domain, gw_host, gw_user, gw_password, gw_domain) =
@@ -251,6 +265,7 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
         gateway_domain: ptr(&gw_domain),
         audio: session.audio_listener().is_some().into(),
         h264: h264.into(),
+        config_path: ptr(&store_c),
     };
     let ctx = Box::into_raw(Box::new(Ctx {
         session: session.clone(),
@@ -285,6 +300,7 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
     }
     *session.native.locked() = Some(Native(raw));
     let (ctx_addr, raw_addr) = (ctx as usize, raw as usize);
+    let store_left = store.clone();
     let spawned = std::thread::Builder::new().name("relaya-freerdp".into()).spawn(move || {
         unsafe { relaya_rdp_run(raw_addr as *mut RawRdp) };
         let ctx = unsafe { Box::from_raw(ctx_addr as *mut Ctx) };
@@ -298,9 +314,15 @@ pub(crate) fn connect(session: Arc<RemoteSession>) {
         if let Some(Native(p)) = native {
             unsafe { relaya_rdp_free(p) }
         }
+        if let Some(dir) = &store {
+            let _ = std::fs::remove_dir_all(dir);
+        }
         ctx.session.listener().on_closed(close);
     });
     if let Err(e) = spawned {
+        if let Some(dir) = &store_left {
+            let _ = std::fs::remove_dir_all(dir);
+        }
         // Поток не создан: освободить сессию и контекст, иначе клиент навсегда останется в «Подключение…».
         let native = session.native.locked().take();
         if let Some(Native(p)) = native {

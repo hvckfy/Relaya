@@ -39,6 +39,7 @@ struct relaya_rdp
 {
 	relaya_rdp_config cfg;
 	char* host;
+	char* config_path;
 	char* user;
 	char* password;
 	char* domain;
@@ -513,6 +514,9 @@ static int client_stop(rdpContext* context)
 static BOOL apply_settings(relaya_rdp* r, rdpSettings* s)
 {
 	BOOL ok = TRUE;
+	/* Свой пустой каталог: хранилище FreeRDP не пишет ~/.config/freerdp и не решает за verify_cert («host key changed»). */
+	if (r->config_path)
+		ok &= freerdp_settings_set_string(s, FreeRDP_ConfigPath, r->config_path);
 	ok &= freerdp_settings_set_string(s, FreeRDP_ServerHostname, r->host);
 	ok &= freerdp_settings_set_uint32(s, FreeRDP_ServerPort, r->cfg.port ? r->cfg.port : 3389);
 	ok &= freerdp_settings_set_string(s, FreeRDP_Username, r->user);
@@ -585,6 +589,7 @@ relaya_rdp* relaya_rdp_new(const relaya_rdp_config* config, const relaya_rdp_cal
 		return NULL;
 	r->cfg = *config;
 	r->host = dup_or_null(config->host);
+	r->config_path = dup_or_null(config->config_path);
 	r->user = dup_or_null(config->user);
 	r->password = dup_or_null(config->password);
 	r->domain = dup_or_null(config->domain);
@@ -775,6 +780,7 @@ void relaya_rdp_free(relaya_rdp* r)
 	CloseHandle(r->wake);
 	DeleteCriticalSection(&r->lock);
 	free(r->host);
+	free(r->config_path);
 	free(r->user);
 	free(r->password);
 	free(r->domain);

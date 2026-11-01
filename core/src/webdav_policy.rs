@@ -258,7 +258,7 @@ fn temp_dir() -> PathBuf {
 }
 
 /// Создать каталог 0700 или принять уже свой: чужой (не каталог, ссылка, другие права) — ошибка, а не запись в него.
-fn create_private_dir(dir: &std::path::Path) -> Result<(), CoreError> {
+pub(crate) fn create_private_dir(dir: &std::path::Path) -> Result<(), CoreError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};

@@ -27,6 +27,7 @@ typedef struct
 	const char* gateway_domain;
 	int audio;                   /* 1 — просить звук у сервера */
 	int h264;                    /* 1 — H.264 (AVC420/444) в графическом конвейере */
+	const char* config_path;     /* NULL — по умолчанию; каталог для хранилища сертификатов FreeRDP */
 } relaya_rdp_config;
 
 enum relaya_rdp_close
