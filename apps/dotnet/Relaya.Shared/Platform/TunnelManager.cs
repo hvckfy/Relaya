@@ -74,7 +74,7 @@ internal sealed class TunnelManager
                     if (attempt <= 8)
                     {
                         var delay = TimeSpan.FromSeconds(Math.Min(60, 5 * Math.Pow(2, attempt - 1)));
-                        _ = System.Threading.Tasks.Task.Delay(delay).ContinueWith(_ =>
+                        _ = System.Threading.Tasks.Task.Delay(delay).ContinueWith(task =>
                         {
                             if (running.TryGetValue(t.id, out var now) && now.Process == p && now.State == State.Failed) Start(t);
                         });
@@ -85,7 +85,7 @@ internal sealed class TunnelManager
             Changed?.Invoke();
         };
         // ExitOnForwardFailure: если через 3 секунды ssh жив — туннель поднят.
-        System.Threading.Tasks.Task.Delay(3000).ContinueWith(_ =>
+        System.Threading.Tasks.Task.Delay(3000).ContinueWith(task =>
         {
             if (!p.HasExited && running.TryGetValue(t.id, out var cur) && cur.Process == p)
             {
