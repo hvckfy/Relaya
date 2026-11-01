@@ -38,24 +38,46 @@ internal sealed partial class RdpView
 
     private static partial string SavePasswordText() => L("Сохранить в диспетчере учётных данных");
 
+    // Одна картинка на сессию (П8): при изменениях — SetPixelBytes только для изменённых прямоугольников,
+    // пересоздание — при новом размере или когда изменилось почти всё.
+    private CanvasBitmap? screen;
+
     private void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         var ds = args.DrawingSession;
         ds.Clear(Microsoft.UI.Colors.Black);
-        CanvasBitmap? bitmap = null;
         try
         {
             Rect at;
             lock (frameLock)
             {
                 if (remoteW == 0 || remoteH == 0) return;
-                bitmap = CanvasBitmap.CreateFromBytes(sender, buffer, remoteW, remoteH,
-                    DirectXPixelFormat.B8G8R8A8UIntNormalized, 96, CanvasAlphaMode.Ignore);
+                if (fullDirty || screen == null || screen.SizeInPixels.Width != remoteW || screen.SizeInPixels.Height != remoteH)
+                {
+                    screen?.Dispose();
+                    screen = CanvasBitmap.CreateFromBytes(sender, buffer, remoteW, remoteH,
+                        DirectXPixelFormat.B8G8R8A8UIntNormalized, 96, CanvasAlphaMode.Ignore);
+                    fullDirty = false;
+                }
+                else
+                {
+                    foreach (var (x, y, w, h) in dirty)
+                    {
+                        var part = new byte[w * h * 4];
+                        for (var row = 0; row < h; row++)
+                            Buffer.BlockCopy(buffer, ((y + row) * remoteW + x) * 4, part, row * w * 4, w * 4);
+                        screen.SetPixelBytes(part, x, y, w, h);
+                    }
+                }
+                dirty.Clear();
                 at = Layout(sender.ActualWidth, sender.ActualHeight);
             }
-            ds.DrawImage(bitmap, at, new Rect(0, 0, bitmap.SizeInPixels.Width, bitmap.SizeInPixels.Height));
+            ds.DrawImage(screen, at, new Rect(0, 0, screen.SizeInPixels.Width, screen.SizeInPixels.Height));
         }
-        catch (Exception e) { Terminal.TerminalView.Trace("RDP draw: " + e.Message); }
-        finally { bitmap?.Dispose(); }
+        catch (Exception e)
+        {
+            Terminal.TerminalView.Trace("RDP draw: " + e.Message);
+            lock (frameLock) fullDirty = true; // устройство потеряно и т. п. — в следующем кадре картинка заново
+        }
     }
 }

@@ -309,9 +309,14 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
     // --- Кадры ---
 
+    // Изменённые прямоугольники с прошлой отрисовки (П8): холст обновляет только их. Под frameLock.
+    // fullDirty — пересоздать картинку целиком (новый размер, слишком много мелких прямоугольников).
+    private readonly List<(int X, int Y, int W, int H)> dirty = new();
+    private bool fullDirty = true;
+
     private void OnConnectedCore(ushort w, ushort h)
     {
-        lock (frameLock) { remoteW = w; remoteH = h; buffer = new byte[w * h * 4]; }
+        lock (frameLock) { remoteW = w; remoteH = h; buffer = new byte[w * h * 4]; dirty.Clear(); fullDirty = true; }
         ui.TryEnqueue(() =>
         {
             connected = true;
@@ -341,7 +346,9 @@ internal sealed partial class RdpView : UserControl, IDisposable
                 var row = r.width * 4;
                 for (var y = 0; y < r.height; y++)
                     Buffer.BlockCopy(r.bgra, y * row, buffer, ((r.y + y) * remoteW + r.x) * 4, row);
+                if (!fullDirty) dirty.Add((r.x, r.y, r.width, r.height));
             }
+            if (dirty.Count > 64) { dirty.Clear(); fullDirty = true; }
         }
         ui.TryEnqueue(() => { if (Visibility == Visibility.Visible) InvalidateCanvas(); });
     }
