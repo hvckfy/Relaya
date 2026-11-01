@@ -43,8 +43,8 @@ internal sealed partial class DavBridge
         prefix = $"/{Guid.NewGuid():N}/{volumeName}";
     }
 
-    /// Где подключение диска уже сделано (Linux — gvfs); на Windows пункт скрыт до своей реализации.
-    public static bool Supported => OperatingSystem.IsLinux();
+    /// Умеет ли платформа подключать диск; без этого пункт меню скрыт. Shared не знает ОС — решает partial платформы.
+    public static bool Supported => PlatformSupported();
 
     public static bool IsMounted(string alias) { lock (bridges) return bridges.ContainsKey(alias); }
 
@@ -89,6 +89,7 @@ internal sealed partial class DavBridge
     private static partial Task MountVolumeAsync(string url, string user, string password);
     private static partial Task UnmountVolumeAsync(string url);
     private static partial void OpenVolume(string url);
+    private static partial bool PlatformSupported();
 
     /// Имя диска: хост, а для вложенной папки — «хост · папка».
     private static string VolumeName(string alias, string path)

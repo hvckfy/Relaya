@@ -9,4 +9,6 @@ internal sealed partial class DavBridge
     private static partial Task MountVolumeAsync(string url, string user, string password) => throw new NotSupportedException();
     private static partial Task UnmountVolumeAsync(string url) => Task.CompletedTask;
     private static partial void OpenVolume(string url) { }
+
+    private static partial bool PlatformSupported() => false;
 }
