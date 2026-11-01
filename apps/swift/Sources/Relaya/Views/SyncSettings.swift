@@ -218,6 +218,24 @@ private struct ProfileForm: View {
                                 .disabled(passphrase.isEmpty)
                         }
                     }
+                    // П3: при прошлой синхронизации ключи не уехали — сказать почему.
+                    if !sync.unexportedKeys.isEmpty {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L("Ключи не выгружены")).bold()
+                                if sync.unexportedKeys.noPassphrase {
+                                    Text(L("Задайте пароль шифрования ключей — без него ключи этой машины не уходят в синхронизацию."))
+                                }
+                                if !sync.unexportedKeys.missing.isEmpty {
+                                    Text(L("Нет файлов ключей из IdentityFile: %@", sync.unexportedKeys.missing.joined(separator: ", ")))
+                                        .textSelection(.enabled)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                                .accessibilityLabel(L("Предупреждение"))
+                        }
+                    }
                     Text(L("Ключи шифруются этим паролем до отправки; на другом Mac введите тот же пароль. Существующие ключи с тем же именем не перезаписываются."))
                         .font(.caption).foregroundStyle(.secondary)
                 }

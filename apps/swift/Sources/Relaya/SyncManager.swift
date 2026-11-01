@@ -20,6 +20,8 @@ final class SyncManager {
         }
     }
     private(set) var states: [Sync.Profile.ID: State] = [:]
+    /// П3: какие ключи не выгрузились при последней синхронизации (состояние ядра, одно на машину).
+    private(set) var unexportedKeys = Sync.unexportedKeys()
     private(set) var lastSync: [String: Date] = (UserDefaults.standard.dictionary(forKey: "syncLastByProfile") as? [String: Date]) ?? [:] {
         didSet { UserDefaults.standard.set(lastSync, forKey: "syncLastByProfile") }
     }
@@ -212,6 +214,7 @@ final class SyncManager {
         lastSync[id.uuidString] = Date()
         states[id] = .idle
         renamedKeys += Sync.takeRenamedKeys()
+        unexportedKeys = Sync.unexportedKeys()
         pendingDeletions += Sync.takePendingDeletions().filter { p in !pendingDeletions.contains(p) }
         agentEscalations = Sync.takeAgentEscalations()
         let skipped = Sync.takeSkippedKeys()

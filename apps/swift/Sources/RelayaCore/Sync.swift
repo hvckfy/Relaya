@@ -299,6 +299,19 @@ extension Sync {
         syncTakeRenamedKeys(paths: paths.rust).map { ($0.name, $0.savedAs) }
     }
 
+    /// Итог последней выгрузки ключей (одно состояние на машину): пароль шифрования не задан — ключи не уехали;
+    /// `missing` — файлы из IdentityFile, которых нет на диске.
+    public struct UnexportedKeys: Equatable, Sendable {
+        public var noPassphrase: Bool
+        public var missing: [String]
+        public var isEmpty: Bool { !noPassphrase && missing.isEmpty }
+    }
+
+    public static func unexportedKeys(paths: Paths = Paths()) -> UnexportedKeys {
+        let u = syncUnexportedKeys(paths: paths.rust)
+        return UnexportedKeys(noPassphrase: u.noPassphrase, missing: u.missing)
+    }
+
     /// Удаление, пришедшее с другой машины и ждущее подтверждения (слишком много сразу).
     public struct PendingDeletion: Identifiable, Hashable, Sendable {
         public var id: String { kind + ":" + key }
