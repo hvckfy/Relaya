@@ -1107,7 +1107,6 @@
 "Сервер ещё не знаком" = "The server is not known yet";
 "Подключитесь к нему один раз в терминале Relaya и подтвердите ключ сервера — после этого синхронизация и туннели заработают." = "Connect to it once in the Relaya terminal and confirm the server key — after that sync and tunnels will work.";
 "Пароли от серверов не синхронизируются никогда. Удаления передаются на другие машины; если удаляется сразу много, Relaya спросит." = "Server passwords are never synced. Deletions are passed on to your other machines; if a lot is deleted at once, Relaya asks first.";
-"Хранилище паролей (Secret Service) недоступно — установите libsecret и gnome-keyring или KWallet." = "The password store (Secret Service) is unavailable. Install libsecret and gnome-keyring or KWallet.";
 "Разрешить без подтверждения: %@" = "Allow without confirmation: %@";
 "Синхронизация расширяет права агентов" = "Sync widens agent permissions";
 "Изменения пришли с другой машины. Без вашего согласия они не применяются; отклонённые больше не предлагаются." = "These changes came from another machine. They aren't applied without your consent; declined ones won't be offered again.";
@@ -1132,3 +1131,5 @@
 "↑↓ — выбрать · Enter — открыть · Ctrl+Enter — файлы · Esc — закрыть" = "↑↓ select · Enter open · Ctrl+Enter files · Esc close";
 "Этот терминал участвует" = "This terminal takes part";
 "SSH-туннель не поднялся за 20 секунд." = "The SSH tunnel did not come up within 20 seconds.";
+"Нет библиотеки libsecret: установите пакет libsecret-1-0 (или libsecret), чтобы сохранять пароли серверов." = "The libsecret library is missing. Install libsecret-1-0 (or libsecret) to save server passwords.";
+"Нет службы хранения паролей: установите gnome-keyring (GNOME, XFCE) или KWallet (KDE) и войдите в систему заново. Без неё пароли серверов не сохраняются, ключи работают." = "No password storage service. Install gnome-keyring (GNOME, Xfce) or KWallet (KDE) and log in again. Without it server passwords are not saved; keys still work.";

@@ -69,8 +69,8 @@ Section: net
 Priority: optional
 Architecture: amd64
 Maintainer: Relaya <relaya@users.noreply.github.com>
-Depends: openssh-client, libsecret-1-0, libx11-6, libfontconfig1, libfreetype6, libice6, libsm6
-Recommends: zenity | kdialog, freerdp3-x11 | freerdp2-x11 | remmina, tigervnc-viewer | remmina
+Depends: openssh-client, libsecret-1-0, libicu74 | libicu72 | libicu70, dbus-user-session, xdg-utils, libx11-6, libfontconfig1, libfreetype6, fonts-dejavu-core | fonts-liberation, libice6, libsm6
+Recommends: gnome-keyring | kwalletmanager, zenity | kdialog, pulseaudio-utils, freerdp3-x11 | remmina, tigervnc-viewer | remmina
 Description: SSH hosts, terminals, tunnels and remote desktops
  Relaya keeps ~/.ssh/config hosts, opens native terminals, SFTP, tunnels,
  RDP and VNC, and syncs settings with the macOS and Windows clients.

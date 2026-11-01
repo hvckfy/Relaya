@@ -31,24 +31,28 @@ internal static class CredentialStore
 
     public static bool Has(string account) => Read(account) != null;
 
-    /// Без libsecret или без службы секретов — одно понятное сообщение (Н12), а не исключение загрузчика.
+    /// Без libsecret или без службы секретов — понятное сообщение (Н12, Л5), а не исключение загрузчика.
+    /// Два случая разные: нет библиотеки (поставить libsecret) и нет службы (поставить и запустить keyring).
     public static void Write(string account, string secret)
     {
         IntPtr attrs;
         try { attrs = Attributes(account); }
-        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { throw Unavailable(null); }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { throw NoLibrary(); }
         try
         {
             // Коллекция по умолчанию ("default") — связка ключей входа, открывается вместе с сеансом.
             if (!secret_password_storev_sync(schema.Value, attrs, "default", "Relaya/" + account, secret, IntPtr.Zero, out var error))
-                throw Unavailable(Message(error));
+                throw NoService(Message(error));
         }
-        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { throw Unavailable(null); }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { throw NoLibrary(); }
         finally { g_hash_table_unref(attrs); }
     }
 
-    private static InvalidOperationException Unavailable(string? detail) =>
-        new(Strings.L("Хранилище паролей (Secret Service) недоступно — установите libsecret и gnome-keyring или KWallet.")
+    private static InvalidOperationException NoLibrary() =>
+        new(Strings.L("Нет библиотеки libsecret: установите пакет libsecret-1-0 (или libsecret), чтобы сохранять пароли серверов."));
+
+    private static InvalidOperationException NoService(string? detail) =>
+        new(Strings.L("Нет службы хранения паролей: установите gnome-keyring (GNOME, XFCE) или KWallet (KDE) и войдите в систему заново. Без неё пароли серверов не сохраняются, ключи работают.")
             + (detail is { Length: > 0 } ? "\n" + detail : ""));
 
     public static void Delete(string account)
