@@ -59,7 +59,10 @@ struct RDPContent: View {
                     Text(L("Отключено")).font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
                     if let error {
                         Text(error).foregroundStyle(.white.opacity(0.75)).multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 460)
+                            // Точная ширина, а не fixedSize + maxWidth: при запросе идеального размера (NavigationSplitView)
+                            // текст мерился почти без ширины, раздувал карточку до тысяч точек, и окно уезжало вверх —
+                            // боковая панель и вкладки оказывались за краем.
+                            .frame(width: 460)
                     }
                     HStack {
                         Button(L("Подключить снова")) { Task { await session.start() } }.buttonStyle(.relayaPrimary)
