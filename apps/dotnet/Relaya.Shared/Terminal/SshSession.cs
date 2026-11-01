@@ -125,13 +125,16 @@ internal sealed class SshSession : IDisposable
         var decoder = Encoding.UTF8.GetDecoder();
         pc.Output += data =>
         {
-            view.Feed(data);
             // Decoder с состоянием: многобайтовый символ на границе кусков не превращается в «�» (С6).
             var chars = new char[decoder.GetCharCount(data, 0, data.Length)];
             decoder.GetChars(data, 0, data.Length, chars, 0);
             tail.Append(chars);
             if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
             var text = System.Text.RegularExpressions.Regex.Replace(tail.ToString(), "\x1b\\[[0-9;?]*[A-Za-z]", "").Replace("\r", "");
+            // Пауза рассылки ставится до того, как запрос появится на экране: ответ на него не успеет уйти в другие
+            // терминалы, даже если набран сразу (L-SEC-1, гонка первого символа).
+            if (PasswordPrompt.IsSecretPrompt(text)) secretPrompt = true;
+            view.Feed(data);
             // До входа пароль из Credential Manager вводится сам, один раз (только запрос самого ssh).
             // Вход выполнен — признак ядра (C23): приглашение shell с курсором после него, без вопросов о пароле/ключе.
             if (!loggedIn && view.Emulator.LoginReady()) loggedIn = true;
