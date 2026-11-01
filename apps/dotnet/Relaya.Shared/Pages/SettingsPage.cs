@@ -71,10 +71,10 @@ internal sealed class SettingsPage : UserControl
             Platform.Accent.Custom = c;
             MainWindow.Current?.ApplyTheme();
         }
-        foreach (var v in Platform.Accent.Palette)
+        foreach (var rgb in Platform.Accent.Palette)
         {
-            var color = Platform.Accent.FromRgb(v);
-            var hex = $"#{v:X6}";
+            var color = Platform.Accent.FromRgb(rgb);
+            var hex = $"#{rgb:X6}";
             var swatch = new Button
             {
                 Width = 32, Height = 32, Padding = new Thickness(0), CornerRadius = new CornerRadius(4),
