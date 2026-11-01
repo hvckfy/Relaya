@@ -16,8 +16,8 @@ required-features = ["bindgen"]
 
 [features]
 bindgen = ["uniffi/cli"]
-# Встроенный RDP для Windows и Linux. На Mac выключено: там RDPKit, ядро не тянет IronRDP и rustls.
-remote-desktop = ["dep:ironrdp", "dep:ironrdp-blocking", "dep:rustls", "dep:x509-cert"]
+# Общие типы удалённых столов (RDP-сессия, слушатели, доверие к сертификатам). Сам RDP — rdp-freerdp.
+remote-desktop = []
 # RDP на FreeRDP 3 вместо IronRDP под тем же API. Нужна собранная FreeRDP: FREERDP_DIR с include/ и lib/
 # (артефакт workflow freerdp.yml); прослойка native/relaya_rdp.c собирается крейтом cc.
 rdp-freerdp = ["remote-desktop", "dep:cc"]
@@ -39,10 +39,6 @@ pbkdf2 = { version = "0.12", features = ["hmac"] }
 sha2 = "0.10"
 rand = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
-ironrdp = { version = "0.17", optional = true, default-features = false, features = ["core", "pdu", "connector", "session", "graphics", "input", "svc", "dvc", "displaycontrol", "cliprdr", "rdpsnd"] }
-ironrdp-blocking = { version = "0.10", optional = true }
-rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
-x509-cert = { version = "0.2", optional = true, default-features = false, features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }

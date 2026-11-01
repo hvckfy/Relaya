@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location "$root/core"
 # Встроенный RDP: с FREERDP_DIR (артефакт freerdp.yml) — движок FreeRDP 3 и его DLL рядом с relaya_core.dll,
-# без него — IronRDP (remote-desktop). На Mac встроенного RDP пока нет.
+# без него встроенного RDP нет (только общие типы remote-desktop).
 # VNC на RoyalVNCKit: с ROYALVNC_DIR (.github/actions/royalvnc) — фича vnc-royal, RoyalVNCKit.dll и рантайм Swift
 # рядом с relaya_core.dll.
 $vnc = if ($env:ROYALVNC_DIR) { ",vnc-royal" } else { "" }
