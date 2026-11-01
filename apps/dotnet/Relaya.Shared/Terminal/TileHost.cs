@@ -130,6 +130,15 @@ internal sealed class TileHost : UserControl, IDisposable
         return a;
     }
 
+    /// Фокус ввода — в активный терминал; ещё не загружен — как только загрузится.
+    public void FocusActive()
+    {
+        if (active?.View is not { } view) return;
+        if (view.IsLoaded) { view.Focus(FocusState.Programmatic); return; }
+        void Once(object sender, RoutedEventArgs e) { view.Loaded -= Once; view.Focus(FocusState.Programmatic); }
+        view.Loaded += Once;
+    }
+
     /// Та же сессия (тот же хост) рядом с активной плиткой.
     public void Split(Edge edge)
     {

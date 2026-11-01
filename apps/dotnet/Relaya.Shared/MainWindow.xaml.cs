@@ -158,7 +158,8 @@ public sealed partial class MainWindow : Window
         var item = new NavigationViewItem { Content = h.alias, Tag = h, Icon = Pages.OsIcon.For(h.os) };
         ToolTipService.SetToolTip(item, RelayaCoreMethods.HostSubtitle(h));
         item.ContextFlyout = Pages.HostActions.Menu(h, item);
-        item.DoubleTapped += (_, _) => OpenSession(h.alias);
+        // Handled: иначе фокус остаётся у пункта списка, а не у новой плитки (Л3).
+        item.DoubleTapped += (_, e) => { e.Handled = true; OpenSession(h.alias); };
         return item;
     }
 
@@ -237,6 +238,8 @@ public sealed partial class MainWindow : Window
         save.Click += async (_, _) => await SaveLayout(tiles);
         menu.Items.Add(save);
         tab.ContextFlyout = menu;
+        // Фокус в терминал после того, как вкладка выбрана и список хостов отпустил фокус (на Uno Loaded мало, Л3).
+        ui.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, tiles.FocusActive);
     }
 
     private async System.Threading.Tasks.Task SaveLayout(Terminal.TileHost tiles)
