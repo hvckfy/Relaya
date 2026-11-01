@@ -1127,3 +1127,6 @@
 "В адресе репозитория пароль или токен — используйте ssh или credential helper" = "The repository address contains a password or token — use ssh or a credential helper";
 "Оставить мой" = "Keep mine";
 "Взять с другой машины" = "Take the other machine’s";
+"Палитра команд" = "Command palette";
+"Параметры" = "Settings";
+"↑↓ — выбрать · Enter — открыть · Ctrl+Enter — файлы · Esc — закрыть" = "↑↓ select · Enter open · Ctrl+Enter files · Esc close";
