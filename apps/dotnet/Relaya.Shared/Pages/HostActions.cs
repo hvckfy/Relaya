@@ -23,6 +23,7 @@ internal static class HostActions
         menu.Items.Add(Item(L("Открыть файлы (SFTP)"), "", () => MainWindow.Current?.OpenSftp(h.alias)));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item(L("Изменить…"), "", async () => await HostEditor.Show(anchor.XamlRoot, h, false)));
+        menu.Items.Add(Item(L("Настроить вход по ключу…"), "\uE8D7", () => MainWindow.Current?.ShowPage(new KeyWizardPage(h))));
         menu.Items.Add(Item(L("Дублировать"), "", async () => await HostEditor.Show(anchor.XamlRoot, h, true)));
         var groups = new MenuFlyoutSubItem { Text = L("Переместить в группу"), Icon = new FontIcon { Glyph = "" } };
         groups.Items.Add(GroupItem(h, null, L("Без группы")));

@@ -131,6 +131,7 @@ internal static class AppState
     public static string SshExe => Tool("ssh");
     public static string SftpExe => Tool("sftp");
     public static string KeygenExe => Tool("ssh-keygen");
+    public static string SshAddExe => Tool("ssh-add");
 
     // Windows: встроенный OpenSSH из System32; Linux: системный ssh из PATH.
     private static string Tool(string name)
