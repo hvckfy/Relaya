@@ -33,6 +33,7 @@ pub mod tile_layout;
 pub mod tmux;
 pub mod tmux_control;
 pub mod webdav;
+pub mod webdav_policy;
 
 pub use error::CoreError;
 

@@ -134,8 +134,7 @@ pub fn remote_supports_h264() -> bool {
 
 /// Где лежат проверенные копии: на Linux — XDG_RUNTIME_DIR (только пользователь, чистится при выходе из сеанса),
 /// как сокет askpass; без него и на других ОС — temp_dir (на macOS он и так пользовательский).
-#[cfg_attr(not(feature = "rdp-freerdp"), allow(dead_code))]
-fn copies_root() -> std::path::PathBuf {
+pub(crate) fn copies_root() -> std::path::PathBuf {
     if cfg!(target_os = "linux") {
         if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from) {
             if dir.is_absolute() && dir.is_dir() {
