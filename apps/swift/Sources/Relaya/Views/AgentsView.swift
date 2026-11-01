@@ -75,6 +75,8 @@ struct AgentsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L("Файл политики агентов (mcp.json) не читается — доступ агентов выключен."))
                             Text(MCPPolicyStore().url.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                            Text(L("Новая политика — с подтверждением каждой команды; режимы хостов задайте заново."))
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button(L("Создать политику заново")) {

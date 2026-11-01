@@ -1287,3 +1287,4 @@
 "Ввести" = "Enter";
 "Сервер спрашивает пароль" = "The server asks for a password";
 "Сохранённый пароль не подошёл" = "The saved password didn’t work";
+"Новая политика — с подтверждением каждой команды; режимы хостов задайте заново." = "The new policy asks before every command; set host modes again.";
