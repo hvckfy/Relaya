@@ -173,11 +173,14 @@ final class RDPCanvasView: NSView {
         pressed.removeAll()
         for sym in vncHeld { vnc?.key(sym, down: false) }
         vncHeld.removeAll()
+        vncPressedBy.removeAll()
     }
 
     // MARK: - VNC: keysym X11
 
     private var vncHeld = Set<UInt32>()
+    /// Какой keysym ушёл на нажатие клавиши (keyCode): на отпускание шлём его же, даже если Shift уже отпущен.
+    private var vncPressedBy: [UInt16: UInt32] = [:]
 
     private func vncModifier(_ keyCode: Int) -> UInt32? {
         switch keyCode {
@@ -187,6 +190,7 @@ final class RDPCanvasView: NSView {
         case kVK_RightControl: 0xFFE4
         case kVK_Option: 0xFFE9
         case kVK_RightOption: 0xFFEA
+        case kVK_CapsLock: 0xFFE5
         case kVK_Command: vncCommandIsSuper ? 0xFFEB : 0xFFE3
         case kVK_RightCommand: vncCommandIsSuper ? 0xFFEC : 0xFFE4
         default: nil
@@ -201,10 +205,17 @@ final class RDPCanvasView: NSView {
             v.key(sym, down: down)
             return
         }
+        if !down {
+            guard let sym = vncPressedBy.removeValue(forKey: event.keyCode) else { return }
+            vncHeld.remove(sym)
+            v.key(sym, down: false)
+            return
+        }
         guard let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first else { return }
         let sym = VNCEngine.keysym(for: scalar)
-        if down { vncHeld.insert(sym) } else { vncHeld.remove(sym) }
-        v.key(sym, down: down)
+        vncPressedBy[event.keyCode] = sym
+        vncHeld.insert(sym)
+        v.key(sym, down: true)
     }
 
     static let vncSpecial: [Int: UInt32] = [
@@ -260,6 +271,11 @@ final class RDPCanvasView: NSView {
             case kVK_Option, kVK_RightOption: .option
             case kVK_CapsLock: .capsLock
             default: .command
+            }
+            if flag == .capsLock {
+                // Caps Lock на Mac приходит одним событием на переключение.
+                v.key(sym, down: true); v.key(sym, down: false)
+                return
             }
             let down = event.modifierFlags.contains(flag)
             if down { vncHeld.insert(sym) } else { vncHeld.remove(sym) }

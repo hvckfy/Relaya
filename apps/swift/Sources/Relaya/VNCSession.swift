@@ -78,6 +78,7 @@ final class VNCSession {
 
     func connect() async {
         guard !closed, engine == nil else { return }
+        credentialError = nil
         var host = desktop.address
         var port = desktop.port
         if let t = desktop.tunnel(localPort: RemoteDesktop.freeLocalPort()) {
@@ -183,7 +184,8 @@ final class VNCSession {
         case .authFailed:
             pendingSave = nil
             if triedSaved { try? keychain.deletePassword(for: account) }
-            phase = .disconnected(L("Неверное имя пользователя или пароль."))
+            credentialError = L("Неверное имя пользователя или пароль.")
+            phase = .disconnected(credentialError)
         default:
             phase = .disconnected(message.isEmpty ? nil : SSHErrorText.describeRemote(.vnc, message))
         }
