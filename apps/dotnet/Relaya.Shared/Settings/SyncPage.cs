@@ -186,18 +186,41 @@ internal sealed class SyncPage : UserControl
         remote.LostFocus += (_, _) => Change(p => p with { remote = remote.Text.Trim() });
 
         var allHosts = new ToggleSwitch { Header = L("Все хосты"), IsOn = initial.scope.allHosts };
-        var groups = new TextBox { Header = L("Группы и хосты через запятую (если не «все»)"),
-            Text = string.Join(", ", initial.scope.groups.Concat(initial.scope.hosts)), IsEnabled = !initial.scope.allHosts };
-        allHosts.Toggled += (_, _) => { groups.IsEnabled = !allHosts.IsOn; Change(p => p with { scope = p.scope with { allHosts = allHosts.IsOn } }); };
-        groups.LostFocus += (_, _) =>
+        // Группы и хосты профиля — флажками (11.2, как на Mac), а не строкой через запятую.
+        var groups = new StackPanel { Spacing = 4, Visibility = initial.scope.allHosts ? Visibility.Collapsed : Visibility.Visible };
+        var groupBoxes = new List<CheckBox>();
+        var hostBoxes = new List<CheckBox>();
+        void SaveScope() => Change(p => p with
         {
-            // Что из списка — группа, а что — хост, решаем по ~/.ssh/config.
-            var names = groups.Text.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
-            var known = MainWindow.KnownGroups();
-            Change(p => p with { scope = p.scope with
+            scope = p.scope with
             {
-                groups = names.Where(known.Contains).ToList(), hosts = names.Where(n => !known.Contains(n)).ToList(),
-            } });
+                groups = groupBoxes.Where(b => b.IsChecked == true).Select(b => (string)b.Tag).ToList(),
+                hosts = hostBoxes.Where(b => b.IsChecked == true).Select(b => (string)b.Tag).ToList(),
+            },
+        });
+        var groupNames = Data.AppState.Groups().ToList();
+        if (groupNames.Count > 0) groups.Children.Add(Pages.Ui.Secondary(L("Группы")));
+        foreach (var g in groupNames)
+        {
+            var b = new CheckBox { Content = g, Tag = g, IsChecked = initial.scope.groups.Contains(g) };
+            b.Checked += (_, _) => SaveScope();
+            b.Unchecked += (_, _) => SaveScope();
+            groupBoxes.Add(b);
+            groups.Children.Add(b);
+        }
+        groups.Children.Add(Pages.Ui.Secondary(L("Хосты")));
+        foreach (var h in Data.AppState.Hosts.OrderBy(h => h.alias))
+        {
+            var b = new CheckBox { Content = h.alias, Tag = h.alias, IsChecked = initial.scope.hosts.Contains(h.alias) };
+            b.Checked += (_, _) => SaveScope();
+            b.Unchecked += (_, _) => SaveScope();
+            hostBoxes.Add(b);
+            groups.Children.Add(b);
+        }
+        allHosts.Toggled += (_, _) =>
+        {
+            groups.Visibility = allHosts.IsOn ? Visibility.Collapsed : Visibility.Visible;
+            Change(p => p with { scope = p.scope with { allHosts = allHosts.IsOn } });
         };
 
         var items = new StackPanel { Spacing = 0 };
