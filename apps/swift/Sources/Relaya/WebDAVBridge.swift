@@ -226,7 +226,11 @@ actor DAVServer {
                 if !overwrite, try await exists(dest) { return WebDAV.response(412, "Precondition Failed") }
                 let existed = overwrite ? try await exists(dest) : false
                 let tool = req.method == "MOVE" ? "mv" : "cp -a"
-                try await shell("\(tool) -- \(StreamTransfer.quote(remote)) \(StreamTransfer.quote(dest))")
+                let d = StreamTransfer.quote(dest)
+                // Замена существующей цели: по RFC 4918 9.9.3 сначала удаляется она — иначе mv/cp положили бы
+                // папку внутрь папки (dest/src), а мост ответил бы «заменено».
+                let clear = existed ? "{ ! test -d \(d) || rm -rf -- \(d); } && " : ""
+                try await shell("\(clear)\(tool) -- \(StreamTransfer.quote(remote)) \(d)")
                 invalidate(remote)
                 invalidate(dest)
                 // 204 — цель заменена, 201 — создана (RFC 4918 9.9.4).
