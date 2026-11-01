@@ -14,6 +14,7 @@
     <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
     <ApplicationIcon>Assets\Relaya.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Свой Main (Program.cs): askpass- и MCP-режимы без окна. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
