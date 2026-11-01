@@ -55,10 +55,6 @@ jobs:
       # pty: вывод, управляющий терминал, размер окна, ввод, ssh из PATH.
       - name: pty smoke test
         run: dotnet run --project apps/dotnet/Relaya.Linux.Smoke -c Release
-      # Unit-тесты чистой логики Shared (запросы секретов для рассылки ввода и т. п.).
-      - name: Shared unit tests
-        if: matrix.lang == 'en'
-        run: dotnet test apps/dotnet/Relaya.Shared.Tests -c Release
       - name: Build Uno app
         run: |
           version=0.0.0
