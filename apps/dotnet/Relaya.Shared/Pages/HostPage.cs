@@ -140,13 +140,61 @@ internal sealed class HostPage : UserControl
         }
         stats.Children.Clear();
         var up = TimeSpan.FromSeconds(s.uptime);
-        stats.Children.Add(Ui.Row("", L("Нагрузка"), $"{s.load1:0.00} / {s.cores} " + L("ядер"),
-            new ProgressBar { Width = 160, Maximum = Math.Max(1, s.cores), Value = s.load1 }));
-        stats.Children.Add(Ui.Row("", L("Память"), $"{Platform.Format.Bytes(s.memTotal - s.memAvailable)} / {Platform.Format.Bytes(s.memTotal)}",
-            new ProgressBar { Width = 160, Maximum = Math.Max(1, s.memTotal), Value = s.memTotal - s.memAvailable }));
-        stats.Children.Add(Ui.Row("", L("Диск /"), $"{Platform.Format.Bytes(s.diskUsed)} / {Platform.Format.Bytes(s.diskTotal)}",
-            new ProgressBar { Width = 160, Maximum = Math.Max(1, s.diskTotal), Value = s.diskUsed }));
-        stats.Children.Add(Ui.Row("", L("Работает"), up.Days > 0 ? L("%@ дн. %@ ч", up.Days, up.Hours) : L("%@ ч %@ мин", up.Hours, up.Minutes)));
+        var uptime = up.Days > 0 ? L("%@ дн. %@ ч", up.Days, up.Hours) : L("%@ ч %@ мин", up.Hours, up.Minutes);
+        var used = s.memTotal - s.memAvailable;
+        var metrics = new (string Glyph, string Title, string Value, double Part)[]
+        {
+            ("\uE9D9", L("Нагрузка"), $"{s.load1:0.00} / {s.cores} " + L("ядер"), s.load1 / Math.Max(1, s.cores)),
+            ("\uE964", L("Память"), $"{Platform.Format.Bytes(used)} / {Platform.Format.Bytes(s.memTotal)}", (double)used / Math.Max(1, s.memTotal)),
+            ("\uEDA2", L("Диск /"), $"{Platform.Format.Bytes(s.diskUsed)} / {Platform.Format.Bytes(s.diskTotal)}", (double)s.diskUsed / Math.Max(1, s.diskTotal)),
+        };
+        // Вид блока «Состояние» (3.3, 12.3) — как на Mac: плитки, компактный список, пиксельные полосы, консоль.
+        switch (Platform.Settings.Get(StatsStyleKey, "tiles"))
+        {
+            case "compact":
+                foreach (var m in metrics)
+                    stats.Children.Add(Ui.Row(m.Glyph, m.Title, m.Value, new ProgressBar { Width = 160, Maximum = 1, Value = Math.Min(1, m.Part) }));
+                stats.Children.Add(Ui.Row("\uE916", L("Работает"), uptime));
+                break;
+            case "pixel":
+            case "console":
+            {
+                var pixel = Platform.Settings.Get(StatsStyleKey, "tiles") == "pixel";
+                string Bar(double part)
+                {
+                    var n = (int)Math.Round(Math.Clamp(part, 0, 1) * 20);
+                    return pixel ? new string('█', n) + new string('░', 20 - n) : "[" + new string('#', n) + new string('.', 20 - n) + "]";
+                }
+                var lines = metrics.Select(m => $"{m.Title,-10} {Bar(m.Part)} {m.Value}").Append($"{L("Работает"),-10} {uptime}");
+                stats.Children.Add(Ui.Card(new TextBlock
+                {
+                    Text = string.Join("\n", lines), FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"),
+                    IsTextSelectionEnabled = true,
+                }));
+                break;
+            }
+            default:
+            {
+                var tiles = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 180, ItemHeight = 96 };
+                foreach (var m in metrics) tiles.Children.Add(Tile(m.Title, m.Value, m.Part));
+                tiles.Children.Add(Tile(L("Работает"), uptime, null));
+                stats.Children.Add(tiles);
+                break;
+            }
+        }
+    }
+
+    public const string StatsStyleKey = "host.statsStyle";
+
+    private static UIElement Tile(string title, string value, double? part)
+    {
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(Ui.Secondary(title));
+        panel.Children.Add(new TextBlock { Text = value, Style = Ui.Style("SubtitleTextBlockStyle"), TextWrapping = TextWrapping.Wrap });
+        if (part is { } p) panel.Children.Add(new ProgressBar { Maximum = 1, Value = Math.Min(1, p) });
+        var card = Ui.Card(panel);
+        card.Margin = new Thickness(0, 0, 8, 8);
+        return card;
     }
 
     private static string Problem(AppState.Result r) => Platform.SshErrors.Describe(r.Stderr, L("Не удалось подключиться"));

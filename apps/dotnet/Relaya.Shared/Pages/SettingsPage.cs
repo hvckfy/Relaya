@@ -141,6 +141,13 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("\uE895", L("Переподключаться после обрыва соединения"), null, reconnect));
         var highlight = new ToggleSwitch { IsOn = Platform.Settings.Get("terminal.highlight", "1") == "1", OnContent = "", OffContent = "", MinWidth = 0 };
         highlight.Toggled += (_, _) => Platform.Settings.Set("terminal.highlight", highlight.IsOn ? "1" : "0");
+        // Вид блока «Состояние» в карточке хоста (12.3, как на Mac).
+        var styleBox = new ComboBox { MinWidth = 180 };
+        var styles = new[] { ("tiles", L("Плитки")), ("compact", L("Компактный")), ("pixel", L("Пиксельный")), ("console", L("Консоль")) };
+        foreach (var (_, title) in styles) styleBox.Items.Add(title);
+        styleBox.SelectedIndex = Math.Max(0, Array.FindIndex(styles, x => x.Item1 == Platform.Settings.Get(HostPage.StatsStyleKey, "tiles")));
+        styleBox.SelectionChanged += (_, _) => Platform.Settings.Set(HostPage.StatsStyleKey, styles[styleBox.SelectedIndex].Item1);
+        list.Children.Add(Ui.Row("\uE9D9", L("Вид блока «Состояние»"), L("Нагрузка, память и диск в карточке хоста"), styleBox));
         var highlightRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         highlightRow.Children.Add(Ui.Button(L("Правила…"), () => MainWindow.Current?.ShowPage(new HighlightRulesPage())));
         // Переключатель внутри панели теряет подпись строки — даём имя для экранного диктора сами.
