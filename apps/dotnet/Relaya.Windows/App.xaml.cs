@@ -20,5 +20,6 @@ public partial class App : Application
 #endif
         window = new MainWindow();
         window.Activate();
+        _ = Platform.TrayIcon.StartAsync();
     }
 }

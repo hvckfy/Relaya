@@ -19,7 +19,17 @@ public sealed partial class MainWindow : Window
     public static MainWindow? Current { get; private set; }
 
     /// true — окно спрятано в трей вместо закрытия; реализация своя у каждой платформы.
-    private partial bool HideToTray();
+    // 8.6, как на Mac: значок в трее виден и хоть один туннель работает — окно прячется, туннели живут;
+    // вернуть — щелчок по значку. TrayIcon — у каждой платформы свой (Windows — Shell_NotifyIcon, Linux — StatusNotifierItem).
+    private bool HideToTray()
+    {
+        if (!Platform.TrayIcon.Visible) return false;
+        var tunnels = AppState.Tunnels.Concat(Platform.TunnelManager.Shared.Temporary);
+        if (!tunnels.Any(t => Platform.TunnelManager.Shared.StatusOf(t).State is Platform.TunnelManager.State.Running or Platform.TunnelManager.State.Starting)) return false;
+        AppWindow.Hide();
+        Platform.TrayIcon.WindowHidden = true;
+        return true;
+    }
 
     /// Handle окна, снятый в UI-потоке: им пользуются фоновые потоки (Windows Hello для askpass).
     public static IntPtr Hwnd { get; private set; }
