@@ -120,13 +120,42 @@ public sealed partial class MainWindow : Window
     private async void OnNewHost(object sender, RoutedEventArgs e) => await Pages.HostEditor.Show(Content.XamlRoot, null, false);
 
     // Сайдбар как на Mac: «Хосты» со сворачиваемыми группами, «Удалённые столы», «Инструменты».
+    // Фильтр по метке (1.7): одна метка, «Все хосты» — сброс. Кнопка рядом с заголовком «Хосты».
+    private string? tagFilter;
+
+    private UIElement HostsHeader()
+    {
+        var tags = AppState.Hosts.SelectMany(h => h.tags).Distinct().OrderBy(t => t).ToList();
+        var title = new TextBlock { Text = tagFilter == null ? L("Хосты") : L("Хосты · #%@", tagFilter), VerticalAlignment = VerticalAlignment.Center };
+        if (tags.Count == 0) return title;
+        var menu = new MenuFlyout();
+        var all = new ToggleMenuFlyoutItem { Text = L("Все хосты"), IsChecked = tagFilter == null };
+        all.Click += (_, _) => { tagFilter = null; Render(Search.Text.Trim()); };
+        menu.Items.Add(all);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        foreach (var t in tags)
+        {
+            var item = new ToggleMenuFlyoutItem { Text = "#" + t, IsChecked = tagFilter == t };
+            item.Click += (_, _) => { tagFilter = t; Render(Search.Text.Trim()); };
+            menu.Items.Add(item);
+        }
+        var button = new Button
+        {
+            Content = new FontIcon { Glyph = "\uE71C", FontSize = Pages.Ui.IconSmall }, Flyout = menu, Padding = new Thickness(4),
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0),
+        };
+        ToolTipService.SetToolTip(button, L("Фильтр по меткам"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, L("Фильтр по меткам"));
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { title, button } };
+    }
+
     private void Render(string query)
     {
         EmptyTitle.Text = AppState.Hosts.Count == 0 ? L("Хостов пока нет — добавьте первый кнопкой «Новый хост…»") : L("Выберите хост слева");
         Nav.MenuItems.Clear();
-        Nav.MenuItems.Add(new NavigationViewItemHeader { Content = L("Хосты") });
-        var shown = AppState.Hosts.Where(h => query.Length == 0
-            || RelayaCoreMethods.FuzzyScoreFields(query, Fields(h)) != null);
+        Nav.MenuItems.Add(new NavigationViewItemHeader { Content = HostsHeader() });
+        var shown = AppState.Hosts.Where(h => (query.Length == 0
+            || RelayaCoreMethods.FuzzyScoreFields(query, Fields(h)) != null) && (tagFilter == null || h.tags.Contains(tagFilter)));
         foreach (var group in shown.GroupBy(h => h.group ?? "").OrderBy(g => g.Key.Length == 0 ? "" : "~" + g.Key))
         {
             var items = group.Select(HostItem).ToList();
