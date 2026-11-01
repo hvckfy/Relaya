@@ -13,6 +13,9 @@ concurrency:
   group: freerdp-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
@@ -28,6 +31,7 @@ jobs:
           - os: ubuntu-24.04
             triplet: x64-linux-dynamic
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: FreeRDP
@@ -55,6 +59,7 @@ jobs:
   # Ядро для Mac с движками FreeRDP и RoyalVNC: обе архитектуры, universal-библиотеки FreeRDP и RoyalVNCKit. Swift-сборку не трогает.
   core-macos:
     runs-on: macos-15
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: FreeRDP arm64
@@ -82,6 +87,7 @@ jobs:
   # Ядро для Linux с движком FreeRDP (и RoyalVNC, как в linux.yml): проверка линковки и привязок C#.
   core-linux:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: FreeRDP
