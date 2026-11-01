@@ -85,7 +85,7 @@ struct VNCContent: View {
                     Button(L("Отмена")) { session.cancelCredentials() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
                     Button(L("Войти")) { session.provide(username: username, password: password, save: save) }
                         .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
-                        .disabled(password.isEmpty)
+                        // Пустой пароль допустим: у некоторых серверов он такой (как в форме RDP).
                 }
             }
             .padding(20)

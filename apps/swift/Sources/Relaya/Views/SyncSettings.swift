@@ -125,6 +125,9 @@ private struct ProfileForm: View {
     @Binding var profile: Sync.Profile
     @Binding var passphrase: String
     @State private var showConflict = false
+    /// Подтверждение «синхронизировать ключи без пароля» — прямо в форме, без отдельного окна.
+    @State private var confirmEmptyPassphrase = false
+    @FocusState private var passphraseFocused: Bool
 
     var body: some View {
         let sync = model.sync
@@ -212,11 +215,39 @@ private struct ProfileForm: View {
                     LabeledContent(L("Пароль ключей")) {
                         HStack {
                             SecureField("", text: $passphrase,
-                                        prompt: Text(sync.hasPassphrase ? L("сохранён в Keychain") : L("не задан")))
+                                        prompt: Text(sync.keysWithoutPassword ? L("без пароля")
+                                                     : sync.hasPassphrase ? L("сохранён в Keychain") : L("не задан")))
                                 .labelsHidden()
-                            Button(L("Сохранить")) { sync.setPassphrase(passphrase); passphrase = "" }
-                                .disabled(passphrase.isEmpty)
+                                .focused($passphraseFocused)
+                            // Пустое поле — синхронизация без пароля, но только после подтверждения ниже.
+                            Button(L("Сохранить")) {
+                                if passphrase.isEmpty { confirmEmptyPassphrase = true }
+                                else { sync.setPassphrase(passphrase); passphrase = "" }
+                            }
+                            .disabled(passphrase.isEmpty && sync.keysWithoutPassword)
                         }
+                    }
+                    if confirmEmptyPassphrase {
+                        Label {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(L("Синхронизировать ключи без пароля?")).bold()
+                                Text(L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы."))
+                                HStack {
+                                    Button(L("Отмена")) { confirmEmptyPassphrase = false; passphraseFocused = true }
+                                        .keyboardShortcut(.cancelAction)
+                                    Button(L("Синхронизировать без пароля"), role: .destructive) {
+                                        sync.allowKeysWithoutPassword()
+                                        confirmEmptyPassphrase = false
+                                    }
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                                .accessibilityLabel(L("Предупреждение"))
+                        }
+                    } else if sync.keysWithoutPassword {
+                        Text(L("Ключи синхронизируются без пароля — в репозитории они фактически открыты. Чтобы защитить их, введите пароль и сохраните."))
+                            .font(.caption).foregroundStyle(.orange)
                     }
                     // П3: при прошлой синхронизации ключи не уехали — сказать почему.
                     if !sync.unexportedKeys.isEmpty {

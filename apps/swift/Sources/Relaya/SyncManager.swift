@@ -49,11 +49,23 @@ final class SyncManager {
         return all.contains(.syncing) ? .syncing : .idle
     }
 
-    var hasPassphrase: Bool { keychain.hasPassword(for: Self.passphraseAccount) }
+    var hasPassphrase: Bool { keysWithoutPassword || keychain.hasPassword(for: Self.passphraseAccount) }
+
+    /// Пользователь подтвердил синхронизацию ключей без пароля: ядро шифрует пустым паролем, то есть ключи в репозитории
+    /// фактически открыты. Пустой пароль — не секрет, Keychain и Touch ID для него не нужны.
+    private(set) var keysWithoutPassword = UserDefaults.standard.bool(forKey: "syncKeysWithoutPassword") {
+        didSet { UserDefaults.standard.set(keysWithoutPassword, forKey: "syncKeysWithoutPassword") }
+    }
 
     func setPassphrase(_ value: String) {
         if value.isEmpty { try? keychain.deletePassword(for: Self.passphraseAccount) }
         else { try? keychain.setPassword(value, for: Self.passphraseAccount) }
+        keysWithoutPassword = false
+    }
+
+    func allowKeysWithoutPassword() {
+        try? keychain.deletePassword(for: Self.passphraseAccount)
+        keysWithoutPassword = true
     }
 
     func addProfile() -> Sync.Profile {
@@ -109,6 +121,7 @@ final class SyncManager {
     /// Пароль ключей — только если в профиле включены ключи; в фоне без Touch ID ключи пропускаются.
     private func keysPassphrase(_ p: Sync.Profile, interactive: Bool) async -> String? {
         guard p.effectiveItems.contains(.keys), hasPassphrase else { return nil }
+        if keysWithoutPassword { return "" }
         if !SecretGate.shared.isUnlocked {
             guard interactive, await SecretGate.shared.authorize(L("Синхронизировать SSH-ключи")) else { return nil }
         }
