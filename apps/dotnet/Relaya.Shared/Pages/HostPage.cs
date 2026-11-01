@@ -32,6 +32,7 @@ internal sealed class HostPage : UserControl
             Ui.Button(L("Подключить"), () => MainWindow.Current?.OpenSession(h.alias), accent: true, glyph: ""),
             Ui.Button(L("Файлы"), () => MainWindow.Current?.OpenSftp(h.alias), glyph: ""),
             Ui.Button(L("Изменить"), async () => await HostEditor.Show(XamlRoot, h, false), glyph: ""),
+            Ui.Button(L("Вход по ключу…"), () => MainWindow.Current?.ShowPage(new KeyWizardPage(h))),
             more);
         Content = page;
         if (Platform.CredentialStore.Has(h.alias) && Platform.Askpass.RunsCommands(h.alias))
@@ -244,6 +245,13 @@ internal sealed class HostPage : UserControl
                 () => MainWindow.Current?.OpenSession(host.alias, RelayaCoreMethods.ServiceLogsCommand(u.name, root) + "\r")));
             actions.Children.Add(Ui.IconButton("", L("Перезапустить"),
                 () => MainWindow.Current?.OpenSession(host.alias, RelayaCoreMethods.ServiceCommand("restart", u.name, root))));
+            // Запуск и остановка (3.5): команда вставляется в терминал, как перезапуск, — человек видит её и запускает.
+            if (u.active == "active")
+                actions.Children.Add(Ui.IconButton("\uE71A", L("Остановить"),
+                    () => MainWindow.Current?.OpenSession(host.alias, RelayaCoreMethods.ServiceCommand("stop", u.name, root))));
+            else
+                actions.Children.Add(Ui.IconButton("\uE768", L("Запустить"),
+                    () => MainWindow.Current?.OpenSession(host.alias, RelayaCoreMethods.ServiceCommand("start", u.name, root))));
             services.Children.Add(Ui.Row(u.active == "active" ? "" : "", u.name, $"{u.active}/{u.sub} · {u.description}", actions));
         }
         foreach (var p in panel.ports.Where(p => p.port != null).Take(30))
