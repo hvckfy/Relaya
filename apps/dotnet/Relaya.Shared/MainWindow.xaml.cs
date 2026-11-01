@@ -75,7 +75,14 @@ public sealed partial class MainWindow : Window
         Platform.Settings.Changed += () => ui.TryEnqueue(ApplyBackground);
         AppState.LoadHosts();
         // Первый запуск — онбординг, когда окно уже на экране (1.15).
-        Activated += async (_, _) => { if (Content?.XamlRoot is { } r && !onboardingShown) { onboardingShown = true; await Pages.OnboardingPage.ShowIfFirstRun(r); } };
+        Activated += async (_, _) =>
+        {
+            if (Content?.XamlRoot is not { } r || onboardingShown) return;
+            onboardingShown = true;
+            // Другой ContentDialog уже открыт (например, синхронизация спросила об удалениях) — онбординг в следующий раз.
+            try { await Pages.OnboardingPage.ShowIfFirstRun(r); }
+            catch (System.Runtime.InteropServices.COMException e) { System.Diagnostics.Trace.WriteLine($"Onboarding: {e.Message}"); }
+        };
         Platform.SyncService.Shared.Imported += () => ui.TryEnqueue(AppState.LoadHosts);
         Platform.SyncService.Shared.AgentEscalationsPending += list =>
             ui.TryEnqueue(() => { if (Content?.XamlRoot is { } root) _ = Relaya.Settings.AgentEscalationsDialog.Show(root, list); });
@@ -315,7 +322,8 @@ public sealed partial class MainWindow : Window
         TabHost.RowDefinitions.Clear();
         TabHost.ColumnDefinitions.Clear();
         var terminals = TabHost.Children.OfType<Terminal.TileHost>().Cast<FrameworkElement>().ToList();
-        if (!gridMode || terminals.Count == 0)
+        if (terminals.Count == 0) gridMode = false; // без терминалов сетки нет — и пункт меню не остаётся отмеченным
+        if (!gridMode)
         {
             foreach (var c in TabHost.Children.OfType<FrameworkElement>()) { Grid.SetRow(c, 0); Grid.SetColumn(c, 0); }
             return false;
