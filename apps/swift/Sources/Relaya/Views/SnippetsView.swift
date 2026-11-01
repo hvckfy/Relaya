@@ -48,7 +48,12 @@ struct SnippetsView: View {
                                     NSPasteboard.general.setString(s.command, forType: .string)
                                 }
                                 Divider()
-                                Button(L("Удалить"), role: .destructive) { model.snippets.removeAll { $0.id == s.id } }
+                                Button(L("Удалить…"), role: .destructive) {
+                                    model.pendingDelete = PendingDelete(title: L("Удалить сниппет «%@»?", s.name),
+                                                                        message: L("Сниппет будет удалён на всех машинах после синхронизации.")) {
+                                        model.snippets.removeAll { $0.id == s.id }
+                                    }
+                                }
                             } label: { Image(systemName: "ellipsis") }
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                         }

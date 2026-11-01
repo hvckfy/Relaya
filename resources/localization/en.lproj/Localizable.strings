@@ -1164,3 +1164,12 @@
 "Переподключение через %@ с (попытка %@ из %@)" = "Reconnecting in %@ s (attempt %@ of %@)";
 "Первое подключение к %@" = "First connection to %@";
 "Сверьте отпечаток ключа сервера с тем, что показывает сам сервер (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub)." = "Compare the server key fingerprint with what the server itself shows (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub).";
+"Удалить «%@»?" = "Delete “%@”?";
+"Подключение к рабочему столу будет удалено." = "The remote desktop connection will be deleted.";
+"Удалить туннель «%@»?" = "Delete tunnel “%@”?";
+"Если он запущен, он будет остановлен." = "If it is running, it will be stopped.";
+"Удалить сниппет «%@»?" = "Delete snippet “%@”?";
+"Сниппет будет удалён на всех машинах после синхронизации." = "The snippet will be deleted on all machines after sync.";
+"Удалить профиль…" = "Delete Profile…";
+"Удалить профиль «%@»?" = "Delete profile “%@”?";
+"Синхронизация по нему остановится, локальная копия репозитория будет удалена. Данные на этой машине и в самом репозитории останутся." = "Syncing with it stops and the local copy of the repository is deleted. Data on this machine and in the repository stays.";

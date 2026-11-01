@@ -252,6 +252,8 @@ final class AppModel {
     var editor: EditorRequest?
     var pendingDelete: SSHHost?
     var alertMessage: String?
+    /// Удаление, ждущее подтверждения (UI-M1).
+    var pendingDelete: PendingDelete?
 
     /// Сохранение сниппетов и столов: ошибка записи показывается, а не теряется (Н16).
     private func saveList(_ save: () throws -> Void) {

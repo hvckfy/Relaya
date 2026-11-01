@@ -69,7 +69,12 @@ struct DesktopsView: View {
                 }
                 Button(L("Изменить…")) { editing = d }
                 Divider()
-                Button(L("Удалить"), role: .destructive) { model.desktops.removeAll { $0.id == d.id } }
+                Button(L("Удалить…"), role: .destructive) {
+                    model.pendingDelete = PendingDelete(title: L("Удалить «%@»?", d.displayName),
+                                                        message: L("Подключение к рабочему столу будет удалено.")) {
+                        model.desktops.removeAll { $0.id == d.id }
+                    }
+                }
             } label: { Image(systemName: "ellipsis") }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         }

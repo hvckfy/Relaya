@@ -97,7 +97,12 @@ private struct TunnelRow: View {
                     NSPasteboard.general.setString("ssh -N \(tunnel.kind.flag) \(tunnel.spec) \(tunnel.hostAlias)", forType: .string)
                 }
                 Divider()
-                Button(L("Удалить"), role: .destructive) { model.tunnels.delete(tunnel.id) }
+                Button(L("Удалить…"), role: .destructive) {
+                    model.pendingDelete = PendingDelete(title: L("Удалить туннель «%@»?", tunnel.name.isEmpty ? tunnel.spec : tunnel.name),
+                                                        message: L("Если он запущен, он будет остановлен.")) {
+                        model.tunnels.delete(tunnel.id)
+                    }
+                }
             } label: {
                 Image(systemName: "ellipsis")
             }

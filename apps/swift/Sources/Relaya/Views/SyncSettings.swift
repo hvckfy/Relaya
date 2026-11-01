@@ -38,7 +38,7 @@ struct SyncSettings: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button(L("Удалить профиль"), role: .destructive) { sync.remove(p.id) }
+                        Button(L("Удалить профиль…"), role: .destructive) { askRemove(p.id, name: p.name) }
                     }
                 }
             } header: {
@@ -65,7 +65,12 @@ struct SyncSettings: View {
                     ProfileForm(profile: Binding(get: { sync.profiles[i] }, set: { sync.profiles[i] = $0 }), passphrase: $passphrase)
                     Divider()
                     HStack {
-                        Button(L("Удалить профиль"), role: .destructive) { sync.remove(e.id); editing = nil }
+                        Button(L("Удалить профиль…"), role: .destructive) {
+                            // Лист закрывается, подтверждение — уже в окне настроек.
+                            let name = sync.profiles[i].name
+                            editing = nil
+                            askRemove(e.id, name: name)
+                        }
                         Spacer()
                         Button(L("Готово")) { editing = nil }.keyboardShortcut(.defaultAction)
                     }
@@ -82,6 +87,14 @@ struct SyncSettings: View {
         if p.scope.allHosts { return L("все хосты") }
         let n = p.scope.groups.count + p.scope.hosts.count
         return L("групп и хостов: %@", "\(n)")
+    }
+
+    /// Удаление профиля удаляет и локальный клон репозитория — только после подтверждения (UI-M1).
+    private func askRemove(_ id: Sync.Profile.ID, name: String) {
+        model.pendingDelete = PendingDelete(title: L("Удалить профиль «%@»?", name),
+                                            message: L("Синхронизация по нему остановится, локальная копия репозитория будет удалена. Данные на этой машине и в самом репозитории останутся.")) {
+            model.sync.remove(id)
+        }
     }
 
     @ViewBuilder private func stateIcon(_ s: SyncManager.State) -> some View {

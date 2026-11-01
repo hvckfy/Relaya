@@ -127,8 +127,11 @@ struct SidebarView: View {
                 Divider()
                 Button(L("Изменить…")) { model.desktopEditor = d }
                 Button(L("Удалить…"), role: .destructive) {
-                    model.desktops.removeAll { $0.id == d.id }
-                    if model.selectedDesktopID == d.id { model.selectedDesktopID = nil }
+                    model.pendingDelete = PendingDelete(title: L("Удалить «%@»?", d.displayName),
+                                                        message: L("Подключение к рабочему столу будет удалено.")) {
+                        model.desktops.removeAll { $0.id == d.id }
+                        if model.selectedDesktopID == d.id { model.selectedDesktopID = nil }
+                    }
                 }
             }
         case .tool:

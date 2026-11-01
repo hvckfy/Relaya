@@ -3,6 +3,8 @@ import RelayaCore
 
 /// Окно «Настройки» (⌘,): оформление и терминал.
 struct SettingsView: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         TabView {
             AppearanceSettings()
@@ -15,6 +17,7 @@ struct SettingsView: View {
                 .tabItem { Label(L("Синхронизация"), systemImage: "arrow.triangle.2.circlepath") }
         }
         .frame(width: 640)
+        .deleteConfirmation(Binding(get: { model.pendingDelete }, set: { model.pendingDelete = $0 }))
     }
 }
 
