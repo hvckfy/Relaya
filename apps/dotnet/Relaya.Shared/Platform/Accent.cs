@@ -39,17 +39,49 @@ internal static partial class Accent
 
     public static Color FromRgb(uint v) => Color.FromArgb(255, (byte)(v >> 16), (byte)(v >> 8), (byte)v);
 
-    /// Поставить акцент в ресурсы приложения. Вызывается из MainWindow.ApplyTheme; кисти перечитываются там же сменой темы.
+    // Акцентные кисти Fluent по темам, как в XamlControlsResources: (кисть, индекс оттенка в Keys, непрозрачность).
+    // Кисти живут в ThemeDictionaries и берут цвета оттуда, поэтому одного SystemAccentColor в корне ресурсов мало.
+    private static readonly (string Brush, int Shade, double Opacity)[] LightBrushes =
+    {
+        ("AccentFillColorDefaultBrush", 4, 1), ("AccentFillColorSecondaryBrush", 4, 0.9), ("AccentFillColorTertiaryBrush", 4, 0.8),
+        ("AccentTextFillColorPrimaryBrush", 5, 1), ("AccentTextFillColorSecondaryBrush", 6, 1), ("AccentTextFillColorTertiaryBrush", 4, 1),
+        ("AccentFillColorSelectedTextBackgroundBrush", 0, 1), ("SystemControlHighlightAccentBrush", 0, 1),
+    };
+    private static readonly (string Brush, int Shade, double Opacity)[] DarkBrushes =
+    {
+        ("AccentFillColorDefaultBrush", 2, 1), ("AccentFillColorSecondaryBrush", 2, 0.9), ("AccentFillColorTertiaryBrush", 2, 0.8),
+        ("AccentTextFillColorPrimaryBrush", 3, 1), ("AccentTextFillColorSecondaryBrush", 3, 1), ("AccentTextFillColorTertiaryBrush", 2, 1),
+        ("AccentFillColorSelectedTextBackgroundBrush", 0, 1), ("SystemControlHighlightAccentBrush", 0, 1),
+    };
+
+    /// Поставить акцент в ресурсы приложения: цвета — в корень и в словари тем, акцентные кисти — в словари тем.
+    /// Вызывается из MainWindow.ApplyTheme; уже показанные элементы перечитывают ресурсы там же сменой темы.
     public static void Apply()
     {
         var resources = Application.Current.Resources;
+        var themes = new[] { ("Light", LightBrushes), ("Dark", DarkBrushes) };
         if ((Custom ?? PlatformSystemAccent()) is not { } accent)
         {
             foreach (var k in Keys) resources.Remove(k); // системный акцент WinUI
+            foreach (var (name, brushes) in themes)
+            {
+                if (!resources.ThemeDictionaries.TryGetValue(name, out var d) || d is not ResourceDictionary theme) continue;
+                foreach (var k in Keys) theme.Remove(k);
+                foreach (var b in brushes) theme.Remove(b.Brush);
+            }
             return;
         }
         var shades = new[] { 0.0, 0.12, 0.24, 0.36, -0.10, -0.20, -0.30 };
-        for (var i = 0; i < Keys.Length; i++) resources[Keys[i]] = Shade(accent, shades[i]);
+        var colors = new Color[Keys.Length];
+        for (var i = 0; i < Keys.Length; i++) resources[Keys[i]] = colors[i] = Shade(accent, shades[i]);
+        foreach (var (name, brushes) in themes)
+        {
+            if (!resources.ThemeDictionaries.TryGetValue(name, out var d) || d is not ResourceDictionary theme)
+                resources.ThemeDictionaries[name] = theme = new ResourceDictionary();
+            for (var i = 0; i < Keys.Length; i++) theme[Keys[i]] = colors[i];
+            foreach (var (brush, shade, opacity) in brushes)
+                theme[brush] = new Microsoft.UI.Xaml.Media.SolidColorBrush(colors[shade]) { Opacity = opacity };
+        }
     }
 
     /// Акцент системы, если WinUI сам его не берёт (Linux: GNOME/KDE); null — оставить по умолчанию.
