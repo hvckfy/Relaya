@@ -17,10 +17,12 @@ runs:
           core/target
         key: core-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('core/Cargo.lock', 'core/rust-toolchain.toml') }}
         restore-keys: core-${{ runner.os }}-${{ runner.arch }}-
+    # Windows runs the PowerShell script in pwsh: Git Bash puts its own `link` before MSVC link.exe on PATH.
     - name: Build Rust core + bindings
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: '& "${{ inputs.script }}"'
+    - name: Build Rust core + bindings
+      if: runner.os != 'Windows'
       shell: bash
-      run: |
-        case "${{ inputs.script }}" in
-          *.ps1) pwsh -NoProfile -File "${{ inputs.script }}" ;;
-          *) "${{ inputs.script }}" ;;
-        esac
+      run: '"${{ inputs.script }}"'
