@@ -142,6 +142,8 @@ public sealed partial class MainWindow : Window
         Platform.ConsentGrace.WatchSessionLock();
         Platform.SyncService.Shared.ScheduleAuto();
         Platform.TunnelManager.Shared.StartAuto();
+        // A login gate file that cannot be written leaves agents with the old state (B-7, V-11).
+        Platform.LoginGate.WriteFailed += Notify;
         // Пока работают туннели и есть значок в трее, закрытие прячет окно (8.6, как на Mac).
         AppWindow.Closing += (_, a) => { if (HideToTray()) a.Cancel = true; };
         Closed += (_, _) => { Platform.TunnelManager.Shared.StopAll(); Platform.DavBridge.UnmountAll(); };
