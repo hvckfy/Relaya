@@ -37,7 +37,9 @@ internal static class Ui
         grid.Children.Add(column);
         var scroll = new ScrollViewer
         {
-            Content = grid, HorizontalScrollMode = ScrollMode.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = grid,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
         scroll.SizeChanged += (_, e) =>
         {
@@ -65,7 +67,8 @@ internal static class Ui
         var grid = new Grid
         {
             ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } },
-            ColumnSpacing = 16, MinHeight = 44,
+            ColumnSpacing = 16,
+            MinHeight = 44,
         };
         if (glyph != null) grid.Children.Add(new FontIcon { Glyph = glyph, FontSize = IconLarge, VerticalAlignment = VerticalAlignment.Center });
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -95,8 +98,12 @@ internal static class Ui
         if (!Data.AppState.Unreadable.TryGetValue(file, out var bak)) return;
         var bar = new InfoBar
         {
-            Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 0, 0, 8),
-            Title = Strings.L("Файл %@ не прочитан", file), Message = Strings.L("Оригинал сохранён как %@. Список начат заново.", bak),
+            Severity = InfoBarSeverity.Warning,
+            IsOpen = true,
+            IsClosable = true,
+            Margin = new Thickness(0, 0, 0, 8),
+            Title = Strings.L("Файл %@ не прочитан", file),
+            Message = Strings.L("Оригинал сохранён как %@. Список начат заново.", bak),
         };
         bar.Closed += (_, _) => Data.AppState.Unreadable.TryRemove(file, out _);
         body.Children.Insert(0, bar);
@@ -108,8 +115,11 @@ internal static class Ui
 
     public static Border Card(UIElement child) => new()
     {
-        Child = child, Padding = new Thickness(16, 12, 16, 12), CornerRadius = new CornerRadius(4),
-        Background = Brush("CardBackgroundFillColorDefaultBrush"), BorderBrush = Brush("CardStrokeColorDefaultBrush"),
+        Child = child,
+        Padding = new Thickness(16, 12, 16, 12),
+        CornerRadius = new CornerRadius(4),
+        Background = Brush("CardBackgroundFillColorDefaultBrush"),
+        BorderBrush = Brush("CardStrokeColorDefaultBrush"),
         BorderThickness = new Thickness(1),
     };
 
@@ -119,7 +129,8 @@ internal static class Ui
         if (glyph != null)
             content = new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 8,
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
                 Children = { new FontIcon { Glyph = glyph, FontSize = IconMedium }, new TextBlock { Text = text } },
             };
         var b = new Button { Content = content };
@@ -142,8 +153,12 @@ internal static class Ui
     {
         var d = new ContentDialog
         {
-            Title = title, Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap },
-            PrimaryButtonText = action, CloseButtonText = Strings.L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = root,
+            Title = title,
+            Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = action,
+            CloseButtonText = Strings.L("Отмена"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = root,
         };
         return await d.ShowAsync() == ContentDialogResult.Primary;
     }

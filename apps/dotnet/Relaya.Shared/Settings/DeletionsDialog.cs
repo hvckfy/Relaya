@@ -50,7 +50,8 @@ internal static class DeletionsDialog
                 Title = L("Подтвердите удаление"),
                 Content = new StackPanel
                 {
-                    Spacing = 12, MinWidth = 420,
+                    Spacing = 12,
+                    MinWidth = 420,
                     Children =
                     {
                         selectAll,
@@ -58,8 +59,11 @@ internal static class DeletionsDialog
                         Pages.Ui.Secondary(L("Удаления пришли синхронизацией с другой машины. Перед удалением делается резервная копия.")),
                     },
                 },
-                PrimaryButtonText = L("Удалить отмеченные"), CloseButtonText = L("Оставить все"),
-                DefaultButton = ContentDialogButton.Close, XamlRoot = root, IsPrimaryButtonEnabled = false,
+                PrimaryButtonText = L("Удалить отмеченные"),
+                CloseButtonText = L("Оставить все"),
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = root,
+                IsPrimaryButtonEnabled = false,
             };
             // «Удалить отмеченные» доступна, только когда что-то отмечено.
             void Update() => dialog.IsPrimaryButtonEnabled = boxes.Any(b => b.Box.IsChecked == true);

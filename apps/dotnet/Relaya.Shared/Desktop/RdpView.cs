@@ -69,13 +69,15 @@ internal sealed partial class RdpView : UserControl, IDisposable
 
         fit = new AppBarToggleButton
         {
-            Label = L("Вписать"), Icon = new FontIcon { Glyph = "" },
+            Label = L("Вписать"),
+            Icon = new FontIcon { Glyph = "" },
             IsChecked = Platform.Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
         };
         fit.Click += (_, _) => { Platform.Settings.Set($"desktop.{d.id}.fit", fit.IsChecked == true ? "1" : "0"); screen.Fit = fit.IsChecked == true; };
         clipboard = new AppBarToggleButton
         {
-            Label = L("Общий буфер обмена"), Icon = new FontIcon { Glyph = "" },
+            Label = L("Общий буфер обмена"),
+            Icon = new FontIcon { Glyph = "" },
             IsChecked = Platform.Settings.Get($"desktop.{d.id}.clipboard", "1") == "1",
         };
         clipboard.Click += (_, _) =>
@@ -105,7 +107,8 @@ internal sealed partial class RdpView : UserControl, IDisposable
         volume.ValueChanged += (_, e) => { audio.VolumePercent = (int)e.NewValue; Platform.Settings.Set($"desktop.{d.id}.volume", ((int)e.NewValue).ToString()); };
         var sound = new AppBarButton
         {
-            Label = L("Звук"), Icon = new FontIcon { Glyph = "\uE767" },
+            Label = L("Звук"),
+            Icon = new FontIcon { Glyph = "\uE767" },
             Flyout = new Flyout { Content = volume },
         };
         var resolution = new AppBarButton { Label = L("Разрешение"), Icon = new FontIcon { Glyph = "\uE740" }, Flyout = ResolutionMenu() };
@@ -113,13 +116,16 @@ internal sealed partial class RdpView : UserControl, IDisposable
         stop.Click += (_, _) => session?.Disconnect();
         var bar = new CommandBar
         {
-            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsDynamicOverflowEnabled = true,
+            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right,
+            IsDynamicOverflowEnabled = true,
             PrimaryCommands = { fit, resolution, clipboard, sound, send, full, stop },
         };
 
         connecting = new StackPanel
         {
-            Spacing = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Children = { ring, ringText },
         };
         problem.IsOpen = false;
@@ -281,8 +287,12 @@ internal sealed partial class RdpView : UserControl, IDisposable
         var save = new CheckBox { Content = SavePasswordText(), IsChecked = true };
         var dialog = new ContentDialog
         {
-            Title = L("Вход на %@", desktop.name), Content = new StackPanel { Spacing = 8, Children = { user, box, save } },
-            PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            Title = L("Вход на %@", desktop.name),
+            Content = new StackPanel { Spacing = 8, Children = { user, box, save } },
+            PrimaryButtonText = L("Подключить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
@@ -301,8 +311,12 @@ internal sealed partial class RdpView : UserControl, IDisposable
         var save = new CheckBox { Content = SavePasswordText(), IsChecked = true };
         var dialog = new ContentDialog
         {
-            Title = L("Пароль для %@", desktop.name), Content = new StackPanel { Spacing = 8, Children = { box, save } },
-            PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            Title = L("Пароль для %@", desktop.name),
+            Content = new StackPanel { Spacing = 8, Children = { box, save } },
+            PrimaryButtonText = L("Подключить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         // Пустой пароль допустим, как в форме RDP на Mac (#32): учётная запись может быть без пароля. Его не сохраняем.
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
@@ -399,25 +413,36 @@ internal sealed partial class RdpView : UserControl, IDisposable
                 CertRole.Redirect => L("Перенаправленный сервер %@ — сюда перенаправил брокер; неожиданный адрес — повод насторожиться", address),
                 _ => L("Сервер %@", address),
             },
-            TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, Style = Pages.Ui.Style("BodyStrongTextBlockStyle"),
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+            Style = Pages.Ui.Style("BodyStrongTextBlockStyle"),
         });
         if (previous != null && previous != sha256)
             content.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false,
-                Title = L("Отпечаток изменился"), Message = L("Раньше у этого сервера был другой сертификат. Убедитесь, что подключаетесь к нужному серверу."),
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = false,
+                Title = L("Отпечаток изменился"),
+                Message = L("Раньше у этого сервера был другой сертификат. Убедитесь, что подключаетесь к нужному серверу."),
             });
         content.Children.Add(new TextBlock { Text = subject, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
         content.Children.Add(Pages.Ui.Secondary("SHA-256"));
         content.Children.Add(new TextBlock
         {
-            Text = sha256, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true,
+            Text = sha256,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
         });
         var dialog = new ContentDialog
         {
-            Title = L("Проверьте сертификат сервера"), Content = content,
-            PrimaryButtonText = L("Доверять"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+            Title = L("Проверьте сертификат сервера"),
+            Content = content,
+            PrimaryButtonText = L("Доверять"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
         };
         var ok = await dialog.ShowAsync() == ContentDialogResult.Primary;
         if (ok) Trust(sha256, node);

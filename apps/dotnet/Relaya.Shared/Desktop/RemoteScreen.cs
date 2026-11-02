@@ -26,7 +26,8 @@ internal sealed partial class RemoteScreen : UserControl
     // 1:1 — холст размером с экран сервера в прокрутке, как на Mac; «вписать» — холст по окну, прокрутки нет.
     private readonly ScrollViewer scroll = new()
     {
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         ZoomMode = ZoomMode.Disabled,
     };
 

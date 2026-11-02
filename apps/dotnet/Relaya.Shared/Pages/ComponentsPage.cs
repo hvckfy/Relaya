@@ -22,13 +22,20 @@ internal static class ComponentsPage
         if (missing.Any(i => i.Required))
             list.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false, Margin = new Thickness(0, 0, 0, 8),
-                Title = L("Не хватает обязательных компонентов"), Message = L("Без них часть Relaya не работает. Команды установки — ниже."),
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = false,
+                Margin = new Thickness(0, 0, 0, 8),
+                Title = L("Не хватает обязательных компонентов"),
+                Message = L("Без них часть Relaya не работает. Команды установки — ниже."),
             });
         else if (missing.Count == 0)
             list.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Success, IsOpen = true, IsClosable = false, Margin = new Thickness(0, 0, 0, 8),
+                Severity = InfoBarSeverity.Success,
+                IsOpen = true,
+                IsClosable = false,
+                Margin = new Thickness(0, 0, 0, 8),
                 Title = L("Все компоненты на месте"),
             });
         foreach (var i in items)

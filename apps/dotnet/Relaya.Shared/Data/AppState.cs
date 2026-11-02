@@ -159,9 +159,13 @@ internal static class AppState
     {
         var info = new ProcessStartInfo(exe)
         {
-            RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
-            UseShellExecute = false, CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
         foreach (var a in args) info.ArgumentList.Add(a);
         if (askpassAlias != null) Platform.Askpass.Configure(info, askpassAlias);

@@ -57,7 +57,10 @@ internal sealed class SyncPage : UserControl
         if (!u.noPassphrase && u.missing.Count == 0) return null;
         return new InfoBar
         {
-            Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 8, 0, 0),
+            Severity = InfoBarSeverity.Warning,
+            IsOpen = true,
+            IsClosable = true,
+            Margin = new Thickness(0, 8, 0, 0),
             Title = L("Ключи не выгружены"),
             Message = u.noPassphrase
                 ? L("Задайте пароль шифрования ключей — без него ключи этой машины не уходят в синхронизацию.")
@@ -106,8 +109,12 @@ internal sealed class SyncPage : UserControl
         }
         var dialog = new ContentDialog
         {
-            Title = L("Конфликт синхронизации"), Content = new ScrollViewer { Content = panel, MaxHeight = 560 },
-            PrimaryButtonText = L("Применить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            Title = L("Конфликт синхронизации"),
+            Content = new ScrollViewer { Content = panel, MaxHeight = 560 },
+            PrimaryButtonText = L("Применить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         dialog.Resources["ContentDialogMaxWidth"] = 960d;
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
@@ -122,7 +129,9 @@ internal sealed class SyncPage : UserControl
         root.Children.Add(new TextBlock
         {
             Text = Platform.PlatformText.SyncProfileHint(),
-            TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new Thickness(0, 0, 0, 12),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brush("TextFillColorSecondaryBrush"),
+            Margin = new Thickness(0, 0, 0, 12),
         });
 
         var pass = new PasswordBox
@@ -134,7 +143,9 @@ internal sealed class SyncPage : UserControl
         // Пустой пароль — не молча: предупреждение прямо под полем, подтверждение — отдельной кнопкой (#32).
         var confirmEmpty = new InfoBar
         {
-            Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(0, 8, 0, 0),
+            Severity = InfoBarSeverity.Warning,
+            IsClosable = false,
+            Margin = new Thickness(0, 8, 0, 0),
             Title = L("Синхронизировать ключи без пароля?"),
             Message = L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы. Из истории git их уже не убрать — если передумаете, ключи придётся заменить."),
         };
@@ -162,7 +173,10 @@ internal sealed class SyncPage : UserControl
         if (sync.KeysWithoutPassphrase)
             root.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false, Margin = new Thickness(0, 8, 0, 0),
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = false,
+                Margin = new Thickness(0, 8, 0, 0),
                 Message = L("Ключи синхронизируются без пароля — в репозитории они фактически открыты. Чтобы защитить их, введите пароль и сохраните."),
             });
 
@@ -174,7 +188,10 @@ internal sealed class SyncPage : UserControl
         {
             var bar = new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 8, 0, 0),
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = true,
+                Margin = new Thickness(0, 8, 0, 0),
                 Message = L("Ключ %@ с другой машины отличается от вашего — сохранён как %@", k.name, k.savedAs),
             };
             bar.Closed += (_, _) => sync.DismissRenamed(k);
@@ -194,8 +211,12 @@ internal sealed class SyncPage : UserControl
             toPass.Click += (_, _) => { pass.StartBringIntoView(); pass.Focus(FocusState.Programmatic); };
             root.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 8, 0, 0),
-                Message = L(key, string.Join(", ", names)), ActionButton = toPass,
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = true,
+                Margin = new Thickness(0, 8, 0, 0),
+                Message = L(key, string.Join(", ", names)),
+                ActionButton = toPass,
             });
         }
 
@@ -222,7 +243,10 @@ internal sealed class SyncPage : UserControl
         if (!itemOff && sync.HasPassphrase) return null;
         var bar = new InfoBar
         {
-            Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 4, 0, 8),
+            Severity = InfoBarSeverity.Warning,
+            IsOpen = true,
+            IsClosable = true,
+            Margin = new Thickness(0, 4, 0, 8),
             Title = L("В профиле %@ есть SSH-ключи с другой машины", p.name),
             Message = itemOff
                 ? L("Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине.")
@@ -256,8 +280,13 @@ internal sealed class SyncPage : UserControl
         var name = new TextBox { Header = L("Название"), Text = initial.name };
         name.LostFocus += (_, _) => Change(p => p with { name = name.Text.Trim().Length > 0 ? name.Text.Trim() : p.name });
 
-        var backend = new ComboBox { Header = L("Где хранить"), Items = { L("Git-репозиторий"), Platform.PlatformText.SyncFolderOption() },
-            SelectedIndex = initial.backend == SyncBackend.Git ? 0 : 1, MinWidth = 280 };
+        var backend = new ComboBox
+        {
+            Header = L("Где хранить"),
+            Items = { L("Git-репозиторий"), Platform.PlatformText.SyncFolderOption() },
+            SelectedIndex = initial.backend == SyncBackend.Git ? 0 : 1,
+            MinWidth = 280
+        };
         var remote = new TextBox { Text = initial.remote };
         void RemoteHeader() => remote.Header = backend.SelectedIndex == 0
             ? L("Репозиторий (git@server:relaya.git) — доступ вашими ключами из ~/.ssh")
@@ -340,8 +369,13 @@ internal sealed class SyncPage : UserControl
         takeTheirs.Click += async (_, _) => await sync.Resolve(id, keepMine: false);
         var pick = new Button { Content = L("Разобрать по файлам…") };
         pick.Click += async (_, _) => await PickConflicts(id);
-        var conflict = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = Visibility.Collapsed,
-            Children = { keepMine, takeTheirs, pick } };
+        var conflict = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Visibility = Visibility.Collapsed,
+            Children = { keepMine, takeTheirs, pick }
+        };
 
         // 11.10: git-сервер ещё не знаком — терминал к нему, отпечаток подтверждается в окне первого подключения.
         var trustKey = new Button { Content = L("Подтвердить ключ сервера…"), Visibility = Visibility.Collapsed };
@@ -353,10 +387,13 @@ internal sealed class SyncPage : UserControl
 
         var header = new Grid { ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } } };
         var icon = new FontIcon { Glyph = "\uE895", FontSize = Pages.Ui.IconLarge, Margin = new Thickness(0, 0, 16, 0) };
-        var titles = new StackPanel { Children = { new TextBlock { Text = initial.name }, new StackPanel
+        var titles = new StackPanel
+        {
+            Children = { new TextBlock { Text = initial.name }, new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Children = { ring, status },
-        } } };
+        } }
+        };
         Grid.SetColumn(titles, 1);
         Grid.SetColumn(enabled, 2);
         header.Children.Add(icon);
@@ -417,19 +454,25 @@ internal sealed class SyncPage : UserControl
     private static Border Card(string title, string description, UIElement control)
     {
         var grid = new Grid { ColumnDefinitions = { new(), new() { Width = GridLength.Auto } }, ColumnSpacing = 16 };
-        var text = new StackPanel { Children =
+        var text = new StackPanel
+        {
+            Children =
         {
             new TextBlock { Text = title },
             new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap, Style = Style("CaptionTextBlockStyle"),
                 Foreground = Brush("TextFillColorSecondaryBrush") },
-        } };
+        }
+        };
         Grid.SetColumn((FrameworkElement)control, 1);
         grid.Children.Add(text);
         grid.Children.Add(control);
         return new Border
         {
-            Child = grid, Padding = new Thickness(16), CornerRadius = new CornerRadius(4),
-            Background = Brush("CardBackgroundFillColorDefaultBrush"), BorderBrush = Brush("CardStrokeColorDefaultBrush"),
+            Child = grid,
+            Padding = new Thickness(16),
+            CornerRadius = new CornerRadius(4),
+            Background = Brush("CardBackgroundFillColorDefaultBrush"),
+            BorderBrush = Brush("CardStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
         };
     }

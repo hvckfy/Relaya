@@ -62,7 +62,10 @@ internal sealed class TmuxControlClient
     {
         var info = new ProcessStartInfo(AppState.SshExe)
         {
-            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
         foreach (var a in new[] { "-tt", alias, RelayaCoreMethods.TmuxCcAttach(SessionName) }) info.ArgumentList.Add(a);
         Askpass.Configure(info, alias);

@@ -81,7 +81,9 @@ internal sealed class DesktopsPage : UserControl
         };
         var gateway = new Expander
         {
-            Header = "RD Gateway", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Header = "RD Gateway",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
             IsExpanded = d?.gatewayHost is { Length: > 0 },
             Content = new StackPanel { Spacing = 8, Children = { gwHost, gwUser, gwDomain, gwPass } },
         };
@@ -90,7 +92,8 @@ internal sealed class DesktopsPage : UserControl
         // V-SEC-1: VNC напрямую не шифрует экран и ввод и не проверяет сервер — предупреждаем, не запрещаем.
         var vncWarning = new InfoBar
         {
-            Severity = InfoBarSeverity.Warning, IsClosable = false,
+            Severity = InfoBarSeverity.Warning,
+            IsClosable = false,
             Message = L("VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Выберите SSH-хост в «Через SSH-хост», если сеть не доверенная."),
         };
         // Сброс доверия сертификату RDP (9.4) — только если оно сохранено.
@@ -127,7 +130,9 @@ internal sealed class DesktopsPage : UserControl
             Ui.Button(L("Отмена"), Build), Ui.Button(L("Сохранить"), () => _ = SaveAsync(), accent: true));
         body.Children.Add(new StackPanel
         {
-            Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
+            Spacing = 12,
+            MaxWidth = 640,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Children = { name, kind, address, port, user, via, vncWarning, group, full, gateway, trust, error },
         });
         Content = page;

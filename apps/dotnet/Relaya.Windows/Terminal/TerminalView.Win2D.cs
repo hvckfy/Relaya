@@ -94,7 +94,9 @@ internal sealed partial class TerminalView
         var i = (bold ? 1 : 0) | (italic ? 2 : 0);
         var f = formats[i] ??= new CanvasTextFormat
         {
-            WordWrapping = CanvasWordWrapping.NoWrap, FontFamily = format.FontFamily, FontSize = format.FontSize,
+            WordWrapping = CanvasWordWrapping.NoWrap,
+            FontFamily = format.FontFamily,
+            FontSize = format.FontSize,
             FontWeight = bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
             FontStyle = italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
         };

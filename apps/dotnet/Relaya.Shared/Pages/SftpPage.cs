@@ -37,7 +37,8 @@ internal sealed class SftpPage : UserControl
         list.DoubleTapped += (_, _) => { if (Selected().FirstOrDefault() is { } f && (f.isDirectory || f.isLink)) _ = Open(Join(f.name)); };
         var toolbar = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 4,
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
             Children =
             {
                 Ui.IconButton("", L("Наверх"), () => _ = Open(Parent(path))),
@@ -54,7 +55,8 @@ internal sealed class SftpPage : UserControl
         };
         var root = new Grid
         {
-            Margin = new Thickness(16), RowSpacing = 8,
+            Margin = new Thickness(16),
+            RowSpacing = 8,
             RowDefinitions = { new() { Height = GridLength.Auto }, new() { Height = GridLength.Auto }, new(), new() { Height = GridLength.Auto } },
         };
         root.Children.Add(toolbar);
@@ -236,7 +238,8 @@ internal sealed class SftpPage : UserControl
             var part = f.isDirectory ? target : PartName(target);
             Enqueue(new Job
             {
-                Name = f.name, Total = f.isDirectory ? 0 : f.size,
+                Name = f.name,
+                Total = f.isDirectory ? 0 : f.size,
                 Commands = new[] { f.isDirectory ? $"get -r {Q(Join(f.name))} {Q(folder.Path)}" : $"get {Q(Join(f.name))} {Q(part)}" },
                 Done = () => new System.IO.FileInfo(part) is { Exists: true } fi ? fi.Length : 0,
                 Cleanup = () => { if (part != target) System.IO.File.Delete(part); return Task.CompletedTask; },
@@ -284,7 +287,9 @@ internal sealed class SftpPage : UserControl
         var temp = prefix + $".{name}.{Guid.NewGuid().ToString("N")[..8]}.relaya-part";
         return new Job
         {
-            Name = name, Total = new System.IO.FileInfo(local).Length, Finished = finished,
+            Name = name,
+            Total = new System.IO.FileInfo(local).Length,
+            Finished = finished,
             Commands = new[] { $"put {Q(local)} {Q(temp)}", $"rename {Q(temp)} {Q(prefix + name)}" },
             Cleanup = async () => await Batch($"-rm {Q(temp)}"), // «-»: ошибку sftp игнорирует, если файла уже нет
         };
@@ -430,7 +435,10 @@ internal sealed class SftpPage : UserControl
         // Скачивание — через ту же очередь (одна передача за раз), открытие — когда оно закончилось.
         Enqueue(new Job
         {
-            Name = f.name, Commands = new[] { $"get {Q(Join(f.name))} {Q(local)}" }, Total = f.size, Done = Done,
+            Name = f.name,
+            Commands = new[] { $"get {Q(Join(f.name))} {Q(local)}" },
+            Total = f.size,
+            Done = Done,
             Finished = () => StartEditing(f.name, dir, local, remoteDir),
         });
     }
@@ -489,8 +497,12 @@ internal sealed class SftpPage : UserControl
         var box = new TextBox { Text = text };
         var d = new ContentDialog
         {
-            Title = title, Content = box, PrimaryButtonText = action, CloseButtonText = L("Отмена"),
-            DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            Title = title,
+            Content = box,
+            PrimaryButtonText = action,
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         return await d.ShowAsync() == ContentDialogResult.Primary ? box.Text.Trim() : null;
     }

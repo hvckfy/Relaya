@@ -60,7 +60,9 @@ internal static class CommandPalette
                     list.Items.Add(new ListViewItem
                     {
                         Content = new TextBlock { Text = section, Style = Ui.Style("CaptionTextBlockStyle"), Foreground = Ui.Brush("TextFillColorSecondaryBrush") },
-                        IsEnabled = false, IsTabStop = false, MinHeight = 24,
+                        IsEnabled = false,
+                        IsTabStop = false,
+                        MinHeight = 24,
                     });
                 }
                 list.Items.Add(Row(item));
@@ -119,7 +121,9 @@ internal static class CommandPalette
         if (item.Subtitle.Length > 0)
             text.Children.Add(new TextBlock
             {
-                Text = item.Subtitle, Style = Ui.Style("CaptionTextBlockStyle"), Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
+                Text = item.Subtitle,
+                Style = Ui.Style("CaptionTextBlockStyle"),
+                Foreground = Ui.Brush("TextFillColorSecondaryBrush"),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             });
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Padding = new Thickness(0, 4, 0, 4), Children = { new FontIcon { Glyph = item.Glyph, FontSize = 16 }, text } };

@@ -40,7 +40,8 @@ internal sealed class VncView : UserControl, IDisposable
         desktop = d;
         fit = new AppBarToggleButton
         {
-            Label = L("Вписать"), Icon = new FontIcon { Glyph = "" },
+            Label = L("Вписать"),
+            Icon = new FontIcon { Glyph = "" },
             IsChecked = Platform.Settings.Get($"desktop.{d.id}.fit", d.scaleToFit == false ? "0" : "1") == "1",
         };
         screen.Fit = fit.IsChecked == true;
@@ -62,12 +63,15 @@ internal sealed class VncView : UserControl, IDisposable
         stop.Click += (_, _) => session?.Disconnect();
         var bar = new CommandBar
         {
-            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsDynamicOverflowEnabled = true,
+            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right,
+            IsDynamicOverflowEnabled = true,
             PrimaryCommands = { fit, send, full, stop },
         };
         connecting = new StackPanel
         {
-            Spacing = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Children = { new ProgressRing { IsActive = true, Width = 48, Height = 48 }, Pages.Ui.Secondary(L("Подключение…")) },
         };
         problem.IsOpen = false;
@@ -145,8 +149,12 @@ internal sealed class VncView : UserControl, IDisposable
             panel.Children.Add(save);
             var dialog = new ContentDialog
             {
-                Title = L("Вход на %@", desktop.name), Content = panel,
-                PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+                Title = L("Вход на %@", desktop.name),
+                Content = panel,
+                PrimaryButtonText = L("Подключить"),
+                CloseButtonText = L("Отмена"),
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
             };
             // Пустой пароль допустим, как в RDP (#32): сервер VNC может пускать без него.
             if (await dialog.ShowAsync() != ContentDialogResult.Primary)
@@ -297,14 +305,28 @@ internal sealed class VncView : UserControl, IDisposable
     // X11 keysym служебных клавиш и модификаторов.
     private static uint? Keysym(VirtualKey key) => key switch
     {
-        VirtualKey.Back => 0xff08, VirtualKey.Tab => 0xff09, VirtualKey.Enter => 0xff0d, VirtualKey.Escape => 0xff1b,
-        VirtualKey.Delete => 0xffff, VirtualKey.Insert => 0xff63, VirtualKey.Home => 0xff50, VirtualKey.End => 0xff57,
-        VirtualKey.PageUp => 0xff55, VirtualKey.PageDown => 0xff56,
-        VirtualKey.Left => 0xff51, VirtualKey.Up => 0xff52, VirtualKey.Right => 0xff53, VirtualKey.Down => 0xff54,
-        VirtualKey.Shift or VirtualKey.LeftShift => 0xffe1, VirtualKey.RightShift => 0xffe2,
-        VirtualKey.Control or VirtualKey.LeftControl => 0xffe3, VirtualKey.RightControl => 0xffe4,
-        VirtualKey.Menu or VirtualKey.LeftMenu => 0xffe9, VirtualKey.RightMenu => 0xffea,
-        VirtualKey.LeftWindows => 0xffeb, VirtualKey.RightWindows => 0xffec,
+        VirtualKey.Back => 0xff08,
+        VirtualKey.Tab => 0xff09,
+        VirtualKey.Enter => 0xff0d,
+        VirtualKey.Escape => 0xff1b,
+        VirtualKey.Delete => 0xffff,
+        VirtualKey.Insert => 0xff63,
+        VirtualKey.Home => 0xff50,
+        VirtualKey.End => 0xff57,
+        VirtualKey.PageUp => 0xff55,
+        VirtualKey.PageDown => 0xff56,
+        VirtualKey.Left => 0xff51,
+        VirtualKey.Up => 0xff52,
+        VirtualKey.Right => 0xff53,
+        VirtualKey.Down => 0xff54,
+        VirtualKey.Shift or VirtualKey.LeftShift => 0xffe1,
+        VirtualKey.RightShift => 0xffe2,
+        VirtualKey.Control or VirtualKey.LeftControl => 0xffe3,
+        VirtualKey.RightControl => 0xffe4,
+        VirtualKey.Menu or VirtualKey.LeftMenu => 0xffe9,
+        VirtualKey.RightMenu => 0xffea,
+        VirtualKey.LeftWindows => 0xffeb,
+        VirtualKey.RightWindows => 0xffec,
         VirtualKey.CapitalLock => 0xffe5,
         >= VirtualKey.F1 and <= VirtualKey.F12 => 0xffbe + (uint)(key - VirtualKey.F1),
         _ => null,

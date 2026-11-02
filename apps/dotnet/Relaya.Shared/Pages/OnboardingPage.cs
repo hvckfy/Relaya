@@ -45,7 +45,8 @@ internal static class OnboardingPage
 
     private static StackPanel Welcome() => new()
     {
-        Spacing = 8, MaxWidth = 460,
+        Spacing = 8,
+        MaxWidth = 460,
         Children =
         {
             Ui.Secondary(L("Relaya читает ваш ~/.ssh/config и ключи как есть. Любое изменение файлов или сервера мы покажем заранее и применим только после подтверждения.")),
@@ -70,7 +71,8 @@ internal static class OnboardingPage
 
     private static StackPanel HowItWorks() => new()
     {
-        Spacing = 10, MaxWidth = 460,
+        Spacing = 10,
+        MaxWidth = 460,
         Children =
         {
             Permission(L("Доступ к ~/.ssh"), L("Читать config и ключи, записывать изменения после вашего подтверждения. Копия config перед правкой — в config.bak.")),

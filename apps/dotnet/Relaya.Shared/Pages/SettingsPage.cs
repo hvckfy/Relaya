@@ -77,8 +77,12 @@ internal sealed class SettingsPage : UserControl
             var hex = $"#{rgb:X6}";
             var swatch = new Button
             {
-                Width = 32, Height = 32, Padding = new Thickness(0), CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(color), BorderBrush = Ui.Brush("ControlStrokeColorDefaultBrush"),
+                Width = 32,
+                Height = 32,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(color),
+                BorderBrush = Ui.Brush("ControlStrokeColorDefaultBrush"),
             };
             ToolTipService.SetToolTip(swatch, hex);
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(swatch, L("Цвет акцента %@", hex));
@@ -147,8 +151,10 @@ internal sealed class SettingsPage : UserControl
                 row.Children.Add(new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(t.Ansi[i]) });
             lines.Children.Add(new TextBlock
             {
-                Text = "user@server:~$ ls --color", Foreground = new SolidColorBrush(t.Foreground),
-                FontFamily = new FontFamily(Platform.Settings.Get("terminal.font", "Cascadia Mono")), Margin = new Thickness(0, 0, 0, 8),
+                Text = "user@server:~$ ls --color",
+                Foreground = new SolidColorBrush(t.Foreground),
+                FontFamily = new FontFamily(Platform.Settings.Get("terminal.font", "Cascadia Mono")),
+                Margin = new Thickness(0, 0, 0, 8),
             });
             lines.Children.Add(row);
             preview.Background = new SolidColorBrush(t.Background);
@@ -188,8 +194,13 @@ internal sealed class SettingsPage : UserControl
         font.TextSubmitted += (_, e) => SetFont(e.Text);
         list.Children.Add(Ui.Row("", L("Шрифт"), L("Моноширинный; установленные в системе шрифты тоже подходят"), font));
 
-        var size = new NumberBox { Minimum = 8, Maximum = 32, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-            Value = double.TryParse(Platform.Settings.Get("terminal.size", "14"), out var v) ? v : 14 };
+        var size = new NumberBox
+        {
+            Minimum = 8,
+            Maximum = 32,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Value = double.TryParse(Platform.Settings.Get("terminal.size", "14"), out var v) ? v : 14
+        };
         size.ValueChanged += (_, _) => Platform.Settings.Set("terminal.size", ((int)size.Value).ToString());
         list.Children.Add(Ui.Row("", L("Размер шрифта"), L("Также Ctrl+= и Ctrl+− в терминале"), size));
         list.Children.Add(preview);
@@ -214,8 +225,13 @@ internal sealed class SettingsPage : UserControl
         highlightRow.Children.Add(highlight);
         list.Children.Add(Ui.Row("\uE7E6", L("Подсветка вывода"), L("Ошибки, предупреждения, успех, IP-адреса и ссылки — цветами темы; полноэкранные программы не трогаются"), highlightRow));
 
-        var idle = new NumberBox { Minimum = 1, Maximum = 10080, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-            Value = double.TryParse(Platform.Settings.Get("tmux.idle", "60"), out var t) ? t : 60 };
+        var idle = new NumberBox
+        {
+            Minimum = 1,
+            Maximum = 10080,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Value = double.TryParse(Platform.Settings.Get("tmux.idle", "60"), out var t) ? t : 60
+        };
         idle.ValueChanged += (_, _) => Platform.Settings.Set("tmux.idle", ((int)idle.Value).ToString());
         list.Children.Add(Ui.Row("\uE8A1", L("tmux: закрывать брошенные сессии через, мин"),
             L("Для хостов с tmux: сессия без подключений живёт на сервере столько минут"), idle));
@@ -249,7 +265,9 @@ internal sealed class SettingsPage : UserControl
         if (Platform.ConsentGrace.LockWatchMissing)
             list.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false,
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = false,
                 Title = L("Блокировка экрана не сбрасывает подтверждение"),
                 Message = L("Нет gdbus — установите его в «Компонентах». Пока окно доверия закроется только по истечении срока."),
             });
@@ -301,7 +319,9 @@ internal sealed class SettingsPage : UserControl
                 {
                     Title = L("Скачать OpenH264 от Cisco?"),
                     Content = new ScrollViewer { Content = new TextBlock { Text = Platform.OpenH264.Info?.notice ?? "", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }, MaxHeight = 360 },
-                    PrimaryButtonText = L("Скачать и включить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close,
+                    PrimaryButtonText = L("Скачать и включить"),
+                    CloseButtonText = L("Отмена"),
+                    DefaultButton = ContentDialogButton.Close,
                     XamlRoot = toggle.XamlRoot,
                 };
                 if (await dialog.ShowAsync() != ContentDialogResult.Primary) { toggle.IsOn = false; return; }
@@ -331,8 +351,12 @@ internal sealed class SettingsPage : UserControl
         list.Children.Add(Ui.Row("", L("Ядро"), "relaya-core " + uniffi.relaya_core.RelayaCoreMethods.CoreVersion()));
         var logSize = new NumberBox
         {
-            Minimum = Platform.LogFiles.MinKB, Maximum = Platform.LogFiles.MaxKB, SmallChange = 64, LargeChange = 1024,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, Value = Platform.LogFiles.LimitKB,
+            Minimum = Platform.LogFiles.MinKB,
+            Maximum = Platform.LogFiles.MaxKB,
+            SmallChange = 64,
+            LargeChange = 1024,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Value = Platform.LogFiles.LimitKB,
         };
         logSize.ValueChanged += (_, e) => { if (!double.IsNaN(e.NewValue)) Platform.Settings.Set("logs.maxKB", ((int)e.NewValue).ToString()); };
         list.Children.Add(Ui.Row("\uE9D9", L("Максимальный размер журналов, КБ"),

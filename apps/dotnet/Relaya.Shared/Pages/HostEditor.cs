@@ -55,8 +55,12 @@ internal static class HostEditor
             : source.identityFiles.Count > 0 ? source.identityFiles : source.identityFile is { } f1 ? new List<string> { f1 } : new List<string>();
         var keyList = new TextBox
         {
-            Header = L("Ключи (IdentityFile), по одному в строке"), Text = string.Join("\r", keyLines), AcceptsReturn = true,
-            PlaceholderText = L("необязательно"), MinHeight = 56, FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            Header = L("Ключи (IdentityFile), по одному в строке"),
+            Text = string.Join("\r", keyLines),
+            AcceptsReturn = true,
+            PlaceholderText = L("необязательно"),
+            MinHeight = 56,
+            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
         };
         var addKeyMenu = new MenuFlyout();
         foreach (var k in keys)
@@ -107,7 +111,8 @@ internal static class HostEditor
         };
         var passwordNote = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8,
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
             Children = { Ui.Secondary(Platform.PlatformText.PasswordStored()), forgetButton },
         };
         // Keepalive (ServerAliveInterval, секунды; пусто — как в конфиге): ssh шлёт пинги и рвёт мёртвое соединение.
@@ -162,7 +167,9 @@ internal static class HostEditor
                 preview.Children.Add(new TextBlock
                 {
                     Text = (line.kind == DiffKind.Added ? "+ " : line.kind == DiffKind.Removed ? "− " : "  ") + line.text,
-                    FontFamily = new FontFamily("Cascadia Mono, Consolas, monospace"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                    FontFamily = new FontFamily("Cascadia Mono, Consolas, monospace"),
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap,
                     Foreground = Ui.Brush(line.kind == DiffKind.Added ? "SystemFillColorSuccessBrush"
                         : line.kind == DiffKind.Removed ? "SystemFillColorCriticalBrush" : "TextFillColorSecondaryBrush"),
                 });
@@ -227,7 +234,10 @@ internal static class HostEditor
                 Spacing = 8,
                 Children = { box, Ui.Secondary(Platform.PlatformText.PasswordStoredAndTyped()) },
             },
-            PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = root,
+            PrimaryButtonText = L("Сохранить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = root,
         };
         if (await dialog.ShowAsync() == ContentDialogResult.Primary && box.Password.Length > 0)
         {

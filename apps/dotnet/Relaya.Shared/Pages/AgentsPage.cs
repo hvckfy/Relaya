@@ -30,7 +30,9 @@ internal sealed class AgentsPage : UserControl
         if (McpHost.PolicyUnreadable())
             body.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Error, IsOpen = true, IsClosable = false,
+                Severity = InfoBarSeverity.Error,
+                IsOpen = true,
+                IsClosable = false,
                 Title = L("Политика не прочитана — доступ выключен"),
                 Message = L("Файл mcp.json повреждён. Агенты не получат доступ, пока вы не сохраните настройки заново.") + "\n" + L("Новая политика — с подтверждением каждой команды; режимы хостов задайте заново."),
                 ActionButton = Ui.Button(L("Создать политику заново"), () => { McpHost.ResetPolicy(); Build(); }),
@@ -195,7 +197,10 @@ internal sealed class AgentsPage : UserControl
         var p = McpHost.LoadPolicy();
         TextBox Box(string header, List<string> lines) => new()
         {
-            Header = header, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, MinHeight = 120,
+            Header = header,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            MinHeight = 120,
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"),
             Text = string.Join("\n", lines),
         };
@@ -206,14 +211,18 @@ internal sealed class AgentsPage : UserControl
             Title = alias == "*" ? L("Правила для всех хостов") : L("Правила для %@", alias),
             Content = new StackPanel
             {
-                Spacing = 12, MinWidth = 420,
+                Spacing = 12,
+                MinWidth = 420,
                 Children =
                 {
                     Ui.Secondary(L("По одному шаблону в строке, как в shell: systemctl restart *, docker logs *. Запрет сильнее разрешения.")),
                     allow, deny,
                 },
             },
-            PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+            PrimaryButtonText = L("Сохранить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         static List<string> Lines(TextBox b) => b.Text.Split('\r', '\n').Select(l => l.Trim()).Where(l => l.Length > 0).Distinct().ToList();

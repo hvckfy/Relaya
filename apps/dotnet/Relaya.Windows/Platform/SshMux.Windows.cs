@@ -151,9 +151,13 @@ internal static partial class SshMux
         {
             var info = new ProcessStartInfo(AppState.SftpExe)
             {
-                RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
-                UseShellExecute = false, CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             };
             foreach (var a in SftpArgs) info.ArgumentList.Add(a);
             info.ArgumentList.Add(alias);

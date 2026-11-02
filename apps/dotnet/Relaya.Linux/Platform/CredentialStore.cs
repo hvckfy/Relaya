@@ -119,7 +119,8 @@ internal static class CredentialStore
     private static void Drop(IntPtr error) => Message(error);
 
     [DllImport(Secret)] private static extern IntPtr secret_password_lookupv_sync(IntPtr schema, IntPtr attributes, IntPtr cancellable, out IntPtr error);
-    [DllImport(Secret)] private static extern bool secret_password_storev_sync(IntPtr schema, IntPtr attributes,
+    [DllImport(Secret)]
+    private static extern bool secret_password_storev_sync(IntPtr schema, IntPtr attributes,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string collection, [MarshalAs(UnmanagedType.LPUTF8Str)] string label,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string password, IntPtr cancellable, out IntPtr error);
     [DllImport(Secret)] private static extern bool secret_password_clearv_sync(IntPtr schema, IntPtr attributes, IntPtr cancellable, out IntPtr error);

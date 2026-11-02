@@ -44,7 +44,9 @@ internal sealed class TunnelManager
         if (running.TryGetValue(t.id, out var r) && r.State is State.Running or State.Starting) return;
         var info = new ProcessStartInfo(Data.AppState.SshExe)
         {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardError = true,
         };
         var passwordOnly = Askpass.CanAutofill(t.hostAlias) && Askpass.PasswordOnly(t.hostAlias);
         foreach (var a in RelayaCoreMethods.TunnelSshArguments(t, passwordOnly)) info.ArgumentList.Add(a);

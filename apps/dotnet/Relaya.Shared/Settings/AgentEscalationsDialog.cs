@@ -36,14 +36,18 @@ internal static class AgentEscalationsDialog
                 Title = L("Синхронизация расширяет права агентов"),
                 Content = new StackPanel
                 {
-                    Spacing = 12, MinWidth = 420,
+                    Spacing = 12,
+                    MinWidth = 420,
                     Children =
                     {
                         new ScrollViewer { Content = rows, MaxHeight = 360 },
                         Pages.Ui.Secondary(L("Изменения пришли с другой машины. Без вашего согласия они не применяются; отклонённые больше не предлагаются.")),
                     },
                 },
-                PrimaryButtonText = L("Применить"), CloseButtonText = L("Отклонить"), DefaultButton = ContentDialogButton.Close, XamlRoot = root,
+                PrimaryButtonText = L("Применить"),
+                CloseButtonText = L("Отклонить"),
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = root,
             };
             var accept = await dialog.ShowAsync() == ContentDialogResult.Primary;
             try { SyncService.Shared.ApplyAgentEscalations(accept); }

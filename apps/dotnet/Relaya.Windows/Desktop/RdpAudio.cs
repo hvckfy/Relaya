@@ -46,7 +46,8 @@ internal sealed class RdpAudio : RemoteAudioListener, IDisposable
                 {
                     buffer = new BufferedWaveProvider(new WaveFormat((int)f.sampleRate, f.bitsPerSample, f.channels))
                     {
-                        DiscardOnBufferOverflow = true, BufferDuration = TimeSpan.FromSeconds(2),
+                        DiscardOnBufferOverflow = true,
+                        BufferDuration = TimeSpan.FromSeconds(2),
                     };
                     output = new WasapiOut(AudioClientShareMode.Shared, 80);
                     output.Init(buffer);

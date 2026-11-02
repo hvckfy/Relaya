@@ -92,8 +92,11 @@ internal sealed class TabStrip : UserControl
     {
         list = new ListView
         {
-            SelectionMode = ListViewSelectionMode.None, IsItemClickEnabled = true,
-            CanDragItems = true, CanReorderItems = true, AllowDrop = true,
+            SelectionMode = ListViewSelectionMode.None,
+            IsItemClickEnabled = true,
+            CanDragItems = true,
+            CanReorderItems = true,
+            AllowDrop = true,
             ItemsSource = TabItems,
             ItemsPanel = (ItemsPanelTemplate)XamlReader.Load(
                 "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">" +

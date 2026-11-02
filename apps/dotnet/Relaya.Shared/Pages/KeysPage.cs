@@ -131,7 +131,8 @@ internal sealed class KeysPage : UserControl
                 MaxHeight = 520,
                 Content = new StackPanel
                 {
-                    Spacing = 8, MinWidth = 420,
+                    Spacing = 8,
+                    MinWidth = 420,
                     Children =
                     {
                         Ui.Section(L("Серверы")),
@@ -144,7 +145,10 @@ internal sealed class KeysPage : UserControl
                     },
                 },
             },
-            PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            PrimaryButtonText = L("Сохранить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;
         var hosts = servers.Children.Concat(gits.Children).OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
@@ -164,10 +168,14 @@ internal sealed class KeysPage : UserControl
             Title = L("Разложить %@ на хосты", Path.GetFileName(pub)),
             Content = new StackPanel
             {
-                Spacing = 8, MinWidth = 420,
+                Spacing = 8,
+                MinWidth = 420,
                 Children = { Ui.Secondary(L("Открытый ключ допишется в ~/.ssh/authorized_keys на каждом выбранном хосте (без дублей).")), new ScrollViewer { Content = list, MaxHeight = 320 } },
             },
-            PrimaryButtonText = L("Разложить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+            PrimaryButtonText = L("Разложить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
         };
         if (await ask.ShowAsync() != ContentDialogResult.Primary) return;
         var key = File.ReadAllText(pub).Trim();
@@ -201,8 +209,12 @@ internal sealed class KeysPage : UserControl
         var box = new PasswordBox { Header = L("Passphrase ключа, если есть") };
         var d = new ContentDialog
         {
-            Title = L("Добавить в агент"), Content = box, PrimaryButtonText = L("Добавить"), CloseButtonText = L("Отмена"),
-            DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            Title = L("Добавить в агент"),
+            Content = box,
+            PrimaryButtonText = L("Добавить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         return await d.ShowAsync() == ContentDialogResult.Primary ? box.Password : null;
     }
@@ -241,7 +253,10 @@ internal sealed class KeysPage : UserControl
         {
             Title = L("Новый ключ ed25519"),
             Content = new StackPanel { Spacing = 12, MinWidth = 380, Children = { name, comment, pass, error } },
-            PrimaryButtonText = L("Создать"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            PrimaryButtonText = L("Создать"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         d.PrimaryButtonClick += async (_, args) =>
         {

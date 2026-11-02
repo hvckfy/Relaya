@@ -72,8 +72,13 @@ internal static class TrayIcon
 
     private static NotifyIconData Data_() => new()
     {
-        cbSize = (uint)Marshal.SizeOf<NotifyIconData>(), hWnd = hwnd, uID = 1,
-        uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP, uCallbackMessage = WM_APP_TRAY, hIcon = icon, szTip = "Relaya",
+        cbSize = (uint)Marshal.SizeOf<NotifyIconData>(),
+        hWnd = hwnd,
+        uID = 1,
+        uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
+        uCallbackMessage = WM_APP_TRAY,
+        hIcon = icon,
+        szTip = "Relaya",
     };
 
     private static void Add()

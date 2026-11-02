@@ -59,8 +59,12 @@ internal sealed class SnippetsPage : UserControl
             boxes.ForEach(panel.Children.Add);
             var d = new ContentDialog
             {
-                Title = s.name, Content = panel, PrimaryButtonText = L("Вставить"), CloseButtonText = L("Отмена"),
-                DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+                Title = s.name,
+                Content = panel,
+                PrimaryButtonText = L("Вставить"),
+                CloseButtonText = L("Отмена"),
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
             };
             if (await d.ShowAsync() != ContentDialogResult.Primary) return;
             command = RelayaCoreMethods.SnippetFilled(command, variables.Zip(boxes).ToDictionary(x => x.First, x => x.Second.Text));
@@ -83,8 +87,12 @@ internal sealed class SnippetsPage : UserControl
         content.Children.Add(new ScrollViewer { Content = list, MaxHeight = 320 });
         var ask = new ContentDialog
         {
-            Title = L("Выполнить «%@» на хостах", s.name), Content = content,
-            PrimaryButtonText = L("Выполнить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+            Title = L("Выполнить «%@» на хостах", s.name),
+            Content = content,
+            PrimaryButtonText = L("Выполнить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
         };
         if (await ask.ShowAsync() != ContentDialogResult.Primary) return;
         var hosts = boxes.Where(b => b.IsChecked == true).Select(b => (string)b.Tag).ToList();
@@ -97,7 +105,9 @@ internal sealed class SnippetsPage : UserControl
             report.Children.Add(new TextBlock { Text = $"{h} · " + (r.Status == 0 ? L("готово") : L("код %@", r.Status)), Style = Ui.Style("BodyStrongTextBlockStyle") });
             report.Children.Add(Ui.Card(new TextBlock
             {
-                Text = (r.Stdout + r.Stderr).Trim() is { Length: > 0 } o ? o : L("(нет вывода)"), IsTextSelectionEnabled = true, TextWrapping = TextWrapping.Wrap,
+                Text = (r.Stdout + r.Stderr).Trim() is { Length: > 0 } o ? o : L("(нет вывода)"),
+                IsTextSelectionEnabled = true,
+                TextWrapping = TextWrapping.Wrap,
                 FontFamily = new FontFamily("Cascadia Mono, Consolas"),
             }));
         }
@@ -111,7 +121,10 @@ internal sealed class SnippetsPage : UserControl
         var name = new TextBox { Header = L("Название"), Text = s?.name ?? "" };
         var command = new TextBox
         {
-            Header = L("Команда ({{переменная}} — спросить при вставке)"), Text = s?.command ?? "", AcceptsReturn = true, MinHeight = 100,
+            Header = L("Команда ({{переменная}} — спросить при вставке)"),
+            Text = s?.command ?? "",
+            AcceptsReturn = true,
+            MinHeight = 100,
             FontFamily = new FontFamily("Cascadia Mono, Consolas"),
         };
         var tags = new TextBox { Header = L("Метки через запятую"), Text = s == null ? "" : string.Join(", ", s.tags) };
@@ -119,7 +132,10 @@ internal sealed class SnippetsPage : UserControl
         {
             Title = s == null ? L("Новый сниппет") : L("Изменить сниппет"),
             Content = new StackPanel { Spacing = 12, MinWidth = 420, Children = { name, command, tags } },
-            PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            PrimaryButtonText = L("Сохранить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         if (await d.ShowAsync() != ContentDialogResult.Primary || command.Text.Trim().Length == 0) return;
         var item = new Snippet(s?.id ?? RelayaCoreMethods.CoreNewId(), name.Text.Trim().Length > 0 ? name.Text.Trim() : command.Text.Trim(),

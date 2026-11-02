@@ -38,7 +38,10 @@ internal sealed class HostPage : UserControl
         if (Platform.CredentialStore.Has(h.alias) && Platform.Askpass.RunsCommands(h.alias))
             body.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Informational, IsOpen = true, IsClosable = true, Margin = new Thickness(0, 0, 0, 8),
+                Severity = InfoBarSeverity.Informational,
+                IsOpen = true,
+                IsClosable = true,
+                Margin = new Thickness(0, 0, 0, 8),
                 Message = L("У хоста есть ProxyCommand/LocalCommand — сохранённый пароль не подставляется автоматически"),
             });
 
@@ -156,7 +159,8 @@ internal sealed class HostPage : UserControl
         menu.Items.Add(custom);
         tunnels.Children.Add(new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 8,
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
             Children =
             {
                 new DropDownButton { Content = L("Пробросить порт"), Flyout = menu },
@@ -235,29 +239,30 @@ internal sealed class HostPage : UserControl
                 break;
             case "pixel":
             case "console":
-            {
-                var pixel = Platform.Settings.Get(StatsStyleKey, "tiles") == "pixel";
-                string Bar(double part)
                 {
-                    var n = (int)Math.Round(Math.Clamp(part, 0, 1) * 20);
-                    return pixel ? new string('█', n) + new string('░', 20 - n) : "[" + new string('#', n) + new string('.', 20 - n) + "]";
+                    var pixel = Platform.Settings.Get(StatsStyleKey, "tiles") == "pixel";
+                    string Bar(double part)
+                    {
+                        var n = (int)Math.Round(Math.Clamp(part, 0, 1) * 20);
+                        return pixel ? new string('█', n) + new string('░', 20 - n) : "[" + new string('#', n) + new string('.', 20 - n) + "]";
+                    }
+                    var lines = metrics.Select(m => $"{m.Title,-10} {Bar(m.Part)} {m.Value}").Append($"{L("Работает"),-10} {uptime}");
+                    stats.Children.Add(Ui.Card(new TextBlock
+                    {
+                        Text = string.Join("\n", lines),
+                        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"),
+                        IsTextSelectionEnabled = true,
+                    }));
+                    break;
                 }
-                var lines = metrics.Select(m => $"{m.Title,-10} {Bar(m.Part)} {m.Value}").Append($"{L("Работает"),-10} {uptime}");
-                stats.Children.Add(Ui.Card(new TextBlock
-                {
-                    Text = string.Join("\n", lines), FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"),
-                    IsTextSelectionEnabled = true,
-                }));
-                break;
-            }
             default:
-            {
-                var tiles = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 180, ItemHeight = 112 }; // заголовок, значение, подпись и полоса — без переноса
-                foreach (var m in metrics) tiles.Children.Add(Tile(m.Title, m.Value, m.Part));
-                tiles.Children.Add(Tile(L("Работает"), uptime, null));
-                stats.Children.Add(tiles);
-                break;
-            }
+                {
+                    var tiles = new VariableSizedWrapGrid { Orientation = Orientation.Horizontal, ItemWidth = 180, ItemHeight = 112 }; // заголовок, значение, подпись и полоса — без переноса
+                    foreach (var m in metrics) tiles.Children.Add(Tile(m.Title, m.Value, m.Part));
+                    tiles.Children.Add(Tile(L("Работает"), uptime, null));
+                    stats.Children.Add(tiles);
+                    break;
+                }
         }
     }
 
@@ -270,7 +275,10 @@ internal sealed class HostPage : UserControl
         var panel = new StackPanel { Spacing = 2 };
         TextBlock Line(string text, string style, bool secondary) => new()
         {
-            Text = text, Style = Ui.Style(style), TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
+            Text = text,
+            Style = Ui.Style(style),
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = secondary ? Ui.Brush("TextFillColorSecondaryBrush") : Ui.Brush("TextFillColorPrimaryBrush"),
         };
         var slash = value.IndexOf(" / ", StringComparison.Ordinal);

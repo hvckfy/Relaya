@@ -40,8 +40,13 @@ internal sealed class HighlightRulesPage : UserControl
         var r = rules[index];
         var enabled = new CheckBox { IsChecked = r.Enabled, Content = L("Включено") };
         var name = new TextBox { Header = L("Название"), Text = r.Name, MinWidth = 200 };
-        var pattern = new TextBox { Header = L("Текст или регулярное выражение"), Text = r.Pattern, MinWidth = 320,
-            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace") };
+        var pattern = new TextBox
+        {
+            Header = L("Текст или регулярное выражение"),
+            Text = r.Pattern,
+            MinWidth = 320,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace")
+        };
         var regex = new CheckBox { IsChecked = r.IsRegex, Content = L("Регулярное выражение") };
         var caseSensitive = new CheckBox { IsChecked = r.CaseSensitive, Content = L("Учитывать регистр") };
         var bold = new CheckBox { IsChecked = r.Bold, Content = L("Жирный") };
@@ -54,8 +59,13 @@ internal sealed class HighlightRulesPage : UserControl
         {
             var updated = r with
             {
-                Enabled = enabled.IsChecked == true, Name = name.Text.Trim(), Pattern = pattern.Text, IsRegex = regex.IsChecked == true,
-                CaseSensitive = caseSensitive.IsChecked == true, Bold = bold.IsChecked == true, Color = System.Math.Max(0, color.SelectedIndex),
+                Enabled = enabled.IsChecked == true,
+                Name = name.Text.Trim(),
+                Pattern = pattern.Text,
+                IsRegex = regex.IsChecked == true,
+                CaseSensitive = caseSensitive.IsChecked == true,
+                Bold = bold.IsChecked == true,
+                Color = System.Math.Max(0, color.SelectedIndex),
             };
             error.Text = updated.IsRegex && updated.Pattern.Length > 0 && HighlightRules.Compile(new[] { updated with { Enabled = true } }).Count == 0
                 ? L("Неверное регулярное выражение — правило не применяется.") : "";

@@ -46,7 +46,10 @@ internal static partial class DesktopLauncher
             // Вывод и ввод — через Relaya (Л6): из меню у xfreerdp нет терминала, и вопрос о сертификате повис бы.
             var info = new ProcessStartInfo(freerdp)
             {
-                UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                UseShellExecute = false,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
             };
             info.ArgumentList.Add($"/v:{host}:{port}");
             if (d.user.Length > 0) info.ArgumentList.Add("/u:" + d.user);
@@ -123,19 +126,28 @@ internal static partial class DesktopLauncher
         if (changed)
             content.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = false,
-                Title = L("Отпечаток изменился"), Message = L("Раньше у этого сервера был другой сертификат. Убедитесь, что подключаетесь к нужному серверу."),
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = false,
+                Title = L("Отпечаток изменился"),
+                Message = L("Раньше у этого сервера был другой сертификат. Убедитесь, что подключаетесь к нужному серверу."),
             });
         content.Children.Add(new TextBlock
         {
-            Text = details, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true,
+            Text = details,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(Terminal.TerminalView.ResolvedMonospace),
         });
         var dialog = new ContentDialog
         {
-            Title = L("Проверьте сертификат сервера"), Content = new ScrollViewer { Content = content, MaxHeight = 420 },
-            PrimaryButtonText = L("Доверять"), SecondaryButtonText = L("Только сейчас"), CloseButtonText = L("Отмена"),
-            DefaultButton = ContentDialogButton.Close, XamlRoot = root,
+            Title = L("Проверьте сертификат сервера"),
+            Content = new ScrollViewer { Content = content, MaxHeight = 420 },
+            PrimaryButtonText = L("Доверять"),
+            SecondaryButtonText = L("Только сейчас"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = root,
         };
         // Уже открыт другой диалог Relaya — ждём его, а не отвечаем за пользователя (ревью 2). xfreerdp ждёт ответа в stdin.
         string? answer = null;

@@ -23,10 +23,10 @@ internal static partial class ConsentGrace
         {
             if ((msg == WmWtsSessionChange && ((int)wParam == WtsSessionLock || (int)wParam == WtsSessionLogoff))
                 || (msg == WmPowerBroadcast && (int)wParam == PbtApmSuspend))
-                {
-                    Reset();
-                    SshMux.CloseAll(); // общие соединения хостов (П-9) не переживают блокировку и сон
-                }
+            {
+                Reset();
+                SshMux.CloseAll(); // общие соединения хостов (П-9) не переживают блокировку и сон
+            }
             return DefSubclassProc(h, msg, wParam, lParam);
         };
         SetWindowSubclass(hwnd, proc, 0x5245, IntPtr.Zero);

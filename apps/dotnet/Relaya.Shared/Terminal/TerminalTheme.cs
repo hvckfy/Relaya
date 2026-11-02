@@ -35,7 +35,8 @@ internal sealed record TerminalTheme(Color Background, Color Foreground, Color C
 
     private static bool WindowIsDark() => Platform.Settings.Get("app.theme", "system") switch
     {
-        "light" => false, "dark" => true,
+        "light" => false,
+        "dark" => true,
         _ => Microsoft.UI.Xaml.Application.Current.RequestedTheme == Microsoft.UI.Xaml.ApplicationTheme.Dark,
     };
 

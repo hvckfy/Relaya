@@ -33,9 +33,13 @@ internal sealed class TileHost : UserControl, IDisposable
     // Подсветка будущего места плитки при перетаскивании вкладки или плитки.
     private readonly Border dropHint = new()
     {
-        Background = Pages.Ui.Brush("AccentFillColorDefaultBrush"), Opacity = 0.25, CornerRadius = new CornerRadius(8),
-        Visibility = Visibility.Collapsed, IsHitTestVisible = false,
-        HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+        Background = Pages.Ui.Brush("AccentFillColorDefaultBrush"),
+        Opacity = 0.25,
+        CornerRadius = new CornerRadius(8),
+        Visibility = Visibility.Collapsed,
+        IsHitTestVisible = false,
+        HorizontalAlignment = HorizontalAlignment.Left,
+        VerticalAlignment = VerticalAlignment.Top,
     };
     private string? layout; // TileLayout JSON ядра
     private DropTarget? drop;
@@ -48,7 +52,9 @@ internal sealed class TileHost : UserControl, IDisposable
     // Видна только при нескольких плитках (как на Mac: рассылка имеет смысл в сетке) или пока рассылка включена.
     private readonly AppBarToggleButton broadcastToggle = new()
     {
-        Icon = new FontIcon { Glyph = "\uEC05" }, LabelPosition = CommandBarLabelPosition.Collapsed, Visibility = Visibility.Collapsed,
+        Icon = new FontIcon { Glyph = "\uEC05" },
+        LabelPosition = CommandBarLabelPosition.Collapsed,
+        Visibility = Visibility.Collapsed,
     };
     private readonly InfoBar broadcastBar = new() { Severity = InfoBarSeverity.Warning, IsClosable = false, Margin = new Thickness(8, 0, 8, 4) };
     private readonly CheckBox broadcastHere = new();
@@ -59,7 +65,9 @@ internal sealed class TileHost : UserControl, IDisposable
     // Состояние активной плитки рядом с портами, как строка состояния на Mac (4.24).
     private readonly TextBlock disconnected = new()
     {
-        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0), Visibility = Visibility.Collapsed,
+        VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(4, 0, 4, 0),
+        Visibility = Visibility.Collapsed,
     };
 
     public event Action<string>? TitleChanged;
@@ -157,12 +165,17 @@ internal sealed class TileHost : UserControl, IDisposable
         var showRecording = Command("", L("Показать файл записи"), () => Platform.Shell.OpenFolder(SshSession.RecordingsFolder));
         var commands = new CommandBar
         {
-            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsDynamicOverflowEnabled = true,
-            HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0, 4, 0),
+            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right,
+            IsDynamicOverflowEnabled = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(4, 0, 4, 0),
             Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"),
             Content = new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0),
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 0),
                 Children = { connectionInfo, disconnected, portsPanel, search },
             },
         };
@@ -297,9 +310,11 @@ internal sealed class TileHost : UserControl, IDisposable
         var expand = Pages.Ui.IconButton("\uE740", L("Развернуть плитку (Ctrl+Shift+Enter)"), () => { });
         var header = new Grid
         {
-            ColumnDefinitions = { new(), new() { Width = GridLength.Auto }, new() { Width = GridLength.Auto } }, Children = { title },
+            ColumnDefinitions = { new(), new() { Width = GridLength.Auto }, new() { Width = GridLength.Auto } },
+            Children = { title },
             // За заголовок плитку переставляют внутри сетки, как на Mac; прозрачный фон — чтобы ловить нажатие.
-            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"), CanDrag = true,
+            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"),
+            CanDrag = true,
         };
         header.DragStarting += (_, e) =>
         {
@@ -315,8 +330,11 @@ internal sealed class TileHost : UserControl, IDisposable
         // Запрос пароля после входа: InfoBar над терминалом, ввод не блокируется.
         var ask = new InfoBar
         {
-            Title = L("Запрос пароля"), Message = L("Подставить пароль хоста?"), Severity = InfoBarSeverity.Informational,
-            IsClosable = false, Margin = new Thickness(4, 0, 4, 4),
+            Title = L("Запрос пароля"),
+            Message = L("Подставить пароль хоста?"),
+            Severity = InfoBarSeverity.Informational,
+            IsClosable = false,
+            Margin = new Thickness(4, 0, 4, 4),
         };
         var put = new Button { Content = L("Подставить"), Style = Pages.Ui.Style("AccentButtonStyle") };
         var no = new Button { Content = L("Нет") };
@@ -337,8 +355,12 @@ internal sealed class TileHost : UserControl, IDisposable
             var save = new CheckBox { Content = Platform.PlatformText.PasswordSaved(), IsChecked = saveByDefault };
             var d = new ContentDialog
             {
-                Title = L("Пароль для %@", alias), Content = new StackPanel { Spacing = 8, Children = { box, save } },
-                PrimaryButtonText = L("Ввести"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+                Title = L("Пароль для %@", alias),
+                Content = new StackPanel { Spacing = 8, Children = { box, save } },
+                PrimaryButtonText = L("Ввести"),
+                CloseButtonText = L("Отмена"),
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
             };
             if (await d.ShowAsync() == ContentDialogResult.Primary && box.Password.Length > 0)
             {
@@ -358,8 +380,11 @@ internal sealed class TileHost : UserControl, IDisposable
         // Вошли по паролю — предложить ключ: «Настроить», «Не сейчас», «Больше не предлагать».
         var offer = new InfoBar
         {
-            Title = L("Настроить вход по ключу?"), Message = L("Без пароля и надёжнее: Relaya создаст ключ, добавит его на сервер и проверит вход."),
-            Severity = InfoBarSeverity.Informational, IsClosable = false, Margin = new Thickness(4, 0, 4, 4),
+            Title = L("Настроить вход по ключу?"),
+            Message = L("Без пароля и надёжнее: Relaya создаст ключ, добавит его на сервер и проверит вход."),
+            Severity = InfoBarSeverity.Informational,
+            IsClosable = false,
+            Margin = new Thickness(4, 0, 4, 4),
         };
         var setup = new Button { Content = L("Настроить"), Style = Pages.Ui.Style("AccentButtonStyle") };
         var later = new Button { Content = L("Не сейчас") };
@@ -377,14 +402,18 @@ internal sealed class TileHost : UserControl, IDisposable
         // 4.19, как на Mac: ключ сервера изменился — ssh отказал; ничего не удаляем за пользователя.
         var keyChanged = new InfoBar
         {
-            Severity = InfoBarSeverity.Error, IsClosable = true, Margin = new Thickness(4, 0, 4, 4),
+            Severity = InfoBarSeverity.Error,
+            IsClosable = true,
+            Margin = new Thickness(4, 0, 4, 4),
             Message = L("Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts."),
         };
         session.HostKeyChanged += () => ui.TryEnqueue(() => keyChanged.IsOpen = true);
         // 4.22: после «Too many authentication failures» переподключились по паролю — сказать почему.
         var passwordOnlyBar = new InfoBar
         {
-            Severity = InfoBarSeverity.Informational, IsClosable = true, Margin = new Thickness(4, 0, 4, 4),
+            Severity = InfoBarSeverity.Informational,
+            IsClosable = true,
+            Margin = new Thickness(4, 0, 4, 4),
             Message = L("Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было."),
         };
         session.PasswordOnlySwitched += () => ui.TryEnqueue(() => passwordOnlyBar.IsOpen = true);
@@ -416,7 +445,10 @@ internal sealed class TileHost : UserControl, IDisposable
                             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas") },
                     },
                 },
-                PrimaryButtonText = L("Подключиться"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
+                PrimaryButtonText = L("Подключиться"),
+                CloseButtonText = L("Отмена"),
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot,
             };
             bool trust;
             try { trust = await dialog.ShowAsync() == ContentDialogResult.Primary; }
@@ -427,8 +459,11 @@ internal sealed class TileHost : UserControl, IDisposable
         // Начальная команда (сниппет, tmux attach) не дождалась входа — не вводим сами, предлагаем вставить.
         var pending = new InfoBar
         {
-            Title = L("Команда не вставлена"), Message = L("Сессия не дошла до приглашения shell."), Severity = InfoBarSeverity.Informational,
-            IsClosable = true, Margin = new Thickness(4, 0, 4, 4),
+            Title = L("Команда не вставлена"),
+            Message = L("Сессия не дошла до приглашения shell."),
+            Severity = InfoBarSeverity.Informational,
+            IsClosable = true,
+            Margin = new Thickness(4, 0, 4, 4),
         };
         var paste = new Button { Content = L("Вставить") };
         pending.ActionButton = paste;
@@ -546,8 +581,11 @@ internal sealed class TileHost : UserControl, IDisposable
     // Куда и как подключена активная плитка — как строка состояния на Mac (4.24): user@host:port и способ входа.
     private readonly TextBlock connectionInfo = new()
     {
-        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 8, 0), Opacity = 0.7,
-        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"), FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(4, 0, 8, 0),
+        Opacity = 0.7,
+        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"),
+        FontSize = 12,
     };
 
     private void UpdateState()

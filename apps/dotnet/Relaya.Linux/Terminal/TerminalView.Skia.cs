@@ -118,7 +118,8 @@ internal sealed partial class TerminalView
         if (!fonts.TryGetValue((bold, italic), out var font))
             fonts[(bold, italic)] = font = new SKFont(SKTypeface.FromFamilyName(resolvedFamily,
                 bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal,
-                italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright), fontSize) { Subpixel = true };
+                italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright), fontSize)
+            { Subpixel = true };
         return font;
     }
 

@@ -101,7 +101,8 @@ internal sealed class KeyWizardPage : UserControl
         var existingPass = new PasswordBox { Header = L("Passphrase ключа, если есть"), Password = existingPassphrase };
         var serverPass = new PasswordBox
         {
-            Header = L("Пароль сервера"), Password = serverPassword,
+            Header = L("Пароль сервера"),
+            Password = serverPassword,
             PlaceholderText = Platform.CredentialStore.Has(host.alias) ? L("Сохранён — будет использован") : L("Нужен, если на сервер ещё нельзя войти ключом"),
         };
         var save = new CheckBox { Content = L("Сохранить пароль сервера"), IsChecked = saveServerPassword };
@@ -140,7 +141,8 @@ internal sealed class KeyWizardPage : UserControl
         form.Children.Add(Ui.Section(L("Будет записано в ~/.ssh/config")));
         form.Children.Add(Ui.Card(new TextBlock
         {
-            Text = string.Join("\n", preview), IsTextSelectionEnabled = true,
+            Text = string.Join("\n", preview),
+            IsTextSelectionEnabled = true,
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
         }));
     }
@@ -160,14 +162,20 @@ internal sealed class KeyWizardPage : UserControl
         if (error != null)
             form.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Error, IsOpen = true, IsClosable = false, Title = L("Не получилось"),
+                Severity = InfoBarSeverity.Error,
+                IsOpen = true,
+                IsClosable = false,
+                Title = L("Не получилось"),
                 Message = error + (rollback != null ? "\n" + L("Откатили: %@.", rollback) : ""),
             });
         else if (step == Step.Done)
             form.Children.Add(new InfoBar
             {
-                Severity = InfoBarSeverity.Success, IsOpen = true, IsClosable = false,
-                Title = L("Готово"), Message = L("%@ теперь входит по ключу %@.", host.alias, "~/.ssh/" + Path.GetFileName(KeyFile)),
+                Severity = InfoBarSeverity.Success,
+                IsOpen = true,
+                IsClosable = false,
+                Title = L("Готово"),
+                Message = L("%@ теперь входит по ключу %@.", host.alias, "~/.ssh/" + Path.GetFileName(KeyFile)),
             });
     }
 

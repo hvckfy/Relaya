@@ -52,8 +52,12 @@ internal sealed class LayoutsPage : UserControl
         var name = new TextBox { Header = L("Название"), Text = s.Name };
         var dialog = new ContentDialog
         {
-            Title = L("Переименовать"), Content = name, PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"),
-            DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot,
+            Title = L("Переименовать"),
+            Content = name,
+            PrimaryButtonText = L("Сохранить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || name.Text.Trim().Length == 0) return;
         SavedLayouts.Rename(s.Id, name.Text.Trim());

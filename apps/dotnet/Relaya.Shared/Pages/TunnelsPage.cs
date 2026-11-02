@@ -91,8 +91,13 @@ internal sealed class TunnelsPage : UserControl
         var host = new ComboBox { Header = L("Хост"), HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var h in AppState.Hosts) host.Items.Add(h.alias);
         host.SelectedItem = t?.hostAlias ?? forHost ?? AppState.Hosts.FirstOrDefault()?.alias;
-        var kind = new ComboBox { Header = L("Тип"), HorizontalAlignment = HorizontalAlignment.Stretch,
-            Items = { L("Локальный (-L)"), L("Удалённый (-R)"), L("SOCKS-прокси (-D)") }, SelectedIndex = t == null ? 0 : (int)t.kind };
+        var kind = new ComboBox
+        {
+            Header = L("Тип"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Items = { L("Локальный (-L)"), L("Удалённый (-R)"), L("SOCKS-прокси (-D)") },
+            SelectedIndex = t == null ? 0 : (int)t.kind
+        };
         var listen = new NumberBox { Header = L("Порт у вас"), Value = t?.listenPort ?? 8080, Minimum = 1, Maximum = 65535 };
         var target = new TextBox { Header = L("Куда (адрес со стороны сервера)"), Text = t?.targetHost ?? "localhost" };
         var targetPort = new NumberBox { Header = L("Порт назначения"), Value = t?.targetPort ?? 80, Minimum = 1, Maximum = 65535 };
@@ -116,7 +121,9 @@ internal sealed class TunnelsPage : UserControl
             Ui.Button(L("Отмена"), Build), Ui.Button(L("Сохранить"), Save, accent: true));
         body.Children.Add(new StackPanel
         {
-            Spacing = 12, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left,
+            Spacing = 12,
+            MaxWidth = 640,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Children = { name, host, kind, listen, target, targetPort, auto, error },
         });
         Content = page;

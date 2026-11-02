@@ -43,8 +43,12 @@ internal static class HostActions
             var name = new TextBox { Header = L("Название группы") };
             var d = new ContentDialog
             {
-                Title = L("Новая группа"), Content = name, PrimaryButtonText = L("Создать"), CloseButtonText = L("Отмена"),
-                DefaultButton = ContentDialogButton.Primary, XamlRoot = anchor.XamlRoot,
+                Title = L("Новая группа"),
+                Content = name,
+                PrimaryButtonText = L("Создать"),
+                CloseButtonText = L("Отмена"),
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = anchor.XamlRoot,
             };
             if (await d.ShowAsync() != ContentDialogResult.Primary || name.Text.Trim().Length == 0) return;
             try { AppState.SetMeta(h with { group = name.Text.Trim() }); }
@@ -58,8 +62,12 @@ internal static class HostActions
         // Вход по паролю на сервере (1.12, как на Mac): команда sshd под ОС хоста — ядро; вставляется в терминал
         // с подтверждением, без sudo под root. ОС не определена — считаем Linux.
         // Windows-сервер: у ядра нет команды для его sshd — пункт не показываем, как на Mac.
-        var sshd = new MenuFlyoutSubItem { Text = L("Вход по паролю на сервере"), Icon = new FontIcon { Glyph = "\uE72E" },
-            Visibility = h.os == ServerOs.Windows ? Visibility.Collapsed : Visibility.Visible };
+        var sshd = new MenuFlyoutSubItem
+        {
+            Text = L("Вход по паролю на сервере"),
+            Icon = new FontIcon { Glyph = "\uE72E" },
+            Visibility = h.os == ServerOs.Windows ? Visibility.Collapsed : Visibility.Visible
+        };
         foreach (var (title, enabled) in new[] { (L("Разрешить…"), true), (L("Запретить…"), false) })
         {
             var item = new MenuFlyoutItem { Text = title };
@@ -100,8 +108,12 @@ internal static class HostActions
         var folder = new TextBox { Header = L("Папка на сервере"), Text = "~", Description = L("/ — весь сервер, ~ — домашняя папка") };
         var d = new ContentDialog
         {
-            Title = L("Подключить как диск"), XamlRoot = root, Content = folder,
-            PrimaryButtonText = L("Подключить"), CloseButtonText = L("Отмена"), DefaultButton = ContentDialogButton.Primary,
+            Title = L("Подключить как диск"),
+            XamlRoot = root,
+            Content = folder,
+            PrimaryButtonText = L("Подключить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
         };
         if (await d.ShowAsync() != ContentDialogResult.Primary) return;
         await DiskAsync(root, () => Platform.DavBridge.MountAsync(alias, folder.Text));

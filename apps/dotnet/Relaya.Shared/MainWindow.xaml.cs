@@ -37,8 +37,10 @@ public sealed partial class MainWindow : Window
         right = Math.Min(right + 48, origin.X + Tabs.ActualWidth); // запас под кнопки прокрутки и перетаскивание в конец
         var rect = new Windows.Graphics.RectInt32
         {
-            X = (int)(origin.X * scale), Y = (int)(origin.Y * scale),
-            Width = (int)((right - origin.X) * scale), Height = (int)(Tabs.ActualHeight * scale),
+            X = (int)(origin.X * scale),
+            Y = (int)(origin.Y * scale),
+            Width = (int)((right - origin.X) * scale),
+            Height = (int)(Tabs.ActualHeight * scale),
         };
         if (rect.Equals(passthrough)) return;
         passthrough = rect;
@@ -106,8 +108,13 @@ public sealed partial class MainWindow : Window
             open.Click += (_, _) => ShowPage(Pages.ComponentsPage.Build());
             Empty.Children.Insert(0, new InfoBar
             {
-                Severity = InfoBarSeverity.Warning, IsOpen = true, IsClosable = true, MaxWidth = 560, Margin = new Thickness(0, 0, 0, 16),
-                Title = L("Не хватает обязательных компонентов"), Message = L("Без них часть Relaya не работает. Что поставить и как — в «Компонентах»."),
+                Severity = InfoBarSeverity.Warning,
+                IsOpen = true,
+                IsClosable = true,
+                MaxWidth = 560,
+                Margin = new Thickness(0, 0, 0, 16),
+                Title = L("Не хватает обязательных компонентов"),
+                Message = L("Без них часть Relaya не работает. Что поставить и как — в «Компонентах»."),
                 ActionButton = open,
             });
         }
@@ -160,8 +167,10 @@ public sealed partial class MainWindow : Window
             var work = Microsoft.UI.Windowing.DisplayArea.Primary.WorkArea;
             AppWindow.MoveAndResize(new Windows.Graphics.RectInt32
             {
-                X = work.X + Math.Max(0, (work.Width - rect.Width) / 2), Y = work.Y + Math.Max(0, (work.Height - rect.Height) / 2),
-                Width = Math.Min(rect.Width, work.Width), Height = Math.Min(rect.Height, work.Height),
+                X = work.X + Math.Max(0, (work.Width - rect.Width) / 2),
+                Y = work.Y + Math.Max(0, (work.Height - rect.Height) / 2),
+                Width = Math.Min(rect.Width, work.Width),
+                Height = Math.Min(rect.Height, work.Height),
             });
         }
 #else
@@ -204,8 +213,11 @@ public sealed partial class MainWindow : Window
         }
         var button = new Button
         {
-            Content = new FontIcon { Glyph = "\uE71C", FontSize = Pages.Ui.IconSmall }, Flyout = menu, Padding = new Thickness(4),
-            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"), BorderThickness = new Thickness(0),
+            Content = new FontIcon { Glyph = "\uE71C", FontSize = Pages.Ui.IconSmall },
+            Flyout = menu,
+            Padding = new Thickness(4),
+            Background = Pages.Ui.Brush("SubtleFillColorTransparentBrush"),
+            BorderThickness = new Thickness(0),
         };
         ToolTipService.SetToolTip(button, L("Фильтр по меткам"));
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, L("Фильтр по меткам"));
@@ -229,7 +241,9 @@ public sealed partial class MainWindow : Window
             }
             var folder = new NavigationViewItem
             {
-                Content = group.Key, Icon = new FontIcon { Glyph = "" }, SelectsOnInvoked = false,
+                Content = group.Key,
+                Icon = new FontIcon { Glyph = "" },
+                SelectsOnInvoked = false,
                 IsExpanded = Platform.Settings.Get("group." + group.Key, "1") == "1",
             };
             folder.Tag = "group:" + group.Key;
@@ -286,7 +300,8 @@ public sealed partial class MainWindow : Window
         if (Pages.HostColors.Of(h.color) is { } dot)
             item.Content = new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 8,
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
                 Children =
                 {
                     new TextBlock { Text = h.alias },
@@ -489,8 +504,12 @@ public sealed partial class MainWindow : Window
         var name = new TextBox { Header = L("Название"), PlaceholderText = L("Мои серверы") };
         var dialog = new ContentDialog
         {
-            Title = L("Сохранить раскладку"), Content = name, PrimaryButtonText = L("Сохранить"), CloseButtonText = L("Отмена"),
-            DefaultButton = ContentDialogButton.Primary, XamlRoot = Content.XamlRoot,
+            Title = L("Сохранить раскладку"),
+            Content = name,
+            PrimaryButtonText = L("Сохранить"),
+            CloseButtonText = L("Отмена"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || name.Text.Trim().Length == 0) return;
         SavedLayouts.Add(name.Text.Trim(), layout);
@@ -627,7 +646,9 @@ public sealed partial class MainWindow : Window
         if (Content is not FrameworkElement root) return;
         var theme = Platform.Settings.Get("app.theme", "system") switch
         {
-            "light" => ElementTheme.Light, "dark" => ElementTheme.Dark, _ => ElementTheme.Default,
+            "light" => ElementTheme.Light,
+            "dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default,
         };
         root.RequestedTheme = theme;
     }
