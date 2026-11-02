@@ -227,7 +227,7 @@ Every pull request runs the same checks as a release, on every platform:
 - **Clients:** `swift build` / `swift test` on macOS, Windows and Linux builds of both languages with terminal smoke tests, translation checks.
 - **Linters:** swift-format, `dotnet format`, actionlint, shellcheck.
 - **Benchmarks:** core hot paths (`core/benches/core.rs`), with the public history at [hvckfy.github.io/Relaya/dev/bench](https://hvckfy.github.io/Relaya/dev/bench/).
-- **Supply chain:** GitHub Actions pinned by commit SHA, read-only tokens by default, downloaded tools checked against pinned hashes or pinned to a commit (the Linux Swift toolchain for RoyalVNCKit is still taken from swift.org over TLS without a hash), weekly grouped Dependabot updates.
+- **Supply chain:** GitHub Actions pinned by commit SHA, read-only tokens by default, downloaded tools checked against pinned hashes or pinned to a commit, weekly grouped Dependabot updates.
 
 ## Contributing
 
