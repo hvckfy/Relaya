@@ -25,8 +25,8 @@ jobs:
       - name: Select Xcode
         # SDK macOS 26 — для Liquid Glass. Берём самый новый Xcode 26 из образа.
         run: |
-          ls -d /Applications/Xcode*.app
-          XC=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          printf '%s\n' /Applications/Xcode*.app
+          XC=$(printf '%s\n' /Applications/Xcode_26*.app | sort -V | tail -1)
           sudo xcode-select -s "$XC"
           xcodebuild -version
 
@@ -79,6 +79,7 @@ jobs:
           security unlock-keychain -p "$KC_PW" "$KC"
           security import "$RUNNER_TEMP/relaya.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
+          # shellcheck disable=SC2046 # the keychain list is meant to split into arguments
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
           # Самоподписанный сертификат не доверенный — ищем по SHA-1, а не по имени среди «валидных».
           HASH=$(security find-certificate -c "Relaya Self-Signed" -Z "$KC" | awk '/SHA-1/{print $NF}')
@@ -108,4 +109,4 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes \
             || gh release view "$GITHUB_REF_NAME" >/dev/null
-          gh release upload "$GITHUB_REF_NAME" build/Relaya-${GITHUB_REF_NAME}-macos-*.zip --clobber
+          gh release upload "$GITHUB_REF_NAME" "build/Relaya-${GITHUB_REF_NAME}-macos-"*.zip --clobber

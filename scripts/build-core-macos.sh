@@ -21,11 +21,12 @@ export MACOSX_DEPLOYMENT_TARGET=15.0
 VNC_FEATURE=""
 [[ -n "${ROYALVNC_DIR:-}" ]] && VNC_FEATURE=",vnc-royal"
 if [[ -n "${FREERDP_DIR_ARM64:-}" && -n "${FREERDP_DIR_X64:-}" ]]; then
-  FREERDP_FOR_aarch64_apple_darwin="$FREERDP_DIR_ARM64"
-  FREERDP_FOR_x86_64_apple_darwin="$FREERDP_DIR_X64"
   for T in "${TARGETS[@]}"; do
-    var="FREERDP_FOR_${T//-/_}"
-    FREERDP_DIR="${!var}" cargo build --release --lib --target "$T" --features "rdp-freerdp$VNC_FEATURE"
+    case "$T" in
+      aarch64-*) dir="$FREERDP_DIR_ARM64" ;;
+      *) dir="$FREERDP_DIR_X64" ;;
+    esac
+    FREERDP_DIR="$dir" cargo build --release --lib --target "$T" --features "rdp-freerdp$VNC_FEATURE"
   done
   FREERDP_UNIVERSAL=1
 else
@@ -34,7 +35,9 @@ else
 fi
 
 rm -rf "$OUT" && mkdir -p "$OUT/headers" "$MAC/Sources/RelayaRust" "$MAC/Frameworks"
-lipo -create $(for T in "${TARGETS[@]}"; do echo "target/$T/release/librelaya_core.a"; done) -output "$OUT/librelaya_core.a"
+LIBS=()
+for T in "${TARGETS[@]}"; do LIBS+=("target/$T/release/librelaya_core.a"); done
+lipo -create "${LIBS[@]}" -output "$OUT/librelaya_core.a"
 if [[ "$FREERDP_UNIVERSAL" == 1 ]]; then
   mkdir -p "$OUT/freerdp"
   for lib in "$FREERDP_DIR_ARM64"/lib/*.dylib; do
@@ -42,7 +45,7 @@ if [[ "$FREERDP_UNIVERSAL" == 1 ]]; then
     [[ -L "$lib" ]] && { cp -P "$lib" "$OUT/freerdp/"; continue; }
     lipo -create "$lib" "$FREERDP_DIR_X64/lib/$name" -output "$OUT/freerdp/$name"
   done
-  echo "freerdp: $OUT/freerdp ($(ls "$OUT/freerdp" | wc -l | tr -d ' ') files)"
+  echo "freerdp: $OUT/freerdp ($(find "$OUT/freerdp" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') files)"
 fi
 
 # RoyalVNCKit — и без FreeRDP: ядро с vnc-royal без этой dylib не загрузится.
