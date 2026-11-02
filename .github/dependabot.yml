@@ -1,8 +1,11 @@
 # Weekly dependency updates, grouped so each ecosystem opens at most one PR.
+# No Swift entry: the package needs the core xcframework that only build-core-macos.sh produces, so Dependabot
+# cannot resolve it; SwiftTerm is updated by hand.
 version: 2
 updates:
+  # Composite actions are not covered by "/" (only workflows and a root action.yml), so list them too.
   - package-ecosystem: github-actions
-    directory: /
+    directories: ["/", "/.github/actions/build-core", "/.github/actions/freerdp", "/.github/actions/royalvnc"]
     schedule: { interval: weekly }
     groups: { actions: { patterns: ["*"] } }
   - package-ecosystem: cargo
@@ -13,7 +16,3 @@ updates:
     directory: /apps/dotnet
     schedule: { interval: weekly }
     groups: { nuget: { patterns: ["*"] } }
-  - package-ecosystem: swift
-    directory: /apps/swift
-    schedule: { interval: weekly }
-    groups: { swift: { patterns: ["*"] } }
