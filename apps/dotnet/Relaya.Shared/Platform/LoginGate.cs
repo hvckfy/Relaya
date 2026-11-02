@@ -20,8 +20,21 @@ internal static class LoginGate
     /// <summary>Raised with the host alias when a background call was refused (the disk unmounts on it).</summary>
     public static event System.Action<string>? Closed;
 
-    /// <summary>The reason background calls to this host are stopped, or null when they may run.</summary>
-    public static string? Reason(string alias) => RelayaCoreMethods.LoginGateReason(File, alias);
+    // Hosts this process already reported through Closed; a stop written by --mcp is reported on first read (V-10).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> Reported = new();
+
+    /// <summary>The raw ssh error line that stopped background calls to this host, or null when they may run.</summary>
+    /// <remarks>
+    /// The line is the same for every writer (V-9): explain it with <see cref="SshErrors.Describe"/>.
+    /// A stop this process has not seen yet, for example one written by the MCP server, raises <see cref="Closed"/>.
+    /// </remarks>
+    public static string? Reason(string alias)
+    {
+        var reason = RelayaCoreMethods.LoginGateReason(File, alias);
+        if (reason == null) Reported.TryRemove(alias, out _);
+        else if (Reported.TryAdd(alias, 0)) Closed?.Invoke(alias);
+        return reason;
+    }
 
     /// <summary>Records the outcome of a background ssh or sftp call; returns true when it was a refusal.</summary>
     /// <remarks>
@@ -36,9 +49,8 @@ internal static class LoginGate
                 Open(alias);
                 return false;
             case LoginOutcome.Refused:
-                var wasOpen = Reason(alias) == null;
-                Write(() => RelayaCoreMethods.LoginGateClose(File, alias, SshErrors.Describe(stderr, Strings.L("Сервер не принял вход."))));
-                if (wasOpen) Closed?.Invoke(alias);
+                Write(() => RelayaCoreMethods.LoginGateClose(File, alias, RelayaCoreMethods.LoginGateEntry(stderr)));
+                Reason(alias); // raises Closed once for this host
                 return true;
             default:
                 return false;
@@ -46,7 +58,11 @@ internal static class LoginGate
     }
 
     /// <summary>Allows background calls again: Refresh, a new password, a successful login.</summary>
-    public static void Open(string alias) => Write(() => RelayaCoreMethods.LoginGateOpen(File, alias));
+    public static void Open(string alias)
+    {
+        Write(() => RelayaCoreMethods.LoginGateOpen(File, alias));
+        Reported.TryRemove(alias, out _);
+    }
 
     /// <summary>Raised with the error text when the gate file cannot be written; agents then keep the old state.</summary>
     public static event System.Action<string>? WriteFailed;

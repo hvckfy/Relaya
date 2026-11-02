@@ -302,7 +302,7 @@ internal sealed class HostPage : UserControl
         {
             case DockerList.NotInstalled: Note(docker, L("Docker не установлен")); return;
             case DockerList.PermissionDenied: Note(docker, L("Нет прав на Docker (добавьте пользователя в группу docker)")); return;
-            case DockerList.Failed f: Note(docker, r.Status == 255 ? Problem(r) : f.message); return;
+            case DockerList.Failed f: Note(docker, r.Status is 255 or < 0 ? Problem(r) : f.message); return;
             case DockerList.Containers c:
                 docker.Children.Clear();
                 if (c.list.Count == 0) { Note(docker, L("Контейнеров нет.")); return; }
@@ -353,7 +353,7 @@ internal sealed class HostPage : UserControl
             list = list.Where(s => !stale.Contains(s.name)).ToList();
         }
         tmux.Children.Clear();
-        if (list.Count == 0) { Note(tmux, r.Status == 255 ? Problem(r) : L("Сессий нет.")); return; }
+        if (list.Count == 0) { Note(tmux, r.Status is 255 or < 0 ? Problem(r) : L("Сессий нет.")); return; }
         foreach (var s in list)
         {
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
@@ -375,7 +375,7 @@ internal sealed class HostPage : UserControl
     {
         Busy(services);
         var r = await AppState.RunOnHost(host.alias, RelayaCoreMethods.HostPanelProbeCommand(host.os), 45);
-        if (r.Status == 255) { Note(services, Problem(r)); return; }
+        if (r.Status is 255 or < 0) { Note(services, Problem(r)); return; }
         var panel = RelayaCoreMethods.HostPanelParse(r.Stdout);
         services.Children.Clear();
         if (panel.updates is { Count: > 0 } updates)
