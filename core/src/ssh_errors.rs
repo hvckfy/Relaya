@@ -13,6 +13,11 @@ pub struct SshProblem {
 
 /// Правила по порядку: первая подходящая подстрока (без учёта регистра) в любой строке вывода.
 const RULES: &[(&[&str], &str, &str)] = &[
+    // A wrong password comes first: after several wrong passwords sshd also ends with "too many authentication
+    // failures", which alone means the agent offered too many keys (B-9).
+    (&["permission denied, please try again", "permission denied (password", "authentication failed"],
+     "Неверный пароль или пользователь",
+     "Проверьте имя пользователя и пароль; сохранённый пароль можно изменить в карточке хоста."),
     (&["too many authentication failures"],
      "Сервер отклонил вход: ssh-agent предложил слишком много ключей",
      "Укажите для этого сервера один ключ: в ~/.ssh/config добавьте IdentityFile с нужным ключом и IdentitiesOnly yes."),
@@ -27,9 +32,6 @@ const RULES: &[(&[&str], &str, &str)] = &[
     (&["permission denied (publickey)"],
      "Сервер не принял ни один ключ",
      "Установите свой публичный ключ на сервер (Ключи → Установить на хост) или укажите в хосте нужный ключ."),
-    (&["permission denied, please try again", "permission denied (password", "authentication failed"],
-     "Неверный пароль или пользователь",
-     "Проверьте имя пользователя и пароль; сохранённый пароль можно изменить в карточке хоста."),
     (&["permission denied", "отказано в доступе", "доступ запрещен", "доступ запрещён"],
      "Нет доступа",
      "Сервер отказал во входе. Проверьте пользователя, ключ или пароль."),
@@ -83,6 +85,26 @@ pub fn ssh_explain(output: String) -> Option<SshProblem> {
         }
     }
     None
+}
+
+/// Whether the server refused the login itself (wrong password, user or key). Clients stop retrying on this and wait for
+/// the user: repeating the same credentials only feeds fail2ban and MaxAuthTries.
+#[uniffi::export]
+pub fn ssh_auth_refused(output: String) -> bool {
+    let lower = output.to_lowercase();
+    ["permission denied", "too many authentication failures", "authentication failed", "incorrect passphrase", "bad passphrase"]
+        .iter()
+        .any(|k| lower.contains(k))
+}
+
+/// Whether the server dropped the connection before login, usually a ban or MaxStartups after failed attempts.
+/// Clients treat it like `ssh_auth_refused`: a retry right away extends the ban.
+#[uniffi::export]
+pub fn ssh_blocked(output: String) -> bool {
+    let lower = output.to_lowercase();
+    ["kex_exchange_identification", "connection reset by peer", "connection closed by remote host"]
+        .iter()
+        .any(|k| lower.contains(k))
 }
 
 /// Протокол удалённого рабочего стола для `remote_explain`.
@@ -225,6 +247,19 @@ pub fn ssh_error_line(output: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wrong_password_wins_over_agent_keys_and_refusals_are_detected() {
+        let six = "Permission denied, please try again.\nReceived disconnect: Too many authentication failures";
+        assert_eq!(ssh_explain(six.into()).unwrap().title, "Неверный пароль или пользователь");
+        let keys = "Received disconnect from 1.2.3.4 port 22:2: Too many authentication failures";
+        assert_eq!(ssh_explain(keys.into()).unwrap().title, "Сервер отклонил вход: ssh-agent предложил слишком много ключей");
+        assert!(ssh_auth_refused("root@h: Permission denied (publickey).".into()));
+        assert!(ssh_auth_refused(keys.into()));
+        assert!(!ssh_auth_refused("ssh: connect to host h port 22: Connection refused".into()));
+        assert!(ssh_blocked("kex_exchange_identification: Connection closed by remote host".into()));
+        assert!(!ssh_blocked("Permission denied (publickey).".into()));
+    }
 
     #[test]
     fn explains_common_failures() {
