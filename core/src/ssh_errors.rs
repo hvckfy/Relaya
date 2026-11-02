@@ -92,9 +92,15 @@ pub fn ssh_explain(output: String) -> Option<SshProblem> {
 #[uniffi::export]
 pub fn ssh_auth_refused(output: String) -> bool {
     let lower = output.to_lowercase();
-    ["permission denied", "too many authentication failures", "authentication failed", "incorrect passphrase", "bad passphrase"]
-        .iter()
-        .any(|k| lower.contains(k))
+    [
+        "permission denied",
+        "too many authentication failures",
+        "authentication failed",
+        "incorrect passphrase",
+        "bad passphrase",
+    ]
+    .iter()
+    .any(|k| lower.contains(k))
 }
 
 /// Whether the server dropped the connection before login, usually a ban or MaxStartups after failed attempts.
@@ -253,7 +259,10 @@ mod tests {
         let six = "Permission denied, please try again.\nReceived disconnect: Too many authentication failures";
         assert_eq!(ssh_explain(six.into()).unwrap().title, "Неверный пароль или пользователь");
         let keys = "Received disconnect from 1.2.3.4 port 22:2: Too many authentication failures";
-        assert_eq!(ssh_explain(keys.into()).unwrap().title, "Сервер отклонил вход: ssh-agent предложил слишком много ключей");
+        assert_eq!(
+            ssh_explain(keys.into()).unwrap().title,
+            "Сервер отклонил вход: ssh-agent предложил слишком много ключей"
+        );
         assert!(ssh_auth_refused("root@h: Permission denied (publickey).".into()));
         assert!(ssh_auth_refused(keys.into()));
         assert!(!ssh_auth_refused("ssh: connect to host h port 22: Connection refused".into()));
