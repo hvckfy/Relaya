@@ -128,6 +128,12 @@ public sealed partial class MainWindow : Window
         {
             if (Content?.XamlRoot is not { } r || onboardingShown) return;
             onboardingShown = true;
+            // Demo: no onboarding; with --screenshots the scenes run and the app quits.
+            if (Platform.Demo.Root != null)
+            {
+                if (Platform.Demo.ScreenshotDir is { } dir) await Platform.DemoScreenshots.RunAsync(this, dir);
+                return;
+            }
             // Другой ContentDialog уже открыт (например, синхронизация спросила об удалениях) — онбординг в следующий раз.
             try { await Pages.OnboardingPage.ShowIfFirstRun(r); }
             catch (System.Runtime.InteropServices.COMException e) { System.Diagnostics.Trace.WriteLine($"Onboarding: {e.Message}"); }

@@ -15,6 +15,8 @@ public static class Program
             return Platform.Askpass.Run(Environment.GetEnvironmentVariable("RELAYA_ASKPASS_PIPE") ?? "", token, string.Join(' ', args));
         if (Array.IndexOf(args, "--mcp") >= 0)
             return Platform.McpHost.Run();
+        // Fictional data for screenshots; before anything reads the ~/.ssh and Relaya folders.
+        Platform.Demo.Configure(args);
 
         // X11 (на Wayland — через XWayland); без дисплея — фреймбуфер.
         UnoPlatformHostBuilder.Create()

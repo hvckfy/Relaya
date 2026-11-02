@@ -13,11 +13,12 @@ namespace Relaya.Data;
 /// в тех же файлах и форматах, что на Mac, поэтому синхронизация переносит их между системами.
 internal static class AppState
 {
-    public static readonly string SshDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh");
+    public static readonly string SshDir = Platform.Demo.Root is { } demo ? Path.Combine(demo, "ssh")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh");
     public static readonly string ConfigPath = Path.Combine(SshDir, "config");
     // Windows: %APPDATA%\Relaya; Linux: $XDG_CONFIG_HOME/relaya (~/.config/relaya) — .NET отдаёт XDG_CONFIG_HOME как ApplicationData.
-    public static readonly string Support = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        OperatingSystem.IsWindows() ? "Relaya" : "relaya");
+    public static readonly string Support = Platform.Demo.Root is { } demoRoot ? Path.Combine(demoRoot, "support")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), OperatingSystem.IsWindows() ? "Relaya" : "relaya");
 
     public static List<SshHost> Hosts { get; private set; } = new();
     public static event Action? HostsChanged;
