@@ -99,5 +99,5 @@ jobs:
           scripts/build-core-linux.sh
           ls -la core/target/release/*.so*
           ldd core/target/release/librelaya_core.so
-          ! ldd core/target/release/librelaya_core.so | grep -q "not found"
+          if ldd core/target/release/librelaya_core.so | grep -q "not found"; then exit 1; fi
           grep -c "RemoteSupportsH264" apps/dotnet/Relaya.Shared/Core/*.cs
