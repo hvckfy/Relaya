@@ -7,6 +7,9 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  # Dry run of the release build when its own files change; publishing needs a tag.
+  pull_request:
+    paths: [".github/workflows/release.yml", ".github/workflows/mac-package.yml"]
 
 permissions:
   contents: read
