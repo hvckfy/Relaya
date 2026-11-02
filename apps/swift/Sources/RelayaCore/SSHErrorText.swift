@@ -4,6 +4,12 @@ import RelayaRust
 /// Понятный текст ошибки ssh/sftp/git: «что случилось. что сделать» и исходная строка (ядро узнаёт ошибку,
 /// перевод — здесь). Неизвестная ошибка — главная строка вывода (fatal:/error: или последняя).
 public enum SSHErrorText {
+    /// The server refused the login or cut the connection before it (rules in the core): callers stop retrying
+    /// with the same credentials and wait for the user.
+    public static func loginRefused(_ output: String) -> Bool {
+        sshAuthRefused(output: output) || sshBlocked(output: output)
+    }
+
     public enum RemoteKind: Sendable { case rdp, vnc }
 
     /// Понятная ошибка RDP/VNC (ядро узнаёт текст RDPKit/RoyalVNC и др.): «что случилось. что сделать» и исходный текст.

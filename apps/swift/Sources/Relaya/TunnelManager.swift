@@ -32,6 +32,8 @@ final class TunnelManager {
     @ObservationIgnored private var retryTasks: [Tunnel.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var lastHosts: [SSHHost] = []
     private static let maxRetries = 8
+    /// Tunnels that came up since the user started them: only these are restarted on their own (B-3).
+    @ObservationIgnored private var wasUp: Set<Tunnel.ID> = []
 
     init(askpassExecutable: String) {
         self.askpassExecutable = askpassExecutable
@@ -141,7 +143,10 @@ final class TunnelManager {
         // ssh -N молчит при успехе: если через пару секунд жив — проброс поднят.
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            if self?.processes[id]?.isRunning == true { self?.status[id] = .running }
+            if self?.processes[id]?.isRunning == true {
+                self?.status[id] = .running
+                self?.wasUp.insert(id)
+            }
             // Проработал минуту — сеть в порядке, счётчик неудач сбрасывается.
             try? await Task.sleep(for: .seconds(58))
             if self?.processes[id]?.isRunning == true { self?.retries[id] = nil }
@@ -151,6 +156,7 @@ final class TunnelManager {
     func stop(_ id: Tunnel.ID) {
         retryTasks.removeValue(forKey: id)?.cancel()
         retries[id] = nil
+        wasUp.remove(id)
         if let pending = pendingAuth.removeValue(forKey: id) {
             pending.cancel()
             status[id] = .stopped
@@ -172,8 +178,12 @@ final class TunnelManager {
             return
         }
         let reason = SSHErrorText.describe(stderr, fallback: L("ssh завершился с кодом %@", "\(code)"))
-        guard let tunnel = tunnels.first(where: { $0.id == id }), tunnel.autoStart else {
-            status[id] = .failed(reason)
+        // B-3: a refused login or a cut before login is not retried (the same credentials would only feed fail2ban),
+        // and neither is a tunnel that never came up; the user fixes the host and starts it again.
+        let refused = SSHErrorText.loginRefused(stderr)
+        guard let tunnel = tunnels.first(where: { $0.id == id }), tunnel.autoStart, !refused, wasUp.contains(id) else {
+            retries[id] = nil
+            status[id] = .failed(refused ? reason + "\n" + L("Исправьте пароль или ключ в карточке хоста и запустите туннель снова.") : reason)
             return
         }
         let attempt = (retries[id] ?? 0) + 1
