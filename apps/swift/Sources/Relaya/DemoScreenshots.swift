@@ -66,12 +66,16 @@ enum DemoScreenshots {
     /// it saves nothing, so the view's own rendering is the fallback.
     private static func shoot(_ window: NSWindow, _ dir: URL, _ name: String) async throws {
         await settle()
+        FileHandle.standardError.write(Data("screenshots: \(name)\n".utf8))
         let file = dir.appending(path: "mac-\(name).png")
         try? FileManager.default.removeItem(at: file)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         p.arguments = ["-x", "-o", "-l\(window.windowNumber)", file.path]
         try p.run()
+        // Without the screen recording permission screencapture may wait for a prompt nobody answers.
+        for _ in 0..<60 where p.isRunning { try? await Task.sleep(for: .milliseconds(250)) }
+        if p.isRunning { p.terminate() }
         p.waitUntilExit()
         let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0
         if p.terminationStatus == 0, size > 10_000 { return }
