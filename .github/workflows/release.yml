@@ -19,10 +19,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Signing secrets only for a tag or a manual run: a PR (its own copy of mac-package.yml) gets none and signs
+  # ad-hoc, so a pull request cannot read the persistent signing identity.
   mac:
     name: "Release · Mac"
+    if: github.event_name != 'pull_request'
     uses: ./.github/workflows/mac-package.yml
     secrets: inherit
+  mac-dry-run:
+    name: "Release · Mac (dry run)"
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/mac-package.yml
   windows:
     name: "Release · Windows"
     uses: ./.github/workflows/windows.yml
@@ -35,7 +42,9 @@ jobs:
 
   publish:
     name: "Release · publish"
-    needs: [mac, windows, linux]
+    needs: [mac, mac-dry-run, windows, linux]
+    # One of the two Mac jobs is always skipped; run when nothing failed or was cancelled.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
