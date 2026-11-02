@@ -10,6 +10,9 @@ inputs:
   swift:
     description: Swift version
     default: "6.2.4"
+  swift-sha256:
+    description: sha256 of the Linux toolchain archive for that version (print it with swift-pin.yml)
+    default: 15608c4fa0364ef906014343d81639cf58169e8a40de2b2d3503c3f35a8bb66d
 outputs:
   dir:
     description: folder with the RoyalVNCKit library
@@ -38,8 +41,12 @@ runs:
         tag="swift-${{ inputs.swift }}-RELEASE"
         if [ ! -x ~/swift-toolchain/usr/bin/swift ]; then
           mkdir -p ~/swift-toolchain
-          curl -fsSL "https://download.swift.org/swift-${{ inputs.swift }}-release/ubuntu2404/$tag/$tag-ubuntu24.04.tar.gz" \
-            | tar xz -C ~/swift-toolchain --strip-components=1
+          # Pinned hash, fail-closed, like actionlint and appimagetool.
+          curl -fsSL -o "$RUNNER_TEMP/swift.tar.gz" \
+            "https://download.swift.org/swift-${{ inputs.swift }}-release/ubuntu2404/$tag/$tag-ubuntu24.04.tar.gz"
+          echo "${{ inputs.swift-sha256 }}  $RUNNER_TEMP/swift.tar.gz" | sha256sum -c -
+          tar xzf "$RUNNER_TEMP/swift.tar.gz" -C ~/swift-toolchain --strip-components=1
+          rm "$RUNNER_TEMP/swift.tar.gz"
         fi
         echo "$HOME/swift-toolchain/usr/bin" >> "$GITHUB_PATH"
     - uses: compnerd/gha-setup-vsdevenv@f1ba60d553a3216ce1b89abe0201213536bc7557 # v6
