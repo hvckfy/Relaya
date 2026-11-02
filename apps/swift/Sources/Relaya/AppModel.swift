@@ -852,6 +852,9 @@ final class AppModel {
                               askpassExecutable: askpassExecutable)
         let bridge = WebDAVBridge(host: h, remoteRoot: path, sftp: sftp, ssh: ssh)
         bridge.onStopped = { [weak self] in self?.finderBridges[h.alias] = nil }
+        bridge.onRefused = { [weak self] reason in
+            self?.alertMessage = L("Диск %@ отключён: сервер не принял пароль или ключ.", h.alias) + "\n" + reason
+        }
         do {
             try await bridge.start()
             finderBridges[h.alias] = bridge
