@@ -63,6 +63,9 @@ struct relaya_rdp
 	int blank_nla;
 	/* authenticate() отказал из-за пустого имени: FreeRDP закроется с CONNECT_CANCELLED — это «нужны учётные данные». */
 	int no_username;
+	/* The last size the client asked for, kept until the server's Display Control channel takes it: a request sent
+	   before the channel is up (right after connecting or reconnecting) used to be dropped for good. */
+	uint32_t want_w, want_h;
 	int closed;
 	uint16_t last_x, last_y;
 };
@@ -227,6 +230,32 @@ static UINT clip_server_data_request(CliprdrClientContext* ctx, const CLIPRDR_FO
 
 /* ---------- каналы ---------- */
 
+/* ---------- desktop size ---------- */
+
+static void send_layout(relaya_rdp* r)
+{
+	if (!r->want_w || !r->disp || !r->disp->SendMonitorLayout)
+		return;
+	DISPLAY_CONTROL_MONITOR_LAYOUT layout = { 0 };
+	layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
+	layout.Width = r->want_w < 200 ? 200 : (r->want_w > 8192 ? 8192 : r->want_w) & ~1u;
+	layout.Height = r->want_h < 200 ? 200 : (r->want_h > 8192 ? 8192 : r->want_h);
+	layout.DesktopScaleFactor = r->cfg.scale_percent > 100 ? r->cfg.scale_percent : 100;
+	layout.DeviceScaleFactor = 100;
+	if (r->disp->SendMonitorLayout(r->disp, 1, &layout) == CHANNEL_RC_OK)
+		r->want_w = r->want_h = 0;
+}
+
+/* The server announced its Display Control limits: the channel is ready, send the size waiting for it. */
+static UINT disp_caps(DispClientContext* disp, UINT32 max_monitors, UINT32 factor_a, UINT32 factor_b)
+{
+	WINPR_UNUSED(max_monitors);
+	WINPR_UNUSED(factor_a);
+	WINPR_UNUSED(factor_b);
+	send_layout((relaya_rdp*)disp->custom);
+	return CHANNEL_RC_OK;
+}
+
 static void on_channel_connected(void* context, const ChannelConnectedEventArgs* e)
 {
 	relaya_rdp* r = owner_of(context);
@@ -243,7 +272,11 @@ static void on_channel_connected(void* context, const ChannelConnectedEventArgs*
 		r->cliprdr = clip;
 	}
 	else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0)
+	{
 		r->disp = e->pInterface;
+		r->disp->custom = r;
+		r->disp->DisplayControlCaps = disp_caps;
+	}
 	else
 		freerdp_client_OnChannelConnectedEventHandler(context, e);
 }
@@ -722,16 +755,9 @@ static void run_commands(relaya_rdp* r, freerdp* instance)
 				break;
 			}
 			case CMD_RESIZE:
-				if (r->disp && r->disp->SendMonitorLayout)
-				{
-					DISPLAY_CONTROL_MONITOR_LAYOUT layout = { 0 };
-					layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
-					layout.Width = c->a < 200 ? 200 : (c->a > 8192 ? 8192 : c->a) & ~1u;
-					layout.Height = c->b < 200 ? 200 : (c->b > 8192 ? 8192 : c->b);
-					layout.DesktopScaleFactor = r->cfg.scale_percent > 100 ? r->cfg.scale_percent : 100;
-					layout.DeviceScaleFactor = 100;
-					(void)r->disp->SendMonitorLayout(r->disp, 1, &layout);
-				}
+				r->want_w = c->a;
+				r->want_h = c->b;
+				send_layout(r);
 				break;
 			case CMD_CLIPBOARD:
 				free(r->local_text);
