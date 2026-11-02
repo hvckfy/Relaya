@@ -65,6 +65,12 @@ jobs:
           P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
         run: |
           if [ -z "$P12" ]; then
+            # Ad-hoc only for a PR dry run: a release without the persistent identity would silently reset
+            # every user's Keychain "Always Allow" grants (S-1).
+            if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+              echo "::error::No signing certificate in secrets; a release must be signed with the persistent identity"
+              exit 1
+            fi
             echo "::warning::No signing certificate in secrets, signing ad-hoc"
             for l in ru en; do codesign --force --deep --sign - "build/$l/Relaya.app"; done
             exit 0
