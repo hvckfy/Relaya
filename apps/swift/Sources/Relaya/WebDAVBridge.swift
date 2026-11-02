@@ -17,6 +17,8 @@ final class WebDAVBridge {
     private(set) var mountPoint: URL?
     private let queue = DispatchQueue(label: "app.relaya.webdav")
     var onStopped: (() -> Void)?
+    /// The server refused the login while the disk was in use; the disk is unmounted right after (B-5).
+    var onRefused: ((String) -> Void)?
 
     /// Папка на сервере, которая стала диском.
     let remoteRoot: String
@@ -31,6 +33,13 @@ final class WebDAVBridge {
     /// Поднять сервер, подключить диск и открыть его в Finder.
     func start() async throws {
         try await server.prepare()
+        await server.setOnRefused { [weak self] reason in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.onRefused?(reason)
+                self.stop()
+            }
+        }
         let params = NWParameters.tcp
         params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
         let listener = try NWListener(using: params)
@@ -131,6 +140,12 @@ actor DAVServer {
     /// Служебные файлы Finder (`._*`, `.DS_Store`) живут только в памяти моста.
     private var junk: [String: Data] = [:]
     private var listings: [String: (files: [RemoteFile], at: Date)] = [:]
+    /// B-5: the server refused the login after the disk was mounted (password changed, key revoked, account
+    /// locked). From then on no ssh is started: Finder keeps retrying, and each retry would be another failed login.
+    private var refused: String?
+    private var onRefused: (@Sendable (String) -> Void)?
+
+    func setOnRefused(_ handler: @escaping @Sendable (String) -> Void) { onRefused = handler }
 
     private let requestedRoot: String
 
@@ -158,6 +173,7 @@ actor DAVServer {
         guard WebDAV.isAuthorized(req.header("authorization"), password: password) else {
             return WebDAV.response(401, "Unauthorized", headers: ["WWW-Authenticate": "Basic realm=\"Relaya\""])
         }
+        if refused != nil { return WebDAV.response(503, "Service Unavailable") }
         do {
             switch WebDAV.decide(req, prefix: prefix, root: root) {
             case let .reply(status, reason):
@@ -229,7 +245,15 @@ actor DAVServer {
                 }
             }
         } catch {
-            return WebDAV.response(500, "Internal Server Error", body: Data(error.localizedDescription.utf8))
+            let message = error.localizedDescription
+            if SSHErrorText.loginRefused(message) {
+                if refused == nil {
+                    refused = message
+                    onRefused?(message)
+                }
+                return WebDAV.response(503, "Service Unavailable")
+            }
+            return WebDAV.response(500, "Internal Server Error", body: Data(message.utf8))
         }
     }
 
