@@ -235,7 +235,12 @@ public sealed partial class MainWindow : Window
     {
         EmptyTitle.Text = AppState.Hosts.Count == 0 ? L("Хостов пока нет — добавьте первый кнопкой «Новый хост…»") : L("Выберите хост слева");
         Nav.MenuItems.Clear();
-        Nav.MenuItems.Add(new NavigationViewItemHeader { Content = HostsHeader() });
+        // With tags the header holds a filter button: NavigationViewItemHeader shows only text (Uno printed the
+        // StackPanel type name, WinUI left a gap), so it is a plain item that cannot be selected.
+        var header = HostsHeader();
+        Nav.MenuItems.Add(header is TextBlock t
+            ? new NavigationViewItemHeader { Content = t.Text }
+            : new NavigationViewItem { Content = header, SelectsOnInvoked = false, IsTabStop = false });
         var shown = AppState.Hosts.Where(h => (query.Length == 0
             || RelayaCoreMethods.FuzzyScoreFields(query, Fields(h)) != null) && (tagFilter == null || h.tags.Contains(tagFilter)));
         foreach (var group in shown.GroupBy(h => h.group ?? "").OrderBy(g => g.Key.Length == 0 ? "" : "~" + g.Key))
