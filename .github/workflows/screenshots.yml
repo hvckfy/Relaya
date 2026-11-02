@@ -64,7 +64,8 @@ jobs:
       - name: Take screenshots
         run: |
           mkdir -p shots
-          build/en/Relaya.app/Contents/MacOS/Relaya --demo --screenshots "$PWD/shots" 2> shots-log.txt &
+          # Through LaunchServices like a user launch: started as a bare binary the app never opened its window.
+          open -W -n --stderr "$PWD/shots-log.txt" build/en/Relaya.app --args --demo --screenshots "$PWD/shots" &
           pid=$!
           # The app quits by itself after the last scene; give it five minutes.
           for _ in $(seq 300); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
@@ -205,7 +206,7 @@ jobs:
             [ -e "$dir/done" ] && break
             for ready in "$dir"/*.ready; do
               [ -e "$ready" ] || continue
-              read -r x y w h < "$ready"
+              read -r x y w h < "$ready" || true
               png="${ready%.ready}.png"
               import -window root -crop "${w}x${h}+${x}+${y}" "$png.tmp.png" && mv "$png.tmp.png" "$png"
               rm -f "$ready"

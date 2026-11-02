@@ -19,7 +19,8 @@ internal static class DemoScreenshots
     {
         Directory.CreateDirectory(dir);
         var os = System.OperatingSystem.IsWindows() ? "windows" : "linux";
-        window.AppWindow.MoveAndResize(new RectInt32 { X = 80, Y = 80, Width = 1280, Height = 800 });
+        // Hosted Windows runners have a 1024x768 screen: the window must fit it to be captured whole.
+        window.AppWindow.MoveAndResize(new RectInt32 { X = 0, Y = 0, Width = 1024, Height = 740 });
         var scenes = new (string Name, System.Action Show)[]
         {
             ("hosts", window.ShowNothing),
@@ -39,7 +40,7 @@ internal static class DemoScreenshots
             var s = window.AppWindow.Size;
             var png = Path.Combine(dir, $"{os}-{name}.png");
             File.Delete(png);
-            File.WriteAllText(Path.Combine(dir, $"{os}-{name}.ready"), $"{p.X} {p.Y} {s.Width} {s.Height}");
+            File.WriteAllText(Path.Combine(dir, $"{os}-{name}.ready"), $"{p.X} {p.Y} {s.Width} {s.Height}\n");
             var waited = 0;
             while (!File.Exists(png) && waited < 60_000) { await Task.Delay(250); waited += 250; }
             if (!File.Exists(png))
