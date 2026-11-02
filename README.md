@@ -134,7 +134,7 @@ Requires macOS 15 Sequoia or later; Liquid Glass needs macOS 26. Universal binar
 
 ### Windows (preview)
 
-1. The script runs the installer silently. By hand: download `Relaya-X.Y.Z-windows-x64-<lang>-setup.exe` from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. Portable `…-windows-x64-<lang>.zip` builds are there too.
+1. The script runs the installer without its wizard (SmartScreen may still ask once, see below). By hand: download `Relaya-X.Y.Z-windows-x64-<lang>-setup.exe` from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. Portable `…-windows-x64-<lang>.zip` builds are there too.
 2. The installer isn't code-signed yet, so SmartScreen asks once: *More info → Run anyway*.
 3. Needs Windows 10 1809+ (Mica background on Windows 11) and the built-in **OpenSSH Client**. The installer offers it on an *Additional components* page (it asks for administrator rights only for that step) together with [Git for Windows](https://git-scm.com), which is needed only for sync through git — folder sync works without it. If a component can't be installed, the last page says how to add it by hand (*Settings → Apps → Optional features → OpenSSH Client*).
 
@@ -184,9 +184,11 @@ apps/swift/           Apple clients — SwiftPM package: macOS app now; iOS/iPad
 apps/dotnet/          .NET clients: Relaya.Shared (pages, terminal, sync — common C#), Relaya.Windows (WinUI 3),
                       Relaya.Linux (Uno Platform, in progress), installer (Inno Setup)
 resources/            shared assets: localization (ru/en strings), app icon sources
-scripts/              build-core-macos.sh, bundle-macos.sh [version] [ru|en], build-core-windows.ps1, build-core-linux.sh
+scripts/              build-core-{macos.sh,windows.ps1,linux.sh}, bundle-macos.sh [version] [ru|en], package-linux.sh,
+                      install.sh / install.ps1 (one-command install, checks SHA256SUMS)
 docs/                 UI spec, design notes, screenshots
-.github/workflows/    ci (macOS), core (Rust on 3 OSes), windows, linux, l10n, freerdp, freerdp-watch, openh264-pin, vnc-poc, release
+.github/workflows/    mac, windows, linux (build and test), core (Rust on 3 OSes), lint, l10n, perf (benchmarks),
+                      release (all platforms on a v* tag; mac-package), freerdp, freerdp-watch, openh264-pin
 ```
 
 ## Building from source

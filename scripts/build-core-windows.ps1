@@ -17,7 +17,7 @@ if ($env:FREERDP_DIR) {
 }
 if ($env:ROYALVNC_DIR) {
     Copy-Item "$env:ROYALVNC_DIR/RoyalVNCKit.dll" target/release/ -Force
-    # Рантайм Swift, который нужен RoyalVNCKit.dll (замерено в vnc-poc.yml); VC++ runtime — системный.
+    # Рантайм Swift, который нужен RoyalVNCKit.dll (measured when VNC was first built on Windows); VC++ runtime — системный.
     $swiftBin = Split-Path (Get-Command swiftCore.dll -ErrorAction Stop).Source
     foreach ($dll in "swiftCore", "swift_Concurrency", "swift_StringProcessing", "swift_RegexParser", "swiftCRT", "swiftDispatch",
                      "swiftWinSDK", "dispatch", "BlocksRuntime", "FoundationEssentials", "swiftSynchronization") {
