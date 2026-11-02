@@ -26,7 +26,7 @@ if ($env:ROYALVNC_DIR) {
     }
 }
 if (-not (Get-Command uniffi-bindgen-cs -ErrorAction SilentlyContinue)) {
-    cargo install --locked uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
+    cargo install --locked uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --rev 2f4880f03ed08d960ad0ee14d11cf95444eee540 # tag v0.9.0+v0.28.3
 }
 $out = "$root/apps/dotnet/Relaya.Shared/Core"
 New-Item -ItemType Directory -Force $out | Out-Null
