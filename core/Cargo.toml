@@ -46,6 +46,10 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Securit
 [build-dependencies]
 cc = { version = "1", optional = true }
 
+[[bench]]
+name = "core"
+harness = false
+
 [dev-dependencies]
 tempfile = "3"
 

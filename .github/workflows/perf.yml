@@ -1,0 +1,51 @@
+name: Core · benchmarks
+
+# Core hot-path timings (core/benches/core.rs). A push to main appends the result to the public history on the
+# gh-pages branch (dev/bench); a PR is compared with that history and fails at a 2x slowdown.
+on:
+  push:
+    branches: [main]
+    paths: ["core/**", ".github/workflows/perf.yml"]
+  pull_request:
+    paths: ["core/**", ".github/workflows/perf.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bench:
+    name: "Core · benchmarks"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write # pushes the history to gh-pages, main only
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: perf-${{ runner.os }}-${{ hashFiles('core/Cargo.lock', 'core/rust-toolchain.toml') }}
+          restore-keys: perf-${{ runner.os }}-
+      - name: Run benchmarks
+        working-directory: core
+        run: cargo bench --locked --bench core | tee "$RUNNER_TEMP/bench.json"
+      - uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
+        with:
+          name: Relaya core
+          tool: customSmallerIsBetter
+          output-file-path: ${{ runner.temp }}/bench.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench
+          github-token: ${{ github.token }}
+          auto-push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          save-data-file: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          alert-threshold: "200%"
+          fail-on-alert: true
+          summary-always: true
