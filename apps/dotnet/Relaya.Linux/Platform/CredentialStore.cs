@@ -52,6 +52,7 @@ internal static class CredentialStore
     /// Два случая разные: нет библиотеки (поставить libsecret) и нет службы (поставить и запустить keyring).
     public static void Write(string account, string secret)
     {
+        LoginGate.Open(account); // a new password may log in again (B-4)
         IntPtr attrs;
         try { attrs = Attributes(account); }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { throw NoLibrary(); }

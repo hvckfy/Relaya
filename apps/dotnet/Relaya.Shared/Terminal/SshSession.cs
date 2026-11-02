@@ -229,6 +229,7 @@ internal sealed class SshSession : IDisposable
             if (!loggedIn && view.Emulator.LoginReady())
             {
                 loggedIn = true;
+                Relaya.Platform.LoginGate.Open(alias); // a successful login lets background calls run again (B-4)
                 sessionLoggedIn = true;
                 if (sawPasswordPrompt && Relaya.Data.AppState.Host(alias)?.identityFile == null
                     && Relaya.Platform.Settings.Get("terminal.offerKeySetup", "1") == "1")

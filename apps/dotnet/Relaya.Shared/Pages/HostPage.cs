@@ -103,11 +103,17 @@ internal sealed class HostPage : UserControl
         body.Children.Add(Header(L("Службы и порты"), () => _ = LoadServices()));
         body.Children.Add(services);
 
-        Loaded += async (_, _) => await Task.WhenAll(LoadStats(), LoadDocker(), LoadTmux(), LoadServices());
+        // B-4: the first probe runs alone; if the server refused it, the others return the same reason without ssh.
+        Loaded += async (_, _) =>
+        {
+            await LoadStats();
+            await Task.WhenAll(LoadDocker(), LoadTmux(), LoadServices());
+        };
     }
 
     private void Refresh()
     {
+        Platform.LoginGate.Open(host.alias); // Refresh is the person's explicit retry (B-4)
         if (AppState.Host(host.alias) is { } h) MainWindow.Current?.ShowPage(new HostPage(h));
     }
 

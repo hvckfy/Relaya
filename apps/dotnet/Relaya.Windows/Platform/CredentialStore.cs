@@ -27,6 +27,7 @@ internal static class CredentialStore
 
     public static void Write(string account, string secret)
     {
+        LoginGate.Open(account); // a new password may log in again (B-4)
         var bytes = Encoding.Unicode.GetBytes(secret);
         var blob = Marshal.AllocHGlobal(bytes.Length);
         try
