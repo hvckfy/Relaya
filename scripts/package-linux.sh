@@ -14,7 +14,7 @@ LANG_CODE="${3:-en}"
 case "$LANG_CODE" in
   ru) COMMENT="SSH-хосты, терминалы, туннели и удалённые столы" ;;
   en) COMMENT="SSH hosts, terminals, tunnels and remote desktops" ;;
-  *) echo "язык: ru или en, получено «$LANG_CODE»" >&2; exit 2 ;;
+  *) echo "language: ru or en, got \"$LANG_CODE\"" >&2; exit 2 ;;
 esac
 OUT="$ROOT/build"
 WORK="$OUT/pkg"
@@ -49,7 +49,7 @@ done
 # Check: the core finds all its libraries inside the package (rpath $ORIGIN), no "not found".
 if ldd "$PUB/librelaya_core.so" | grep -q 'not found'; then
   ldd "$PUB/librelaya_core.so" | grep 'not found' >&2
-  echo "librelaya_core.so: не хватает библиотек в пакете" >&2
+  echo "librelaya_core.so: libraries missing from the package" >&2
   exit 1
 fi
 

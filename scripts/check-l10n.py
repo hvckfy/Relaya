@@ -42,7 +42,7 @@ def en_entries():
             continue
         m = ENTRY.match(line)
         if not m:
-            problems.append(f'en.lproj:{n}: строка не разобрана')
+            problems.append(f'en.lproj:{n}: line not parsed')
             continue
         entries[unescape(m.group(1))].append((n, unescape(m.group(2))))
     return entries, problems
@@ -55,16 +55,16 @@ def main():
         if not re.search('[а-яА-ЯёЁ]', k):
             continue  # Latin text (names, commands) needs no translation
         if k not in entries:
-            problems.append(f'нет перевода: «{k}» ({places[0]})')
+            problems.append(f'no translation: «{k}» ({places[0]})')
     for k, rows in entries.items():
         if len(rows) > 1:
-            problems.append(f'дубль в en.lproj: «{k}» (строки {", ".join(str(r[0]) for r in rows)})')
+            problems.append(f'duplicate in en.lproj: «{k}» (lines {", ".join(str(r[0]) for r in rows)})')
         for n, v in rows:
             if k.count('%@') != v.count('%@'):
-                problems.append(f'en.lproj:{n}: число %@ не совпадает в «{k}»')
+                problems.append(f'en.lproj:{n}: %@ count differs in «{k}»')
     for p in problems:
         print(p)
-    print(f'ключей в коде: {len(keys)}, записей en.lproj: {len(entries)}, проблем: {len(problems)}')
+    print(f'keys in code: {len(keys)}, en.lproj entries: {len(entries)}, problems: {len(problems)}')
     sys.exit(1 if problems else 0)
 
 

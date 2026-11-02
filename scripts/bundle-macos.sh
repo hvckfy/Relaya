@@ -7,7 +7,7 @@ set -euo pipefail
 
 VERSION="${1:-0.0.0}"
 RELAYA_LANG="${2:-}"
-case "$RELAYA_LANG" in ""|ru|en) ;; *) echo "язык: ru или en" >&2; exit 1 ;; esac
+case "$RELAYA_LANG" in ""|ru|en) ;; *) echo "language: ru or en" >&2; exit 1 ;; esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build${RELAYA_LANG:+/$RELAYA_LANG}/Relaya.app"
 

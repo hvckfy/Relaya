@@ -1,14 +1,14 @@
 name: FreeRDP
 description: >
-  FreeRDP 3 (клиент) через vcpkg для ядра (feature rdp-freerdp): кэш по core/native/vcpkg.json и freerdp.version,
-  при промахе — сборка (~15 минут). Не зависит от артефактов других workflow.
+  The FreeRDP 3 client through vcpkg for the core (feature rdp-freerdp): cached by core/native/vcpkg.json and
+  freerdp.version, built on a miss (~15 minutes). Does not depend on other workflows' artifacts.
 inputs:
   triplet:
-    description: vcpkg triplet (x64-windows; на macOS — arm64-osx-dynamic / x64-osx-dynamic, на Linux — x64-linux-dynamic; ядро линкует dylib и .so)
+    description: vcpkg triplet (x64-windows; arm64-osx-dynamic / x64-osx-dynamic on macOS, x64-linux-dynamic on Linux; the core links the dylib and .so)
     default: x64-windows
 outputs:
   dir:
-    description: каталог с include/, lib/ и bin/
+    description: folder with include/, lib/ and bin/
     value: ${{ steps.dir.outputs.dir }}
 runs:
   using: composite
