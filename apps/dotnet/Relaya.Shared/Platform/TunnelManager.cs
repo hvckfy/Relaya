@@ -65,10 +65,15 @@ internal sealed class TunnelManager
             lock (error) message = error.ToString();
             if (running.TryGetValue(t.id, out var cur) && cur.Process == p)
             {
-                running[t.id] = (p, State.Failed, SshErrors.Describe(message, Strings.L("ssh завершился с кодом %@", p.ExitCode)));
+                // B-3: a refused or blocked login is not retried: every retry is another failed login for fail2ban.
+                var refused = RelayaCoreMethods.SshAuthRefused(message) || RelayaCoreMethods.SshBlocked(message);
+                running[t.id] = (p, State.Failed, refused
+                    ? Strings.L("Сервер не принял вход.") + " " + Strings.L("Исправьте пароль или ключ в карточке хоста и запустите туннель снова.")
+                    : SshErrors.Describe(message, Strings.L("ssh завершился с кодом %@", p.ExitCode)));
+                if (refused) { wasUp.TryRemove(t.id, out _); retries.TryRemove(t.id, out _); }
                 // Автоперезапуск (8.4, как на Mac): туннель «вместе с Relaya», который поднимался и упал, —
                 // через 5, 10, 20, 40, 60… с, до 8 попыток подряд. Ручная остановка (Stop) убирает запись — и повтора нет.
-                if (t.autoStart && wasUp.TryRemove(t.id, out _) || t.autoStart && retries.ContainsKey(t.id))
+                else if (t.autoStart && wasUp.TryRemove(t.id, out _) || t.autoStart && retries.ContainsKey(t.id))
                 {
                     var attempt = retries.AddOrUpdate(t.id, 1, (_, n) => n + 1);
                     if (attempt <= 8)
