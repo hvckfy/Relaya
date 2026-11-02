@@ -1,3 +1,4 @@
+using System.IO;
 using uniffi.relaya_core;
 
 namespace Relaya.Platform;
