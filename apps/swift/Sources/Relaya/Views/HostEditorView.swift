@@ -398,6 +398,8 @@ struct HostEditorView: View {
             } else if passwordEdited, !password.isEmpty {
                 try model.keychain.setPassword(password, for: account)
             }
+            // New credentials: background probes may log in again (B-2).
+            model.loginMayRetry(normalized.alias)
             dismiss()
         } catch {
             self.error = error.localizedDescription

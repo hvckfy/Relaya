@@ -670,10 +670,53 @@ final class AppModel {
     /// `interactive` — вызвано пользователем: можно спросить Touch ID; иначе пароль берём, только если уже подтверждён.
     func exec(_ command: String, on host: SSHHost, interactive: Bool, reason: String,
               timeout: Duration = .seconds(20)) async throws -> ProcessResult {
+        let alias = current(host).alias
+        // B-4: until a login to this host has worked, background probes go one at a time; the first one also opens
+        // the shared master connection, and if it is refused the rest stop with the same reason.
+        if !interactive, !loginWorked.contains(alias), let pending = firstLogin[alias] { await pending.value }
+        if !interactive, let refused = loginRefused[alias] { throw LoginRefused(errorDescription: refused) }
+        var finish: (() -> Void)?
+        if !interactive, !loginWorked.contains(alias), firstLogin[alias] == nil {
+            let (signal, continuation) = AsyncStream<Void>.makeStream()
+            firstLogin[alias] = Task { for await _ in signal {} }
+            finish = { continuation.finish() }
+        }
+        defer {
+            if let finish { finish(); firstLogin[alias] = nil }
+        }
         let ssh = await invocation(for: host, interactive: interactive, reason: reason)
-        return try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, command],
-                                           environment: ssh.environment, timeout: timeout)
+        let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, command],
+                                            environment: ssh.environment, timeout: timeout)
+        noteLogin(alias, r)
+        return r
     }
+
+    // MARK: - Refused logins (B-2, B-4)
+
+    /// Hosts whose last background login the server refused or cut off before login, with the reason to show.
+    /// Background probes (stats, Docker, tmux, services) do not run for them until the user presses Refresh,
+    /// changes the password or a login succeeds: repeating the same credentials only feeds fail2ban.
+    var loginRefused: [String: String] = [:]
+
+    struct LoginRefused: LocalizedError { var errorDescription: String? }
+
+    /// Hosts where a login has worked this run: their probes no longer wait for one another.
+    private var loginWorked: Set<String> = []
+    /// The background login in flight for a host whose login has not worked yet.
+    private var firstLogin: [String: Task<Void, Never>] = [:]
+
+    /// Exit code 255 is ssh's own failure; a command failing on the server never latches the host.
+    func noteLogin(_ alias: String, _ r: ProcessResult) {
+        if r.status != 255, !r.timedOut {
+            loginRefused[alias] = nil
+            loginWorked.insert(alias)
+        } else if r.status == 255, !r.timedOut, sshAuthRefused(output: r.stderr) || sshBlocked(output: r.stderr) {
+            loginRefused[alias] = SSHErrorText.describe(r.stderr, fallback: L("Сервер не принял вход."))
+        }
+    }
+
+    /// The user changed credentials or asked to retry: background probes may log in again.
+    func loginMayRetry(_ alias: String) { loginRefused[alias] = nil }
 
     /// Аргументы и окружение ssh для хоста — общие для exec и потоковых передач SFTP.
     /// `multiplex` — служебный вызов идёт через общее соединение хоста (П-9); окна tmux — своим.
