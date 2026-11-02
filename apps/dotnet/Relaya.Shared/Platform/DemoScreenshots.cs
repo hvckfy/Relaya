@@ -18,8 +18,8 @@ internal static class DemoScreenshots
     public static async Task RunAsync(MainWindow window, string dir)
     {
         Directory.CreateDirectory(dir);
-        var os = OperatingSystem.IsWindows() ? "windows" : "linux";
-        window.AppWindow.MoveAndResize(new RectInt32(80, 80, 1280, 800));
+        var os = System.OperatingSystem.IsWindows() ? "windows" : "linux";
+        window.AppWindow.MoveAndResize(new RectInt32 { X = 80, Y = 80, Width = 1280, Height = 800 });
         var scenes = new (string Name, System.Action Show)[]
         {
             ("hosts", window.ShowNothing),
