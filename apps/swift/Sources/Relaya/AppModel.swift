@@ -710,7 +710,7 @@ final class AppModel {
         if r.status != 255, !r.timedOut {
             loginRefused[alias] = nil
             loginWorked.insert(alias)
-        } else if r.status == 255, !r.timedOut, sshAuthRefused(output: r.stderr) || sshBlocked(output: r.stderr) {
+        } else if r.status == 255, !r.timedOut, SSHErrorText.loginRefused(r.stderr) {
             loginRefused[alias] = SSHErrorText.describe(r.stderr, fallback: L("Сервер не принял вход."))
         }
     }

@@ -1402,3 +1402,4 @@
 "Сервер %@" = "Server %@";
 "Имя содержит управляющие символы: %@" = "The name contains control characters: %@";
 "Сервер не принял вход." = "The server refused the login.";
+"Исправьте пароль или ключ в карточке хоста и запустите туннель снова." = "Fix the password or key in the host card and start the tunnel again.";
