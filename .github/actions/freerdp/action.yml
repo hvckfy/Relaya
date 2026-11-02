@@ -17,8 +17,8 @@ runs:
       id: cache
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
-        # Своя папка на каждый triplet: vcpkg в режиме манифеста удаляет из install-root пакеты других
-        # triplet'ов, и на macOS сборка x86_64 стирала arm64 (без кэша — нет winpr/crt.h).
+        # A folder per triplet: vcpkg in manifest mode removes other triplets' packages from install-root,
+        # and on macOS the x86_64 build erased arm64 (without the cache: no winpr/crt.h).
         path: core/native/vcpkg_installed/${{ inputs.triplet }}.root
         key: freerdp-${{ inputs.triplet }}-${{ hashFiles('core/native/vcpkg.json', 'core/native/freerdp.version', 'core/native/ports/**', 'core/native/openh264/**') }}
     - name: Build FreeRDP
@@ -26,7 +26,7 @@ runs:
       shell: pwsh
       run: |
         $baseline = (Get-Content core/native/vcpkg.json | ConvertFrom-Json).'builtin-baseline'
-        # На Windows vcpkg есть в образе; на macOS — клон по закреплённому baseline.
+        # On Windows vcpkg is on the image; on macOS it is cloned at the pinned baseline.
         if (-not $env:VCPKG_INSTALLATION_ROOT -or -not (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
           $env:VCPKG_INSTALLATION_ROOT = Join-Path $env:RUNNER_TEMP "vcpkg"
           git clone -q https://github.com/microsoft/vcpkg $env:VCPKG_INSTALLATION_ROOT

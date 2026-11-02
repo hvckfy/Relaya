@@ -1,6 +1,6 @@
 name: Windows
 
-# Ветка main — проверка сборки и артефакт; тег v* — ещё и zip в GitHub Release рядом с Mac-версией.
+# main: build check and artifact. Release packages are built by release.yml, which calls this workflow.
 on:
   push:
     branches: [main]
@@ -18,12 +18,12 @@ on:
 
 permissions:
   contents: read
-  actions: read # артефакт FreeRDP из freerdp.yml
+  actions: read # FreeRDP artifact from freerdp.yml
 
 concurrency:
   group: windows-${{ github.ref }}
-  # Один прогон на ветку доходит до конца; из новых ждёт только самый свежий (GitHub заменяет ожидающий),
-  # так проверка не отменяется частыми пушами, а очередь не копится.
+  # One run per branch finishes; of the newer ones only the latest waits (GitHub replaces the pending one),
+  # so frequent pushes do not cancel the check and the queue does not grow.
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
     name: "Windows · build (${{ matrix.lang }})"
     runs-on: windows-latest
     timeout-minutes: 45
-    # Язык интерфейса задаётся при сборке (ADR-002): две сборки, два установщика.
+    # The UI language is fixed at build time (ADR-002): two builds, two installers.
     strategy:
       fail-fast: false
       matrix:
@@ -41,8 +41,8 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      # Встроенный RDP на FreeRDP: артефакт последнего удачного freerdp.yml на main; скрипт ядра соберёт с rdp-freerdp
-      # и положит DLL FreeRDP рядом с relaya_core.dll.
+      # Built-in RDP on FreeRDP: the artifact of the last successful freerdp.yml on main; the core script builds with
+      # rdp-freerdp and puts the FreeRDP DLLs next to relaya_core.dll.
       - name: Fetch FreeRDP
         shell: pwsh
         env:
@@ -51,10 +51,10 @@ jobs:
           $run = gh run list -R ${{ github.repository }} --workflow freerdp.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId'
           gh run download $run -R ${{ github.repository }} -n freerdp-x64-windows -D "$env:RUNNER_TEMP/freerdp"
           "FREERDP_DIR=$env:RUNNER_TEMP/freerdp".Replace('\','/') | Out-File -Append $env:GITHUB_ENV
-      # VNC на RoyalVNCKit: закреплённый коммит, кэш; скрипт ядра включит vnc-royal и положит DLL рядом.
+      # VNC on RoyalVNCKit: pinned commit, cached; the core script enables vnc-royal and puts the DLL alongside.
       - name: RoyalVNCKit
         uses: ./.github/actions/royalvnc
-      # Unit-тесты чистой логики Shared (Т4) — без ядра и WinUI, до долгой сборки.
+      # Unit tests of the pure Shared logic (T4): no core and no WinUI, before the long build.
       - name: Shared unit tests
         shell: pwsh
         run: dotnet test apps/dotnet/Relaya.Shared.Tests -c Release
@@ -62,8 +62,8 @@ jobs:
         uses: ./.github/actions/build-core
         with:
           script: scripts/build-core-windows.ps1
-      # ConPTY: вывод процесса доходит до подписчика (регрессия «чёрная вкладка, код 255»).
-      # sshd в раннере для smoke-теста: вход по ключу на localhost. Не поднялся — ssh-часть теста пропускается.
+      # ConPTY: process output reaches the subscriber (regression "black tab, exit code 255").
+      # sshd on the runner for the smoke test: key login to localhost. If it does not start, the ssh part is skipped.
       - name: Start local sshd for smoke test
         shell: pwsh
         continue-on-error: true
@@ -80,7 +80,7 @@ jobs:
           Start-Service sshd
           "RELAYA_SMOKE_SSH_KEY=$key" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "RELAYA_SMOKE_SSH_KEY_PASS=$locked" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-      # Терминал как в приложении: WinExe без консоли, ConPTY, эмулятор ядра, ввод, Resize, ssh.
+      # The terminal as in the app: WinExe without a console, ConPTY, the core emulator, input, Resize, ssh.
       - name: Terminal smoke test
         shell: pwsh
         run: |
@@ -89,14 +89,14 @@ jobs:
           $p = Start-Process build/smoke/Relaya.Windows.Smoke.exe -ArgumentList "`"$log`"" -Wait -PassThru
           Get-Content $log
           exit $p.ExitCode
-      # PRI-задачи WinAppSDK есть только в MSBuild из Visual Studio, не в dotnet CLI.
+      # The WinAppSDK PRI tasks exist only in Visual Studio's MSBuild, not in the dotnet CLI.
       - uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
       - name: Build WinUI app
         shell: pwsh
         run: |
           $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.0.0' }
           msbuild apps/dotnet/Relaya.Windows/Relaya.Windows.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:Version=$version -p:RelayaLang=${{ matrix.lang }}
-      # Установщик (Inno Setup есть на образе windows-latest; если нет — ставим через choco).
+      # Installer (Inno Setup is on the windows-latest image; if not, install it with choco).
       - name: Build installer
         shell: pwsh
         run: |
@@ -116,11 +116,11 @@ jobs:
             build/Relaya-windows-${{ matrix.lang }}.zip
             build/Relaya-*-${{ matrix.lang }}-setup.exe
           if-no-files-found: error
-      # Настоящий TerminalView (WinUI + Win2D): Feed из фонового потока, проверка отрисованного кадра.
+      # The real TerminalView (WinUI + Win2D): Feed from a background thread, check of a rendered frame.
       - name: Terminal view selftest
         shell: pwsh
         run: |
-          # Отдельная сборка с RELAYA_SELFTEST — в самом конце, после артефактов: в релиз этот режим не попадает.
+          # A separate RELAYA_SELFTEST build at the very end, after the artifacts: this mode never reaches a release.
           $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.0.0' }
           msbuild apps/dotnet/Relaya.Windows/Relaya.Windows.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:Version=$version -p:RelayaLang=${{ matrix.lang }} -p:RelayaSelftest=true
           $exe = Get-ChildItem apps/dotnet/Relaya.Windows/bin/x64/Release -Recurse -Filter Relaya.exe | Select-Object -First 1

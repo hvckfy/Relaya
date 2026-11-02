@@ -49,7 +49,7 @@ runs:
       with:
         branch: swift-${{ inputs.swift }}-release
         tag: ${{ inputs.swift }}-RELEASE
-    # На macOS Swift — из Xcode: его версия входит в ключ кэша, чтобы смена образа пересобрала dylib.
+    # On macOS Swift comes from Xcode: its version is part of the cache key, so a new image rebuilds the dylib.
     - name: Toolchain id
       id: toolchain
       shell: bash
@@ -75,11 +75,11 @@ runs:
         if ($IsLinux) {
           swift build -c release --product RoyalVNCKit -Xswiftc -static-stdlib
         } elseif ($IsMacOS) {
-          # minos берётся из platforms манифеста (там macOS 11), а не из --triple: поднять до 15 (минимум Relaya).
+          # minos comes from the manifest platforms (macOS 11 there), not from --triple: raise it to 15 (Relaya's minimum).
           $manifest = Get-Content Package.swift -Raw
           if ($manifest -notmatch '\.macOS\(\.v11\)') { Write-Error "Package.swift: .macOS(.v11) not found"; exit 1 }
           $manifest.Replace('.macOS(.v11)', '.macOS(.v15)') | Set-Content Package.swift -NoNewline
-          # По архитектуре, потом lipo в одну dylib.
+          # One architecture at a time, then lipo into one dylib.
           foreach ($arch in "arm64", "x86_64") {
             swift build -c release --product RoyalVNCKit --triple "$arch-apple-macosx15.0"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,8 +1,8 @@
 name: FreeRDP
 
-# Собирает FreeRDP 3 (клиент) через vcpkg (.github/actions/freerdp — тот же кэш, что у core.yml) и кладёт артефакт.
-# Версия закреплена в core/native/vcpkg.json и core/native/freerdp.version; без FFmpeg. H.264 на Windows —
-# Media Foundation из ОС, на macOS и Linux — OpenH264 от Cisco, загружаемый по пути (overlay core/native/ports).
+# Builds the FreeRDP 3 client through vcpkg (.github/actions/freerdp, the same cache as core.yml) and keeps an artifact.
+# The version is pinned in core/native/vcpkg.json and core/native/freerdp.version; no FFmpeg. H.264 on Windows is
+# Media Foundation from the OS; on macOS and Linux, Cisco's OpenH264 loaded by path (overlay core/native/ports).
 on:
   push:
     branches: ["**"]
@@ -57,7 +57,7 @@ jobs:
             ${{ steps.freerdp.outputs.dir }}/share/freerdp*
           retention-days: 90
 
-  # Ядро для Mac с движками FreeRDP и RoyalVNC: обе архитектуры, universal-библиотеки FreeRDP и RoyalVNCKit. Swift-сборку не трогает.
+  # The Mac core with the FreeRDP and RoyalVNC engines: both architectures, universal FreeRDP and RoyalVNCKit libraries. No Swift build.
   core-macos:
     name: "FreeRDP · core on Mac"
     runs-on: macos-15
@@ -86,7 +86,7 @@ jobs:
           lipo -info core/build/librelaya_core.a core/build/freerdp/libRoyalVNCKit.dylib
           grep -c "class RemoteSession\|func rdp(" apps/swift/Sources/RelayaRust/relaya_core.swift
 
-  # Ядро для Linux с движком FreeRDP (и RoyalVNC, как в linux.yml): проверка линковки и привязок C#.
+  # The Linux core with FreeRDP (and RoyalVNC, as in linux.yml): checks linking and the C# bindings.
   core-linux:
     name: "FreeRDP · core on Linux"
     runs-on: ubuntu-24.04

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Собирает Relaya.app из SwiftPM-сборки.
-# Использование: scripts/bundle-macos.sh [version] [ru|en]
-#   без языка → build/Relaya.app с обоими переводами (язык по системе, переключатель в настройках);
-#   с языком  → build/<язык>/Relaya.app только с этим языком (ADR-002: язык задаётся при сборке).
+# Builds Relaya.app from the SwiftPM build.
+# Usage: scripts/bundle-macos.sh [version] [ru|en]
+#   no language: build/Relaya.app with both translations (system language, a switch in settings);
+#   a language: build/<lang>/Relaya.app with that language only (ADR-002: the language is fixed at build time).
 set -euo pipefail
 
 VERSION="${1:-0.0.0}"
@@ -12,7 +12,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/build${RELAYA_LANG:+/$RELAYA_LANG}/Relaya.app"
 
 cd "$ROOT/apps/swift"
-# По архитектуре отдельно: мульти-arch сборка уходит в xcbuild, который не тянет плагин SwiftTerm.
+# One architecture at a time: a multi-arch build goes through xcbuild, which cannot run the SwiftTerm plugin.
 BINS=()
 for ARCH in arm64 x86_64; do
   swift build -c release --triple "$ARCH-apple-macosx15.0"
@@ -23,7 +23,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create "${BINS[@]}" -output "$APP/Contents/MacOS/Relaya"
 
-# Динамические библиотеки зависимостей (RoyalVNCKit) — рядом с бинарником: SwiftPM прописывает rpath @loader_path.
+# Dependency dylibs (RoyalVNCKit) next to the binary: SwiftPM sets rpath @loader_path.
 for LIB in "$(dirname "${BINS[0]}")"/*.dylib; do
   [[ -e "$LIB" ]] || continue
   DYLIB="$(basename "$LIB")"
@@ -32,14 +32,14 @@ for LIB in "$(dirname "${BINS[0]}")"/*.dylib; do
   lipo -create "${PARTS[@]}" -output "$APP/Contents/MacOS/$DYLIB"
 done
 
-# FreeRDP 3 (встроенный RDP ядра) — в Contents/Frameworks вместе со ссылками; install name у vcpkg — @rpath/…,
-# rpath @executable_path/../Frameworks прописан в Package.swift.
+# FreeRDP 3 (the core's built-in RDP) in Contents/Frameworks with its links; vcpkg's install name is @rpath/…,
+# and rpath @executable_path/../Frameworks is set in Package.swift.
 if [ -d "$ROOT/core/build/freerdp" ]; then
   mkdir -p "$APP/Contents/Frameworks"
   cp -a "$ROOT/core/build/freerdp/"*.dylib "$APP/Contents/Frameworks/"
 fi
 
-# Иконка из resources/icon/ (рендер Blender, см. resources/icon/README.md) → все размеры .iconset.
+# The icon from resources/icon/ (a Blender render, see resources/icon/README.md) in every .iconset size.
 ICON_SRC="$ROOT/resources/icon/relaya-chain-r-icon.png"
 ICONSET="$ROOT/build/Relaya.iconset"
 rm -rf "$ICONSET" && mkdir -p "$ICONSET"
@@ -49,7 +49,7 @@ for SIZE in 16 32 128 256 512; do
 done
 iconutil -c icns "$ROOT/build/Relaya.iconset" -o "$APP/Contents/Resources/Relaya.icns"
 
-# Переводы интерфейса: ключи — русские строки, en.lproj — английский (см. apps/swift/Sources/RelayaCore/Localization.swift).
+# UI translations: keys are Russian strings, en.lproj is English (see apps/swift/Sources/RelayaCore/Localization.swift).
 if [ -n "$RELAYA_LANG" ]; then
   cp -R "$ROOT/resources/localization/$RELAYA_LANG.lproj" "$APP/Contents/Resources/"
   DEV_REGION="$RELAYA_LANG"

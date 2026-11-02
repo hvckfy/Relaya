@@ -1,7 +1,7 @@
 name: Mac
 
 on:
-  # Ветки проверяются через PR: push на любую ветку плюс pull_request гоняли Mac-сборку дважды.
+  # Branches are checked through PRs: push on any branch plus pull_request ran the Mac build twice.
   push:
     branches: [main]
     # Own files only: a commit for another platform neither starts nor cancels this run. Tags go to release.yml.
@@ -18,8 +18,8 @@ on:
 
 concurrency:
   group: mac-${{ github.ref }}
-  # Один прогон на ветку доходит до конца; из новых ждёт только самый свежий (GitHub заменяет ожидающий),
-  # так проверка не отменяется частыми пушами, а очередь не копится.
+  # One run per branch finishes; of the newer ones only the latest waits (GitHub replaces the pending one),
+  # so frequent pushes do not cancel the check and the queue does not grow.
   cancel-in-progress: false
 
 permissions:
@@ -34,14 +34,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Select Xcode
-        # SDK macOS 26 — для Liquid Glass. Берём самый новый Xcode 26 из образа.
+        # The macOS 26 SDK is for Liquid Glass. Take the newest Xcode 26 on the image.
         run: |
           printf '%s\n' /Applications/Xcode*.app
           XC=$(printf '%s\n' /Applications/Xcode_26*.app | sort -V | tail -1)
           sudo xcode-select -s "$XC"
           xcodebuild -version
 
-      # FreeRDP 3 для встроенного RDP (ядро с rdp-freerdp): dylib обеих архитектур, кэш vcpkg в действии.
+      # FreeRDP 3 for the built-in RDP (core with rdp-freerdp): dylibs for both architectures, vcpkg cache in the action.
       - name: FreeRDP arm64
         id: freerdp_arm
         uses: ./.github/actions/freerdp
@@ -53,7 +53,7 @@ jobs:
         with:
           triplet: x64-osx-dynamic
 
-      # RoyalVNCKit (VNC ядра, feature vnc-royal): universal dylib для macOS 15.
+      # RoyalVNCKit (the core's VNC, feature vnc-royal): a universal dylib for macOS 15.
       - name: RoyalVNCKit
         id: royalvnc
         uses: ./.github/actions/royalvnc

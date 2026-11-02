@@ -1,6 +1,6 @@
 name: Localization
 
-# Каждая строка интерфейса (L("…") в Swift и C#) должна быть в en.lproj, без дублей и с тем же числом %@.
+# Every UI string (L("…") in Swift and C#) must be in en.lproj, without duplicates and with the same number of %@.
 on:
   push:
     branches: [main]
@@ -8,8 +8,8 @@ on:
 
 concurrency:
   group: l10n-${{ github.ref }}
-  # Один прогон на ветку доходит до конца; из новых ждёт только самый свежий (GitHub заменяет ожидающий),
-  # так проверка не отменяется частыми пушами, а очередь не копится.
+  # One run per branch finishes; of the newer ones only the latest waits (GitHub replaces the pending one),
+  # so frequent pushes do not cancel the check and the queue does not grow.
   cancel-in-progress: false
 
 permissions:

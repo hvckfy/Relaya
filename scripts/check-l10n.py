@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Проверка локализации (CI): каждый ключ L("…") из Swift и C# есть в en.lproj, без дублей, %@ совпадает.
-Ключи — русские строки (язык разработки). Запуск: python3 -I scripts/check-l10n.py [корень репозитория]."""
+"""Localization check (CI): every L("…") key from Swift and C# is in en.lproj, without duplicates, with matching %@.
+Keys are Russian strings (the development language). Run: python3 -I scripts/check-l10n.py [repository root]."""
 import os, re, sys, collections
 
 ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..'))
 EN = os.path.join(ROOT, 'resources/localization/en.lproj/Localizable.strings')
 SOURCES = [('apps/swift/Sources', '.swift'), ('apps/dotnet', '.cs')]
-# L("…") и Strings.L("…"); в Swift и C# одинаковые обычные строки с \-экранированием.
+# L("…") and Strings.L("…"); Swift and C# share plain strings with \ escapes.
 CALL = re.compile(r'(?<![\w.])(?:Strings\.)?L\(\s*"((?:[^"\\\n]|\\.)*)"')
 ENTRY = re.compile(r'^"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)";\s*$')
 
@@ -28,7 +28,7 @@ def code_keys():
                 for m in CALL.finditer(text):
                     raw = m.group(1)
                     if '\\(' in raw or '{' in raw and ext == '.cs' and '$"' in text[max(0, m.start() - 3):m.start() + 3]:
-                        continue  # интерполяция — не ключ
+                        continue  # interpolation, not a key
                     line = text.count('\n', 0, m.start()) + 1
                     keys[unescape(raw)].append(f'{os.path.relpath(path, ROOT)}:{line}')
     return keys
@@ -53,7 +53,7 @@ def main():
     entries, problems = en_entries()
     for k, places in sorted(keys.items()):
         if not re.search('[а-яА-ЯёЁ]', k):
-            continue  # латиница (имена, команды) переводить не нужно
+            continue  # Latin text (names, commands) needs no translation
         if k not in entries:
             problems.append(f'нет перевода: «{k}» ({places[0]})')
     for k, rows in entries.items():

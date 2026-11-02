@@ -1,7 +1,7 @@
 name: FreeRDP watch
 
-# Раз в неделю: вышла ли новая FreeRDP и есть ли advisories на закреплённую версию.
-# Один запрос к GitHub API и один к OSV; при новостях — issue с меткой security.
+# Weekly: is there a new FreeRDP release, and are there advisories for the pinned version.
+# One GitHub API request and one OSV request; news opens an issue labelled security.
 on:
   schedule:
     - cron: "17 6 * * 1"
