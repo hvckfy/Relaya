@@ -752,11 +752,6 @@ static void run_commands(relaya_rdp* r, freerdp* instance)
 
 void relaya_rdp_run(relaya_rdp* r)
 {
-	if (!previous_provider)
-	{
-		previous_provider = freerdp_get_current_addin_provider();
-		(void)freerdp_register_addin_provider(relaya_addin_provider, 0);
-	}
 	RDP_CLIENT_ENTRY_POINTS ep = { 0 };
 	ep.Version = RDP_CLIENT_INTERFACE_VERSION;
 	ep.Size = sizeof(RDP_CLIENT_ENTRY_POINTS_V1);
@@ -772,6 +767,14 @@ void relaya_rdp_run(relaya_rdp* r)
 	{
 		close_once(r, RELAYA_CLOSE_PROTOCOL, "freerdp_client_context_new failed");
 		return;
+	}
+	/* freerdp_client_context_new registers FreeRDP's static addin provider, replacing any earlier one; ours goes on
+	   top after it, on every attempt, or rdpsnd cannot find the "relaya" device and post_connect fails. */
+	FREERDP_LOAD_CHANNEL_ADDIN_ENTRY_FN current = freerdp_get_current_addin_provider();
+	if (current != relaya_addin_provider)
+	{
+		previous_provider = current;
+		(void)freerdp_register_addin_provider(relaya_addin_provider, 0);
 	}
 	((relaya_context*)context)->owner = r;
 	r->context = context;
