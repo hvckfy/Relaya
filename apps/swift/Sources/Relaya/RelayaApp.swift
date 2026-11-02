@@ -24,6 +24,7 @@ struct RelayaApp: App {
                     model.tunnels.startAutoStart(hosts: model.hosts)
                     model.sync.onImported = { [weak model] items in model?.applySynced(items) }
                     model.sync.start()
+                    if let dir = DemoScreenshots.directory { await DemoScreenshots.run(model, into: dir) }
                 }
         }
         .windowToolbarStyle(.unified)
