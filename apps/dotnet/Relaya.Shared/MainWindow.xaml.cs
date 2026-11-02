@@ -123,17 +123,16 @@ public sealed partial class MainWindow : Window
         AppState.HostsChanged += () => ui.TryEnqueue(() => Render(Search.Text.Trim()));
         Platform.Settings.Changed += () => ui.TryEnqueue(ApplyBackground);
         AppState.LoadHosts();
+        // --demo --screenshots: a window without a window manager (Xvfb) is never activated, so start on a timer.
+        if (Platform.Demo.ScreenshotDir is { } shotsDir)
+            ui.TryEnqueue(async () => { await System.Threading.Tasks.Task.Delay(4000); await Platform.DemoScreenshots.RunAsync(this, shotsDir); });
         // Первый запуск — онбординг, когда окно уже на экране (1.15).
         Activated += async (_, _) =>
         {
             if (Content?.XamlRoot is not { } r || onboardingShown) return;
             onboardingShown = true;
-            // Demo: no onboarding; with --screenshots the scenes run and the app quits.
-            if (Platform.Demo.Root != null)
-            {
-                if (Platform.Demo.ScreenshotDir is { } dir) await Platform.DemoScreenshots.RunAsync(this, dir);
-                return;
-            }
+            // Demo: no onboarding (the screenshot scenes start below, without waiting for activation).
+            if (Platform.Demo.Root != null) return;
             // Другой ContentDialog уже открыт (например, синхронизация спросила об удалениях) — онбординг в следующий раз.
             try { await Pages.OnboardingPage.ShowIfFirstRun(r); }
             catch (System.Runtime.InteropServices.COMException e) { System.Diagnostics.Trace.WriteLine($"Onboarding: {e.Message}"); }

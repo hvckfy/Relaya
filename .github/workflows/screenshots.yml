@@ -64,11 +64,12 @@ jobs:
       - name: Take screenshots
         run: |
           mkdir -p shots
-          build/en/Relaya.app/Contents/MacOS/Relaya --demo --screenshots "$PWD/shots" &
+          build/en/Relaya.app/Contents/MacOS/Relaya --demo --screenshots "$PWD/shots" 2> shots-log.txt &
           pid=$!
           # The app quits by itself after the last scene; give it five minutes.
           for _ in $(seq 300); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
-          if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "::error::screenshots timed out"; exit 1; fi
+          cat shots-log.txt
+          if kill -0 "$pid" 2>/dev/null; then screencapture -x debug-mac.png || true; kill "$pid"; echo "::error::screenshots timed out"; exit 1; fi
           wait "$pid"
           ls -l shots
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -76,12 +77,24 @@ jobs:
           name: screenshots-mac
           path: shots/*.png
           if-no-files-found: error
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: debug-mac
+          path: |
+            shots/
+            shots-log.txt
+            debug-*.png
+          if-no-files-found: ignore
 
   windows:
     name: "Screenshots · Windows"
     if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: windows-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read # FreeRDP artifact from freerdp.yml, as in windows.yml
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -90,6 +103,16 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
+      - name: Fetch FreeRDP
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $run = gh run list -R ${{ github.repository }} --workflow freerdp.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId'
+          gh run download $run -R ${{ github.repository }} -n freerdp-x64-windows -D "$env:RUNNER_TEMP/freerdp"
+          "FREERDP_DIR=$env:RUNNER_TEMP/freerdp".Replace('\','/') | Out-File -Append $env:GITHUB_ENV
+      - name: RoyalVNCKit
+        uses: ./.github/actions/royalvnc
       - name: Build Rust core + C# bindings
         uses: ./.github/actions/build-core
         with:
@@ -131,6 +154,15 @@ jobs:
           name: screenshots-windows
           path: shots/*.png
           if-no-files-found: error
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: debug-windows
+          path: |
+            shots/
+            shots-log.txt
+            debug-*.png
+          if-no-files-found: ignore
 
   linux:
     name: "Screenshots · Linux"
@@ -166,7 +198,7 @@ jobs:
           Xvfb :99 -screen 0 1440x960x24 &
           export DISPLAY=:99
           sleep 2
-          build/relaya/relaya --demo --screenshots "$dir" &
+          build/relaya/relaya --demo --screenshots "$dir" > shots-log.txt 2>&1 &
           pid=$!
           # The app announces each scene with <scene>.ready ("x y width height"); capture that part of the screen.
           for _ in $(seq 1200); do
@@ -180,6 +212,8 @@ jobs:
             done
             sleep 0.25
           done
+          tail -50 shots-log.txt
+          [ -e "$dir/done" ] || import -window root debug-linux.png || true
           kill "$pid" 2>/dev/null || true
           if [ -e "$dir/failed" ]; then echo "::error::$(cat "$dir/failed")"; exit 1; fi
           [ -e "$dir/done" ] || { echo "::error::screenshots timed out"; exit 1; }
@@ -189,6 +223,15 @@ jobs:
           name: screenshots-linux
           path: shots/*.png
           if-no-files-found: error
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: debug-linux
+          path: |
+            shots/
+            shots-log.txt
+            debug-*.png
+          if-no-files-found: ignore
 
   # Release tags only, no project code runs here: replaces gh-pages/screenshots/ with the new pictures.
   publish:

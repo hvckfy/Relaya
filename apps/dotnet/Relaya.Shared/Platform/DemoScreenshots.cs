@@ -32,6 +32,7 @@ internal static class DemoScreenshots
         };
         foreach (var (name, show) in scenes)
         {
+            System.Console.Error.WriteLine($"screenshots: {name}");
             show();
             await Task.Delay(2000);
             var p = window.AppWindow.Position;
