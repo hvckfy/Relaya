@@ -292,7 +292,9 @@ internal sealed class HostPage : UserControl
         return card;
     }
 
-    private static string Problem(AppState.Result r) => Platform.SshErrors.Describe(r.Stderr, L("Не удалось подключиться"));
+    // Without a matching rule the error text itself (a timeout, a cancel) says more than the generic fallback (V-13).
+    private static string Problem(AppState.Result r) =>
+        Platform.SshErrors.Describe(r.Stderr, string.IsNullOrWhiteSpace(r.Stderr) ? L("Не удалось подключиться") : r.Stderr.Trim());
 
     private async Task LoadDocker()
     {
