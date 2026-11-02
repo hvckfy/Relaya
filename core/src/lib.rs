@@ -4,6 +4,7 @@
 
 uniffi::setup_scaffolding!();
 
+pub mod demo;
 pub mod diff;
 pub mod docker;
 pub mod error;
