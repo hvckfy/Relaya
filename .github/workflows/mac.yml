@@ -4,8 +4,7 @@ on:
   # Ветки проверяются через PR: push на любую ветку плюс pull_request гоняли Mac-сборку дважды.
   push:
     branches: [main]
-    tags: ["v*"]
-    # Только свои файлы: коммит другой платформы не запускает и не отменяет этот прогон (теги — всегда).
+    # Own files only: a commit for another platform neither starts nor cancels this run. Tags go to release.yml.
     paths:
       - "apps/swift/**"
       - "core/**"

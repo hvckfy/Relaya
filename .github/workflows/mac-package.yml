@@ -1,25 +1,19 @@
-name: Mac release
+name: Mac package
 
-# Тег вида v0.1.0 → собранный Relaya.zip в GitHub Release.
-# Подпись — постоянным самоподписанным сертификатом из секретов SIGNING_P12_BASE64 / SIGNING_P12_PASSWORD:
-# у всех версий одна «личность», поэтому разрешения Keychain («Разрешать всегда») не сбрасываются после обновления.
-# Без секретов — ad-hoc. Нотаризации нет: при первом запуске macOS попросит подтвердить открытие.
+# Builds the signed ru/en app zips for release.yml (artifact release-macos); release.yml publishes them.
+# Signing uses the persistent self-signed certificate from SIGNING_P12_BASE64 / SIGNING_P12_PASSWORD, so every
+# version keeps one identity and Keychain "Always Allow" grants survive updates. Without secrets: ad-hoc.
 on:
-  push:
-    tags: ["v*"]
-  # Ручной прогон сборки без публикации (проверка ветки).
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
-  release:
-    name: "Mac · release package"
+  package:
+    name: "Mac · package"
     runs-on: macos-26
     timeout-minutes: 120
-    permissions:
-      contents: write  # публикует релиз по тегу
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -92,22 +86,10 @@ jobs:
 
       - name: Package
         run: |
-          for l in ru en; do ditto -c -k --keepParent "build/$l/Relaya.app" "build/Relaya-${GITHUB_REF_NAME}-macos-$l.zip"; done
+          for l in ru en; do ditto -c -k --keepParent "build/$l/Relaya.app" "build/Relaya-macos-$l.zip"; done
 
-      - name: Upload build (manual run)
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Relaya-test-build
-          path: build/Relaya-*.zip
-
-      - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        # Windows-сборка (windows.yml) кладёт свой zip в тот же релиз — кто первый, тот и создаёт; если create
-        # проиграл гонку, релиз уже есть (второй view), иначе шаг падает с настоящей ошибкой.
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes \
-            || gh release view "$GITHUB_REF_NAME" >/dev/null
-          gh release upload "$GITHUB_REF_NAME" "build/Relaya-${GITHUB_REF_NAME}-macos-"*.zip --clobber
+          name: release-macos
+          path: build/Relaya-macos-*.zip
+          if-no-files-found: error

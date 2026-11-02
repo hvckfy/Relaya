@@ -4,8 +4,7 @@ name: Windows
 on:
   push:
     branches: [main]
-    tags: ["v*"]
-    # Только свои файлы: коммит другой платформы не запускает и не отменяет этот прогон (теги — всегда).
+    # Own files only: a commit for another platform neither starts nor cancels this run. Tags go to release.yml.
     paths:
       - "apps/dotnet/**"
       - "core/**"
@@ -14,6 +13,8 @@ on:
       - ".github/actions/build-core/**"
       - ".github/workflows/windows.yml"
   pull_request:
+  # release.yml builds the release packages from here.
+  workflow_call:
 
 permissions:
   contents: read
@@ -30,8 +31,6 @@ jobs:
     name: "Windows · build (${{ matrix.lang }})"
     runs-on: windows-latest
     timeout-minutes: 45
-    permissions:
-      contents: write  # публикует релиз по тегу
     # Язык интерфейса задаётся при сборке (ADR-002): две сборки, два установщика.
     strategy:
       fail-fast: false
@@ -106,23 +105,17 @@ jobs:
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
           & $iscc /DAppVersion=$version /DRelayaLang=${{ matrix.lang }} apps/dotnet/installer/Relaya.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # Portable zip next to the installer; release.yml renames and publishes both.
+      - name: Zip app
+        shell: pwsh
+        run: Compress-Archive -Path apps/dotnet/Relaya.Windows/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/* -DestinationPath build/Relaya-windows-${{ matrix.lang }}.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Relaya-windows-x64-${{ matrix.lang }}
+          name: release-windows-${{ matrix.lang }}
           path: |
-            apps/dotnet/Relaya.Windows/bin/x64/Release/
+            build/Relaya-windows-${{ matrix.lang }}.zip
             build/Relaya-*-${{ matrix.lang }}-setup.exe
-      - name: Publish to release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $zip = "Relaya-$env:GITHUB_REF_NAME-windows-x64-${{ matrix.lang }}.zip"
-          Compress-Archive -Path apps/dotnet/Relaya.Windows/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/* -DestinationPath $zip
-          # Две сборки (ru, en) идут параллельно: релиз мог создать соседний job — тогда create падает, и это нормально.
-          gh release view $env:GITHUB_REF_NAME 2>$null; if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --generate-notes 2>$null; Start-Sleep 5 }
-          gh release upload $env:GITHUB_REF_NAME $zip (Get-Item build/Relaya-*-${{ matrix.lang }}-setup.exe).FullName --clobber
+          if-no-files-found: error
       # Настоящий TerminalView (WinUI + Win2D): Feed из фонового потока, проверка отрисованного кадра.
       - name: Terminal view selftest
         shell: pwsh
