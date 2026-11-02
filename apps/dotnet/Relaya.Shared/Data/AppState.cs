@@ -145,8 +145,14 @@ internal static class AppState
 
     /// Служебная команда на хосте: `ssh alias -- command` (статистика, карточка хоста, диск). Пароль — через askpass
     /// из Credential Manager; на Linux — через общее соединение хоста (П-9, SshMux).
-    public static Task<Result> RunOnHost(string alias, string command, int timeoutSeconds = 30) =>
-        Run(SshExe, Platform.SshMux.SshOptions(alias).Concat(new[] { "-o", "ConnectTimeout=10", alias, "--", command }), alias, null, timeoutSeconds);
+    public static async Task<Result> RunOnHost(string alias, string command, int timeoutSeconds = 30)
+    {
+        // B-4: after a refused login no new ssh starts for this host until Refresh, a new password or a login.
+        if (Platform.LoginGate.Reason(alias) is { } reason) return new Result(-1, "", reason);
+        var r = await Run(SshExe, Platform.SshMux.SshOptions(alias).Concat(new[] { "-o", "ConnectTimeout=10", alias, "--", command }), alias, null, timeoutSeconds);
+        Platform.LoginGate.Note(alias, r.Status, r.Stderr);
+        return r;
+    }
 
     public static async Task<Result> Run(string exe, IEnumerable<string> args, string? askpassAlias, string? stdin, int timeoutSeconds = 60,
         System.Threading.CancellationToken cancel = default)
