@@ -543,6 +543,13 @@ public sealed partial class MainWindow : Window
 
     private sealed record Tab(UIElement Content, IDisposable? Owner);
 
+    /// <summary>Shows a passive notice over the content; safe to call from any thread.</summary>
+    internal void Notify(string message) => ui.TryEnqueue(() =>
+    {
+        Notice.Message = message;
+        Notice.IsOpen = true;
+    });
+
     /// tmux-сессии всех открытых вкладок: уборка старых сессий их не трогает (К10).
     internal List<string> OpenTmuxNames => Tabs.TabItems.OfType<TabStripItem>()
         .Select(t => (t.Tag as Tab)?.Content).OfType<Terminal.TileHost>().SelectMany(t => t.TmuxNames).ToList();

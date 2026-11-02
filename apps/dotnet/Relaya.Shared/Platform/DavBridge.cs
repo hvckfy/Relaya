@@ -58,6 +58,22 @@ internal sealed partial class DavBridge
         OpenVolume(bridge.Url);
     }
 
+    // B-5: a refused login unmounts the host's disk and tells the person why (user decision: automatically).
+    static DavBridge() => LoginGate.Closed += alias =>
+    {
+        bool mounted;
+        lock (bridges) mounted = bridges.ContainsKey(alias);
+        if (!mounted) return;
+        _ = UnmountRefusedAsync(alias);
+    };
+
+    private static async Task UnmountRefusedAsync(string alias)
+    {
+        try { await UnmountAsync(alias); }
+        catch (Exception e) { Terminal.TerminalView.Trace("dav unmount: " + e.Message); }
+        MainWindow.Current?.Notify(Strings.L("Диск %@ отключён: сервер не принял пароль или ключ.", alias));
+    }
+
     public static async Task UnmountAsync(string alias)
     {
         DavBridge? bridge;
@@ -238,6 +254,8 @@ internal sealed partial class DavBridge
         }
         catch (Exception e)
         {
+            // B-5: the server refused the login — the disk is being unmounted, nothing more is tried.
+            if (LoginGate.Reason(alias) != null) return Response(503, "Service Unavailable");
             return Response(500, "Internal Server Error", null, Encoding.UTF8.GetBytes(e.Message));
         }
     }

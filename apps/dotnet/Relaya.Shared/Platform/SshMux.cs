@@ -27,10 +27,16 @@ internal static partial class SshMux
     /// Команды `sftp -b -` (пути — только через sftp_batch_path) с выводом как у отдельного запуска sftp.
     /// `transfer` — get/put: отдельный разовый sftp, чтобы копирование не задерживало навигацию по тому же хосту
     /// (на Linux он всё равно идёт через master хоста).
-    public static Task<AppState.Result> Sftp(string alias, string commands, int timeoutSeconds, CancellationToken cancel = default, bool transfer = false)
+    public static async Task<AppState.Result> Sftp(string alias, string commands, int timeoutSeconds, CancellationToken cancel = default, bool transfer = false)
     {
-        if (!Allowed(alias)) return RunSftp(alias, Array.Empty<string>(), commands, timeoutSeconds, cancel);
-        return transfer ? RunSftp(alias, PlatformSshOptions(alias), commands, timeoutSeconds, cancel) : PlatformSftp(alias, commands, timeoutSeconds, cancel);
+        // B-5: after a refused login no new sftp starts for this host.
+        if (LoginGate.Reason(alias) is { } reason) return new AppState.Result(-1, "", reason);
+        var r = !Allowed(alias) ? await RunSftp(alias, Array.Empty<string>(), commands, timeoutSeconds, cancel)
+            : transfer ? await RunSftp(alias, PlatformSshOptions(alias), commands, timeoutSeconds, cancel)
+            : await PlatformSftp(alias, commands, timeoutSeconds, cancel);
+        // A failed command (missing file) is not a refusal; only the login outcome changes the gate.
+        if (r.Status != 0) LoginGate.Note(alias, r.Status, r.Stderr);
+        return r;
     }
 
     /// Закрыть все общие соединения: выход, блокировка сеанса, сон.

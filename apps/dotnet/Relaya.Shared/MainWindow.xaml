@@ -83,6 +83,9 @@
                     <TextBlock x:Name="EmptyTitle" Text="Выберите хост слева" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
                     <TextBlock x:Name="ConfigPath" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" />
                 </StackPanel>
+                <!-- Passive notices (a disk unmounted after a refused login): top of the content, closable. -->
+                <InfoBar x:Name="Notice" Severity="Warning" IsClosable="True" IsOpen="False"
+                         VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="560" Margin="16" />
             </Grid>
         </NavigationView>
     </Grid>
