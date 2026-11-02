@@ -61,8 +61,12 @@ internal static class Askpass
     {
         if (CanAutofill(alias))
         {
-            if (PasswordOnly(alias))
-                foreach (var o in uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().Reverse<string>()) info.ArgumentList.Insert(0, o);
+            // B-1: one password prompt per background process, so a wrong saved password costs one failed login,
+            // not six (askpass would answer every prompt with the same password).
+            var options = PasswordOnly(alias)
+                ? uniffi.relaya_core.RelayaCoreMethods.AskpassSshOptions()
+                : new List<string> { "-o", "NumberOfPasswordPrompts=1" };
+            foreach (var o in options.Reverse<string>()) info.ArgumentList.Insert(0, o);
             SetEnvironment(info, alias);
         }
         else if (!interactive)
