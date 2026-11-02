@@ -33,11 +33,12 @@ final class WebDAVBridge {
     /// Поднять сервер, подключить диск и открыть его в Finder.
     func start() async throws {
         try await server.prepare()
-        await server.setOnRefused { [weak self] reason in
+        let owner = WeakBridge(self)
+        await server.setOnRefused { reason in
             DispatchQueue.main.async {
-                guard let self else { return }
-                self.onRefused?(reason)
-                self.stop()
+                guard let bridge = owner.bridge else { return }
+                bridge.onRefused?(reason)
+                bridge.stop()
             }
         }
         let params = NWParameters.tcp
@@ -327,6 +328,12 @@ actor DAVServer {
                                             environment: ssh.environment, timeout: .seconds(120))
         guard r.succeeded else { throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message) }
     }
+}
+
+/// Weak reference the server's refusal callback can carry across threads; the bridge is used on the main thread.
+private final class WeakBridge: @unchecked Sendable {
+    weak var bridge: WebDAVBridge?
+    init(_ bridge: WebDAVBridge) { self.bridge = bridge }
 }
 
 /// Срабатывает один раз — для continuation, который ждёт первого из нескольких событий.
