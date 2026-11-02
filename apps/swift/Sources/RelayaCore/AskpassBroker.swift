@@ -37,7 +37,7 @@ public final class AskpassBroker: @unchecked Sendable {
         let token = bytes.map { String(format: "%02x", $0) }.joined()
         lock.withLock {
             grants = grants.filter { $0.value.expires > Date() }
-            grants[token] = Grant(secret: secret, uses: 3, expires: Date().addingTimeInterval(120))
+            grants[token] = Grant(secret: secret, uses: 2, expires: Date().addingTimeInterval(120))
         }
         return (socket, token)
     }

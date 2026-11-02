@@ -121,9 +121,11 @@ internal static class AskpassBroker
             return null;
         lock (g)
         {
-            if (++g.Uses > 1) { grants.TryRemove(token, out _); return null; }
+            // Two answers per token: one ssh process asks once for password and once for keyboard-interactive
+            // (NumberOfPasswordPrompts=1 limits each method), the same count as on the Mac.
+            if (++g.Uses > 2) { grants.TryRemove(token, out _); return null; }
+            if (g.Uses == 2) grants.TryRemove(token, out _);
         }
-        grants.TryRemove(token, out _);
         // Настройка «Подтверждать каждое использование пароля»: Windows Hello, без него — диалог с «Нет» по умолчанию.
         if (Settings.GetFresh("security.confirmPassword", "0") == "1"
             && !ConsentGrace.Confirm(() => Consent.Ask(Strings.L("ssh просит пароль %@:", g.Account) + "\n\n" + prompt))) return null;

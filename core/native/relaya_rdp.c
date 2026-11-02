@@ -246,13 +246,17 @@ static void send_layout(relaya_rdp* r)
 		r->want_w = r->want_h = 0;
 }
 
-/* The server announced its Display Control limits: the channel is ready, send the size waiting for it. */
+/* The server announced its Display Control limits: the channel is ready. This runs on the channel's thread, so it
+   only wakes the command loop with an empty resize; want_w/want_h and SendMonitorLayout stay on that one thread
+   (R-DVC-1). */
 static UINT disp_caps(DispClientContext* disp, UINT32 max_monitors, UINT32 factor_a, UINT32 factor_b)
 {
 	WINPR_UNUSED(max_monitors);
 	WINPR_UNUSED(factor_a);
 	WINPR_UNUSED(factor_b);
-	send_layout((relaya_rdp*)disp->custom);
+	relaya_rdp* r = (relaya_rdp*)disp->custom;
+	if (r)
+		push(r, CMD_RESIZE, 0, 0, 0, NULL);
 	return CHANNEL_RC_OK;
 }
 
@@ -287,7 +291,15 @@ static void on_channel_disconnected(void* context, const ChannelDisconnectedEven
 	if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0)
 		r->cliprdr = NULL;
 	else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0)
+	{
+		/* No caps callback may reach r once the channel is gone. */
+		if (r->disp)
+		{
+			r->disp->DisplayControlCaps = NULL;
+			r->disp->custom = NULL;
+		}
 		r->disp = NULL;
+	}
 	else
 		freerdp_client_OnChannelDisconnectedEventHandler(context, e);
 }
@@ -755,8 +767,12 @@ static void run_commands(relaya_rdp* r, freerdp* instance)
 				break;
 			}
 			case CMD_RESIZE:
-				r->want_w = c->a;
-				r->want_h = c->b;
+				/* 0x0 comes from disp_caps: send what is waiting. */
+				if (c->a && c->b)
+				{
+					r->want_w = c->a;
+					r->want_h = c->b;
+				}
 				send_layout(r);
 				break;
 			case CMD_CLIPBOARD:
