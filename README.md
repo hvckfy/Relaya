@@ -33,15 +33,17 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 
 ## Screenshots
 
-<p align="center"><img src="docs/screenshots/tiles.jpg" width="860" alt="Terminals side by side as tiles over a shared background, Liquid Glass sidebar"></p>
+<p align="center"><img src="https://hvckfy.github.io/Relaya/screenshots/mac-tiles.png" width="860" alt="macOS: terminals side by side as tiles"></p>
 
-| Host card | Keys |
+| macOS · host card | macOS · keys |
 |---|---|
-| <img src="docs/screenshots/host.jpg" alt="Host card with live status, ports and connection details"> | <img src="docs/screenshots/keys.jpg" alt="Keys screen with fingerprints"> |
-| **Snippets** | **Appearance** |
-| <img src="docs/screenshots/snippets.jpg" alt="Snippets with variables"> | <img src="docs/screenshots/settings.jpg" alt="Appearance settings: window style, Liquid Glass, background image"> |
+| <img src="https://hvckfy.github.io/Relaya/screenshots/mac-host.png" alt="macOS host card with live status, ports and connection details"> | <img src="https://hvckfy.github.io/Relaya/screenshots/mac-keys.png" alt="macOS keys screen with fingerprints"> |
+| **Windows · hosts** | **Windows · snippets** |
+| <img src="https://hvckfy.github.io/Relaya/screenshots/windows-hosts.png" alt="Windows client: host list"> | <img src="https://hvckfy.github.io/Relaya/screenshots/windows-snippets.png" alt="Windows client: snippets"> |
+| **Linux · keys** | **Linux · AI agents** |
+| <img src="https://hvckfy.github.io/Relaya/screenshots/linux-keys.png" alt="Linux client: keys"> | <img src="https://hvckfy.github.io/Relaya/screenshots/linux-agents.png" alt="Linux client: AI agent access"> |
 
-<sub>All hosts and keys above are fictional — screenshots are taken with `Relaya --demo`.</sub>
+<sub>Taken automatically by CI from every release with `Relaya --demo --screenshots` — all hosts and keys are fictional.</sub>
 
 ## Features
 

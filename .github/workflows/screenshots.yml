@@ -1,0 +1,198 @@
+name: Screenshots
+
+# README screenshots from the released code, on fictional demo data (`--demo --screenshots`): Mac, Windows, Linux.
+# After a successful Release on a v* tag the pictures go to gh-pages/screenshots/, which the README links to, so
+# the README itself never changes. A manual run or a PR that edits this file only keeps them as an artifact.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+  pull_request:
+    paths: [".github/workflows/screenshots.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # The tag commit after a release, otherwise the run's own commit.
+  SHOTS_REF: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  mac:
+    name: "Screenshots · Mac"
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.SHOTS_REF }}
+          persist-credentials: false
+      - name: Select Xcode
+        run: |
+          XC=$(printf '%s\n' /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+      # Without FreeRDP and RoyalVNC: the demo shows no remote desktop session.
+      - name: Build Rust core
+        uses: ./.github/actions/build-core
+        with:
+          script: scripts/build-core-macos.sh
+      - name: Build app (en)
+        run: scripts/bundle-macos.sh 0.0.0 en
+      - name: Take screenshots
+        run: |
+          mkdir -p shots
+          build/en/Relaya.app/Contents/MacOS/Relaya --demo --screenshots "$PWD/shots" &
+          pid=$!
+          # The app quits by itself after the last scene; give it five minutes.
+          for _ in $(seq 300); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "::error::screenshots timed out"; exit 1; fi
+          wait "$pid"
+          ls -l shots
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: screenshots-mac
+          path: shots/*.png
+          if-no-files-found: error
+
+  windows:
+    name: "Screenshots · Windows"
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.SHOTS_REF }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.0.x
+      - name: Build Rust core + C# bindings
+        uses: ./.github/actions/build-core
+        with:
+          script: scripts/build-core-windows.ps1
+      - uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
+      - name: Build WinUI app (en)
+        shell: pwsh
+        run: msbuild apps/dotnet/Relaya.Windows/Relaya.Windows.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:Version=0.0.0 -p:RelayaLang=en
+      # The app announces each scene with <scene>.ready ("x y width height"); this loop captures that rectangle.
+      - name: Take screenshots
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $dir = Join-Path $PWD "shots"
+          New-Item -ItemType Directory $dir -Force | Out-Null
+          $exe = Get-ChildItem apps/dotnet/Relaya.Windows/bin/x64/Release -Recurse -Filter Relaya.exe | Select-Object -First 1
+          $p = Start-Process $exe.FullName -ArgumentList "--demo", "--screenshots", "`"$dir`"" -PassThru
+          $deadline = (Get-Date).AddMinutes(5)
+          while (-not (Test-Path "$dir/done") -and (Get-Date) -lt $deadline) {
+            foreach ($ready in Get-ChildItem $dir -Filter *.ready) {
+              $x, $y, $w, $h = (Get-Content $ready.FullName).Split(' ') | ForEach-Object { [int]$_ }
+              $bmp = New-Object System.Drawing.Bitmap $w, $h
+              $g = [System.Drawing.Graphics]::FromImage($bmp)
+              $g.CopyFromScreen($x, $y, 0, 0, $bmp.Size)
+              $png = [IO.Path]::ChangeExtension($ready.FullName, ".png")
+              $bmp.Save("$png.tmp", [System.Drawing.Imaging.ImageFormat]::Png)
+              Move-Item "$png.tmp" $png -Force
+              Remove-Item $ready.FullName
+              $g.Dispose(); $bmp.Dispose()
+            }
+            Start-Sleep -Milliseconds 250
+          }
+          if (-not $p.HasExited) { $p.Kill() }
+          if (Test-Path "$dir/failed") { Write-Error (Get-Content "$dir/failed"); exit 1 }
+          if (-not (Test-Path "$dir/done")) { Write-Error "screenshots timed out"; exit 1 }
+          Get-ChildItem $dir
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: screenshots-windows
+          path: shots/*.png
+          if-no-files-found: error
+
+  linux:
+    name: "Screenshots · Linux"
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ env.SHOTS_REF }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.0.x
+      - name: Build Rust core + C# bindings
+        uses: ./.github/actions/build-core
+        with:
+          script: scripts/build-core-linux.sh
+      - name: Build Uno app (en)
+        run: |
+          dotnet publish apps/dotnet/Relaya.Linux/Relaya.Linux.csproj -c Release -f net10.0-desktop -r linux-x64 \
+            --self-contained -p:Version=0.0.0 -p:RelayaLang=en -o build/relaya
+      - name: Take screenshots
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends xvfb imagemagick >/dev/null
+          dir="$PWD/shots"; mkdir -p "$dir"
+          Xvfb :99 -screen 0 1440x960x24 &
+          export DISPLAY=:99
+          sleep 2
+          build/relaya/relaya --demo --screenshots "$dir" &
+          pid=$!
+          # The app announces each scene with <scene>.ready ("x y width height"); capture that part of the screen.
+          for _ in $(seq 1200); do
+            [ -e "$dir/done" ] && break
+            for ready in "$dir"/*.ready; do
+              [ -e "$ready" ] || continue
+              read -r x y w h < "$ready"
+              png="${ready%.ready}.png"
+              import -window root -crop "${w}x${h}+${x}+${y}" "$png.tmp.png" && mv "$png.tmp.png" "$png"
+              rm -f "$ready"
+            done
+            sleep 0.25
+          done
+          kill "$pid" 2>/dev/null || true
+          if [ -e "$dir/failed" ]; then echo "::error::$(cat "$dir/failed")"; exit 1; fi
+          [ -e "$dir/done" ] || { echo "::error::screenshots timed out"; exit 1; }
+          ls -l "$dir"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: screenshots-linux
+          path: shots/*.png
+          if-no-files-found: error
+
+  # Release tags only, no project code runs here: replaces gh-pages/screenshots/ with the new pictures.
+  publish:
+    name: "Screenshots · publish"
+    needs: [mac, windows, linux]
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # pushes to gh-pages
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: gh-pages
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: screenshots-*
+          merge-multiple: true
+          path: new
+      - name: Push to gh-pages
+        env:
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          rm -rf screenshots && mkdir screenshots && mv new/*.png screenshots/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A screenshots
+          git diff --cached --quiet && { echo "no changes"; exit 0; }
+          git commit -m "Screenshots for $TAG"
+          git push origin gh-pages
