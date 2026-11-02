@@ -36,7 +36,7 @@ internal static class Demo
         File.WriteAllText(Path.Combine(ssh, "config"), RelayaCoreMethods.DemoSshConfig());
         foreach (var (name, comment) in new[] { ("id_ed25519", "alex@laptop"), ("id_ed25519_work", "alex@acme · deploy"), ("id_ed25519_homelab", "alex@laptop · homelab") })
         {
-            var info = new ProcessStartInfo(OperatingSystem.IsWindows() ? "ssh-keygen.exe" : "ssh-keygen") { UseShellExecute = false };
+            var info = new ProcessStartInfo(System.OperatingSystem.IsWindows() ? "ssh-keygen.exe" : "ssh-keygen") { UseShellExecute = false };
             foreach (var a in new[] { "-t", "ed25519", "-N", "", "-q", "-C", comment, "-f", Path.Combine(ssh, name) }) info.ArgumentList.Add(a);
             using var p = Process.Start(info);
             p?.WaitForExit();

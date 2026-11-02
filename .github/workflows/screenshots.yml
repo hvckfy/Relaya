@@ -37,9 +37,26 @@ jobs:
         run: |
           XC=$(printf '%s\n' /Applications/Xcode_26*.app | sort -V | tail -1)
           sudo xcode-select -s "$XC"
-      # Without FreeRDP and RoyalVNC: the demo shows no remote desktop session.
+      # The app links the core with RDP (FreeRDP) and VNC (RoyalVNCKit), as in mac.yml.
+      - name: FreeRDP arm64
+        id: freerdp_arm
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: arm64-osx-dynamic
+      - name: FreeRDP x86_64
+        id: freerdp_x64
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: x64-osx-dynamic
+      - name: RoyalVNCKit
+        id: royalvnc
+        uses: ./.github/actions/royalvnc
       - name: Build Rust core
         uses: ./.github/actions/build-core
+        env:
+          FREERDP_DIR_ARM64: ${{ steps.freerdp_arm.outputs.dir }}
+          FREERDP_DIR_X64: ${{ steps.freerdp_x64.outputs.dir }}
+          ROYALVNC_DIR: ${{ steps.royalvnc.outputs.dir }}
         with:
           script: scripts/build-core-macos.sh
       - name: Build app (en)
@@ -128,6 +145,12 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
+      - name: FreeRDP
+        uses: ./.github/actions/freerdp
+        with:
+          triplet: x64-linux-dynamic
+      - name: RoyalVNCKit
+        uses: ./.github/actions/royalvnc
       - name: Build Rust core + C# bindings
         uses: ./.github/actions/build-core
         with:
