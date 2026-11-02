@@ -99,5 +99,8 @@ internal static class McpHost
             Directory.CreateDirectory(Data.AppState.Support);
             LogFiles.Append(LogFile, RelayaCoreMethods.McpLogLine(entry) + "\n");
         }
+
+        // B-7: the core stops an agent's retries after a refused login, through the file the app also clears.
+        public string LoginGatePath() => LoginGate.File;
     }
 }
