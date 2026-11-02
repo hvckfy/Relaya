@@ -1,5 +1,6 @@
 import AppKit
 import RelayaCore
+import SwiftUI
 
 /// `Relaya --demo --screenshots <dir>`: opens each README scene on the fictional demo data, saves the main
 /// window as `<dir>/mac-<scene>.png` and quits. Used by screenshots.yml after every release tag.
@@ -70,10 +71,36 @@ enum DemoScreenshots {
                     h.write(Data(line.utf8))
                     try? h.close()
                 }
-                if second == 5 { NSApp.windows.filter { $0.canBecomeMain }.forEach { $0.makeKeyAndOrderFront(nil) } }
+                // On a fresh runner SwiftUI opened no main window at launch (only the menu bar extra), so the
+                // scenes never started; host the same MainView in a window of our own and run them there.
+                if second == 3, !NSApp.windows.contains(where: { $0.canBecomeMain }) { openFallbackWindow(dir) }
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+    }
+
+    /// Keeps the fallback window and its model alive for the whole run.
+    private static var fallback: (window: NSWindow, model: AppModel)?
+
+    private static func openFallbackWindow(_ dir: URL) {
+        let model = AppModel()
+        model.started = true
+        model.settings.applyAppearance()
+        model.reloadHosts()
+        let root = MainView()
+            .environment(model)
+            .environment(model.settings)
+            .frame(minWidth: 900, minHeight: 560)
+        let window = NSWindow(
+            contentRect: NSRect(x: 80, y: 80, width: 1280, height: 800),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+        window.title = "Relaya"
+        window.titlebarAppearsTransparent = true
+        window.contentView = NSHostingView(rootView: root)
+        window.makeKeyAndOrderFront(nil)
+        fallback = (window, model)
+        Task { @MainActor in await run(model, into: dir) }
     }
 
     private struct Failure: Error, CustomStringConvertible {
