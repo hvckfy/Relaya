@@ -29,11 +29,11 @@ enum DemoData {
         let tunnels = [
             Tunnel(name: "Postgres prod", hostAlias: "db-primary", listenPort: 15432, targetHost: "localhost", targetPort: 5432, autoStart: true),
             Tunnel(name: "Grafana", hostAlias: "web-1", listenPort: 3000, targetHost: "grafana.internal", targetPort: 3000),
-            Tunnel(name: "SOCKS через VPS", hostAlias: "vps-fra", kind: .dynamic, listenPort: 1080),
+            Tunnel(name: "SOCKS via VPS", hostAlias: "vps-fra", kind: .dynamic, listenPort: 1080),
         ]
         try? encoder.encode(tunnels).write(to: support.appending(path: "tunnels.json"))
         let desktops = [
-            RemoteDesktop(name: "Mac mini (студия)", kind: .vnc, address: "localhost", user: "alex", viaSSHHost: "mac-mini"),
+            RemoteDesktop(name: "Mac mini (studio)", kind: .vnc, address: "localhost", user: "alex", viaSSHHost: "mac-mini"),
             RemoteDesktop(name: "Windows build agent", kind: .rdp, address: "10.20.0.15", user: "ACME\\builder"),
         ]
         try? encoder.encode(desktops).write(to: support.appending(path: "desktops.json"))
