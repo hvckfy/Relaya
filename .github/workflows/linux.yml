@@ -73,7 +73,7 @@ jobs:
           version=0.0.0
           if [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then version="${BASH_REMATCH[1]}"; fi
           dotnet publish apps/dotnet/Relaya.Linux/Relaya.Linux.csproj -c Release -f net10.0-desktop -r linux-x64 \
-            --self-contained -p:Version=$version -p:RelayaLang=${{ matrix.lang }} -o build/relaya-linux-x64-${{ matrix.lang }}
+            --self-contained -p:Version="$version" -p:RelayaLang=${{ matrix.lang }} -o build/relaya-linux-x64-${{ matrix.lang }}
       - name: Package AppImage and .deb
         run: |
           version=0.0.0

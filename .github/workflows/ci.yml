@@ -35,8 +35,8 @@ jobs:
       - name: Select Xcode
         # SDK macOS 26 — для Liquid Glass. Берём самый новый Xcode 26 из образа.
         run: |
-          ls -d /Applications/Xcode*.app
-          XC=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          printf '%s\n' /Applications/Xcode*.app
+          XC=$(printf '%s\n' /Applications/Xcode_26*.app | sort -V | tail -1)
           sudo xcode-select -s "$XC"
           xcodebuild -version
 

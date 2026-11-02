@@ -24,7 +24,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create "${BINS[@]}" -output "$APP/Contents/MacOS/Relaya"
 
 # Динамические библиотеки зависимостей (RoyalVNCKit) — рядом с бинарником: SwiftPM прописывает rpath @loader_path.
-for DYLIB in $(cd "$(dirname "${BINS[0]}")" && ls *.dylib 2>/dev/null); do
+for LIB in "$(dirname "${BINS[0]}")"/*.dylib; do
+  [[ -e "$LIB" ]] || continue
+  DYLIB="$(basename "$LIB")"
   PARTS=()
   for B in "${BINS[@]}"; do PARTS+=("$(dirname "$B")/$DYLIB"); done
   lipo -create "${PARTS[@]}" -output "$APP/Contents/MacOS/$DYLIB"
