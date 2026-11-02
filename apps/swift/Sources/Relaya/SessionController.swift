@@ -291,9 +291,10 @@ final class SessionController {
         exitCode = code
         hostKeyPrompt = nil
         // 255 — ошибка соединения ssh. Переподключаемся, только если сессия успела поработать.
-        // B-6: a refused login is not retried; reconnecting would send the same saved password again.
-        if autoReconnect, code == 255, loggedIn || Date().timeIntervalSince(startedAt) > 10,
-           !SSHErrorText.loginRefused(tail) {
+        // B-6: a refused login is not retried; reconnecting would send the same saved password again. After a login
+        // the tail is the user's own output, so it is not checked then.
+        if autoReconnect, code == 255,
+           loggedIn || (Date().timeIntervalSince(startedAt) > 10 && !SSHErrorText.loginRefused(tail)) {
             // Сервер рвёт связь сразу после входа раз за разом — не переподключаемся бесконечно: после 10 подряд
             // коротких сессий (меньше минуты) ждём ручного «Переподключить». Минута стабильной работы сбрасывает счётчик.
             quickReconnects = Date().timeIntervalSince(startedAt) > 60 ? 0 : quickReconnects + 1
