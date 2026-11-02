@@ -4,8 +4,7 @@ name: Linux
 on:
   push:
     branches: [main]
-    tags: ["v*"]
-    # Только свои файлы: коммит другой платформы не запускает и не отменяет этот прогон (теги — всегда).
+    # Own files only: a commit for another platform neither starts nor cancels this run. Tags go to release.yml.
     paths:
       - "apps/dotnet/**"
       - "core/**"
@@ -14,8 +13,9 @@ on:
       - ".github/actions/build-core/**"
       - ".github/workflows/linux.yml"
   pull_request:
+  # release.yml builds the release packages from here.
+  workflow_call:
 
-# Права на запись — только у job release (Т6).
 permissions:
   contents: read
 
@@ -79,36 +79,16 @@ jobs:
           if [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then version="${BASH_REMATCH[1]}"; fi
           sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends imagemagick >/dev/null
           export APPIMAGE_EXTRACT_AND_RUN=1  # без FUSE на раннере
-          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          # Pinned release and hash: an unpinned "continuous" build would run unchecked code in the release.
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
           chmod +x appimagetool
           APPIMAGETOOL="$PWD/appimagetool" scripts/package-linux.sh build/relaya-linux-x64-${{ matrix.lang }} "$version" ${{ matrix.lang }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: Relaya-linux-x64-${{ matrix.lang }}
+          name: release-linux-${{ matrix.lang }}
           path: |
             build/Relaya-*.AppImage
             build/relaya_*.deb
+          if-no-files-found: error
 
-  release:
-    name: "Linux · publish release"
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          pattern: Relaya-linux-x64-*
-          merge-multiple: true
-          path: build
-      - name: Publish to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          # Релиз мог создать параллельный workflow (Mac, Windows): после неудачного create проверяем ещё раз и падаем с текстом.
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes \
-            || gh release view "$GITHUB_REF_NAME" >/dev/null || { echo "::error::не удалось создать релиз $GITHUB_REF_NAME"; exit 1; }
-          gh release upload "$GITHUB_REF_NAME" build/Relaya-*.AppImage build/relaya_*.deb --clobber

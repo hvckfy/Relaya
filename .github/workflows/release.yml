@@ -1,0 +1,71 @@
+name: Release
+
+# A v* tag builds every platform once and publishes one GitHub Release with SHA256SUMS.
+# Asset names: Relaya-<version>-<os>-<arch>-<lang>.<ext>, no "v" prefix and no "latest" copies.
+# A manual run builds the same packages and keeps them as a workflow artifact without publishing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    name: "Release · Mac"
+    uses: ./.github/workflows/mac-package.yml
+    secrets: inherit
+  windows:
+    name: "Release · Windows"
+    uses: ./.github/workflows/windows.yml
+    permissions:
+      contents: read
+      actions: read # FreeRDP artifact from freerdp.yml
+  linux:
+    name: "Release · Linux"
+    uses: ./.github/workflows/linux.yml
+
+  publish:
+    name: "Release · publish"
+    needs: [mac, windows, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # creates the release
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: in
+      - name: Name assets and write SHA256SUMS
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || ver="0.0.0-${GITHUB_SHA:0:7}"
+          mkdir dist
+          # Exactly one input file per pattern, otherwise the release would be incomplete or ambiguous.
+          one() { local f; f=$(compgen -G "$1"); [ "$(printf '%s\n' "$f" | wc -l)" -eq 1 ] || { echo "::error::expected one $1"; exit 1; }; mv "$f" "dist/$2"; }
+          for l in ru en; do
+            one "in/Relaya-macos-$l.zip" "Relaya-$ver-macos-universal-$l.zip"
+            one "in/Relaya-windows-$l.zip" "Relaya-$ver-windows-x64-$l.zip"
+            one "in/Relaya-*-$l-setup.exe" "Relaya-$ver-windows-x64-$l-setup.exe"
+            one "in/Relaya-*-$l-x86_64.AppImage" "Relaya-$ver-linux-x64-$l.AppImage"
+            one "in/relaya_*-${l}_amd64.deb" "Relaya-$ver-linux-x64-$l.deb"
+          done
+          cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Relaya-packages
+          path: dist/
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes dist/*
