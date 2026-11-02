@@ -85,12 +85,13 @@ internal sealed class HostPage : UserControl
         void OnTunnels() => ui.TryEnqueue(BuildTunnels);
         Platform.TunnelManager.Shared.Changed += OnTunnels;
         Unloaded += (_, _) => Platform.TunnelManager.Shared.Changed -= OnTunnels;
-        body.Children.Add(Header(L("Состояние"), () => _ = LoadStats()));
+        // Refresh is the user's explicit retry: it reopens background logins closed after a refusal (V-2).
+        body.Children.Add(Header(L("Состояние"), () => { Platform.LoginGate.Open(host.alias); _ = LoadStats(); }));
         body.Children.Add(stats);
-        body.Children.Add(Header(L("Docker"), () => _ = LoadDocker()));
+        body.Children.Add(Header(L("Docker"), () => { Platform.LoginGate.Open(host.alias); _ = LoadDocker(); }));
         body.Children.Add(docker);
         // «Завершить все» сессии Relaya на хосте (3.7), с подтверждением.
-        body.Children.Add(Header(L("Сессии tmux"), () => _ = LoadTmux(), Ui.Button(L("Завершить все"), async () =>
+        body.Children.Add(Header(L("Сессии tmux"), () => { Platform.LoginGate.Open(host.alias); _ = LoadTmux(); }, Ui.Button(L("Завершить все"), async () =>
         {
             var names = RelayaCoreMethods.TmuxParse((await AppState.RunOnHost(host.alias, RelayaCoreMethods.TmuxListCommand())).Stdout)
                 .Where(t => RelayaCoreMethods.TmuxIsHostSession(host.alias, t.name)).Select(t => t.name).ToList();
@@ -100,7 +101,7 @@ internal sealed class HostPage : UserControl
             await LoadTmux();
         })));
         body.Children.Add(tmux);
-        body.Children.Add(Header(L("Службы и порты"), () => _ = LoadServices()));
+        body.Children.Add(Header(L("Службы и порты"), () => { Platform.LoginGate.Open(host.alias); _ = LoadServices(); }));
         body.Children.Add(services);
 
         // B-4: the first probe runs alone; if the server refused it, the others return the same reason without ssh.

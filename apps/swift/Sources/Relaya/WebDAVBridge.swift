@@ -247,7 +247,10 @@ actor DAVServer {
             }
         } catch {
             let message = error.localizedDescription
-            if SSHErrorText.loginRefused(message) {
+            // Only a refused login stops the disk; "Permission denied" from a command (a read-only folder) does not.
+            let refusedLogin = (error as? StreamTransfer.Failure)?.loginRefused == true
+                || (error as? SFTPClient.Failure)?.loginRefused == true
+            if refusedLogin {
                 if refused == nil {
                     refused = message
                     onRefused?(message)
@@ -320,13 +323,17 @@ actor DAVServer {
                                             environment: ssh.environment, timeout: .seconds(60))
         if r.status == 0 { return true }
         if r.status == 1 { return false }
-        throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message)
+        throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message,
+                                     loginRefused: r.status == 255 && SSHErrorText.loginRefused(r.stderr))
     }
 
     private func shell(_ command: String) async throws {
         let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, command],
                                             environment: ssh.environment, timeout: .seconds(120))
-        guard r.succeeded else { throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message) }
+        guard r.succeeded else {
+            throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message,
+                                         loginRefused: r.status == 255 && SSHErrorText.loginRefused(r.stderr))
+        }
     }
 }
 

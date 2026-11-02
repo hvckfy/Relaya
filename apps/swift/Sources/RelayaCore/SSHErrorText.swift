@@ -10,6 +10,12 @@ public enum SSHErrorText {
         sshAuthRefused(output: output) || sshBlocked(output: output)
     }
 
+    /// The server cut the connection before login (a ban, MaxStartups, sshd still starting), with no refusal of
+    /// the credentials themselves.
+    public static func loginBlocked(_ output: String) -> Bool {
+        sshBlocked(output: output) && !sshAuthRefused(output: output)
+    }
+
     public enum RemoteKind: Sendable { case rdp, vnc }
 
     /// Понятная ошибка RDP/VNC (ядро узнаёт текст RDPKit/RoyalVNC и др.): «что случилось. что сделать» и исходный текст.
