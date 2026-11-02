@@ -1,18 +1,18 @@
 name: RoyalVNCKit
 description: >
-  RoyalVNCKit (MIT) с C API для ядра (feature vnc-royal), закреплённый коммит; на Linux — одна .so с
-  -static-stdlib, на Windows — dll и рантайм Swift в PATH, на macOS — universal dylib (arm64 и x86_64, minos 15)
-  на Swift из Xcode (рантайм — в системе). Кэш по коммиту и версии Swift.
+  RoyalVNCKit (MIT) with a C API for the core (feature vnc-royal), pinned commit: one .so with -static-stdlib on
+  Linux, a dll plus the Swift runtime in PATH on Windows, a universal dylib (arm64 and x86_64, minos 15) built with
+  Xcode's Swift on macOS (the runtime is in the OS). Cached by commit and Swift version.
 inputs:
   commit:
-    description: коммит royalapplications/royalvnc (Package.resolved в нём закрепляет CryptoSwift a59b4d9 и Cstb 1.0.6)
+    description: royalapplications/royalvnc commit (its Package.resolved pins CryptoSwift a59b4d9 and Cstb 1.0.6)
     default: 090b96eddeee183e9fec293c5cd881d302a4349d
   swift:
-    description: версия Swift
+    description: Swift version
     default: "6.2.4"
 outputs:
   dir:
-    description: каталог с библиотекой RoyalVNCKit
+    description: folder with the RoyalVNCKit library
     value: ${{ steps.dir.outputs.dir }}
 runs:
   using: composite

@@ -27,10 +27,10 @@ jobs:
           vulns=$(curl -fsS https://api.osv.dev/v1/query -d "{\"package\":{\"name\":\"freerdp\",\"ecosystem\":\"Debian\"},\"version\":\"$pinned\"}" | jq -r '[.vulns[]?.id] | join(", ")')
           echo "pinned=$pinned latest=$latest vulns=$vulns"
           body=""
-          [ "$latest" != "$pinned" ] && body="Вышла FreeRDP $latest, в Relaya закреплена $pinned (core/native/freerdp.version, overrides в core/native/vcpkg.json)."
-          [ -n "$vulns" ] && body="$body"$'\n'"OSV для $pinned: $vulns"
+          [ "$latest" != "$pinned" ] && body="FreeRDP $latest is out; Relaya pins $pinned (core/native/freerdp.version, overrides in core/native/vcpkg.json)."
+          [ -n "$vulns" ] && body="$body"$'\n'"OSV for $pinned: $vulns"
           if [ -n "$body" ]; then
-            title="FreeRDP: обновить с $pinned до $latest"
+            title="FreeRDP: update from $pinned to $latest"
             if ! gh issue list --state open --search "$title in:title" --json number -q '.[0].number' | grep -q .; then
               gh issue create --title "$title" --label security --body "$body" || gh issue create --title "$title" --body "$body"
             fi
