@@ -23,7 +23,8 @@ internal static class LoginGate
     {
         // ssh and sftp exit with 255 when the connection or login fails; a failed command (a read-only folder,
         // docker without the docker group) exits with its own code and proves the login worked (V-1).
-        if (status != 255) { Open(alias); return false; }
+        // A negative status (timeout, cancel, not started) says nothing about the login and leaves the gate as is.
+        if (status != 255) { if (status >= 0) Open(alias); return false; }
         if (!RelayaCoreMethods.SshAuthRefused(stderr) && !RelayaCoreMethods.SshBlocked(stderr)) return false;
         var reason = SshErrors.Describe(stderr, Strings.L("Сервер не принял вход."));
         if (Refused.TryAdd(alias, reason)) Closed?.Invoke(alias);
