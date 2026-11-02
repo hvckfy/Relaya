@@ -1,11 +1,11 @@
-# Собирает Rust-ядро в relaya_core.dll и генерирует C#-привязки UniFFI для Windows-клиента.
+# Builds the Rust core into relaya_core.dll and generates the UniFFI C# bindings for the Windows client.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location "$root/core"
-# Встроенный RDP: с FREERDP_DIR (артефакт freerdp.yml) — движок FreeRDP 3 и его DLL рядом с relaya_core.dll,
-# без него встроенного RDP нет (только общие типы remote-desktop).
-# VNC на RoyalVNCKit: с ROYALVNC_DIR (.github/actions/royalvnc) — фича vnc-royal, RoyalVNCKit.dll и рантайм Swift
-# рядом с relaya_core.dll.
+# Built-in RDP: with FREERDP_DIR (the freerdp.yml artifact), the FreeRDP 3 engine and its DLLs next to relaya_core.dll;
+# without it there is no built-in RDP (only the shared remote-desktop types).
+# VNC on RoyalVNCKit: with ROYALVNC_DIR (.github/actions/royalvnc), feature vnc-royal, RoyalVNCKit.dll and the Swift runtime
+# next to relaya_core.dll.
 $vnc = if ($env:ROYALVNC_DIR) { ",vnc-royal" } else { "" }
 if ($env:FREERDP_DIR) {
     cargo build --locked --release --features "rdp-freerdp$vnc"
@@ -31,7 +31,7 @@ if (-not (Get-Command uniffi-bindgen-cs -ErrorAction SilentlyContinue)) {
 $out = "$root/apps/dotnet/Relaya.Shared/Core"
 New-Item -ItemType Directory -Force $out | Out-Null
 uniffi-bindgen-cs --library target/release/relaya_core.dll --out-dir $out
-# Сгенерированный код не под нашими правилами nullable: предупреждения глушим только в нём (А9), а не во всём проекте.
+# Generated code is not under our nullable rules: silence the warnings in it only (A9), not in the whole project.
 Get-ChildItem "$out/*.cs" | ForEach-Object {
     $text = Get-Content $_.FullName -Raw
     if (-not $text.StartsWith("#nullable disable")) { Set-Content $_.FullName ("#nullable disable`n#pragma warning disable`n" + $text) -NoNewline }

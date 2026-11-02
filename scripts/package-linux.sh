@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Пакеты Linux-клиента из готового dotnet publish: AppImage (основной) и .deb.
-#   scripts/package-linux.sh <каталог publish> <версия> <ru|en>
-#     →  build/Relaya-<версия>-<язык>-x86_64.AppImage, build/relaya_<версия>-<язык>_amd64.deb
-# Язык — язык сборки (ADR-002, -p:RelayaLang): от него подпись в меню. Имя пакета .deb одно (relaya),
-# поэтому ru и en заменяют друг друга при установке, а не ставятся рядом.
-# Нужны: appimagetool (в PATH или APPIMAGETOOL), ImageMagick (convert/magick), dpkg-deb.
-# Интеграция по freedesktop: Desktop Entry, иконки hicolor 16…512 (Icon Theme), AppStream metainfo.
+# Linux client packages from a finished dotnet publish: AppImage (main) and .deb.
+#   scripts/package-linux.sh <publish dir> <version> <ru|en>
+#     ->  build/Relaya-<version>-<lang>-x86_64.AppImage, build/relaya_<version>-<lang>_amd64.deb
+# The language is the build's (ADR-002, -p:RelayaLang) and sets the menu label. The .deb package name is one (relaya),
+# so ru and en replace each other on install instead of living side by side.
+# Needs appimagetool (in PATH or APPIMAGETOOL), ImageMagick (convert/magick), dpkg-deb.
+# freedesktop integration: Desktop Entry, hicolor icons 16…512 (Icon Theme), AppStream metainfo.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PUB="$(cd "$1" && pwd)"
@@ -38,22 +38,22 @@ StartupWMClass=relaya
 DESK
 }
 
-# MSBuild копирует цепочку libX.so -> libX.so.3 -> libX.so.3.x как отдельные файлы. Загрузчику по rpath $ORIGIN нужен
-# только файл с именем SONAME (libX.so.3): остальные копии библиотек с SONAME убираем, чтобы пакет не вырос в 2–3 раза.
-# Библиотеки без версии в SONAME (librelaya_core.so, libRoyalVNCKit.so) остаются как есть.
+# MSBuild copies the chain libX.so -> libX.so.3 -> libX.so.3.x as separate files. The loader (rpath $ORIGIN) needs
+# only the file named by SONAME (libX.so.3): drop the other copies so the package does not grow 2-3 times.
+# Libraries without a version in SONAME (librelaya_core.so, libRoyalVNCKit.so) stay as they are.
 for f in "$PUB"/*.so "$PUB"/*.so.*; do
   [[ -f "$f" ]] || continue
   soname=$(readelf -d "$f" 2>/dev/null | sed -n 's/.*(SONAME).*\[\(.*\)\]/\1/p')
   if [[ -n "$soname" && "$(basename "$f")" != "$soname" && -f "$PUB/$soname" ]]; then rm -f "$f"; fi
 done
-# Проверка: ядро находит все свои библиотеки внутри пакета (rpath $ORIGIN), без «not found».
+# Check: the core finds all its libraries inside the package (rpath $ORIGIN), no "not found".
 if ldd "$PUB/librelaya_core.so" | grep -q 'not found'; then
   ldd "$PUB/librelaya_core.so" | grep 'not found' >&2
   echo "librelaya_core.so: не хватает библиотек в пакете" >&2
   exit 1
 fi
 
-# --- AppImage: приложение целиком в usr/lib/relaya, запуск через AppRun ---
+# --- AppImage: the whole app in usr/lib/relaya, started through AppRun ---
 APPDIR="$WORK/Relaya.AppDir"
 mkdir -p "$APPDIR/usr/lib/relaya" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 cp -a "$PUB/." "$APPDIR/usr/lib/relaya/"
@@ -69,7 +69,7 @@ mkdir -p "$APPDIR/usr/share/metainfo"
 cp "$ROOT/resources/linux/$ID.metainfo.xml" "$APPDIR/usr/share/metainfo/$ID.appdata.xml"
 cat > "$APPDIR/AppRun" <<'RUN'
 #!/bin/sh
-# ssh запускает этот же бинарник как askpass (SSH_ASKPASS = путь процесса внутри смонтированного AppImage).
+# ssh runs this same binary as askpass (SSH_ASKPASS = the process path inside the mounted AppImage).
 HERE="$(dirname "$(readlink -f "$0")")"
 exec "$HERE/usr/lib/relaya/relaya" "$@"
 RUN
@@ -77,7 +77,7 @@ chmod +x "$APPDIR/AppRun"
 TOOL="${APPIMAGETOOL:-appimagetool}"
 ARCH=x86_64 "$TOOL" "$APPDIR" "$OUT/Relaya-$VERSION-$LANG_CODE-x86_64.AppImage"
 
-# --- .deb: /opt/relaya, команда relaya в /usr/bin ---
+# --- .deb: /opt/relaya, the relaya command in /usr/bin ---
 DEB="$WORK/deb"
 mkdir -p "$DEB/DEBIAN" "$DEB/opt/relaya" "$DEB/usr/bin" "$DEB/usr/share/applications" "$DEB/usr/share/metainfo"
 cp -a "$PUB/." "$DEB/opt/relaya/"

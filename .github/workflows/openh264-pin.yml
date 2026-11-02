@@ -1,7 +1,7 @@
 name: OpenH264 pin
 
-# Вручную: скачать бинари OpenH264 от Cisco для закреплённой версии, сверить MD5 с подписанным списком Cisco
-# и вывести sha256 архива и библиотеки — их ядро закрепляет в openh264_info (core/src/openh264.rs).
+# Manual: download Cisco's OpenH264 binaries for the pinned version, check MD5 against Cisco's signed list
+# and print the sha256 of the archive and the library, which the core pins in openh264_info (core/src/openh264.rs).
 on:
   workflow_dispatch:
     inputs:

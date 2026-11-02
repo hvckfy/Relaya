@@ -18,14 +18,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Select Xcode
-        # SDK macOS 26 — для Liquid Glass. Берём самый новый Xcode 26 из образа.
+        # The macOS 26 SDK is for Liquid Glass. Take the newest Xcode 26 on the image.
         run: |
           printf '%s\n' /Applications/Xcode*.app
           XC=$(printf '%s\n' /Applications/Xcode_26*.app | sort -V | tail -1)
           sudo xcode-select -s "$XC"
           xcodebuild -version
 
-      # FreeRDP 3 для встроенного RDP (ядро с rdp-freerdp): dylib обеих архитектур, кэш vcpkg в действии.
+      # FreeRDP 3 for the built-in RDP (core with rdp-freerdp): dylibs for both architectures, vcpkg cache in the action.
       - name: FreeRDP arm64
         id: freerdp_arm
         uses: ./.github/actions/freerdp
@@ -37,7 +37,7 @@ jobs:
         with:
           triplet: x64-osx-dynamic
 
-      # RoyalVNCKit (VNC ядра, feature vnc-royal): universal dylib для macOS 15.
+      # RoyalVNCKit (the core's VNC, feature vnc-royal): a universal dylib for macOS 15.
       - name: RoyalVNCKit
         id: royalvnc
         uses: ./.github/actions/royalvnc
@@ -85,7 +85,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
           # shellcheck disable=SC2046 # the keychain list is meant to split into arguments
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
-          # Самоподписанный сертификат не доверенный — ищем по SHA-1, а не по имени среди «валидных».
+          # The self-signed certificate is not trusted: find it by SHA-1, not by name among the "valid" ones.
           HASH=$(security find-certificate -c "Relaya Self-Signed" -Z "$KC" | awk '/SHA-1/{print $NF}')
           for l in ru en; do
             codesign --force --deep --keychain "$KC" --sign "$HASH" "build/$l/Relaya.app"

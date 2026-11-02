@@ -1,6 +1,6 @@
 name: Linux
 
-# Ветка main — ядро, pty smoke, приложение на Uno и пакеты (AppImage, .deb) артефактом; тег v* — ещё и в GitHub Release.
+# main: core, pty smoke test, the Uno app and packages (AppImage, .deb) as an artifact. Releases come from release.yml.
 on:
   push:
     branches: [main]
@@ -21,17 +21,17 @@ permissions:
 
 concurrency:
   group: linux-${{ github.ref }}
-  # Один прогон на ветку доходит до конца; из новых ждёт только самый свежий (GitHub заменяет ожидающий),
-  # так проверка не отменяется частыми пушами, а очередь не копится.
+  # One run per branch finishes; of the newer ones only the latest waits (GitHub replaces the pending one),
+  # so frequent pushes do not cancel the check and the queue does not grow.
   cancel-in-progress: false
 
 jobs:
   build:
     name: "Linux · build (${{ matrix.lang }})"
-    # 24.04: toolchain Swift для RoyalVNCKit собран под неё (libxml2.so.2).
+    # 24.04: the Swift toolchain for RoyalVNCKit is built for it (libxml2.so.2).
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    # Две сборки, как у Mac и Windows (ADR-002): язык интерфейса задаётся при сборке.
+    # Two builds, as on Mac and Windows (ADR-002): the UI language is fixed at build time.
     strategy:
       fail-fast: false
       matrix:
@@ -47,23 +47,23 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('apps/dotnet/**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
-      # RDP на FreeRDP 3 из vcpkg с нашим overlay (OpenH264 по пути), как на Mac и Windows: action выставит FREERDP_DIR,
-      # скрипт ядра соберёт с rdp-freerdp и положит .so FreeRDP рядом с ядром. Первая сборка ~25 минут, дальше кэш.
+      # RDP on FreeRDP 3 from vcpkg with our overlay (OpenH264 by path), as on Mac and Windows: the action sets FREERDP_DIR,
+      # the core script builds with rdp-freerdp and puts the FreeRDP .so next to the core. First build ~25 minutes, then cached.
       - name: FreeRDP
         uses: ./.github/actions/freerdp
         with:
           triplet: x64-linux-dynamic
-      # VNC на RoyalVNCKit (.so с -static-stdlib): скрипт ядра включит vnc-royal и положит её рядом с ядром.
+      # VNC on RoyalVNCKit (.so with -static-stdlib): the core script enables vnc-royal and puts it next to the core.
       - name: RoyalVNCKit
         uses: ./.github/actions/royalvnc
       - name: Build Rust core + C# bindings
         uses: ./.github/actions/build-core
         with:
           script: scripts/build-core-linux.sh
-      # pty: вывод, управляющий терминал, размер окна, ввод, ssh из PATH.
+      # pty: output, controlling terminal, window size, input, ssh from PATH.
       - name: pty smoke test
         run: dotnet run --project apps/dotnet/Relaya.Linux.Smoke -c Release
-      # Unit-тесты чистой логики Shared (форматтеры, запрос пароля ssh) — те же, что в windows.yml.
+      # Unit tests of the pure Shared logic (formatters, the ssh password prompt), the same as in windows.yml.
       - name: Shared unit tests
         if: matrix.lang == 'en'
         run: dotnet test apps/dotnet/Relaya.Shared.Tests -c Release
@@ -78,7 +78,7 @@ jobs:
           version=0.0.0
           if [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then version="${BASH_REMATCH[1]}"; fi
           sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends imagemagick >/dev/null
-          export APPIMAGE_EXTRACT_AND_RUN=1  # без FUSE на раннере
+          export APPIMAGE_EXTRACT_AND_RUN=1  # no FUSE on the runner
           # Pinned release and hash: an unpinned "continuous" build would run unchecked code in the release.
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
           echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -

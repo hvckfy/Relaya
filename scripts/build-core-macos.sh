@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Собирает Rust-ядро (core/) в универсальную статическую библиотеку для macOS (arm64 + x86_64),
-# генерирует Swift-обёртки UniFFI и кладёт всё туда, откуда их берёт SwiftPM:
-#   apps/swift/Frameworks/RelayaCoreFFI.xcframework — библиотека + заголовок + modulemap
-#   apps/swift/Sources/RelayaRust/relaya_core.swift  — сгенерированный Swift API
+# Builds the Rust core (core/) into a universal static library for macOS (arm64 + x86_64),
+# generates the UniFFI Swift wrappers and puts everything where SwiftPM takes it from:
+#   apps/swift/Frameworks/RelayaCoreFFI.xcframework: library + header + modulemap
+#   apps/swift/Sources/RelayaRust/relaya_core.swift: the generated Swift API
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORE="$ROOT/core"
@@ -13,11 +13,11 @@ cd "$CORE"
 TARGETS=(aarch64-apple-darwin x86_64-apple-darwin)
 if command -v rustup >/dev/null; then rustup target add "${TARGETS[@]}" >/dev/null; fi
 export MACOSX_DEPLOYMENT_TARGET=15.0
-# Встроенный RDP (FreeRDP 3): с FREERDP_DIR_ARM64 и FREERDP_DIR_X64 (каталоги vcpkg arm64-osx-dynamic и
-# x64-osx-dynamic, см. .github/actions/freerdp) ядро собирается с rdp-freerdp, а dylib FreeRDP/OpenSSL склеиваются
-# в universal и кладутся в $OUT/freerdp — их линкует и встраивает в .app Swift-сборка. Без них — как раньше.
-# VNC на RoyalVNCKit: с ROYALVNC_DIR (.github/actions/royalvnc — universal libRoyalVNCKit.dylib, minos 15) ядро
-# собирается с vnc-royal, dylib кладётся в $OUT/freerdp рядом с FreeRDP (каталог нативных dylib для Contents/Frameworks).
+# Built-in RDP (FreeRDP 3): with FREERDP_DIR_ARM64 and FREERDP_DIR_X64 (vcpkg folders arm64-osx-dynamic and
+# x64-osx-dynamic, see .github/actions/freerdp) the core builds with rdp-freerdp, and the FreeRDP/OpenSSL dylibs are
+# merged into universal ones in $OUT/freerdp, which the Swift build links and embeds in the .app. Without them, no RDP.
+# VNC on RoyalVNCKit: with ROYALVNC_DIR (.github/actions/royalvnc, universal libRoyalVNCKit.dylib, minos 15) the core
+# builds with vnc-royal; the dylib goes to $OUT/freerdp next to FreeRDP (the native dylib folder for Contents/Frameworks).
 VNC_FEATURE=""
 [[ -n "${ROYALVNC_DIR:-}" ]] && VNC_FEATURE=",vnc-royal"
 if [[ -n "${FREERDP_DIR_ARM64:-}" && -n "${FREERDP_DIR_X64:-}" ]]; then
@@ -48,17 +48,17 @@ if [[ "$FREERDP_UNIVERSAL" == 1 ]]; then
   echo "freerdp: $OUT/freerdp ($(find "$OUT/freerdp" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') files)"
 fi
 
-# RoyalVNCKit — и без FreeRDP: ядро с vnc-royal без этой dylib не загрузится.
+# RoyalVNCKit even without FreeRDP: a core with vnc-royal does not load without this dylib.
 if [[ -n "${ROYALVNC_DIR:-}" ]]; then
   mkdir -p "$OUT/freerdp"
   cp "$ROYALVNC_DIR/libRoyalVNCKit.dylib" "$OUT/freerdp/"
 fi
 
-# Обёртки из метаданных собранной библиотеки (library mode).
+# Wrappers from the built library's metadata (library mode).
 cargo run --locked --release --quiet --features bindgen --bin uniffi-bindgen -- generate \
   --library "target/${TARGETS[0]}/release/librelaya_core.dylib" --language swift --out-dir "$OUT/gen"
 cp "$OUT/gen/"*.h "$OUT/headers/"
-# SwiftPM/xcframework ищет module.modulemap.
+# SwiftPM/xcframework looks for module.modulemap.
 cp "$OUT/gen/"*.modulemap "$OUT/headers/module.modulemap"
 cp "$OUT/gen/"*.swift "$MAC/Sources/RelayaRust/"
 
