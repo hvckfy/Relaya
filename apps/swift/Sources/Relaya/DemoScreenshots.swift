@@ -53,6 +53,29 @@ enum DemoScreenshots {
         }
     }
 
+    /// CI diagnostics: writes the app's windows to `<dir>/launch.log` for 20 seconds after launch, and brings any
+    /// hidden one to the front, because on a hosted runner the main window did not appear by itself.
+    static func watchLaunch(into dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let log = dir.appending(path: "launch.log")
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        Task { @MainActor in
+            for second in 0..<20 {
+                let windows = NSApp.windows.map {
+                    "\($0.className) '\($0.title)' visible=\($0.isVisible) frame=\(NSStringFromRect($0.frame))"
+                }
+                let line = "t=\(second)s active=\(NSApp.isActive) screens=\(NSScreen.screens.count) windows=\(windows)\n"
+                if let h = try? FileHandle(forWritingTo: log) {
+                    h.seekToEndOfFile()
+                    h.write(Data(line.utf8))
+                    try? h.close()
+                }
+                if second == 5 { NSApp.windows.filter { $0.canBecomeMain }.forEach { $0.makeKeyAndOrderFront(nil) } }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
     private struct Failure: Error, CustomStringConvertible {
         let description: String
         init(_ d: String) { description = d }
