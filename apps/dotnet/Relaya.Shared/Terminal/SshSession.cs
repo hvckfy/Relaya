@@ -205,6 +205,7 @@ internal sealed class SshSession : IDisposable
         var loggedIn = false;
         var sawPasswordPrompt = false;
         var tail = new StringBuilder();
+        var lastText = ""; // the latest output tail, read by Exited (B-6)
         var decoder = Encoding.UTF8.GetDecoder();
         pc.Output += data =>
         {
@@ -215,6 +216,7 @@ internal sealed class SshSession : IDisposable
             if (tail.Length > 512) tail.Remove(0, tail.Length - 512);
             // П-7: признаки считаются один раз на кусок; без ESC в хвосте регулярка не нужна.
             var text = StripCsi(tail.ToString()).Replace("\r", "");
+            lastText = text;
             var secret = uniffi.relaya_core.RelayaCoreMethods.TerminalSecretPrompt(text);
             var prompt = PasswordPrompt.Matches(text);
             // Пауза рассылки ставится до того, как запрос появится на экране: ответ на него не успеет уйти в другие
@@ -304,7 +306,11 @@ internal sealed class SshSession : IDisposable
             }
             End("\x1b[2m" + L("[сессия завершена, код %@]", code) + "\x1b[0m");
             shortRuns = DateTime.UtcNow - startedAt < TimeSpan.FromSeconds(60) ? shortRuns + 1 : 0;
-            if (code == 255 && shortRuns <= 10 && Relaya.Platform.Settings.Get("terminal.autoReconnect", "1") == "1"
+            // B-6: before login, a refusal in the output ends the session for good: reconnecting would only add failed
+            // logins (fail2ban). The person fixes the password or key and reconnects by hand.
+            var last = lastText;
+            var refused = !sessionLoggedIn && (uniffi.relaya_core.RelayaCoreMethods.SshAuthRefused(last) || uniffi.relaya_core.RelayaCoreMethods.SshBlocked(last));
+            if (!refused && code == 255 && shortRuns <= 10 && Relaya.Platform.Settings.Get("terminal.autoReconnect", "1") == "1"
                 && (sessionLoggedIn || DateTime.UtcNow - startedAt > TimeSpan.FromSeconds(10)))
                 ui.TryEnqueue(ScheduleReconnect);
         };
