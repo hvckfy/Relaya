@@ -46,6 +46,34 @@ import Testing
         ((result["content"] as! [[String: Any]])[0]["text"] as! String)
     }
 
+    /// B-7: after a refused login the agent's retries never start ssh; the gate file opening lets one through.
+    @Test func refusedLoginStopsRetriesUntilTheGateOpens() async throws {
+        let gate = FileManager.default.temporaryDirectory.appending(path: "gate-\(UUID().uuidString).json").path
+        defer { try? FileManager.default.removeItem(atPath: gate) }
+        let runs = Box()
+        let reply = Box()
+        reply.value = "refused"
+        let s = MCPServer(hosts: { hosts }, policy: { MCPPolicy(enabled: true, defaultMode: .trusted) }, log: nil,
+                          execute: { _, _, _ in
+                              runs.value += "x"
+                              return reply.value == "refused"
+                                  ? ProcessResult(status: 255, stdout: "", stderr: "root@web: Permission denied (password).")
+                                  : ProcessResult(status: 1, stdout: "", stderr: "cat: /root/x: Permission denied")
+                          },
+                          confirm: { _, _, _ in true }, loginGatePath: gate)
+        _ = await call(s, "run_command", ["host": "web", "command": "uptime"])
+        let again = text(await call(s, "run_command", ["host": "web", "command": "uptime"]))
+        #expect(runs.value.count == 1)
+        #expect(again.contains("повторные вызовы ничего не изменят") && again.contains("[exit code: -1]"))
+
+        // Refresh in the app opens the file; a command that prints "Permission denied" itself keeps it open.
+        try LoginGateFile.open("web", at: gate)
+        reply.value = "command"
+        _ = await call(s, "run_command", ["host": "web", "command": "cat /root/x"])
+        _ = await call(s, "run_command", ["host": "web", "command": "cat /root/x"])
+        #expect(runs.value.count == 3)
+    }
+
     @Test func initializeAndList() async {
         let s = server(MCPPolicy())
         let r = await s.handle(#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"Claude"}}}"#)!

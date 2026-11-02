@@ -19,9 +19,12 @@ public final class MCPServer {
     private let log: MCPLog?
     private let execute: Executor
     private let confirm: Confirmer
+    /// Login gate file shared with the app (B-7); empty turns the gate off.
+    private let loginGatePath: String
 
     public init(hosts: @escaping () -> [SSHHost], policy: @escaping () -> MCPPolicy, log: MCPLog?,
-                execute: @escaping Executor, confirm: @escaping Confirmer) {
+                execute: @escaping Executor, confirm: @escaping Confirmer, loginGatePath: String = "") {
+        self.loginGatePath = loginGatePath
         self.hosts = hosts
         self.policy = policy
         self.log = log
@@ -55,7 +58,8 @@ public final class MCPServer {
             },
             confirm: { host, command, client in
                 await MCPServer.askWithDialog(host: host, command: command, client: client)
-            }
+            },
+            loginGatePath: LoginGateFile.path
         )
     }
 
@@ -124,6 +128,8 @@ public final class MCPServer {
             e.output = entry.output
             owner.log?.append(e)
         }
+
+        func loginGatePath() -> String { owner.loginGatePath }
     }
 
     private final class UnsafeBox<T>: @unchecked Sendable { var value: T? }

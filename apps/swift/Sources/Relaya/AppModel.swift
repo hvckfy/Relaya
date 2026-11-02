@@ -675,6 +675,8 @@ final class AppModel {
         // the shared master connection, and if it is refused the rest stop with the same reason.
         if !interactive, !loginWorked.contains(alias), let pending = firstLogin[alias] { await pending.value }
         if !interactive, let refused = loginRefused[alias] { throw LoginRefused(errorDescription: refused) }
+        // The user asked for this call (Refresh): agents may try the host again too (B-7).
+        if interactive { loginMayRetry(alias) }
         var finish: (() -> Void)?
         if !interactive, !loginWorked.contains(alias), firstLogin[alias] == nil {
             let (signal, continuation) = AsyncStream<Void>.makeStream()
@@ -706,17 +708,32 @@ final class AppModel {
     private var firstLogin: [String: Task<Void, Never>] = [:]
 
     /// Exit code 255 is ssh's own failure; a command failing on the server never latches the host.
+    /// The rule is the core's (`login_outcome`); the result also goes to the gate file the MCP server reads (B-7).
     func noteLogin(_ alias: String, _ r: ProcessResult) {
-        if r.status != 255, !r.timedOut {
+        switch LoginGateFile.outcome(r) {
+        case .worked:
             loginRefused[alias] = nil
             loginWorked.insert(alias)
-        } else if r.status == 255, !r.timedOut, SSHErrorText.loginRefused(r.stderr) {
-            loginRefused[alias] = SSHErrorText.describe(r.stderr, fallback: L("Сервер не принял вход."))
+            writeGate { try LoginGateFile.open(alias) }
+        case .refused:
+            let reason = SSHErrorText.describe(r.stderr, fallback: L("Сервер не принял вход."))
+            loginRefused[alias] = reason
+            writeGate { try LoginGateFile.close(alias, reason: reason) }
+        case .unknown:
+            break
         }
     }
 
-    /// The user changed credentials or asked to retry: background probes may log in again.
-    func loginMayRetry(_ alias: String) { loginRefused[alias] = nil }
+    /// The user changed credentials or asked to retry: background probes and agents may log in again.
+    func loginMayRetry(_ alias: String) {
+        loginRefused[alias] = nil
+        writeGate { try LoginGateFile.open(alias) }
+    }
+
+    /// A gate file that cannot be written leaves agents with the old state, so the user sees why.
+    private func writeGate(_ body: () throws -> Void) {
+        do { try body() } catch { alertMessage = L("Не удалось сохранить состояние входа: %@", error.localizedDescription) }
+    }
 
     /// Аргументы и окружение ssh для хоста — общие для exec и потоковых передач SFTP.
     /// `multiplex` — служебный вызов идёт через общее соединение хоста (П-9); окна tmux — своим.
