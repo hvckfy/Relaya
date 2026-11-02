@@ -1,4 +1,4 @@
-name: CI
+name: Mac
 
 on:
   # Ветки проверяются через PR: push на любую ветку плюс pull_request гоняли Mac-сборку дважды.
@@ -13,7 +13,7 @@ on:
       - "scripts/*macos*"
       - ".github/actions/freerdp/**"
       - ".github/actions/royalvnc/**"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/mac.yml"
   pull_request:
 
 concurrency:
@@ -27,6 +27,7 @@ permissions:
 
 jobs:
   build-test:
+    name: "Mac · build and test"
     runs-on: macos-26
     timeout-minutes: 90
     steps:

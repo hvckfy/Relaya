@@ -1,4 +1,4 @@
-name: Release
+name: Mac release
 
 # Тег вида v0.1.0 → собранный Relaya.zip в GitHub Release.
 # Подпись — постоянным самоподписанным сертификатом из секретов SIGNING_P12_BASE64 / SIGNING_P12_PASSWORD:
@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   release:
+    name: "Mac · release package"
     runs-on: macos-26
     timeout-minutes: 120
     permissions:

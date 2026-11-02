@@ -24,6 +24,7 @@ concurrency:
 
 jobs:
   workflows:
+    name: "Lint · workflows (actionlint)"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -38,6 +39,7 @@ jobs:
           ./actionlint -color
 
   scripts:
+    name: "Lint · shell scripts (shellcheck)"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
