@@ -13,6 +13,9 @@ public enum LoginGateFile {
         loginOutcome(status: r.status, timedOut: r.timedOut, stderr: r.stderr)
     }
 
+    /// The raw ssh line to store for a refused login; every writer stores the same line (V-9).
+    public static func entry(_ stderr: String) -> String { loginGateEntry(stderr: stderr) }
+
     /// The reason background calls to `alias` are stopped, or nil.
     public static func reason(_ alias: String, at file: String = path) -> String? {
         loginGateReason(path: file, alias: alias)

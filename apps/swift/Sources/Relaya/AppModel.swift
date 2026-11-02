@@ -732,7 +732,7 @@ final class AppModel {
         case .refused:
             let reason = SSHErrorText.describe(r.stderr, fallback: L("Сервер не принял вход."))
             loginRefused[alias] = reason
-            writeGate { try LoginGateFile.close(alias, reason: reason) }
+            writeGate { try LoginGateFile.close(alias, reason: LoginGateFile.entry(r.stderr)) }
         case .unknown:
             break
         }

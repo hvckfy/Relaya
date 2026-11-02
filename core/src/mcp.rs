@@ -918,7 +918,9 @@ impl McpServer {
                             false,
                             Some(reason.clone()),
                         );
-                        return (login_refused_text(alias, &reason) + "\n[exit code: -1]", true);
+                        let title =
+                            crate::login_gate::login_refusal_reason(reason.clone(), "Сервер не принял вход.".into());
+                        return (login_refused_text(alias, &title) + "\n[exit code: -1]", true);
                     }
                 }
                 // allow-правила действуют только на хостах «с подтверждением» и «доверенных»: на read-only изменяющая команда отклоняется.

@@ -46,6 +46,15 @@ pub fn login_outcome(status: i32, timed_out: bool, stderr: String) -> LoginOutco
     }
 }
 
+/// What the gate file stores for a refused login: the raw ssh line the error rule matched, or the last error line.
+///
+/// Every writer (the app on each platform, the MCP server) stores the same raw line, so each reader explains it with
+/// its own localized rules (V-9): `ssh_explain` of the stored line gives the same title and hint as of the full output.
+#[uniffi::export]
+pub fn login_gate_entry(stderr: String) -> String {
+    ssh_explain(stderr.clone()).map(|p| p.detail).unwrap_or_else(|| crate::ssh_errors::ssh_error_line(stderr))
+}
+
 /// The short reason for a refused login, from the ssh error rules; `fallback` when no rule matches.
 #[uniffi::export]
 pub fn login_refusal_reason(stderr: String, fallback: String) -> String {
@@ -123,9 +132,7 @@ pub fn login_gate_note(
 ) -> Result<LoginOutcome, CoreError> {
     let outcome = login_outcome(status, timed_out, stderr.clone());
     match outcome {
-        LoginOutcome::Refused => {
-            login_gate_close(path, alias, login_refusal_reason(stderr, "Сервер не принял вход.".into()))?
-        }
+        LoginOutcome::Refused => login_gate_close(path, alias, login_gate_entry(stderr))?,
         LoginOutcome::Worked => login_gate_open(path, alias)?,
         LoginOutcome::Unknown => {}
     }
@@ -164,7 +171,10 @@ mod tests {
             login_gate_note(path.clone(), "web".into(), 255, false, DENIED.into()).ok(),
             Some(LoginOutcome::Refused)
         );
-        assert!(login_gate_reason(path.clone(), "web".into()).is_some());
+        // The raw line is stored, so the reader's own rules explain it again (V-9).
+        let stored = login_gate_reason(path.clone(), "web".into()).unwrap_or_default();
+        assert_eq!(stored, DENIED);
+        assert_eq!(ssh_explain(stored).map(|p| p.title), ssh_explain(DENIED.into()).map(|p| p.title));
         assert_eq!(login_gate_reason(path.clone(), "db".into()), None);
         // A timeout leaves it closed; a worked login opens it.
         assert!(login_gate_note(path.clone(), "web".into(), 124, true, String::new()).is_ok());
