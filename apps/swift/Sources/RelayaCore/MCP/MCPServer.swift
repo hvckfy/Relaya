@@ -118,7 +118,7 @@ public final class MCPServer {
                 r.timedOut
                 ? [r.stderr, L("Команда остановлена: превышен таймаут %@ с", "\(timeoutSeconds)")]
                     .filter { !$0.isEmpty }.joined(separator: "\n") : r.stderr
-            return ExecResult(status: r.timedOut ? 124 : r.status, stdout: r.stdout, stderr: stderr)
+            return ExecResult(status: r.timedOut ? 124 : r.status, stdout: r.stdout, stderr: stderr, timedOut: r.timedOut)
         }
 
         func confirm(host: RelayaRust.SshHost, command: String, client: String) -> Bool {

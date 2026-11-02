@@ -79,7 +79,7 @@ internal static class McpHost
         public ExecResult Execute(SshHost host, string command, uint timeoutSeconds)
         {
             var r = Data.AppState.RunOnHost(host.alias, command, (int)timeoutSeconds).GetAwaiter().GetResult();
-            return new ExecResult(r.Status, r.Stdout, r.Stderr);
+            return new ExecResult(r.Status, r.Stdout, r.Stderr, false); // a timeout is already -1 here
         }
 
         // Подтверждение каждой команды — системное окно поверх всех (Touch ID на Mac).

@@ -741,6 +741,8 @@ pub struct ExecResult {
     pub status: i32,
     pub stdout: String,
     pub stderr: String,
+    /// The command was stopped by the timeout: says nothing about the login (V-7).
+    pub timed_out: bool,
 }
 
 /// Что даёт клиент: хосты, политика, выполнение по ssh, окно подтверждения, запись в журнал.
@@ -916,7 +918,7 @@ impl McpServer {
                             false,
                             Some(reason.clone()),
                         );
-                        return (login_refused_text(alias, &reason), true);
+                        return (login_refused_text(alias, &reason) + "\n[exit code: -1]", true);
                     }
                 }
                 // allow-правила действуют только на хостах «с подтверждением» и «доверенных»: на read-only изменяющая команда отклоняется.
@@ -958,7 +960,13 @@ impl McpServer {
                 let r = self.backend.execute(host, command.clone(), timeout);
                 let mut gate_note = None;
                 if !gate.is_empty() {
-                    match crate::login_gate::login_gate_note(gate, alias.into(), r.status, false, r.stderr.clone()) {
+                    match crate::login_gate::login_gate_note(
+                        gate,
+                        alias.into(),
+                        r.status,
+                        r.timed_out,
+                        r.stderr.clone(),
+                    ) {
                         Ok(crate::login_gate::LoginOutcome::Refused) => {
                             gate_note = Some(login_refused_text(
                                 alias,
@@ -1010,7 +1018,7 @@ impl McpServer {
 fn login_refused_text(alias: &str, reason: &str) -> String {
     format!(
         "{reason}\nRelaya не повторяет вход на {alias}, чтобы сервер не заблокировал адрес; повторные вызовы ничего не изменят. \
-         Попросите пользователя проверить пароль или ключ для {alias} в Relaya и нажать «Обновить» в карточке хоста.\n[exit code: -1]"
+         Попросите пользователя проверить пароль или ключ для {alias} в Relaya и нажать «Обновить» в карточке хоста."
     )
 }
 
@@ -1055,7 +1063,7 @@ mod tests {
             ran: Mutex::new(vec![]),
             logged: Mutex::new(vec![]),
             gate: String::new(),
-            reply: Mutex::new(ExecResult { status: 0, stdout: "ok".into(), stderr: "".into() }),
+            reply: Mutex::new(ExecResult { status: 0, stdout: "ok".into(), stderr: "".into(), timed_out: false }),
         });
         (McpServer::new(f.clone()), f)
     }
@@ -1082,6 +1090,7 @@ mod tests {
                 status: 255,
                 stdout: "".into(),
                 stderr: "root@web: Permission denied (password).".into(),
+                timed_out: false,
             }),
         });
         let s = McpServer::new(f.clone());
@@ -1089,6 +1098,7 @@ mod tests {
 
         let first = text(call(&s, "run_command", json!({"host": "web", "command": "uptime"})));
         assert!(first.contains("повторные вызовы ничего не изменят"), "{first}");
+        assert_eq!(first.matches("[exit code:").count(), 1, "{first}");
         for _ in 0..3 {
             let again = text(call(&s, "read_file", json!({"host": "web", "path": "/etc/hostname"})));
             assert!(again.contains("«Обновить»") && again.contains("[exit code: -1]"), "{again}");
@@ -1098,8 +1108,12 @@ mod tests {
 
         // A command that prints "Permission denied" itself exits with its own code and does not close the gate.
         crate::login_gate::login_gate_open(gate.clone(), "web".into()).expect("open");
-        *f.reply.locked() =
-            ExecResult { status: 1, stdout: "".into(), stderr: "cat: /root/x: Permission denied".into() };
+        *f.reply.locked() = ExecResult {
+            status: 1,
+            stdout: "".into(),
+            stderr: "cat: /root/x: Permission denied".into(),
+            timed_out: false,
+        };
         call(&s, "run_command", json!({"host": "web", "command": "cat /root/x"}));
         call(&s, "run_command", json!({"host": "web", "command": "cat /root/x"}));
         assert_eq!(f.ran.locked().len(), 3);
