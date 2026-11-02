@@ -35,6 +35,7 @@ jobs:
           restore-keys: perf-${{ runner.os }}-
       - name: Run benchmarks
         working-directory: core
+        shell: bash # pipefail: a failed cargo bench must not hide behind tee
         run: cargo bench --locked --bench core | tee "$RUNNER_TEMP/bench.json"
       - uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
         with:
@@ -47,5 +48,6 @@ jobs:
           auto-push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           save-data-file: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           alert-threshold: "200%"
-          fail-on-alert: true
+          # Hosted runners are noisy: report only until the history shows a sane threshold.
+          fail-on-alert: false
           summary-always: true
