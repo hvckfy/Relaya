@@ -12,8 +12,10 @@ public struct HostStats: Equatable, Sendable {
     public var diskUsed: Int64
     public var uptime: TimeInterval
 
-    public init(load1: Double, cores: Int, memTotal: Int64, memAvailable: Int64,
-                diskTotal: Int64, diskUsed: Int64, uptime: TimeInterval) {
+    public init(
+        load1: Double, cores: Int, memTotal: Int64, memAvailable: Int64,
+        diskTotal: Int64, diskUsed: Int64, uptime: TimeInterval
+    ) {
         self.load1 = load1
         self.cores = cores
         self.memTotal = memTotal
@@ -33,8 +35,9 @@ public struct HostStats: Equatable, Sendable {
 
     public static func parse(_ output: String) -> HostStats? {
         hostStatsParse(output: output).map {
-            HostStats(load1: $0.load1, cores: Int($0.cores), memTotal: $0.memTotal, memAvailable: $0.memAvailable,
-                      diskTotal: $0.diskTotal, diskUsed: $0.diskUsed, uptime: $0.uptime)
+            HostStats(
+                load1: $0.load1, cores: Int($0.cores), memTotal: $0.memTotal, memAvailable: $0.memAvailable,
+                diskTotal: $0.diskTotal, diskUsed: $0.diskUsed, uptime: $0.uptime)
         }
     }
 }

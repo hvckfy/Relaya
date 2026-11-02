@@ -139,9 +139,10 @@ extension Sync.Item {
 
 extension Sync.Profile {
     var rust: SyncProfile {
-        SyncProfile(id: id.uuidString, name: name, backend: backend == .git ? .git : .iCloud, remote: remote,
-                    scope: SyncScope(allHosts: scope.allHosts, groups: scope.groups.sorted(), hosts: scope.hosts.sorted()),
-                    items: Sync.Item.allCases.filter(items.contains).map(\.rust), auto: auto, enabled: enabled)
+        SyncProfile(
+            id: id.uuidString, name: name, backend: backend == .git ? .git : .iCloud, remote: remote,
+            scope: SyncScope(allHosts: scope.allHosts, groups: scope.groups.sorted(), hosts: scope.hosts.sorted()),
+            items: Sync.Item.allCases.filter(items.contains).map(\.rust), auto: auto, enabled: enabled)
     }
 }
 
@@ -214,12 +215,16 @@ public struct GitSync: Sendable {
 
     /// Один цикл: выгрузка → коммит → слияние с сервером → разнос пришедшего → отправка.
     /// Типы ядра не Sendable — переводим их туда и обратно внутри фонового потока.
-    public func sync(machine: String, profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(),
-                     passphrase: String? = nil) async throws -> Outcome {
+    public func sync(
+        machine: String, profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(),
+        passphrase: String? = nil
+    ) async throws -> Outcome {
         let (repo, remote) = (repo.path, remote)
         return try await offMain { () -> Outcome in
-            switch try gitSync(repo: repo, remote: remote, machine: machine, profile: profile.rust, paths: paths.rust,
-                               passphrase: passphrase) {
+            switch try gitSync(
+                repo: repo, remote: remote, machine: machine, profile: profile.rust, paths: paths.rust,
+                passphrase: passphrase)
+            {
             case .upToDate: return .upToDate
             case .synced(let pulled, let imported): return .synced(pulled: pulled, imported: imported.map(Sync.Item.init(rust:)))
             case .conflict(let c): return .conflict(c.map { Conflict(path: $0.path, mine: $0.mine, theirs: $0.theirs) })
@@ -228,8 +233,10 @@ public struct GitSync: Sendable {
     }
 
     /// Разрешить конфликт (`true` — моя версия), закоммитить, разнести и отправить.
-    public func resolve(_ choices: [String: Bool], profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(),
-                        passphrase: String? = nil) async throws -> [Sync.Item] {
+    public func resolve(
+        _ choices: [String: Bool], profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(),
+        passphrase: String? = nil
+    ) async throws -> [Sync.Item] {
         let repo = repo.path
         return try await offMain {
             try gitResolve(repo: repo, keepMine: choices, profile: profile.rust, paths: paths.rust, passphrase: passphrase)
@@ -258,13 +265,17 @@ public enum FolderSync {
 
     /// Трёхстороннее слияние, как в git: снимок прошлой синхронизации, своё и пришедшее; конфликты — тем же
     /// экраном, что у git. `keepMine` — ответы на конфликты прошлого вызова (`true` — моя версия).
-    public static func merge(_ profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(), passphrase: String? = nil,
-                             folder: URL, keepMine: [String: Bool] = [:]) async throws -> GitSync.Outcome {
+    public static func merge(
+        _ profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(), passphrase: String? = nil,
+        folder: URL, keepMine: [String: Bool] = [:]
+    ) async throws -> GitSync.Outcome {
         let path = folder.path
         return try await Task.detached { () -> GitSync.Outcome in
             do {
-                switch try folderSyncMerge(profile: profile.rust, paths: paths.rust, passphrase: passphrase, folder: path,
-                                           keepMine: keepMine) {
+                switch try folderSyncMerge(
+                    profile: profile.rust, paths: paths.rust, passphrase: passphrase, folder: path,
+                    keepMine: keepMine)
+                {
                 case .upToDate: return .upToDate
                 case .synced(let pulled, let imported): return .synced(pulled: pulled, imported: imported.map(Sync.Item.init(rust:)))
                 case .conflict(let c):
@@ -277,8 +288,10 @@ public enum FolderSync {
     }
 
     @discardableResult
-    public static func sync(_ profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(), passphrase: String? = nil,
-                            folder: URL) throws -> [Sync.Item] {
+    public static func sync(
+        _ profile: Sync.Profile, paths: Sync.Paths = Sync.Paths(), passphrase: String? = nil,
+        folder: URL
+    ) throws -> [Sync.Item] {
         try folderSync(profile: profile.rust, paths: paths.rust, passphrase: passphrase, folder: folder.path).map(Sync.Item.init(rust:))
     }
 }
@@ -345,7 +358,9 @@ extension Sync {
     }
 
     public static func takeAgentEscalations(paths: Paths = Paths()) -> [AgentEscalation] {
-        syncTakeAgentEscalations(paths: paths.rust).map { AgentEscalation(host: $0.host, from: $0.from.map(MCPPolicy.Mode.init(rust:)), to: $0.to.map(MCPPolicy.Mode.init(rust:)), rule: $0.rule) }
+        syncTakeAgentEscalations(paths: paths.rust).map {
+            AgentEscalation(host: $0.host, from: $0.from.map(MCPPolicy.Mode.init(rust:)), to: $0.to.map(MCPPolicy.Mode.init(rust:)), rule: $0.rule)
+        }
     }
 
     /// Применить или отклонить все ждущие расширения прав агентов.

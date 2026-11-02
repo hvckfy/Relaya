@@ -13,8 +13,10 @@ public struct HighlightRule: Codable, Hashable, Identifiable, Sendable {
     public var bold: Bool
     public var enabled: Bool
 
-    public init(name: String, pattern: String, isRegex: Bool = true, caseSensitive: Bool = false,
-                color: Int, bold: Bool = false, enabled: Bool = true) {
+    public init(
+        name: String, pattern: String, isRegex: Bool = true, caseSensitive: Bool = false,
+        color: Int, bold: Bool = false, enabled: Bool = true
+    ) {
         self.name = name
         self.pattern = pattern
         self.isRegex = isRegex
@@ -25,14 +27,16 @@ public struct HighlightRule: Codable, Hashable, Identifiable, Sendable {
     }
 
     public static let defaults: [HighlightRule] = [
-        HighlightRule(name: L("Ошибки"), pattern: #"\b(error|errors|failed|failure|fatal|panic|denied|refused|critical|exception)\b"#,
-                      color: 9, bold: true),
+        HighlightRule(
+            name: L("Ошибки"), pattern: #"\b(error|errors|failed|failure|fatal|panic|denied|refused|critical|exception)\b"#,
+            color: 9, bold: true),
         HighlightRule(name: L("Предупреждения"), pattern: #"\b(warn|warning|warnings|deprecated)\b"#, color: 11),
         HighlightRule(name: L("Успех"), pattern: #"\b(ok|success|successful|succeeded|done|passed|active \(running\))\b"#, color: 10),
         HighlightRule(name: L("IP-адреса"), pattern: #"\b(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?\b"#, color: 14),
         HighlightRule(name: "URL", pattern: #"\bhttps?://[^\s'"<>]+"#, color: 12),
-        HighlightRule(name: L("Даты и время"), pattern: #"\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\b"#,
-                      color: 13, enabled: false),
+        HighlightRule(
+            name: L("Даты и время"), pattern: #"\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\b"#,
+            color: 13, enabled: false),
     ]
 
     public func compiled() -> NSRegularExpression? {

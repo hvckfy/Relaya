@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 import LocalAuthentication
 
 /// Выдача секретов askpass-помощнику без утечки другим процессам (M8).
@@ -111,7 +111,8 @@ public final class AskpassBroker: @unchecked Sendable {
             return g
         }
         guard let grant else { return }
-        let expected = grant.secret.kind == .passphrase
+        let expected =
+            grant.secret.kind == .passphrase
             ? prompt.lowercased().contains("passphrase")
             : PasswordPrompt.matches(prompt)
         guard expected else { return }
@@ -148,8 +149,10 @@ public final class AskpassBroker: @unchecked Sendable {
         let done = DispatchSemaphore(value: 0)
         let ok = LockedFlag()
         let what = secret.kind == .passphrase ? L("passphrase ключа") : L("пароль")
-        context.evaluatePolicy(.deviceOwnerAuthentication,
-                               localizedReason: L("ssh просит %@ для %@", what, secret.account)) { success, _ in
+        context.evaluatePolicy(
+            .deviceOwnerAuthentication,
+            localizedReason: L("ssh просит %@ для %@", what, secret.account)
+        ) { success, _ in
             ok.value = success
             done.signal()
         }

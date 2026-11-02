@@ -1,5 +1,5 @@
-import Foundation
 import CoreGraphics
+import Foundation
 import RelayaRust
 
 /// Раскладка терминалов плитками: дерево разбиений без наложений.
@@ -65,14 +65,22 @@ public indirect enum TileLayout<ID: Hashable & Sendable>: Equatable, Sendable {
         case .row(let c):
             let w = rect.width / CGFloat(c.count)
             return c.enumerated().reduce(into: [:]) { acc, e in
-                acc.merge(e.element.frames(in: CGRect(x: rect.minX + w * CGFloat(e.offset), y: rect.minY,
-                                                      width: w, height: rect.height))) { $1 }
+                acc.merge(
+                    e.element.frames(
+                        in: CGRect(
+                            x: rect.minX + w * CGFloat(e.offset), y: rect.minY,
+                            width: w, height: rect.height))
+                ) { $1 }
             }
         case .column(let c):
             let h = rect.height / CGFloat(c.count)
             return c.enumerated().reduce(into: [:]) { acc, e in
-                acc.merge(e.element.frames(in: CGRect(x: rect.minX, y: rect.minY + h * CGFloat(e.offset),
-                                                      width: rect.width, height: h))) { $1 }
+                acc.merge(
+                    e.element.frames(
+                        in: CGRect(
+                            x: rect.minX, y: rect.minY + h * CGFloat(e.offset),
+                            width: rect.width, height: h))
+                ) { $1 }
             }
         }
     }
@@ -195,7 +203,8 @@ public enum LayoutStore {
 
     public static func load() -> [Saved] {
         guard let data = try? Data(contentsOf: url),
-              let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+            let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return [] }
         return list.compactMap { d in
             guard let name = d["name"] as? String, let l = d["layout"].flatMap(TileLayout<String>.init(jsonObject:)) else { return nil }
             return Saved(id: (d["id"] as? String).flatMap(UUID.init(uuidString:)) ?? UUID(), name: name, layout: l)

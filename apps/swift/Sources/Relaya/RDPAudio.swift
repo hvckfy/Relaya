@@ -16,7 +16,9 @@ final class RDPAudio: @unchecked Sendable {
 
     /// Громкость пользователя 0…1 (ползунок в окне стола) × громкость сервера.
     func setUserVolume(_ v: Double) {
-        queue.async { self.userVolume = Float(v); self.apply() }
+        queue.async {
+            self.userVolume = Float(v); self.apply()
+        }
     }
 
     init() {
@@ -24,7 +26,9 @@ final class RDPAudio: @unchecked Sendable {
     }
 
     func setServerVolume(_ v: Double) {
-        queue.async { self.serverVolume = Float(v); self.apply() }
+        queue.async {
+            self.serverVolume = Float(v); self.apply()
+        }
     }
 
     private func apply() { player.volume = userVolume * serverVolume }
@@ -58,8 +62,11 @@ final class RDPAudio: @unchecked Sendable {
     private func reconfigure(_ f: RDPEngine.AudioFormat) {
         player.stop()
         engine.stop()
-        guard let out = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(f.sampleRate),
-                                      channels: AVAudioChannelCount(f.channels), interleaved: false) else { return }
+        guard
+            let out = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32, sampleRate: Double(f.sampleRate),
+                channels: AVAudioChannelCount(f.channels), interleaved: false)
+        else { return }
         engine.disconnectNodeOutput(player)
         engine.connect(player, to: engine.mainMixerNode, format: out)
         do {

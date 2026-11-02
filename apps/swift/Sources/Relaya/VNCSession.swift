@@ -67,7 +67,8 @@ final class VNCSession {
     private func savedPassword() -> String? {
         if let p = try? keychain.password(for: account) { return p }
         guard account != desktop.legacyKeychainAccount,
-              let old = try? keychain.password(for: desktop.legacyKeychainAccount) else { return nil }
+            let old = try? keychain.password(for: desktop.legacyKeychainAccount)
+        else { return nil }
         try? keychain.setPassword(old, for: account)
         return old
     }

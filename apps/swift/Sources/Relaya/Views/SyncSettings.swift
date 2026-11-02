@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Настройки → Синхронизация. Как «Учётные записи интернета» в Системных настройках: одна сгруппированная форма
 /// со списком профилей; профиль открывается листом. Без своей колонки-списка — она не выглядит как macOS
@@ -19,11 +19,17 @@ struct SyncSettings: View {
             }
             Section {
                 if sync.profiles.isEmpty {
-                    Text(L("Профиль — это ваш git-репозиторий (или папка в iCloud Drive) и набор хостов: все, группы или отдельные хосты. Пароли не синхронизируются никогда."))
-                        .foregroundStyle(.secondary)
+                    Text(
+                        L(
+                            "Профиль — это ваш git-репозиторий (или папка в iCloud Drive) и набор хостов: все, группы или отдельные хосты. Пароли не синхронизируются никогда."
+                        )
+                    )
+                    .foregroundStyle(.secondary)
                 }
                 ForEach(sync.profiles) { p in
-                    Button { editing = p.id } label: {
+                    Button {
+                        editing = p.id
+                    } label: {
                         HStack {
                             stateIcon(sync.state(p)).frame(width: 20)
                             VStack(alignment: .leading, spacing: 1) {
@@ -52,12 +58,15 @@ struct SyncSettings: View {
         }
         .formStyle(.grouped)
         .frame(height: 520)
-        .alert(L("Ключи с другой машины сохранены отдельно"),
-               isPresented: Binding(get: { !sync.renamedKeys.isEmpty }, set: { if !$0 { sync.renamedKeys = [] } })) {
+        .alert(
+            L("Ключи с другой машины сохранены отдельно"),
+            isPresented: Binding(get: { !sync.renamedKeys.isEmpty }, set: { if !$0 { sync.renamedKeys = [] } })
+        ) {
             Button("OK") { sync.renamedKeys = [] }
         } message: {
-            Text(L("У этих ключей на другой машине другое содержимое. Ваши файлы не тронуты, пришедшие лежат рядом:")
-                 + "\n\n" + sync.renamedKeys.map { "\($0.name) → \($0.savedAs)" }.joined(separator: "\n"))
+            Text(
+                L("У этих ключей на другой машине другое содержимое. Ваши файлы не тронуты, пришедшие лежат рядом:")
+                    + "\n\n" + sync.renamedKeys.map { "\($0.name) → \($0.savedAs)" }.joined(separator: "\n"))
         }
         .sheet(item: Binding(get: { editing.map(Edited.init) }, set: { editing = $0?.id })) { e in
             if let i = sync.profiles.firstIndex(where: { $0.id == e.id }) {
@@ -91,8 +100,10 @@ struct SyncSettings: View {
 
     /// Удаление профиля удаляет и локальный клон репозитория — только после подтверждения (UI-M1).
     private func askRemove(_ id: Sync.Profile.ID, name: String) {
-        model.pendingRemoval = PendingDelete(title: L("Удалить профиль «%@»?", name),
-                                            message: L("Синхронизация по нему остановится, локальная копия репозитория будет удалена. Данные на этой машине и в самом репозитории останутся.")) {
+        model.pendingRemoval = PendingDelete(
+            title: L("Удалить профиль «%@»?", name),
+            message: L("Синхронизация по нему остановится, локальная копия репозитория будет удалена. Данные на этой машине и в самом репозитории останутся.")
+        ) {
             model.sync.remove(id)
         }
     }
@@ -150,7 +161,9 @@ private struct ProfileForm: View {
                                 ForEach(model.hosts) { h in
                                     Button(h.alias) { profile.remote = "\(h.alias):relaya.git" }
                                 }
-                            } label: { Image(systemName: "server.rack") }
+                            } label: {
+                                Image(systemName: "server.rack")
+                            }
                             .menuStyle(.borderlessButton).fixedSize()
                             .help(L("Взять хост из ~/.ssh/config"))
                         }
@@ -170,16 +183,22 @@ private struct ProfileForm: View {
                 Toggle(L("Все хосты"), isOn: $profile.scope.allHosts)
                 if !profile.scope.allHosts {
                     ForEach(model.groups, id: \.self) { g in
-                        Toggle(isOn: Binding(get: { profile.scope.groups.contains(g) },
-                                             set: { if $0 { profile.scope.groups.insert(g) } else { profile.scope.groups.remove(g) } })) {
+                        Toggle(
+                            isOn: Binding(
+                                get: { profile.scope.groups.contains(g) },
+                                set: { if $0 { profile.scope.groups.insert(g) } else { profile.scope.groups.remove(g) } })
+                        ) {
                             Label(L("Группа «%@»", g), systemImage: "folder")
                         }
                     }
                     DisclosureGroup(L("Отдельные хосты")) {
                         ForEach(model.hosts.filter { !$0.isGitService }) { h in
                             let viaGroup = h.group.map { profile.scope.groups.contains($0) } ?? false
-                            Toggle(isOn: Binding(get: { viaGroup || profile.scope.hosts.contains(h.alias) },
-                                                 set: { if $0 { profile.scope.hosts.insert(h.alias) } else { profile.scope.hosts.remove(h.alias) } })) {
+                            Toggle(
+                                isOn: Binding(
+                                    get: { viaGroup || profile.scope.hosts.contains(h.alias) },
+                                    set: { if $0 { profile.scope.hosts.insert(h.alias) } else { profile.scope.hosts.remove(h.alias) } })
+                            ) {
                                 Text(h.alias)
                             }
                             .disabled(viaGroup)
@@ -191,18 +210,25 @@ private struct ProfileForm: View {
             Section(L("Что синхронизировать")) {
                 ForEach(Sync.Item.allCases) { item in
                     let hostless = item == .snippets || item == .agents
-                    Toggle(item.title, isOn: Binding(get: { profile.items.contains(item) },
-                                                     set: { if $0 { profile.items.insert(item) } else { profile.items.remove(item) } }))
-                        .disabled(hostless && !profile.scope.allHosts)
-                        .help(hostless && !profile.scope.allHosts ? L("Только для профиля «все хосты»") : "")
+                    Toggle(
+                        item.title,
+                        isOn: Binding(
+                            get: { profile.items.contains(item) },
+                            set: { if $0 { profile.items.insert(item) } else { profile.items.remove(item) } })
+                    )
+                    .disabled(hostless && !profile.scope.allHosts)
+                    .help(hostless && !profile.scope.allHosts ? L("Только для профиля «все хосты»") : "")
                 }
                 // П4: ключи лежат в репозитории, но этот профиль их не берёт — сказать почему и предложить включить.
                 if sync.remoteHasKeys(profile), !profile.items.contains(.keys) || !sync.hasPassphrase {
                     Label {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(profile.items.contains(.keys)
-                                 ? L("Пароль шифрования ключей не задан — ключи не загружаются. Задайте тот же пароль, что на другой машине.")
-                                 : L("Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине."))
+                            Text(
+                                profile.items.contains(.keys)
+                                    ? L("Пароль шифрования ключей не задан — ключи не загружаются. Задайте тот же пароль, что на другой машине.")
+                                    : L(
+                                        "Пункт «SSH-ключи» выключен — ключи не загружаются. Включите его и задайте тот же пароль шифрования, что на другой машине."
+                                    ))
                             if !profile.items.contains(.keys) {
                                 Button(L("Включить")) { profile.items.insert(.keys) }
                             }
@@ -215,17 +241,23 @@ private struct ProfileForm: View {
                 if profile.items.contains(.keys) {
                     LabeledContent(L("Пароль ключей")) {
                         HStack {
-                            SecureField("", text: $passphrase,
-                                        prompt: Text(sync.keysWithoutPassword ? L("без пароля")
-                                                     : sync.hasPassphrase ? L("сохранён в Keychain") : L("не задан")))
-                                .labelsHidden()
-                                .focused($passphraseFocused)
+                            SecureField(
+                                "", text: $passphrase,
+                                prompt: Text(
+                                    sync.keysWithoutPassword
+                                        ? L("без пароля")
+                                        : sync.hasPassphrase ? L("сохранён в Keychain") : L("не задан"))
+                            )
+                            .labelsHidden()
+                            .focused($passphraseFocused)
                             // Пустое поле — синхронизация без пароля, но только после подтверждения ниже.
                             Button(L("Сохранить")) {
-                                if passphrase.isEmpty { confirmEmptyPassphrase = true }
-                                else {
-                                    do { try sync.setPassphrase(passphrase); passphrase = ""; passphraseError = nil }
-                                    catch { passphraseError = error.localizedDescription }
+                                if passphrase.isEmpty {
+                                    confirmEmptyPassphrase = true
+                                } else {
+                                    do { try sync.setPassphrase(passphrase); passphrase = ""; passphraseError = nil } catch {
+                                        passphraseError = error.localizedDescription
+                                    }
                                 }
                             }
                             .disabled(passphrase.isEmpty && sync.keysWithoutPassword)
@@ -238,13 +270,17 @@ private struct ProfileForm: View {
                         Label {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(L("Синхронизировать ключи без пароля?")).bold()
-                                Text(L("Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы. Из истории git их уже не убрать — если передумаете, ключи придётся заменить."))
+                                Text(
+                                    L(
+                                        "Это небезопасно: приватные ключи попадут в репозиторий фактически открытыми, и любой с доступом к нему сможет войти на ваши серверы. Из истории git их уже не убрать — если передумаете, ключи придётся заменить."
+                                    ))
                                 HStack {
-                                    Button(L("Отмена")) { confirmEmptyPassphrase = false; passphraseFocused = true }
-                                        .keyboardShortcut(.cancelAction)
+                                    Button(L("Отмена")) {
+                                        confirmEmptyPassphrase = false; passphraseFocused = true
+                                    }
+                                    .keyboardShortcut(.cancelAction)
                                     Button(L("Синхронизировать без пароля"), role: .destructive) {
-                                        do { try sync.allowKeysWithoutPassword(); passphraseError = nil }
-                                        catch { passphraseError = error.localizedDescription }
+                                        do { try sync.allowKeysWithoutPassword(); passphraseError = nil } catch { passphraseError = error.localizedDescription }
                                         confirmEmptyPassphrase = false
                                     }
                                 }
@@ -275,8 +311,12 @@ private struct ProfileForm: View {
                                 .accessibilityLabel(L("Предупреждение"))
                         }
                     }
-                    Text(L("Ключи шифруются этим паролем до отправки; на другом Mac введите тот же пароль. Существующие ключи с тем же именем не перезаписываются."))
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text(
+                        L(
+                            "Ключи шифруются этим паролем до отправки; на другом Mac введите тот же пароль. Существующие ключи с тем же именем не перезаписываются."
+                        )
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
                 }
                 Text(L("Пароли от серверов не синхронизируются никогда. Удаления передаются на другие машины; если удаляется сразу много, Relaya спросит."))
                     .font(.caption).foregroundStyle(.secondary)
@@ -288,8 +328,10 @@ private struct ProfileForm: View {
                     HStack {
                         switch state {
                         case .idle:
-                            Text(sync.lastSync(profile).map { L("синхронизировано %@", $0.formatted(.relative(presentation: .named))) }
-                                 ?? L("ещё не синхронизировалось")).foregroundStyle(.secondary)
+                            Text(
+                                sync.lastSync(profile).map { L("синхронизировано %@", $0.formatted(.relative(presentation: .named))) }
+                                    ?? L("ещё не синхронизировалось")
+                            ).foregroundStyle(.secondary)
                         case .syncing:
                             ProgressView().controlSize(.small)
                             Text(L("синхронизация…")).foregroundStyle(.secondary)
@@ -358,18 +400,25 @@ struct ConflictSheet: View {
                 }
             }
             HStack {
-                Button(L("Отложить")) { Task { await model.sync.postpone(profileID); dismiss() } }
+                Button(L("Отложить")) {
+                    Task {
+                        await model.sync.postpone(profileID); dismiss()
+                    }
+                }
                 Spacer()
                 Button(L("Применить")) {
                     let choices = Dictionary(uniqueKeysWithValues: conflicts.map { ($0.path, keepMine[$0.path] ?? true) })
-                    Task { await model.sync.resolve(profileID, choices); dismiss() }
+                    Task {
+                        await model.sync.resolve(profileID, choices); dismiss()
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
             }
         }
         .padding(20)
-        .frame(minWidth: 640, idealWidth: 820, maxWidth: .infinity, minHeight: 420, idealHeight: 560, maxHeight: .infinity)  // UI-M3: лист не больше экрана MacBook Air 13"
+        // UI-M3: the sheet never outgrows a 13" MacBook Air screen.
+        .frame(minWidth: 640, idealWidth: 820, maxWidth: .infinity, minHeight: 420, idealHeight: 560, maxHeight: .infinity)
     }
 
     private func version(_ title: String, _ text: String, chosen: Bool) -> some View {
@@ -382,8 +431,10 @@ struct ConflictSheet: View {
             }
             .frame(height: 220)
             .background(Color(nsColor: .textBackgroundColor), in: .rect(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(chosen ? Color.accentColor : Color.secondary.opacity(0.3),
-                                                                     lineWidth: chosen ? 2 : 0.5))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6).strokeBorder(
+                    chosen ? Color.accentColor : Color.secondary.opacity(0.3),
+                    lineWidth: chosen ? 2 : 0.5))
         }
         .frame(maxWidth: .infinity)
     }
@@ -398,7 +449,8 @@ struct SyncToolbarButton: View {
         let sync = model.sync
         Button {
             if let p = sync.activeProfiles.first(where: { if case .conflict = sync.state($0) { true } else { false } }),
-               case .conflict(let c) = sync.state(p) {
+                case .conflict(let c) = sync.state(p)
+            {
                 conflict = (p.id, c)
             } else {
                 Task { await sync.syncAll() }
@@ -411,13 +463,15 @@ struct SyncToolbarButton: View {
             case .idle: Label(L("Синхронизировать"), systemImage: "arrow.triangle.2.circlepath")
             }
         }
-        .help({
-            switch sync.overall {
-            case .failed(let m): return m
-            case .conflict: return L("Конфликт синхронизации — нажмите, чтобы разобрать")
-            default: return L("Синхронизировать все профили")
-            }
-        }())
+        .help(
+            {
+                switch sync.overall {
+                case .failed(let m): return m
+                case .conflict: return L("Конфликт синхронизации — нажмите, чтобы разобрать")
+                default: return L("Синхронизировать все профили")
+                }
+            }()
+        )
         .sheet(isPresented: Binding(get: { conflict != nil }, set: { if !$0 { conflict = nil } })) {
             if let conflict { ConflictSheet(profileID: conflict.0, conflicts: conflict.1).environment(model) }
         }
@@ -436,8 +490,11 @@ struct PendingDeletionsSheet: View {
             Form {
                 Section {
                     ForEach(items) { item in
-                        Toggle(isOn: Binding(get: { checked.contains(item.id) },
-                                             set: { if $0 { checked.insert(item.id) } else { checked.remove(item.id) } })) {
+                        Toggle(
+                            isOn: Binding(
+                                get: { checked.contains(item.id) },
+                                set: { if $0 { checked.insert(item.id) } else { checked.remove(item.id) } })
+                        ) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(item.name)
                                 Text("\(Self.kindTitle(item.kind)) · \(item.machine) · \(item.deletedAt)")
@@ -448,7 +505,10 @@ struct PendingDeletionsSheet: View {
                 } header: {
                     Text(L("Синхронизация хочет удалить %@ элемент(ов)", "\(items.count)"))
                 } footer: {
-                    Text(L("Удаления пришли с другой машины. Отмеченное будет удалено, остальное останется и больше не будет предлагаться к удалению. Перед удалением делается резервная копия."))
+                    Text(
+                        L(
+                            "Удаления пришли с другой машины. Отмеченное будет удалено, остальное останется и больше не будет предлагаться к удалению. Перед удалением делается резервная копия."
+                        ))
                 }
             }
             .formStyle(.grouped)

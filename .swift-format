@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "indentation": {
+    "spaces": 4
+  },
+  "lineLength": 160,
+  "maximumBlankLines": 1,
+  "respectsExistingLineBreaks": true,
+  "lineBreakBeforeEachArgument": false,
+  "rules": {
+    "AlwaysUseLowerCamelCase": false,
+    "DoNotUseSemicolons": false,
+    "OneVariableDeclarationPerLine": false,
+    "OrderedImports": true,
+    "NoAssignmentInExpressions": false,
+    "UseLetInEveryBoundCaseVariable": false,
+    "ReplaceForEachWithForLoop": false,
+    "NoParensAroundConditions": true
+  }
+}

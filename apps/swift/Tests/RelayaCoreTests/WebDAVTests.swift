@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import RelayaCore
 
 struct WebDAVTests {
@@ -22,10 +23,11 @@ struct WebDAVTests {
     }
 
     @Test func multistatusAndHelpers() {
-        let xml = String(decoding: WebDAV.multistatus([
-            .init(href: "/t/web/", name: "web", isDirectory: true, size: 0, modified: Date(timeIntervalSince1970: 0)),
-            .init(href: "/t/web/a & b.txt", name: "a & b.txt", isDirectory: false, size: 12, modified: Date(timeIntervalSince1970: 0)),
-        ]), as: UTF8.self)
+        let xml = String(
+            decoding: WebDAV.multistatus([
+                .init(href: "/t/web/", name: "web", isDirectory: true, size: 0, modified: Date(timeIntervalSince1970: 0)),
+                .init(href: "/t/web/a & b.txt", name: "a & b.txt", isDirectory: false, size: 12, modified: Date(timeIntervalSince1970: 0)),
+            ]), as: UTF8.self)
         #expect(xml.contains("<D:collection/>"))
         #expect(xml.contains("<D:getcontentlength>12</D:getcontentlength>"))
         #expect(xml.contains("a%20&amp;%20b.txt") || xml.contains("a%20%26%20b.txt"))

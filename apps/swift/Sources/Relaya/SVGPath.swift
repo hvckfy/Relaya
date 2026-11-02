@@ -8,9 +8,12 @@ struct SVGPathShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         let s = min(rect.width, rect.height) / 24
-        return path.applying(CGAffineTransform(scaleX: s, y: s)
-            .concatenating(CGAffineTransform(translationX: rect.minX + (rect.width - 24 * s) / 2,
-                                             y: rect.minY + (rect.height - 24 * s) / 2)))
+        return path.applying(
+            CGAffineTransform(scaleX: s, y: s)
+                .concatenating(
+                    CGAffineTransform(
+                        translationX: rect.minX + (rect.width - 24 * s) / 2,
+                        y: rect.minY + (rect.height - 24 * s) / 2)))
     }
 }
 
@@ -63,7 +66,8 @@ enum SVGPathParser {
                 path.addQuadCurve(to: p, control: q); cur = p; quad = q
             case UInt8(ascii: "a"):
                 guard let rx = t.number(), let ry = t.number(), let rot = t.number(),
-                      let large = t.flag(), let sweep = t.flag(), let p = pt() else { break }
+                    let large = t.flag(), let sweep = t.flag(), let p = pt()
+                else { break }
                 arc(&path, from: cur, to: p, rx: rx, ry: ry, rotation: rot, large: large, sweep: sweep)
                 cur = p
             case UInt8(ascii: "z"):
@@ -79,8 +83,10 @@ enum SVGPathParser {
     }
 
     /// Дуга SVG (endpoint) → кубические кривые.
-    private static func arc(_ path: inout Path, from p0: CGPoint, to p1: CGPoint, rx: Double, ry: Double,
-                            rotation: Double, large: Bool, sweep: Bool) {
+    private static func arc(
+        _ path: inout Path, from p0: CGPoint, to p1: CGPoint, rx: Double, ry: Double,
+        rotation: Double, large: Bool, sweep: Bool
+    ) {
         var rx = abs(rx), ry = abs(ry)
         guard rx > 0, ry > 0, p0 != p1 else { path.addLine(to: p1); return }
         let phi = rotation * .pi / 180, cosP = cos(phi), sinP = sin(phi)
@@ -114,8 +120,9 @@ enum SVGPathParser {
         for _ in 0..<segments {
             let b = a + step
             let pa = point(a), pb = point(b), da = deriv(a), db = deriv(b)
-            path.addCurve(to: pb, control1: CGPoint(x: pa.x + k * da.x, y: pa.y + k * da.y),
-                          control2: CGPoint(x: pb.x - k * db.x, y: pb.y - k * db.y))
+            path.addCurve(
+                to: pb, control1: CGPoint(x: pa.x + k * da.x, y: pa.y + k * da.y),
+                control2: CGPoint(x: pb.x - k * db.x, y: pb.y - k * db.y))
             a = b
         }
     }
@@ -155,12 +162,16 @@ enum SVGPathParser {
             var dot = false, digits = false
             while i < s.count {
                 let c = s[i]
-                if c >= 48 && c <= 57 { digits = true; i += 1 }
-                else if c == 46, !dot { dot = true; i += 1 }
-                else if (c == 101 || c == 69), digits {
+                if c >= 48 && c <= 57 {
+                    digits = true; i += 1
+                } else if c == 46, !dot {
+                    dot = true; i += 1
+                } else if c == 101 || c == 69, digits {
                     i += 1
                     if i < s.count, s[i] == 45 || s[i] == 43 { i += 1 }
-                } else { break }
+                } else {
+                    break
+                }
             }
             guard digits else { i = begin; return nil }
             return Double(String(decoding: s[begin..<i], as: UTF8.self))

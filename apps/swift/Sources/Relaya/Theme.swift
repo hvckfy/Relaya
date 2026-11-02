@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Цвета интерфейса. Каждый токен — динамический NSColor: берёт значение из текущей
 /// темы оформления (`ThemeStore.current`) и её светлого или тёмного варианта.
@@ -8,24 +8,26 @@ enum Theme {
     static let bg2 = token(\.bg2)
     static let side = token(\.side)
     /// Фон панелей сессий (файлы SFTP) поверх картинки фона.
-    static let session = Color(nsColor: NSColor(name: nil) { appearance in
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let a = ThemeStore.sessionOpacity
-        if ThemeStore.native { return NSColor(white: isDark ? 0.13 : 0.93, alpha: a) }
-        let theme = ThemeStore.current
-        return NSColor(hex: (isDark ? theme.dark : theme.light).bg, alpha: a)
-    })
+    static let session = Color(
+        nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let a = ThemeStore.sessionOpacity
+            if ThemeStore.native { return NSColor(white: isDark ? 0.13 : 0.93, alpha: a) }
+            let theme = ThemeStore.current
+            return NSColor(hex: (isDark ? theme.dark : theme.light).bg, alpha: a)
+        })
 
     /// Фон разделов в рабочей области: с картинкой фона — полупрозрачный.
-    static let content = Color(nsColor: NSColor(name: nil) { appearance in
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let a = ThemeStore.contentOpacity
-        if ThemeStore.native {
-            return NSColor(white: isDark ? 0.13 : 0.93, alpha: a)
-        }
-        let theme = ThemeStore.current
-        return NSColor(hex: (isDark ? theme.dark : theme.light).bg, alpha: a)
-    })
+    static let content = Color(
+        nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let a = ThemeStore.contentOpacity
+            if ThemeStore.native {
+                return NSColor(white: isDark ? 0.13 : 0.93, alpha: a)
+            }
+            let theme = ThemeStore.current
+            return NSColor(hex: (isDark ? theme.dark : theme.light).bg, alpha: a)
+        })
     static let bar = token(\.bar)
     static let line = token(\.tx, light: 0.12, dark: 0.13)
     static let line2 = token(\.tx, light: 0.06, dark: 0.07)
@@ -46,14 +48,15 @@ enum Theme {
     static let termTx = dynamicNS(0x1D1D1F, 0xE8E8EA)
 
     static func token(_ key: KeyPath<UIColors, UInt32> & Sendable, light: Double = 1, dark: Double = 1) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            if ThemeStore.native, let system = systemColors[key] {
-                return system.withAlphaComponent(isDark ? dark : light)
-            }
-            let theme = ThemeStore.current
-            return NSColor(hex: (isDark ? theme.dark : theme.light)[keyPath: key], alpha: isDark ? dark : light)
-        })
+        Color(
+            nsColor: NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                if ThemeStore.native, let system = systemColors[key] {
+                    return system.withAlphaComponent(isDark ? dark : light)
+                }
+                let theme = ThemeStore.current
+                return NSColor(hex: (isDark ? theme.dark : theme.light)[keyPath: key], alpha: isDark ? dark : light)
+            })
     }
 
     /// Системные цвета macOS для каждого токена — в нативном стиле окна.
@@ -86,10 +89,11 @@ enum Theme {
 
 extension NSColor {
     convenience init(hex: UInt32, alpha: Double = 1) {
-        self.init(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-                  green: CGFloat((hex >> 8) & 0xFF) / 255,
-                  blue: CGFloat(hex & 0xFF) / 255,
-                  alpha: alpha)
+        self.init(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha)
     }
 }
 
@@ -244,13 +248,13 @@ extension View {
     /// Собирается и старым Xcode — тогда ничего не делает.
     @ViewBuilder func relayaGlass<S: Shape>(_ shape: S) -> some View {
         #if compiler(>=6.2)
-        if ThemeStore.glass, #available(macOS 26, *) {
-            self.glassEffect(.regular, in: shape)
-        } else {
-            self
-        }
+            if ThemeStore.glass, #available(macOS 26, *) {
+                self.glassEffect(.regular, in: shape)
+            } else {
+                self
+            }
         #else
-        self
+            self
         #endif
     }
 }

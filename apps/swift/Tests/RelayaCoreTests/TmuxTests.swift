@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import RelayaCore
 
 struct TmuxTests {
@@ -43,8 +44,9 @@ struct TmuxTests {
     @Test func staleEnforcesCap() {
         let now = Date(timeIntervalSince1970: 10_000)
         let s = (0..<12).map { i in
-            TmuxSession(name: String(format: "relaya-a--%08x", i), attached: 0, created: now,
-                        activity: Date(timeIntervalSince1970: 9_000 + Double(i)), detachedAt: now)
+            TmuxSession(
+                name: String(format: "relaya-a--%08x", i), attached: 0, created: now,
+                activity: Date(timeIntervalSince1970: 9_000 + Double(i)), detachedAt: now)
         }
         #expect(Tmux.stale(s, alias: "a", open: [], ttlMinutes: 60, now: now) == ["relaya-a--00000000", "relaya-a--00000001"])
     }

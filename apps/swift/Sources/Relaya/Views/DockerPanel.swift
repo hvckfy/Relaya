@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Контейнеры Docker на хосте: статус, логи, оболочка внутри, запуск/остановка/перезапуск.
 /// Если Docker на хосте нет — блок не показывается.
@@ -28,15 +28,20 @@ struct DockerPanel: View {
                 }
             case .permissionDenied?:
                 section(count: nil) {
-                    message(L("Нет прав на Docker. Добавьте пользователя в группу docker (sudo usermod -aG docker $USER) и войдите заново, или подключайтесь под root."))
+                    message(
+                        L(
+                            "Нет прав на Docker. Добавьте пользователя в группу docker (sudo usermod -aG docker $USER) и войдите заново, или подключайтесь под root."
+                        ))
                 }
             case .failed(let m)?:
                 section(count: nil) { message(m) }
             }
         }
-        .confirmationDialog(L("Остановить контейнер «%@»?", confirmStop?.name ?? ""),
-                            isPresented: Binding(get: { confirmStop != nil }, set: { if !$0 { confirmStop = nil } }),
-                            presenting: confirmStop) { c in
+        .confirmationDialog(
+            L("Остановить контейнер «%@»?", confirmStop?.name ?? ""),
+            isPresented: Binding(get: { confirmStop != nil }, set: { if !$0 { confirmStop = nil } }),
+            presenting: confirmStop
+        ) { c in
             Button(L("Остановить"), role: .destructive) { Task { await model.dockerAction("stop", c, on: host) } }
         }
     }
@@ -97,7 +102,9 @@ struct DockerPanel: View {
                     } else {
                         Button(L("Запустить")) { Task { await model.dockerAction("start", c, on: host) } }
                     }
-                } label: { Image(systemName: "ellipsis") }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             }
         }

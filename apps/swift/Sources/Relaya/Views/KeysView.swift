@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Экран «Ключи»: пары ключей из ~/.ssh и инспектор.
 struct KeysView: View {
@@ -33,15 +33,16 @@ struct KeysView: View {
 
             HStack(spacing: 0) {
                 keysTable
-                .overlay {
-                    if loading { ProgressView() }
-                    else if keys.isEmpty {
-                        VStack(spacing: 8) {
-                            Text(L("В ~/.ssh нет ключей")).foregroundStyle(Theme.tx2)
-                            Button(L("Сгенерировать ed25519")) { generate = true }.buttonStyle(.relayaPrimary)
+                    .overlay {
+                        if loading {
+                            ProgressView()
+                        } else if keys.isEmpty {
+                            VStack(spacing: 8) {
+                                Text(L("В ~/.ssh нет ключей")).foregroundStyle(Theme.tx2)
+                                Button(L("Сгенерировать ed25519")) { generate = true }.buttonStyle(.relayaPrimary)
+                            }
                         }
                     }
-                }
 
                 if let key = keys.first(where: { $0.id == selection }) {
                     Rectangle().fill(Theme.line).frame(width: 0.5)
@@ -72,19 +73,24 @@ struct KeysView: View {
                 Task { await addToAgent(key, passphrase: phrase) }
             }
         }
-        .confirmationDialog(L("Переместить %@ в Корзину?", "\(confirmDelete?.name ?? "")"),
-                            isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
-                            presenting: confirmDelete) { key in
+        .confirmationDialog(
+            L("Переместить %@ в Корзину?", "\(confirmDelete?.name ?? "")"),
+            isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
+            presenting: confirmDelete
+        ) { key in
             Button(L("В Корзину"), role: .destructive) { trash(key) }
         } message: { key in
             let names = hosts(using: key).map(\.alias)
-            Text(names.isEmpty
-                 ? L("Ключ не указан ни у одного хоста в ~/.ssh/config. Файлы можно будет восстановить из Корзины.")
-                 : L("Перестанут подключаться по этому ключу: %@. Файлы можно будет восстановить из Корзины.", "\(names.joined(separator: ", "))"))
+            Text(
+                names.isEmpty
+                    ? L("Ключ не указан ни у одного хоста в ~/.ssh/config. Файлы можно будет восстановить из Корзины.")
+                    : L("Перестанут подключаться по этому ключу: %@. Файлы можно будет восстановить из Корзины.", "\(names.joined(separator: ", "))"))
         }
         .alert(L("Ключи"), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
-        } message: { Text(message ?? "") }
+        } message: {
+            Text(message ?? "")
+        }
     }
 
     // Отдельно от body: иначе компилятор не успевает вывести типы всего экрана.
@@ -152,7 +158,10 @@ struct KeysView: View {
             } header: {
                 Text(L("Используется хостами · %@", "\(using.count)"))
             } footer: {
-                Text(L("Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента. Git-серверы (User git) не показываются в списке хостов и не синхронизируются."))
+                Text(
+                    L(
+                        "Выбранные хосты и git-серверы ходят только с этим ключом (IdentitiesOnly), без перебора ключей агента. Git-серверы (User git) не показываются в списке хостов и не синхронизируются."
+                    ))
             }
 
             Section {
@@ -180,7 +189,6 @@ struct KeysView: View {
         .formStyle(.grouped)
     }
 
-
     /// Хосты ключа — по всем IdentityFile (ядро), как и в инспекторе.
     private func hosts(using key: SSHKey) -> [SSHHost] {
         let aliases = Set((try? model.store.loadDocument().text).map { KeyHosts.hosts($0, key: key.path) } ?? [])
@@ -195,11 +203,12 @@ struct KeysView: View {
         if selection == nil { selection = keys.first?.id }
     }
 
-    static let agentHelp = L("""
-    ssh-agent — системная служба macOS, которая держит ключи расшифрованными в памяти.
-    Ключ «в агенте»: ssh использует его без ввода passphrase (она сохраняется в Keychain), и его можно пробросить на сервер через ForwardAgent.
-    Минус: если в агенте много ключей, ssh перебирает их все, и сервер может оборвать вход («Too many authentication failures») раньше, чем спросит пароль.
-    """)
+    static let agentHelp = L(
+        """
+        ssh-agent — системная служба macOS, которая держит ключи расшифрованными в памяти.
+        Ключ «в агенте»: ssh использует его без ввода passphrase (она сохраняется в Keychain), и его можно пробросить на сервер через ForwardAgent.
+        Минус: если в агенте много ключей, ssh перебирает их все, и сервер может оборвать вход («Too many authentication failures») раньше, чем спросит пароль.
+        """)
 
     private func removeFromAgent(_ key: SSHKey) async {
         do {
@@ -332,8 +341,11 @@ private struct DeployKeySheet: View {
                 .font(.system(size: 12)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
             List(model.hosts) { h in
                 HStack {
-                    Toggle(isOn: Binding(get: { chosen.contains(h.alias) },
-                                         set: { if $0 { chosen.insert(h.alias) } else { chosen.remove(h.alias) } })) {
+                    Toggle(
+                        isOn: Binding(
+                            get: { chosen.contains(h.alias) },
+                            set: { if $0 { chosen.insert(h.alias) } else { chosen.remove(h.alias) } })
+                    ) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(h.alias)
                             Text(h.subtitle).font(.system(size: 11)).foregroundStyle(Theme.tx2)
@@ -355,8 +367,10 @@ private struct DeployKeySheet: View {
             failures
             HStack {
                 Spacer()
-                Button(results.isEmpty ? L("Отмена") : L("Закрыть")) { done(); dismiss() }
-                    .buttonStyle(.relaya).keyboardShortcut(.cancelAction).disabled(working)
+                Button(results.isEmpty ? L("Отмена") : L("Закрыть")) {
+                    done(); dismiss()
+                }
+                .buttonStyle(.relaya).keyboardShortcut(.cancelAction).disabled(working)
                 Button(L("Разложить")) { Task { await run() } }
                     .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
                     .disabled(chosen.isEmpty || working)
@@ -386,7 +400,8 @@ private struct DeployKeySheet: View {
         for host in model.hosts where chosen.contains(host.alias) {
             results[host.alias] = .running
             do {
-                let secret: KeyInstaller.SecretRef? = model.keychain.hasPassword(for: host.keychainAccount)
+                let secret: KeyInstaller.SecretRef? =
+                    model.keychain.hasPassword(for: host.keychainAccount)
                     ? .init(store: model.keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil
                 try await installer.install(publicKey: key.publicKey, alias: host.alias, password: secret)
                 try await installer.verify(alias: host.alias, keyPath: key.path)
@@ -424,7 +439,10 @@ private struct KeyHostsSheet: View {
                 } header: {
                     Text(L("Серверы"))
                 } footer: {
-                    Text(L("Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.bak."))
+                    Text(
+                        L(
+                            "Для выбранных в ~/.ssh/config ставится IdentityFile этого ключа и IdentitiesOnly yes — ssh не будет перебирать другие ключи агента. Перед записью делается копия config.bak."
+                        ))
                 }
                 Section {
                     ForEach(all.filter(isGit), id: \.self) { alias in row(alias) }
@@ -437,7 +455,9 @@ private struct KeyHostsSheet: View {
                 } header: {
                     Text(L("Git-серверы"))
                 } footer: {
-                    Text(L("GitHub, GitLab, свой Gitea или Forgejo: вход как git с этим ключом. Git-серверы не показываются среди хостов и не синхронизируются."))
+                    Text(
+                        L("GitHub, GitLab, свой Gitea или Forgejo: вход как git с этим ключом. Git-серверы не показываются среди хостов и не синхронизируются.")
+                    )
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
@@ -459,8 +479,11 @@ private struct KeyHostsSheet: View {
     }
 
     private func row(_ alias: String) -> some View {
-        Toggle(isOn: Binding(get: { selected.contains(alias) },
-                             set: { if $0 { selected.insert(alias) } else { selected.remove(alias) } })) {
+        Toggle(
+            isOn: Binding(
+                get: { selected.contains(alias) },
+                set: { if $0 { selected.insert(alias) } else { selected.remove(alias) } })
+        ) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(alias)
                 if let h = model.hosts.first(where: { $0.alias == alias }) {

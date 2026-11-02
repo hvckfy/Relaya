@@ -20,8 +20,10 @@ public final class MCPServer {
     private let execute: Executor
     private let confirm: Confirmer
 
-    public init(hosts: @escaping () -> [SSHHost], policy: @escaping () -> MCPPolicy, log: MCPLog?,
-                execute: @escaping Executor, confirm: @escaping Confirmer) {
+    public init(
+        hosts: @escaping () -> [SSHHost], policy: @escaping () -> MCPPolicy, log: MCPLog?,
+        execute: @escaping Executor, confirm: @escaping Confirmer
+    ) {
         self.hosts = hosts
         self.policy = policy
         self.log = log
@@ -47,8 +49,9 @@ public final class MCPServer {
                     args += ["-o", "BatchMode=yes"]
                 }
                 do {
-                    return try await ProcessRunner.run("/usr/bin/ssh", args + [host.alias, command],
-                                                       environment: env, timeout: timeout)
+                    return try await ProcessRunner.run(
+                        "/usr/bin/ssh", args + [host.alias, command],
+                        environment: env, timeout: timeout)
                 } catch {
                     return ProcessResult(status: -1, stdout: "", stderr: error.localizedDescription)
                 }
@@ -93,7 +96,9 @@ public final class MCPServer {
             let sem = DispatchSemaphore(value: 0)
             // Поток ядра ждёт здесь, пока задача не закончится, — гонки нет.
             let work = UncheckedSendable(value: body)
-            Task.detached { box.value = await work.value(); sem.signal() }
+            Task.detached {
+                box.value = await work.value(); sem.signal()
+            }
             sem.wait()
             return box.value!
         }
@@ -105,8 +110,10 @@ public final class MCPServer {
             let h = SSHHost(rust: host), run = owner.execute
             let r = wait { await run(h, command, .seconds(Int(timeoutSeconds))) }
             // Остановку по таймауту агент видит словами, а не как «код выхода 15».
-            let stderr = r.timedOut ? [r.stderr, L("Команда остановлена: превышен таймаут %@ с", "\(timeoutSeconds)")]
-                .filter { !$0.isEmpty }.joined(separator: "\n") : r.stderr
+            let stderr =
+                r.timedOut
+                ? [r.stderr, L("Команда остановлена: превышен таймаут %@ с", "\(timeoutSeconds)")]
+                    .filter { !$0.isEmpty }.joined(separator: "\n") : r.stderr
             return ExecResult(status: r.timedOut ? 124 : r.status, stdout: r.stdout, stderr: stderr)
         }
 
@@ -117,8 +124,9 @@ public final class MCPServer {
 
         func log(entry: McpLogEntry) {
             let f = ISO8601DateFormatter()
-            var e = MCPLogEntry(date: f.date(from: entry.date) ?? Date(), client: entry.client, tool: entry.tool, host: entry.host,
-                                detail: entry.detail, decision: entry.decision, exitCode: entry.exitCode)
+            var e = MCPLogEntry(
+                date: f.date(from: entry.date) ?? Date(), client: entry.client, tool: entry.tool, host: entry.host,
+                detail: entry.detail, decision: entry.decision, exitCode: entry.exitCode)
             e.session = entry.session.flatMap(UUID.init(uuidString:))
             e.changes = entry.changes
             e.output = entry.output
@@ -166,19 +174,20 @@ public final class MCPServer {
     static func askWithButtons(host: SSHHost, command: String, client: String) async -> Bool {
         func esc(_ s: String) -> String { s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
         // Команда целиком: подтверждать можно только то, что видно (обрезаем лишь совсем огромные, с пометкой).
-        let shown = command.count > 4000
+        let shown =
+            command.count > 4000
             ? String(command.prefix(4000)) + "\n" + L("… (ещё %@ символов — отклоните)", "\(command.count - 4000)") : command
         let tags = host.tags.isEmpty ? "" : " [\(host.tags.joined(separator: ", "))]"
         let (deny, allow) = (esc(L("Запретить")), esc(L("Разрешить")))
         let question = esc(L("%@ хочет выполнить на %@", client, host.alias)) + esc(tags)
         let script = """
-        set answer to display dialog "\(question):\n\n\(esc(shown))" ¬
-            with title "\(esc(L("Relaya — запрос агента")))" buttons {"\(deny)", "\(allow)"} default button "\(deny)" ¬
-            cancel button "\(deny)" with icon caution giving up after 120
-        if gave up of answer then error number -128
-        if button returned of answer is "\(allow)" then return "RELAYA_ALLOW"
-        return "RELAYA_DENY"
-        """
+            set answer to display dialog "\(question):\n\n\(esc(shown))" ¬
+                with title "\(esc(L("Relaya — запрос агента")))" buttons {"\(deny)", "\(allow)"} default button "\(deny)" ¬
+                cancel button "\(deny)" with icon caution giving up after 120
+            if gave up of answer then error number -128
+            if button returned of answer is "\(allow)" then return "RELAYA_ALLOW"
+            return "RELAYA_DENY"
+            """
         // Ответ — ASCII: у процесса MCP бывает локаль без UTF-8, и osascript печатает кириллицу как «?»,
         // из-за чего «Разрешить» не совпадало и любое разрешение считалось отказом.
         guard let r = try? await ProcessRunner.run("/usr/bin/osascript", ["-e", script]) else { return false }

@@ -1,6 +1,6 @@
-import SwiftUI
-import SwiftTerm
 import RelayaCore
+import SwiftTerm
+import SwiftUI
 
 /// Вкладки сессий (34 pt, как в макете Main).
 struct SessionTabBar: View {
@@ -16,17 +16,24 @@ struct SessionTabBar: View {
                 }
             }
             if model.tileableSessions.count >= 2 {
-                ToggleIcon(on: model.gridMode, systemImage: "square.grid.2x2",
-                           label: L("Сетка: все терминалы сразу"), tint: Theme.acc) { model.gridMode.toggle() }
+                ToggleIcon(
+                    on: model.gridMode, systemImage: "square.grid.2x2",
+                    label: L("Сетка: все терминалы сразу"), tint: Theme.acc
+                ) { model.gridMode.toggle() }
             }
             if model.terminalSessions.count >= 2 {
-                ToggleIcon(on: model.broadcastInput, systemImage: "dot.radiowaves.left.and.right",
-                           label: L("Ввод во все терминалы"), tint: Theme.red) { model.broadcastInput.toggle() }
+                ToggleIcon(
+                    on: model.broadcastInput, systemImage: "dot.radiowaves.left.and.right",
+                    label: L("Ввод во все терминалы"), tint: Theme.red
+                ) { model.broadcastInput.toggle() }
             }
             IconButton(systemImage: "plus", label: L("Новая вкладка"), size: 34) {
                 if case .tmux(let w)? = model.activeSession?.kind { w.client.newWindow(); return }
-                if let host = model.activeSession?.host ?? model.selectedHost { model.connect(host) }
-                else if let d = model.selectedDesktop { model.openDesktop(d) }
+                if let host = model.activeSession?.host ?? model.selectedHost {
+                    model.connect(host)
+                } else if let d = model.selectedDesktop {
+                    model.openDesktop(d)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -53,8 +60,11 @@ private struct SessionTab: View {
         HStack(spacing: 8) {
             Image(systemName: session.systemImage)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(session.controller?.ended == true ? Theme.tx2.opacity(0.4)
-                                 : tabTint ?? Theme.tx2)
+                .foregroundStyle(
+                    session.controller?.ended == true
+                        ? Theme.tx2.opacity(0.4)
+                        : tabTint ?? Theme.tx2
+                )
                 .frame(width: 14)
             if model.receivesBroadcast(session) {
                 Image(systemName: "dot.radiowaves.left.and.right")
@@ -97,16 +107,22 @@ private struct SessionTab: View {
         .onHover { hovering = $0 }
         .padding(.vertical, 4)
         .contentShape(.rect)
-        .onTapGesture { model.activeSessionID = session.id; model.screen = .hosts }
+        .onTapGesture {
+            model.activeSessionID = session.id; model.screen = .hosts
+        }
         .onDrag {
             model.draggingSessionID = session.id
             return NSItemProvider(object: session.id.uuidString as NSString)
         }
         .contextMenu {
             if let c = session.controller {
-                Toggle(L("Сессия tmux"), isOn: Binding(get: { c.tmuxName != nil },
-                                                      set: { model.setTmux($0, for: session) }))
-                    .help(L("Вкладка переподключится: при включении — внутри tmux, при выключении сессия на сервере закроется."))
+                Toggle(
+                    L("Сессия tmux"),
+                    isOn: Binding(
+                        get: { c.tmuxName != nil },
+                        set: { model.setTmux($0, for: session) })
+                )
+                .help(L("Вкладка переподключится: при включении — внутри tmux, при выключении сессия на сервере закроется."))
             }
             if let c = session.controller {
                 Button(c.logURL == nil ? L("Записывать сессию в файл") : L("Остановить запись сессии")) { c.toggleLogging() }
@@ -122,7 +138,6 @@ private struct SessionTab: View {
         }
     }
 }
-
 
 /// Кнопка-переключатель в полосе вкладок.
 private struct ToggleIcon: View {

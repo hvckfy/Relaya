@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Экран «Агенты (MCP)»: подключение к AI-клиентам, права по хостам, журнал.
 struct AgentsView: View {
@@ -60,8 +60,12 @@ struct AgentsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L("Агенты (MCP)")).font(.system(size: 20, weight: .bold))
-                        Text(L("AI-агенты (Claude, Cursor и другие) работают с вашими серверами через Relaya. Ключи им не передаются — команды выполняет ваш ssh, с вашими правами доступа."))
-                            .foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
+                        Text(
+                            L(
+                                "AI-агенты (Claude, Cursor и другие) работают с вашими серверами через Relaya. Ключи им не передаются — команды выполняет ваш ssh, с вашими правами доступа."
+                            )
+                        )
+                        .foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
                     Toggle(L("Доступ включён"), isOn: $policy.enabled).toggleStyle(.switch)
@@ -148,12 +152,16 @@ struct AgentsView: View {
                                             policy.grants = g
                                         }
                                     }
-                                } label: { Image(systemName: "clock.badge") }
+                                } label: {
+                                    Image(systemName: "clock.badge")
+                                }
                                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                                 .help(L("Временный доступ: потом вернётся обычный режим"))
                                 .accessibilityLabel(L("Временный доступ"))
-                                modePicker(Binding(get: { policy.hosts[h.alias] ?? policy.defaultMode },
-                                                   set: { policy.hosts[h.alias] = $0 }))
+                                modePicker(
+                                    Binding(
+                                        get: { policy.hosts[h.alias] ?? policy.defaultMode },
+                                        set: { policy.hosts[h.alias] = $0 }))
                             }
                         }
                         Divider().overlay(Theme.line2).gridCellColumns(4)
@@ -164,8 +172,12 @@ struct AgentsView: View {
                             Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                         }
                     }
-                    Text(L("«Только чтение» — безопасные команды (ls, cat, df, journalctl, docker ps…) без перенаправлений и sudo. «С подтверждением» — каждую команду вы одобряете в системном окне; без ответа за 2 минуты — отказ."))
-                        .font(.system(size: 11)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        L(
+                            "«Только чтение» — безопасные команды (ls, cat, df, journalctl, docker ps…) без перенаправлений и sudo. «С подтверждением» — каждую команду вы одобряете в системном окне; без ответа за 2 минуты — отказ."
+                        )
+                    )
+                    .font(.system(size: 11)).foregroundStyle(Theme.tx2).fixedSize(horizontal: false, vertical: true)
                 }
                 .disabled(!policy.enabled)
 
@@ -204,7 +216,9 @@ struct AgentsView: View {
                         .frame(width: 220)
                         Spacer()
                         Button(L("Обновить")) { log = MCPLog().recent() }.buttonStyle(.relaya(.normal, height: 24))
-                        Button(L("Очистить")) { MCPLog().clear(); log = [] }.buttonStyle(.relaya(.ghost, height: 24))
+                        Button(L("Очистить")) {
+                            MCPLog().clear(); log = []
+                        }.buttonStyle(.relaya(.ghost, height: 24))
                     }
                     if log.isEmpty {
                         Text(L("Пока пусто.")).foregroundStyle(Theme.tx2)
@@ -252,7 +266,9 @@ struct AgentsView: View {
     private struct RulesTarget: Identifiable { let id: String }
 
     private func rulesButton(for alias: String) -> some View {
-        let count = alias == "*" ? (policy.allow?["*"]?.count ?? 0) + (policy.deny?["*"]?.count ?? 0)
+        let count =
+            alias == "*"
+            ? (policy.allow?["*"]?.count ?? 0) + (policy.deny?["*"]?.count ?? 0)
             : policy.allowPatterns(for: alias).count + policy.denyPatterns(for: alias).count
         return Button(count > 0 ? L("Правила (%@)", "\(count)") : L("Правила")) { rulesHost = alias }
             .buttonStyle(.relaya(.ghost, height: 22))
@@ -307,7 +323,9 @@ private struct RulesEditor: View {
             HStack {
                 Spacer()
                 Button(L("Отмена")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(L("Сохранить")) { save(); dismiss() }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
+                Button(L("Сохранить")) {
+                    save(); dismiss()
+                }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
             }
         }
         .padding(20)

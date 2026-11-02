@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Экран «Рабочие столы»: VNC и RDP, в т.ч. через SSH-туннель.
 struct DesktopsView: View {
@@ -23,8 +23,12 @@ struct DesktopsView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "display.2").font(.system(size: 32, weight: .light)).foregroundStyle(Theme.tx2)
                     Text(L("Нет рабочих столов")).font(.system(size: 15, weight: .bold))
-                    Text(L("VNC и RDP открываются прямо в окне Relaya.\nПароль хранится в Keychain, можно подключаться через SSH-туннель.\n«Общий экран» и Windows App — запасной вариант в меню «…»."))
-                        .multilineTextAlignment(.center).foregroundStyle(Theme.tx2)
+                    Text(
+                        L(
+                            "VNC и RDP открываются прямо в окне Relaya.\nПароль хранится в Keychain, можно подключаться через SSH-туннель.\n«Общий экран» и Windows App — запасной вариант в меню «…»."
+                        )
+                    )
+                    .multilineTextAlignment(.center).foregroundStyle(Theme.tx2)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -69,12 +73,16 @@ struct DesktopsView: View {
                 Button(L("Изменить…")) { editing = d }
                 Divider()
                 Button(L("Удалить…"), role: .destructive) {
-                    model.pendingRemoval = PendingDelete(title: L("Удалить «%@»?", d.displayName),
-                                                        message: L("Подключение к рабочему столу и его сохранённые пароли будут удалены.")) {
+                    model.pendingRemoval = PendingDelete(
+                        title: L("Удалить «%@»?", d.displayName),
+                        message: L("Подключение к рабочему столу и его сохранённые пароли будут удалены.")
+                    ) {
                         model.deleteDesktop(d)
                     }
                 }
-            } label: { Image(systemName: "ellipsis") }
+            } label: {
+                Image(systemName: "ellipsis")
+            }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         }
         .padding(12)
@@ -102,37 +110,49 @@ struct DesktopEditor: View {
                 .pickerStyle(.segmented)
                 .onChange(of: desktop.kind) { _, k in portText = String(k.defaultPort) }
                 TextField(L("Название"), text: $desktop.name)
-                TextField(L("Группа"), text: Binding(get: { desktop.group ?? "" },
-                                                     set: { desktop.group = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }),
-                          prompt: Text(L("необязательно")))
+                TextField(
+                    L("Группа"),
+                    text: Binding(
+                        get: { desktop.group ?? "" },
+                        set: { desktop.group = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }),
+                    prompt: Text(L("необязательно")))
                 Toggle(L("Через SSH-туннель"), isOn: $useSSH)
                 if useSSH {
                     Picker(L("SSH-хост"), selection: Binding(get: { desktop.viaSSHHost ?? "" }, set: { desktop.viaSSHHost = $0 })) {
                         ForEach(model.hosts) { Text($0.alias).tag($0.alias) }
                     }
                 }
-                TextField(useSSH ? L("Адрес с точки зрения сервера") : L("Адрес"), text: $desktop.address,
-                          prompt: Text(useSSH ? "localhost" : "192.168.1.10"))
+                TextField(
+                    useSSH ? L("Адрес с точки зрения сервера") : L("Адрес"), text: $desktop.address,
+                    prompt: Text(useSSH ? "localhost" : "192.168.1.10"))
                 TextField(L("Порт"), text: $portText)
                 TextField(L("Пользователь"), text: $desktop.user, prompt: Text(L("необязательно")))
                 if desktop.kind == .vnc, !useSSH {
                     // V-SEC-1: VNC не проверяет сервер и не шифрует трафик — без SSH-туннеля его можно подслушать.
-                    Label(L("VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Включите «Через SSH-туннель», если сеть не доверенная."),
-                          systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(.orange)
+                    Label(
+                        L(
+                            "VNC без SSH-туннеля не шифрует экран и ввод и не проверяет, тот ли это сервер. Включите «Через SSH-туннель», если сеть не доверенная."
+                        ),
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption).foregroundStyle(.orange)
                 }
                 if desktop.kind == .rdp {
-                    Picker(L("Разрешение"), selection: Binding(
-                        get: { desktop.rdpWidth.flatMap { w in desktop.rdpHeight.map { "\(w)x\($0)" } } ?? "fit" },
-                        set: { v in
-                            let parts = v.split(separator: "x").compactMap { Int($0) }
-                            desktop.rdpWidth = parts.count == 2 ? parts[0] : nil
-                            desktop.rdpHeight = parts.count == 2 ? parts[1] : nil
-                        })) {
+                    Picker(
+                        L("Разрешение"),
+                        selection: Binding(
+                            get: { desktop.rdpWidth.flatMap { w in desktop.rdpHeight.map { "\(w)x\($0)" } } ?? "fit" },
+                            set: { v in
+                                let parts = v.split(separator: "x").compactMap { Int($0) }
+                                desktop.rdpWidth = parts.count == 2 ? parts[0] : nil
+                                desktop.rdpHeight = parts.count == 2 ? parts[1] : nil
+                            })
+                    ) {
                         Text(L("По размеру окна (подстраивается на лету)")).tag("fit")
                         ForEach(RemoteDesktop.rdpResolutionPresets, id: \.0) { w, h in Text("\(w) × \(h)").tag("\(w)x\(h)") }
                         if let w = desktop.rdpWidth, let h = desktop.rdpHeight,
-                           !RemoteDesktop.rdpResolutionPresets.contains(where: { $0 == (w, h) }) {
+                            !RemoteDesktop.rdpResolutionPresets.contains(where: { $0 == (w, h) })
+                        {
                             Text("\(w) × \(h)").tag("\(w)x\(h)")
                         }
                     }
@@ -207,8 +227,9 @@ struct DesktopEditor: View {
     }
 
     private func optional(_ key: WritableKeyPath<RemoteDesktop, String?>) -> Binding<String> {
-        Binding(get: { desktop[keyPath: key] ?? "" },
-                set: { desktop[keyPath: key] = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 })
+        Binding(
+            get: { desktop[keyPath: key] ?? "" },
+            set: { desktop[keyPath: key] = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 })
     }
 
     private var result: RemoteDesktop {

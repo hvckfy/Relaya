@@ -57,8 +57,10 @@ public enum ProcessRunner {
                 }
                 process.terminationHandler = { p in
                     eof.notify(queue: .global()) {
-                        continuation.resume(returning: ProcessResult(status: p.terminationStatus, stdout: stdout.string,
-                                                                     stderr: stderr.string, timedOut: expired.value))
+                        continuation.resume(
+                            returning: ProcessResult(
+                                status: p.terminationStatus, stdout: stdout.string,
+                                stderr: stderr.string, timedOut: expired.value))
                     }
                 }
                 if box.cancelled {

@@ -1,4 +1,5 @@
 import Testing
+
 @testable import RelayaCore
 
 @Suite struct PasswordPromptTests {
@@ -40,8 +41,11 @@ import Testing
 @Suite struct KeyFingerprintTests {
     @Test func parsesKeygenOutput() {
         let fp = KeyFingerprint.parse("256 SHA256:Xq3vN1abc heckfy@macbook-air · web (ED25519)\n")
-        #expect(fp == KeyFingerprint(bits: 256, fingerprint: "SHA256:Xq3vN1abc",
-                                     comment: "heckfy@macbook-air · web", type: "ed25519"))
+        #expect(
+            fp
+                == KeyFingerprint(
+                    bits: 256, fingerprint: "SHA256:Xq3vN1abc",
+                    comment: "heckfy@macbook-air · web", type: "ed25519"))
     }
 
     @Test func rejectsGarbage() {

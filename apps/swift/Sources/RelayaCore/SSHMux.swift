@@ -12,7 +12,8 @@ public enum SSHMux {
     /// запускает команды).
     public static func options(alias: String) -> [String] {
         guard KeyInstaller.passwordMayBeAutomated(alias: alias),
-              let dir = try? sshMuxDir(base: NSTemporaryDirectory()) else { return [] }
+            let dir = try? sshMuxDir(base: NSTemporaryDirectory())
+        else { return [] }
         let path = sshMuxControlPath(dir: dir, alias: alias)
         lock.withLock { paths[alias] = path }
         return sshMuxOptions(controlPath: path)
@@ -20,7 +21,9 @@ public enum SSHMux {
 
     /// Закрыть все master-соединения: выход из приложения, блокировка экрана, сон.
     public static func closeAll() {
-        let all = lock.withLock { defer { paths.removeAll() }; return paths }
+        let all = lock.withLock {
+            defer { paths.removeAll() }; return paths
+        }
         for (alias, path) in all {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")

@@ -28,9 +28,10 @@ public enum SSHConfigParser {
 
 extension SSHHost {
     init(rust h: RelayaRust.SshHost) {
-        self.init(alias: h.alias, hostName: h.hostName, user: h.user, port: h.port.map(Int.init), identityFile: h.identityFile,
-                  proxyJump: h.proxyJump, forwardAgent: h.forwardAgent, serverAliveInterval: h.serverAliveInterval.map(Int.init),
-                  compression: h.compression, group: h.group, tags: h.tags, color: h.color, os: h.os.flatMap(ServerOS.init(rust:)))
+        self.init(
+            alias: h.alias, hostName: h.hostName, user: h.user, port: h.port.map(Int.init), identityFile: h.identityFile,
+            proxyJump: h.proxyJump, forwardAgent: h.forwardAgent, serverAliveInterval: h.serverAliveInterval.map(Int.init),
+            compression: h.compression, group: h.group, tags: h.tags, color: h.color, os: h.os.flatMap(ServerOS.init(rust:)))
         tmux = h.tmux
         identityFiles = h.identityFiles
         forwardAgentValue = h.forwardAgentValue
@@ -44,9 +45,10 @@ extension SSHHost {
     }
 
     var rust: RelayaRust.SshHost {
-        RelayaRust.SshHost(alias: alias, hostName: hostName, user: user, port: port.map(Int64.init), identityFile: identityFile,
-                           proxyJump: proxyJump, forwardAgent: forwardAgent, serverAliveInterval: serverAliveInterval.map(Int64.init),
-                           compression: compression, group: group, tags: tags, color: color, os: os?.rust, tmux: tmux,
-                           identityFiles: identityFileList, forwardAgentValue: forwardAgentValue, compressionValue: compressionValue)
+        RelayaRust.SshHost(
+            alias: alias, hostName: hostName, user: user, port: port.map(Int64.init), identityFile: identityFile,
+            proxyJump: proxyJump, forwardAgent: forwardAgent, serverAliveInterval: serverAliveInterval.map(Int64.init),
+            compression: compression, group: group, tags: tags, color: color, os: os?.rust, tmux: tmux,
+            identityFiles: identityFileList, forwardAgentValue: forwardAgentValue, compressionValue: compressionValue)
     }
 }

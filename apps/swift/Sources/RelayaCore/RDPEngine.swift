@@ -34,11 +34,13 @@ public final class RDPEngine: @unchecked Sendable {
         /// Проверенная библиотека OpenH264 (OpenH264.libraryPath); nil — без H.264.
         public var h264LibraryPath: String?
 
-        public init(host: String, port: Int, user: String, password: String, domain: String?,
-                    width: Int, height: Int, scalePercent: Int, trustedCertificate: String?,
-                    trustedNodes: [String: String] = [:],
-                    gatewayHost: String? = nil, gatewayUser: String? = nil, gatewayPassword: String? = nil,
-                    gatewayDomain: String? = nil, h264LibraryPath: String? = nil) {
+        public init(
+            host: String, port: Int, user: String, password: String, domain: String?,
+            width: Int, height: Int, scalePercent: Int, trustedCertificate: String?,
+            trustedNodes: [String: String] = [:],
+            gatewayHost: String? = nil, gatewayUser: String? = nil, gatewayPassword: String? = nil,
+            gatewayDomain: String? = nil, h264LibraryPath: String? = nil
+        ) {
             self.host = host; self.port = port; self.user = user; self.password = password; self.domain = domain
             self.width = width; self.height = height; self.scalePercent = scalePercent
             self.trustedCertificate = trustedCertificate
@@ -84,16 +86,17 @@ public final class RDPEngine: @unchecked Sendable {
     public init(config c: Config, events: Events) {
         listener = Listener(events)
         session = RemoteSession.rdp(
-            config: RdpConfig(host: c.host, port: UInt16(clamping: c.port), user: c.user, password: c.password, domain: c.domain,
-                              width: UInt16(clamping: c.width), height: UInt16(clamping: c.height),
-                              scalePercent: UInt32(clamping: c.scalePercent), trustedCertSha256: c.trustedCertificate,
-                              trustedCerts: c.trustedNodes.compactMap { key, sha in
-                                  guard let i = key.lastIndex(of: ":"), let port = UInt16(key[key.index(after: i)...]) else { return nil }
-                                  return TrustedCert(host: String(key[..<i]), port: port, sha256: sha)
-                              },
-                              gatewayHost: c.gatewayHost, gatewayUser: c.gatewayUser, gatewayPassword: c.gatewayPassword,
-                              gatewayDomain: c.gatewayDomain,
-                              h264LibraryPath: c.h264LibraryPath),
+            config: RdpConfig(
+                host: c.host, port: UInt16(clamping: c.port), user: c.user, password: c.password, domain: c.domain,
+                width: UInt16(clamping: c.width), height: UInt16(clamping: c.height),
+                scalePercent: UInt32(clamping: c.scalePercent), trustedCertSha256: c.trustedCertificate,
+                trustedCerts: c.trustedNodes.compactMap { key, sha in
+                    guard let i = key.lastIndex(of: ":"), let port = UInt16(key[key.index(after: i)...]) else { return nil }
+                    return TrustedCert(host: String(key[..<i]), port: port, sha256: sha)
+                },
+                gatewayHost: c.gatewayHost, gatewayUser: c.gatewayUser, gatewayPassword: c.gatewayPassword,
+                gatewayDomain: c.gatewayDomain,
+                h264LibraryPath: c.h264LibraryPath),
             listener: listener)
         // Звук и буфер обмена — до connect: иначе сервер не предложит каналы.
         session.setClipboardListener(listener: listener)
@@ -125,22 +128,25 @@ public final class RDPEngine: @unchecked Sendable {
         func onResize(width: UInt16, height: UInt16) { events.resized(Int(width), Int(height)) }
         func onCert(sha256: String, subject: String, node: CertNode) { events.certificate(sha256, subject, node) }
         func onClosed(close: RemoteClose) {
-            let kind: CloseKind = switch close.kind {
-            case .authFailed: .authFailed
-            case .network: .network
-            case .serverClosed: .serverClosed
-            case .certRejected: .certRejected
-            case .protocol: .protocolError
-            case .closedByUser: .closedByUser
-            case .credentialsRequired: .credentialsRequired
-            case .accountProblem: .accountProblem
-            }
+            let kind: CloseKind =
+                switch close.kind {
+                case .authFailed: .authFailed
+                case .network: .network
+                case .serverClosed: .serverClosed
+                case .certRejected: .certRejected
+                case .protocol: .protocolError
+                case .closedByUser: .closedByUser
+                case .credentialsRequired: .credentialsRequired
+                case .accountProblem: .accountProblem
+                }
             events.closed(kind, close.message)
         }
         func onRemoteClipboard(text: String) { events.clipboard(text) }
         func onAudio(format: RelayaRust.AudioFormat, timestamp: UInt32, pcm: Data) {
-            events.audio(AudioFormat(sampleRate: Int(format.sampleRate), channels: Int(format.channels),
-                                     bitsPerSample: Int(format.bitsPerSample)), pcm)
+            events.audio(
+                AudioFormat(
+                    sampleRate: Int(format.sampleRate), channels: Int(format.channels),
+                    bitsPerSample: Int(format.bitsPerSample)), pcm)
         }
         func onAudioVolume(left: UInt16, right: UInt16) { events.audioVolume(Double(max(left, right)) / 65535) }
         func onAudioClosed() {}

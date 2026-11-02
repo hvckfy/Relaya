@@ -45,9 +45,10 @@ public enum WebDAV {
     }
 
     public static func multistatus(_ entries: [Entry]) -> Data {
-        davMultistatus(entries: entries.map {
-            DavEntry(href: $0.href, name: $0.name, isDirectory: $0.isDirectory, size: $0.size, modified: $0.modified.timeIntervalSince1970)
-        })
+        davMultistatus(
+            entries: entries.map {
+                DavEntry(href: $0.href, name: $0.name, isDirectory: $0.isDirectory, size: $0.size, modified: $0.modified.timeIntervalSince1970)
+            })
     }
 
     /// Ответ на LOCK: Finder без него подключает диск только для чтения. Блокировка условная.
@@ -94,14 +95,18 @@ public enum WebDAV {
 
     /// Что сделать по запросу и каким кодом ответить (после проверки пароля).
     public static func decide(_ req: Request, prefix: String, root: String) -> Action {
-        davDecide(method: req.method, path: req.path, destination: req.header("destination"),
-                  overwrite: req.header("overwrite"), prefix: prefix, root: root)
+        davDecide(
+            method: req.method, path: req.path, destination: req.header("destination"),
+            overwrite: req.header("overwrite"), prefix: prefix, root: root)
     }
 
-    public static func transferPlan(source: String, destination: String, isMove: Bool, overwrite: Bool,
-                                    destinationExists: Bool) -> TransferPlan {
-        davTransferPlan(source: source, destination: destination, isMove: isMove, overwrite: overwrite,
-                        destinationExists: destinationExists)
+    public static func transferPlan(
+        source: String, destination: String, isMove: Bool, overwrite: Bool,
+        destinationExists: Bool
+    ) -> TransferPlan {
+        davTransferPlan(
+            source: source, destination: destination, isMove: isMove, overwrite: overwrite,
+            destinationExists: destinationExists)
     }
 
     public static func deleteCommand(_ remote: String) -> String { davDeleteCommand(remote: remote) }

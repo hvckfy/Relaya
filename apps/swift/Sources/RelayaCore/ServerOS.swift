@@ -74,7 +74,9 @@ extension ServerOS {
     /// Пункты меню «Вход по паролю».
     public var passwordLoginActions: [OSAction] {
         guard self != .windows else { return [] }
-        return [OSAction(L("Разрешить вход по паролю"), passwordLoginCommand(enabled: true), needsRoot: true),
-                OSAction(L("Запретить вход по паролю"), passwordLoginCommand(enabled: false), needsRoot: true)]
+        return [
+            OSAction(L("Разрешить вход по паролю"), passwordLoginCommand(enabled: true), needsRoot: true),
+            OSAction(L("Запретить вход по паролю"), passwordLoginCommand(enabled: false), needsRoot: true),
+        ]
     }
 }

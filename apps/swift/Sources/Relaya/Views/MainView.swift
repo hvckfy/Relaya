@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Главное окно: sidebar · вкладки · хлебные крошки · терминал · статус-бар.
 struct MainView: View {
@@ -29,16 +29,21 @@ struct MainView: View {
                 if !model.allTags.isEmpty {
                     Menu {
                         ForEach(model.allTags, id: \.self) { tag in
-                            Toggle(tag, isOn: Binding(get: { model.tagFilter.contains(tag) },
-                                                      set: { _ in model.toggleTagFilter(tag) }))
+                            Toggle(
+                                tag,
+                                isOn: Binding(
+                                    get: { model.tagFilter.contains(tag) },
+                                    set: { _ in model.toggleTagFilter(tag) }))
                         }
                         if !model.tagFilter.isEmpty {
                             Divider()
                             Button(L("Сбросить фильтр меток")) { model.tagFilter = [] }
                         }
                     } label: {
-                        Label(L("Метки"), systemImage: model.tagFilter.isEmpty
-                              ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        Label(
+                            L("Метки"),
+                            systemImage: model.tagFilter.isEmpty
+                                ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                     }
                     .help(L("Фильтр по меткам"))
                 }
@@ -66,12 +71,18 @@ struct MainView: View {
         // Без своей заливки тулбара: сайдбар идёт на всю высоту окна (как в Finder),
         // а над рабочей областью виден её фон.
         .deleteConfirmation($model.pendingRemoval)
-        .sheet(isPresented: Binding(get: { !model.sync.pendingDeletions.isEmpty },
-                                    set: { if !$0, !model.sync.pendingDeletions.isEmpty { model.sync.resolveDeletions(confirm: []) } })) {
+        .sheet(
+            isPresented: Binding(
+                get: { !model.sync.pendingDeletions.isEmpty },
+                set: { if !$0, !model.sync.pendingDeletions.isEmpty { model.sync.resolveDeletions(confirm: []) } })
+        ) {
             PendingDeletionsSheet(items: model.sync.pendingDeletions) { model.sync.resolveDeletions(confirm: $0) }
         }
-        .sheet(isPresented: Binding(get: { !model.sync.agentEscalations.isEmpty },
-                                    set: { if !$0, !model.sync.agentEscalations.isEmpty { model.sync.resolveAgentEscalations(accept: false) } })) {
+        .sheet(
+            isPresented: Binding(
+                get: { !model.sync.agentEscalations.isEmpty },
+                set: { if !$0, !model.sync.agentEscalations.isEmpty { model.sync.resolveAgentEscalations(accept: false) } })
+        ) {
             AgentEscalationsSheet(items: model.sync.agentEscalations) { model.sync.resolveAgentEscalations(accept: $0) }
         }
         .sheet(item: $model.desktopEditor) { d in
@@ -115,36 +126,45 @@ struct MainView: View {
         }
         .confirmationDialog(
             L("Запретить вход по паролю на «%@»?", "\(model.pendingDisablePassword?.alias ?? "")"),
-            isPresented: Binding(get: { model.pendingDisablePassword != nil },
-                                 set: { if !$0 { model.pendingDisablePassword = nil } }),
+            isPresented: Binding(
+                get: { model.pendingDisablePassword != nil },
+                set: { if !$0 { model.pendingDisablePassword = nil } }),
             presenting: model.pendingDisablePassword
         ) { host in
             Button(L("Запретить"), role: .destructive) { model.setPasswordLogin(false, on: host) }
         } message: { host in
-            Text(host.usesKey
-                 ? L("Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу %@.", "\(host.identityFile ?? "")")
-                 : L("У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу."))
+            Text(
+                host.usesKey
+                    ? L("Откроется вкладка и выполнит команду на сервере. Входить можно будет только по ключу %@.", "\(host.identityFile ?? "")")
+                    : L("У хоста не указан ключ! Если на сервере нет вашего ключа, вы потеряете доступ. Сначала настройте вход по ключу."))
         }
         .confirmationDialog(
             L("Разрешить вход по паролю на «%@»?", "\(model.pendingEnablePassword?.alias ?? "")"),
-            isPresented: Binding(get: { model.pendingEnablePassword != nil },
-                                 set: { if !$0 { model.pendingEnablePassword = nil } }),
+            isPresented: Binding(
+                get: { model.pendingEnablePassword != nil },
+                set: { if !$0 { model.pendingEnablePassword = nil } }),
             presenting: model.pendingEnablePassword
         ) { host in
             Button(L("Разрешить")) { model.setPasswordLogin(true, on: host) }
         } message: { _ in
             Text(L("Это слабее, чем вход только по ключу: пароль можно подобрать. Откроется вкладка и выполнит команду на сервере."))
         }
-        .alert(L("Открыть в Finder"), isPresented: Binding(get: { model.finderMountRequest != nil },
-                                                          set: { if !$0 { model.finderMountRequest = nil } }),
-               presenting: model.finderMountRequest) { host in
+        .alert(
+            L("Открыть в Finder"),
+            isPresented: Binding(
+                get: { model.finderMountRequest != nil },
+                set: { if !$0 { model.finderMountRequest = nil } }),
+            presenting: model.finderMountRequest
+        ) { host in
             FinderMountActions(host: host)
         } message: { host in
             Text(L("Какую папку на %@ подключить как диск? / — весь сервер, ~ — домашняя папка.", host.alias))
         }
-        .alert(L("Переименовать раскладку"),
-               isPresented: Binding(get: { model.renamingLayout != nil }, set: { if !$0 { model.renamingLayout = nil } }),
-               presenting: model.renamingLayout) { saved in
+        .alert(
+            L("Переименовать раскладку"),
+            isPresented: Binding(get: { model.renamingLayout != nil }, set: { if !$0 { model.renamingLayout = nil } }),
+            presenting: model.renamingLayout
+        ) { saved in
             RenameLayoutActions(saved: saved)
         }
         .alert(L("Сохранить раскладку"), isPresented: $model.savingLayout) {
@@ -183,8 +203,9 @@ struct MainView: View {
         } else if model.screen == .agents {
             AgentsView()
         } else if model.gridMode, model.tileableSessions.count >= 2,
-                  // VNC/RDP в плитки не входят: их вкладка показывается сама, а не сетка за ней.
-                  model.activeSession.map({ s in model.tileableSessions.contains { $0.id == s.id } }) ?? true {
+            // VNC/RDP в плитки не входят: их вкладка показывается сама, а не сетка за ней.
+            model.activeSession.map({ s in model.tileableSessions.contains { $0.id == s.id } }) ?? true
+        {
             SessionGrid()
         } else if let session = model.activeSession {
             // id привязывает содержимое к вкладке — при переключении процессы не пересоздаются.
@@ -236,10 +257,12 @@ private struct DockTarget: ViewModifier {
             let bounds = CGRect(origin: .zero, size: geo.size)
             content
                 .overlay(alignment: .topLeading) { DockHint(rect: hint) }
-                .onDrop(of: [.plainText], delegate: TileDropDelegate(
-                    model: model,
-                    frames: { model.activeSessionID.map { [$0: bounds.insetBy(dx: 28, dy: 28)] } ?? [:] },
-                    bounds: bounds, hint: $hint))
+                .onDrop(
+                    of: [.plainText],
+                    delegate: TileDropDelegate(
+                        model: model,
+                        frames: { model.activeSessionID.map { [$0: bounds.insetBy(dx: 28, dy: 28)] } ?? [:] },
+                        bounds: bounds, hint: $hint))
         }
     }
 }
@@ -309,9 +332,17 @@ private struct SplitToolbarButtons: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Button { model.splitActive(.right) } label: { Label(L("Разделить вправо"), systemImage: "rectangle.split.2x1") }
-            .help(L("Разделить вправо (⌘D)"))
-        Button { model.splitActive(.bottom) } label: { Label(L("Разделить вниз"), systemImage: "rectangle.split.1x2") }
-            .help(L("Разделить вниз (⇧⌘D)"))
+        Button {
+            model.splitActive(.right)
+        } label: {
+            Label(L("Разделить вправо"), systemImage: "rectangle.split.2x1")
+        }
+        .help(L("Разделить вправо (⌘D)"))
+        Button {
+            model.splitActive(.bottom)
+        } label: {
+            Label(L("Разделить вниз"), systemImage: "rectangle.split.1x2")
+        }
+        .help(L("Разделить вниз (⇧⌘D)"))
     }
 }

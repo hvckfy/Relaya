@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Карточка хоста без активной сессии.
 struct HostDetailView: View {
@@ -32,7 +32,11 @@ struct HostDetailView: View {
                         .buttonStyle(.relaya(.normal, height: 24))
                     }
                 } label: {
-                    Label { Text(host.os?.title ?? L("ОС не определена")) } icon: { OSIcon(os: host.os, size: 18) }
+                    Label {
+                        Text(host.os?.title ?? L("ОС не определена"))
+                    } icon: {
+                        OSIcon(os: host.os, size: 18)
+                    }
                 }
                 if !host.usesKey {
                     LabeledContent(L("Ключ не указан — скорее всего, вход по паролю.")) {
@@ -62,8 +66,10 @@ struct HostDetailView: View {
             Section(L("Аутентификация")) {
                 // Е.1: ssh этого хоста запускает программы из конфига — сохранённый пароль не подставляется (M8).
                 if !KeyInstaller.passwordMayBeAutomated(alias: host.alias) {
-                    Label(L("У хоста ProxyCommand или LocalCommand — сохранённый пароль Relaya не подставляет, введите его сами."),
-                          systemImage: "exclamationmark.shield").font(.system(size: 12)).foregroundStyle(Theme.org)
+                    Label(
+                        L("У хоста ProxyCommand или LocalCommand — сохранённый пароль Relaya не подставляет, введите его сами."),
+                        systemImage: "exclamationmark.shield"
+                    ).font(.system(size: 12)).foregroundStyle(Theme.org)
                 }
                 info(L("Ключ"), host.identityFile ?? L("по умолчанию / пароль"))
                 info(L("Агент-форвардинг"), host.forwardAgent == true ? L("да") : L("нет"))

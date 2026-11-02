@@ -1,8 +1,8 @@
 import AppKit
-import SwiftUI
 import Observation
-import SwiftTerm
 import RelayaCore
+import SwiftTerm
+import SwiftUI
 
 /// Состояние одной вкладки: распознаёт запросы ssh в выводе терминала и управляет переподключением.
 @MainActor
@@ -120,7 +120,8 @@ final class SessionController {
             hostKeyChanged = true
         }
         if tail.contains("Are you sure you want to continue connecting"),
-           tail.trimmingCharacters(in: .whitespaces).hasSuffix("?") {
+            tail.trimmingCharacters(in: .whitespaces).hasSuffix("?")
+        {
             hostKeyPrompt = Self.fingerprint(in: tail) ?? L("неизвестен")
             return
         }
@@ -178,7 +179,8 @@ final class SessionController {
 
         // Первый осмысленный вывод после ввода пароля — значит, вошли.
         if sawPasswordPrompt, !loggedIn,
-           text.contains(where: \.isLetter), !text.contains("Permission denied") {
+            text.contains(where: \.isLetter), !text.contains("Permission denied")
+        {
             loggedIn = true
             passwordPromptWithoutSaved = false
             if !host.usesKey { offerKeySetup = true }
@@ -204,7 +206,8 @@ final class SessionController {
         Task { @MainActor in
             // Touch ID перед подстановкой сохранённого пароля.
             guard await SecretGate.shared.authorize(L("Подставить сохранённый пароль для %@", host.alias)),
-                  let pw = try? keychain.password(for: host.keychainAccount) else {
+                let pw = try? keychain.password(for: host.keychainAccount)
+            else {
                 autofilled = false
                 passwordPromptWithoutSaved = true
                 return
@@ -261,8 +264,9 @@ final class SessionController {
         let asked = generation
         Task { @MainActor in
             guard await SecretGate.shared.authorize(reason),
-                  let pw = try? keychain.password(for: host.keychainAccount),
-                  asked == generation else { return }
+                let pw = try? keychain.password(for: host.keychainAccount),
+                asked == generation
+            else { return }
             tail = ""
             terminal?.sendQuiet(pw + "\r")
         }
@@ -392,10 +396,12 @@ final class SessionController {
 
     /// Вывод терминала без ANSI-последовательностей и возвратов каретки — для читаемого лога.
     static func plainText(_ text: String) -> String {
-        text.replacingOccurrences(of: #"\x1B\[[0-9;?]*[ -/]*[@-~]|\x1B\][^\x07\x1B]*(\x07|\x1B\\)|\x1B[()][A-Z0-9]|\x1B[=>]"#,
-                                  with: "", options: .regularExpression)
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "")
+        text.replacingOccurrences(
+            of: #"\x1B\[[0-9;?]*[ -/]*[@-~]|\x1B\][^\x07\x1B]*(\x07|\x1B\\)|\x1B[()][A-Z0-9]|\x1B[=>]"#,
+            with: "", options: .regularExpression
+        )
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: "\r", with: "")
     }
 
     func showFind() {
@@ -499,13 +505,17 @@ struct TerminalView: NSViewRepresentable {
         let options = controller.passwordOnly ? KeyInstaller.passwordOnlyOptions : []
         if RelayaPaths.isDemo {
             // Демо: локальная оболочка с приглашением «как на сервере», без сетевых подключений.
-            view.startProcess(executable: "/bin/bash", args: ["--noprofile", "--norc", "-i"],
-                              environment: DemoData.shellEnvironment(for: controller.host))
+            view.startProcess(
+                executable: "/bin/bash", args: ["--noprofile", "--norc", "-i"],
+                environment: DemoData.shellEnvironment(for: controller.host))
         } else {
             var args = options + [controller.host.alias]
             if let name = controller.tmuxName {
-                args = options + ["-t", controller.host.alias,
-                                  Tmux.attachCommand(name: name, ttlMinutes: controller.tmuxIdleMinutes)]
+                args =
+                    options + [
+                        "-t", controller.host.alias,
+                        Tmux.attachCommand(name: name, ttlMinutes: controller.tmuxIdleMinutes),
+                    ]
             }
             view.startProcess(executable: "/usr/bin/ssh", args: args)
         }

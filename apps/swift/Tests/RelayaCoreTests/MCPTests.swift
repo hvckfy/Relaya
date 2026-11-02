@@ -1,17 +1,22 @@
 import Foundation
 import Testing
+
 @testable import RelayaCore
 
 @Suite struct MCPPolicyTests {
-    @Test(arguments: ["df -h", "cat /etc/os-release", "journalctl -u nginx -n 50 | grep error",
-                      "docker ps", "systemctl status ssh", "ps aux | sort -rk3 | head"])
+    @Test(arguments: [
+        "df -h", "cat /etc/os-release", "journalctl -u nginx -n 50 | grep error",
+        "docker ps", "systemctl status ssh", "ps aux | sort -rk3 | head",
+    ])
     func readOnlyAllowed(_ cmd: String) {
         #expect(MCPPolicy.isReadOnly(cmd))
     }
 
-    @Test(arguments: ["rm -rf /tmp/x", "echo hi > /etc/motd", "cat a; reboot", "ls && shutdown now",
-                      "sudo cat /etc/shadow", "sed -i s/a/b/ f", "find / -delete", "echo $(whoami)",
-                      "systemctl restart nginx", "docker rm x", ""])
+    @Test(arguments: [
+        "rm -rf /tmp/x", "echo hi > /etc/motd", "cat a; reboot", "ls && shutdown now",
+        "sudo cat /etc/shadow", "sed -i s/a/b/ f", "find / -delete", "echo $(whoami)",
+        "systemctl restart nginx", "docker rm x", "",
+    ])
     func readOnlyDenied(_ cmd: String) {
         #expect(!MCPPolicy.isReadOnly(cmd))
     }
@@ -25,13 +30,18 @@ import Testing
 }
 
 @Suite struct MCPServerTests {
-    let hosts = [SSHHost(alias: "web", hostName: "1.2.3.4", user: "root", tags: ["prod"], os: .ubuntu),
-                 SSHHost(alias: "secret")]
+    let hosts = [
+        SSHHost(alias: "web", hostName: "1.2.3.4", user: "root", tags: ["prod"], os: .ubuntu),
+        SSHHost(alias: "secret"),
+    ]
 
     func server(_ policy: MCPPolicy, confirm: Bool = false, ran: @escaping @Sendable (String) -> Void = { _ in }) -> MCPServer {
-        MCPServer(hosts: { hosts }, policy: { policy }, log: nil,
-                  execute: { _, cmd, _ in ran(cmd); return ProcessResult(status: 0, stdout: "ok", stderr: "") },
-                  confirm: { _, _, _ in confirm })
+        MCPServer(
+            hosts: { hosts }, policy: { policy }, log: nil,
+            execute: { _, cmd, _ in
+                ran(cmd); return ProcessResult(status: 0, stdout: "ok", stderr: "")
+            },
+            confirm: { _, _, _ in confirm })
     }
 
     func call(_ s: MCPServer, _ name: String, _ args: [String: Any]) async -> [String: Any] {
@@ -73,11 +83,13 @@ import Testing
     }
 
     @Test func confirmRespectsDecision() async {
-        let refused = await call(server(MCPPolicy(defaultMode: .confirm), confirm: false), "run_command",
-                                 ["host": "web", "command": "reboot"])
+        let refused = await call(
+            server(MCPPolicy(defaultMode: .confirm), confirm: false), "run_command",
+            ["host": "web", "command": "reboot"])
         #expect(text(refused).contains("отклонил"))
-        let approved = await call(server(MCPPolicy(defaultMode: .confirm), confirm: true), "run_command",
-                                  ["host": "web", "command": "reboot"])
+        let approved = await call(
+            server(MCPPolicy(defaultMode: .confirm), confirm: true), "run_command",
+            ["host": "web", "command": "reboot"])
         #expect(approved["isError"] as? Bool == false)
     }
 
@@ -117,8 +129,9 @@ struct MCPRulesTests {
 
     @Test func summariesGroupChangingCommands() {
         let s = UUID()
-        var a = MCPLogEntry(client: "Claude", tool: "run_command", host: "web", detail: "systemctl restart nginx",
-                            decision: "одобрено пользователем", exitCode: 0)
+        var a = MCPLogEntry(
+            client: "Claude", tool: "run_command", host: "web", detail: "systemctl restart nginx",
+            decision: "одобрено пользователем", exitCode: 0)
         a.session = s; a.changes = true
         var b = MCPLogEntry(client: "Claude", tool: "run_command", host: "web", detail: "ls", decision: "разрешено: чтение", exitCode: 0)
         b.session = s; b.changes = false

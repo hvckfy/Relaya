@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Частые пробросы в один клик.
 struct PortPreset: Identifiable {
@@ -83,23 +83,30 @@ struct PortsPanel: View {
                 .buttonStyle(.relaya(.ghost, height: 22))
                 .help(L("Скопировать адрес"))
             }
-            Toggle("", isOn: Binding(get: { running },
-                                     set: { $0 ? model.tunnels.start(t, hosts: model.hosts) : model.tunnels.stop(t.id) }))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .labelsHidden()
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { running },
+                    set: { $0 ? model.tunnels.start(t, hosts: model.hosts) : model.tunnels.stop(t.id) })
+            )
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .labelsHidden()
             Menu {
                 Button(L("Изменить…")) { editing = t }
                 Button(L("Удалить"), role: .destructive) { model.tunnels.delete(t.id) }
-            } label: { Image(systemName: "ellipsis") }
+            } label: {
+                Image(systemName: "ellipsis")
+            }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         }
     }
 
     private func forward(_ preset: PortPreset) {
         let local = RemoteDesktop.preferredLocalPort(for: preset.remotePort)
-        let tunnel = Tunnel(name: preset.kind == .dynamic ? L("SOCKS-прокси") : preset.name, hostAlias: host.alias,
-                            kind: preset.kind, listenPort: local, targetHost: "localhost", targetPort: preset.remotePort)
+        let tunnel = Tunnel(
+            name: preset.kind == .dynamic ? L("SOCKS-прокси") : preset.name, hostAlias: host.alias,
+            kind: preset.kind, listenPort: local, targetHost: "localhost", targetPort: preset.remotePort)
         model.tunnels.upsert(tunnel)
         model.tunnels.start(tunnel, hosts: model.hosts)
     }

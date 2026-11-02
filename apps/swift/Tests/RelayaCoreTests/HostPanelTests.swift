@@ -1,22 +1,23 @@
 import Testing
+
 @testable import RelayaCore
 
 struct HostPanelTests {
     let sample = """
-    ##SERVICES
-    cron.service loaded active running Regular background program processing daemon
-    nginx.service loaded failed failed A high performance web server
-    ssh.service loaded active running OpenBSD Secure Shell server
-    ##PORTS
-    tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=612,fd=3))
-    tcp LISTEN 0 511 [::]:80 [::]:* users:(("nginx",pid=700,fd=6))
-    udp UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:* users:(("systemd-resolve",pid=500,fd=13))
-    ##ERRORS
-    2026-10-31T10:00:00+0000 web nginx[700]: bind() failed
-    ##UPDATES
-    openssl/stable 3.0.15-1 amd64 [upgradable from: 3.0.14-1]
-    curl/stable 8.5.0-2 amd64 [upgradable from: 8.5.0-1]
-    """
+        ##SERVICES
+        cron.service loaded active running Regular background program processing daemon
+        nginx.service loaded failed failed A high performance web server
+        ssh.service loaded active running OpenBSD Secure Shell server
+        ##PORTS
+        tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=612,fd=3))
+        tcp LISTEN 0 511 [::]:80 [::]:* users:(("nginx",pid=700,fd=6))
+        udp UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:* users:(("systemd-resolve",pid=500,fd=13))
+        ##ERRORS
+        2026-10-31T10:00:00+0000 web nginx[700]: bind() failed
+        ##UPDATES
+        openssl/stable 3.0.15-1 amd64 [upgradable from: 3.0.14-1]
+        curl/stable 8.5.0-2 amd64 [upgradable from: 8.5.0-1]
+        """
 
     @Test func parsesAllSections() {
         let p = HostPanel.parse(sample)

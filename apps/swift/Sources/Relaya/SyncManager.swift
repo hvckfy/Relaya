@@ -33,7 +33,8 @@ final class SyncManager {
     private static let passphraseAccount = "relaya-sync-keys"
 
     init() {
-        profiles = UserDefaults.standard.data(forKey: "syncProfiles")
+        profiles =
+            UserDefaults.standard.data(forKey: "syncProfiles")
             .flatMap { try? JSONDecoder().decode([Sync.Profile].self, from: $0) } ?? []
     }
 
@@ -59,8 +60,7 @@ final class SyncManager {
 
     /// Ошибка Keychain — наверх, в форму: иначе пользователь думал бы, что пароль сохранён.
     func setPassphrase(_ value: String) throws {
-        if value.isEmpty { try keychain.deletePassword(for: Self.passphraseAccount) }
-        else { try keychain.setPassword(value, for: Self.passphraseAccount) }
+        if value.isEmpty { try keychain.deletePassword(for: Self.passphraseAccount) } else { try keychain.setPassword(value, for: Self.passphraseAccount) }
         keysWithoutPassword = false
     }
 
@@ -183,8 +183,12 @@ final class SyncManager {
         var imported: [Sync.Item] = []
         do {
             if p.backend == .iCloud {
-                if case .synced(_, let items) = try await FolderSync.merge(p, passphrase: pass, folder: FolderSync.folder(for: p),
-                                                                            keepMine: choices) { imported = items }
+                if case .synced(_, let items) = try await FolderSync.merge(
+                    p, passphrase: pass, folder: FolderSync.folder(for: p),
+                    keepMine: choices)
+                {
+                    imported = items
+                }
             } else {
                 imported = try await git.resolve(choices, profile: p, passphrase: pass)
             }
@@ -236,10 +240,13 @@ final class SyncManager {
         pendingDeletions += Sync.takePendingDeletions().filter { p in !pendingDeletions.contains(p) }
         agentEscalations = Sync.takeAgentEscalations()
         let skipped = Sync.takeSkippedKeys()
-        skippedKeysNotice = skipped.wrongPassphrase.isEmpty && skipped.noPassphrase.isEmpty ? nil
+        skippedKeysNotice =
+            skipped.wrongPassphrase.isEmpty && skipped.noPassphrase.isEmpty
+            ? nil
             : !skipped.wrongPassphrase.isEmpty
                 ? L("Ключи не загружены — пароль шифрования ключей не подошёл: %@", skipped.wrongPassphrase.joined(separator: ", "))
-                : L("Ключи не загружены — задайте пароль шифрования ключей (тот же, что на другой машине): %@",
+                : L(
+                    "Ключи не загружены — задайте пароль шифрования ключей (тот же, что на другой машине): %@",
                     skipped.noPassphrase.joined(separator: ", "))
         if !imported.isEmpty { onImported?(imported) }
     }

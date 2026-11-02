@@ -1,8 +1,7 @@
 name: Lint
 
-# Линтеры, которые не собирают приложения: workflow (actionlint) и shell-скрипты (shellcheck).
-# Swift (swift-format), C# (dotnet format) и Rust (clippy, rustfmt) — отдельными задачами после базового
-# форматирования кода.
+# Linters that build nothing: workflows (actionlint), shell scripts (shellcheck), Swift (swift-format).
+# Rust clippy and rustfmt run in core.yml.
 
 on:
   push:
@@ -10,10 +9,14 @@ on:
     paths:
       - ".github/**"
       - "scripts/**"
+      - "apps/swift/**"
+      - ".swift-format"
   pull_request:
     paths:
       - ".github/**"
       - "scripts/**"
+      - "apps/swift/**"
+      - ".swift-format"
 
 permissions:
   contents: read
@@ -47,3 +50,17 @@ jobs:
       # shellcheck есть в образе ubuntu-24.04.
       - name: shellcheck
         run: shellcheck --version && shellcheck scripts/*.sh
+
+  swift:
+    name: "Lint · Swift (swift-format)"
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # swift-format ships with Xcode; take the newest Xcode 26, the same one mac.yml builds with.
+      - name: swift-format
+        run: |
+          XC=$(printf '%s\n' /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcrun swift-format --version
+          xcrun swift-format lint --strict --recursive --configuration .swift-format apps/swift/Sources apps/swift/Tests apps/swift/Package.swift

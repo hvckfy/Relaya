@@ -43,10 +43,12 @@ public struct KeyFingerprint: Equatable, Sendable {
     public static func parse(_ line: String) -> KeyFingerprint? {
         let parts = line.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ").map(String.init)
         guard parts.count >= 3, parts[1].contains(":"),
-              let last = parts.last, last.hasPrefix("("), last.hasSuffix(")") else { return nil }
+            let last = parts.last, last.hasPrefix("("), last.hasSuffix(")")
+        else { return nil }
         let comment = parts.count > 3 ? parts[2..<(parts.count - 1)].joined(separator: " ") : ""
-        return KeyFingerprint(bits: Int(parts[0]), fingerprint: parts[1], comment: comment,
-                              type: String(last.dropFirst().dropLast()).lowercased())
+        return KeyFingerprint(
+            bits: Int(parts[0]), fingerprint: parts[1], comment: comment,
+            type: String(last.dropFirst().dropLast()).lowercased())
     }
 }
 
@@ -78,8 +80,9 @@ public enum KeyScanner {
     public static func inspect(path: String) async -> SSHKey? {
         let pubPath = path + ".pub"
         guard let pub = try? String(contentsOfFile: pubPath, encoding: .utf8),
-              let result = try? await ProcessRunner.run("/usr/bin/ssh-keygen", ["-lf", pubPath]),
-              result.succeeded, let fp = KeyFingerprint.parse(result.stdout) else { return nil }
+            let result = try? await ProcessRunner.run("/usr/bin/ssh-keygen", ["-lf", pubPath]),
+            result.succeeded, let fp = KeyFingerprint.parse(result.stdout)
+        else { return nil }
         // Пустая passphrase подходит → ключ без защиты. Секрет ни во что не передаём.
         let probe = try? await ProcessRunner.run("/usr/bin/ssh-keygen", ["-y", "-P", "", "-f", path])
         let attrs = try? FileManager.default.attributesOfItem(atPath: path)

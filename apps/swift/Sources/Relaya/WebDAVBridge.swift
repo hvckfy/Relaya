@@ -1,6 +1,6 @@
 import AppKit
-import Network
 import NetFS
+import Network
 import RelayaCore
 
 /// «SFTP как диск в Finder»: локальный WebDAV-сервер на 127.0.0.1 со случайным портом и секретным токеном в пути,
@@ -104,13 +104,16 @@ final class WebDAVBridge {
                 // Не гостем: сервер требует Basic-аутентификацию со случайным паролем этого подключения,
                 // иначе к диску мог бы обратиться любой локальный процесс, узнавший порт и путь.
                 var points: Unmanaged<CFArray>?
-                let status = NetFSMountURLSync(url as CFURL, nil, user as CFString, password as CFString,
-                                               open, nil, &points)
+                let status = NetFSMountURLSync(
+                    url as CFURL, nil, user as CFString, password as CFString,
+                    open, nil, &points)
                 if status == 0, let list = points?.takeRetainedValue() as? [String], let first = list.first {
                     cont.resume(returning: URL(fileURLWithPath: first))
                 } else {
-                    cont.resume(throwing: NSError(domain: NSPOSIXErrorDomain, code: Int(status),
-                                                  userInfo: [NSLocalizedDescriptionKey: L("Не удалось подключить диск (код %@).", "\(status)")]))
+                    cont.resume(
+                        throwing: NSError(
+                            domain: NSPOSIXErrorDomain, code: Int(status),
+                            userInfo: [NSLocalizedDescriptionKey: L("Не удалось подключить диск (код %@).", "\(status)")]))
                 }
             }
         }
@@ -167,13 +170,18 @@ actor DAVServer {
             case let .propfind(remote, isJunk):
                 return try await propfind(req, remote: remote, isJunk: isJunk)
             case .proppatch:
-                return WebDAV.response(207, "Multi-Status", headers: ["Content-Type": "application/xml; charset=utf-8"],
-                                       body: WebDAV.multistatus([]))
+                return WebDAV.response(
+                    207, "Multi-Status", headers: ["Content-Type": "application/xml; charset=utf-8"],
+                    body: WebDAV.multistatus([]))
             case .lock:
                 let token = "opaquelocktoken:\(UUID().uuidString)"
-                return WebDAV.response(200, "OK", headers: ["Content-Type": "application/xml; charset=utf-8",
-                                                            "Lock-Token": "<\(token)>"],
-                                       body: WebDAV.lockResponse(token: token, path: req.path))
+                return WebDAV.response(
+                    200, "OK",
+                    headers: [
+                        "Content-Type": "application/xml; charset=utf-8",
+                        "Lock-Token": "<\(token)>",
+                    ],
+                    body: WebDAV.lockResponse(token: token, path: req.path))
             case .unlock:
                 return WebDAV.response(204, "No Content")
             case let .get(remote, isJunk), let .head(remote, isJunk):
@@ -189,15 +197,18 @@ actor DAVServer {
                 let tmp = try WebDAV.tempFile()
                 defer { removeTemp(tmp) }
                 try await StreamTransfer.download(ssh, remotePath: remote, to: tmp) { _ in }
-                return WebDAV.response(200, "OK", headers: ["Content-Type": "application/octet-stream"],
-                                       body: try Data(contentsOf: tmp))
+                return WebDAV.response(
+                    200, "OK", headers: ["Content-Type": "application/octet-stream"],
+                    body: try Data(contentsOf: tmp))
             case let .put(remote, isJunk):
                 if isJunk { junk[remote] = req.body; return WebDAV.response(201, "Created") }
                 let tmp = try WebDAV.tempFile()
                 defer { removeTemp(tmp) }
                 try req.body.write(to: tmp)
-                try await StreamTransfer.upload(ssh, localURL: tmp, remoteDirectory: SFTPClient.parent(of: remote),
-                                                name: (remote as NSString).lastPathComponent) { _ in }
+                try await StreamTransfer.upload(
+                    ssh, localURL: tmp, remoteDirectory: SFTPClient.parent(of: remote),
+                    name: (remote as NSString).lastPathComponent
+                ) { _ in }
                 invalidate(remote)
                 return WebDAV.response(201, "Created")
             case let .mkcol(remote):
@@ -217,8 +228,10 @@ actor DAVServer {
                     return WebDAV.response(201, "Created")
                 }
                 let existed = try await exists(destination)
-                switch WebDAV.transferPlan(source: source, destination: destination, isMove: isMove,
-                                           overwrite: overwrite, destinationExists: existed) {
+                switch WebDAV.transferPlan(
+                    source: source, destination: destination, isMove: isMove,
+                    overwrite: overwrite, destinationExists: existed)
+                {
                 case let .reply(status, reason):
                     return WebDAV.response(Int(status), reason)
                 case let .run(command, status, reason):
@@ -263,13 +276,15 @@ actor DAVServer {
                 entries.append(entry(f, href: base + f.name + (f.isDirectory ? "/" : "")))
             }
         }
-        return WebDAV.response(207, "Multi-Status", headers: ["Content-Type": "application/xml; charset=utf-8"],
-                               body: WebDAV.multistatus(entries))
+        return WebDAV.response(
+            207, "Multi-Status", headers: ["Content-Type": "application/xml; charset=utf-8"],
+            body: WebDAV.multistatus(entries))
     }
 
     private func entry(_ f: RemoteFile, href: String) -> WebDAV.Entry {
-        .init(href: href, name: f.name, isDirectory: f.isDirectory, size: f.size,
-              modified: WebDAV.date(fromListing: f.modified))
+        .init(
+            href: href, name: f.name, isDirectory: f.isDirectory, size: f.size,
+            modified: WebDAV.date(fromListing: f.modified))
     }
 
     private func list(_ dir: String) async throws -> [RemoteFile] {
@@ -291,16 +306,18 @@ actor DAVServer {
 
     /// Есть ли путь на сервере (файл, папка или ссылка).
     private func exists(_ path: String) async throws -> Bool {
-        let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, WebDAV.existsCommand(path)],
-                                            environment: ssh.environment, timeout: .seconds(60))
+        let r = try await ProcessRunner.run(
+            "/usr/bin/ssh", ssh.options + [ssh.alias, WebDAV.existsCommand(path)],
+            environment: ssh.environment, timeout: .seconds(60))
         if r.status == 0 { return true }
         if r.status == 1 { return false }
         throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message)
     }
 
     private func shell(_ command: String) async throws {
-        let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, command],
-                                            environment: ssh.environment, timeout: .seconds(120))
+        let r = try await ProcessRunner.run(
+            "/usr/bin/ssh", ssh.options + [ssh.alias, command],
+            environment: ssh.environment, timeout: .seconds(120))
         guard r.succeeded else { throw StreamTransfer.Failure(message: r.message.isEmpty ? "ssh: \(r.status)" : r.message) }
     }
 }
@@ -309,7 +326,11 @@ actor DAVServer {
 private final class Once: @unchecked Sendable {
     private let lock = NSLock()
     private var done = false
-    func fire() -> Bool { lock.withLock { defer { done = true }; return !done } }
+    func fire() -> Bool {
+        lock.withLock {
+            defer { done = true }; return !done
+        }
+    }
 }
 
 /// Одно соединение Finder: запросы по очереди, ответы в том же порядке. Всё состояние — в своей очереди.
@@ -358,10 +379,12 @@ private final class DAVConnection: @unchecked Sendable {
         Task.detached { [self] in
             let data = await handler(req)
             queue.async { [self] in
-                conn.send(content: data, completion: .contentProcessed { [self] _ in
-                    busy = false
-                    pump()
-                })
+                conn.send(
+                    content: data,
+                    completion: .contentProcessed { [self] _ in
+                        busy = false
+                        pump()
+                    })
             }
         }
     }

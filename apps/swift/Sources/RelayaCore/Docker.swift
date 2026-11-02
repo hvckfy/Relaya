@@ -41,8 +41,12 @@ public enum Docker {
     public static func parse(stdout: String, stderr: String, status: Int32) -> ListResult {
         switch dockerParse(stdout: stdout, stderr: stderr, status: status) {
         case .containers(let list):
-            return .containers(list.map { DockerContainer(id: $0.id, name: $0.name, image: $0.image, state: $0.state,
-                                                          status: $0.status, ports: $0.ports) })
+            return .containers(
+                list.map {
+                    DockerContainer(
+                        id: $0.id, name: $0.name, image: $0.image, state: $0.state,
+                        status: $0.status, ports: $0.ports)
+                })
         case .notInstalled: return .notInstalled
         case .permissionDenied: return .permissionDenied
         case .failed(let m): return .failed(m)

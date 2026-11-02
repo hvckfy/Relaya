@@ -1,6 +1,6 @@
-import SwiftUI
-import SwiftTerm
 import RelayaCore
+import SwiftTerm
+import SwiftUI
 
 /// Вкладка с окном tmux (control mode): терминал без своего процесса, данные — через соединение tmux.
 struct TmuxPaneContent: View {

@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Палитра команд ⌘K (как Spotlight / «Open Quickly» в Xcode): одно поле, нечёткий поиск
 /// по хостам, удалённым столам, сниппетам, туннелям, раскладкам и действиям; ↑↓ — выбор, ⏎ — выполнить,
@@ -51,7 +51,9 @@ struct CommandPalette: View {
                                 }
                                 row(item, selected: i == selection)
                                     .id(item.id)
-                                    .onTapGesture { selection = i; run(results, alternate: false) }
+                                    .onTapGesture {
+                                        selection = i; run(results, alternate: false)
+                                    }
                             }
                         }
                         .padding(.vertical, 6)
@@ -79,9 +81,15 @@ struct CommandPalette: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.line, lineWidth: 0.5))
         .shadow(color: .black.opacity(0.3), radius: 30, y: 12)
         .onAppear { focused = true }
-        .onKeyPress(.downArrow) { selection = min(selection + 1, max(results.count - 1, 0)); return .handled }
-        .onKeyPress(.upArrow) { selection = max(selection - 1, 0); return .handled }
-        .onKeyPress(.escape) { model.commandPalette = false; return .handled }
+        .onKeyPress(.downArrow) {
+            selection = min(selection + 1, max(results.count - 1, 0)); return .handled
+        }
+        .onKeyPress(.upArrow) {
+            selection = max(selection - 1, 0); return .handled
+        }
+        .onKeyPress(.escape) {
+            model.commandPalette = false; return .handled
+        }
         .onKeyPress(.return, phases: .down) { press in
             guard press.modifiers.contains(.command) else { return .ignored }
             run(results, alternate: true)
@@ -138,12 +146,16 @@ struct CommandPalette: View {
         let q = query.trimmingCharacters(in: .whitespaces)
         if q.isEmpty {
             let recent = model.paletteRecents.compactMap { id in all.first { $0.id == id } }
-                .map { Item(id: $0.id, title: $0.title, subtitle: $0.subtitle, systemImage: $0.systemImage,
-                            section: L("Недавние"), fields: $0.fields, run: $0.run, alternate: $0.alternate) }
+                .map {
+                    Item(
+                        id: $0.id, title: $0.title, subtitle: $0.subtitle, systemImage: $0.systemImage,
+                        section: L("Недавние"), fields: $0.fields, run: $0.run, alternate: $0.alternate)
+                }
             let rest = all.filter { item in !recent.contains { $0.id == item.id } }
             return recent + rest.filter { $0.section != L("Действия") }.prefix(12)
         }
-        return all
+        return
+            all
             .compactMap { item in FuzzyMatch.score(q, in: [item.title] + item.fields).map { (item, $0) } }
             .sorted { $0.1 > $1.1 }
             .prefix(40)
@@ -153,31 +165,43 @@ struct CommandPalette: View {
     private var items: [Item] {
         var list: [Item] = []
         for h in model.hosts where !h.isGitService {
-            list.append(Item(id: "host:" + h.alias, title: h.alias, subtitle: h.subtitle, systemImage: "terminal",
-                             section: L("Хосты"), fields: [h.subtitle, h.group ?? ""] + h.tags,
-                             run: { $0.connect(h) }, alternate: { $0.openFiles(h) }))
+            list.append(
+                Item(
+                    id: "host:" + h.alias, title: h.alias, subtitle: h.subtitle, systemImage: "terminal",
+                    section: L("Хосты"), fields: [h.subtitle, h.group ?? ""] + h.tags,
+                    run: { $0.connect(h) }, alternate: { $0.openFiles(h) }))
         }
         for d in model.desktops {
-            list.append(Item(id: "desktop:" + d.id.uuidString, title: d.displayName, subtitle: d.kind.title + " · " + d.summary,
-                             systemImage: d.kind == .vnc ? "display" : "pc", section: L("Удалённые столы"),
-                             fields: [d.summary], run: { $0.openDesktop(d) }))
+            list.append(
+                Item(
+                    id: "desktop:" + d.id.uuidString, title: d.displayName, subtitle: d.kind.title + " · " + d.summary,
+                    systemImage: d.kind == .vnc ? "display" : "pc", section: L("Удалённые столы"),
+                    fields: [d.summary], run: { $0.openDesktop(d) }))
         }
         for layout in model.savedLayouts {
-            list.append(Item(id: "layout:" + layout.id.uuidString, title: layout.name,
-                             subtitle: layout.layout.ids.joined(separator: ", "), systemImage: "square.grid.2x2",
-                             section: L("Раскладки"), fields: layout.layout.ids, run: { $0.openLayout(layout) }))
+            list.append(
+                Item(
+                    id: "layout:" + layout.id.uuidString, title: layout.name,
+                    subtitle: layout.layout.ids.joined(separator: ", "), systemImage: "square.grid.2x2",
+                    section: L("Раскладки"), fields: layout.layout.ids, run: { $0.openLayout(layout) }))
         }
         for s in model.snippets {
-            list.append(Item(id: "snippet:" + s.id.uuidString, title: s.name, subtitle: s.command, systemImage: "text.badge.plus",
-                             section: L("Сниппеты"), fields: [s.command] + s.tags,
-                             run: { m in m.paletteSnippet = s; m.snippetPalette = true }))
+            list.append(
+                Item(
+                    id: "snippet:" + s.id.uuidString, title: s.name, subtitle: s.command, systemImage: "text.badge.plus",
+                    section: L("Сниппеты"), fields: [s.command] + s.tags,
+                    run: { m in
+                        m.paletteSnippet = s; m.snippetPalette = true
+                    }))
         }
         for t in model.tunnels.tunnels {
             let running = model.tunnels.status(of: t) == .running
-            list.append(Item(id: "tunnel:" + t.id.uuidString, title: (running ? L("Остановить туннель") : L("Запустить туннель")) + " · " + t.name,
-                             subtitle: t.spec, systemImage: "arrow.left.arrow.right", section: L("Туннели"),
-                             fields: [t.name, t.spec],
-                             run: { m in running ? m.tunnels.stop(t.id) : m.tunnels.start(t, hosts: m.hosts) }))
+            list.append(
+                Item(
+                    id: "tunnel:" + t.id.uuidString, title: (running ? L("Остановить туннель") : L("Запустить туннель")) + " · " + t.name,
+                    subtitle: t.spec, systemImage: "arrow.left.arrow.right", section: L("Туннели"),
+                    fields: [t.name, t.spec],
+                    run: { m in running ? m.tunnels.stop(t.id) : m.tunnels.start(t, hosts: m.hosts) }))
         }
         let actions: [(String, String, String, @MainActor (AppModel) -> Void)] = [
             ("new-host", L("Новый хост…"), "plus", { $0.add(nil) }),
@@ -190,8 +214,11 @@ struct CommandPalette: View {
             ("grid", L("Сетка: все терминалы сразу"), "square.grid.2x2", { $0.gridMode.toggle() }),
             ("reload", L("Перечитать ~/.ssh/config"), "arrow.clockwise", { $0.reloadHosts() }),
         ]
-        list += actions.map { Item(id: "action:" + $0.0, title: $0.1, subtitle: "", systemImage: $0.2,
-                                   section: L("Действия"), run: $0.3) }
+        list += actions.map {
+            Item(
+                id: "action:" + $0.0, title: $0.1, subtitle: "", systemImage: $0.2,
+                section: L("Действия"), run: $0.3)
+        }
         return list
     }
 }

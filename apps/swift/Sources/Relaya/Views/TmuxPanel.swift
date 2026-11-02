@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Сессии tmux, которые Relaya оставила на хосте: подключиться, завершить одну или все.
 struct TmuxPanel: View {
@@ -51,9 +51,12 @@ struct TmuxPanel: View {
                 Text(L("оставлена")).font(.system(size: 11)).foregroundStyle(Theme.org)
             }
             Spacer()
-            Text(s.attached > 0 ? L("подключена")
-                 : L("без подключения %@", (s.detachedAt ?? s.activity).formatted(.relative(presentation: .named))))
-                .font(.system(size: 11.5)).foregroundStyle(Theme.tx2)
+            Text(
+                s.attached > 0
+                    ? L("подключена")
+                    : L("без подключения %@", (s.detachedAt ?? s.activity).formatted(.relative(presentation: .named)))
+            )
+            .font(.system(size: 11.5)).foregroundStyle(Theme.tx2)
             Button(L("Подключиться")) { model.connect(host, tmuxSession: s.name) }
                 .buttonStyle(.relaya(.ghost, height: 22))
                 .disabled(s.attached > 0)

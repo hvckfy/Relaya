@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Окно встроенного RDP: экран Windows, статус, ввод учётных данных.
 struct RDPWindow: View {
@@ -67,8 +67,10 @@ struct RDPContent: View {
                     HStack {
                         Button(L("Подключить снова")) { Task { await session.start() } }.buttonStyle(.relayaPrimary)
                         if session.certificateMismatch {
-                            Button(L("Сбросить доверие")) { session.forgetCertificate(); Task { await session.start() } }
-                                .buttonStyle(.relaya)
+                            Button(L("Сбросить доверие")) {
+                                session.forgetCertificate(); Task { await session.start() }
+                            }
+                            .buttonStyle(.relaya)
                         }
                     }
                 }
@@ -101,7 +103,9 @@ struct RDPContent: View {
                 .help(L("Общий буфер обмена с удалённым столом"))
             }
             ToolbarItem {
-                Button { session.toggleFullScreen() } label: {
+                Button {
+                    session.toggleFullScreen()
+                } label: {
                     Label(L("Во весь экран"), systemImage: "arrow.up.left.and.arrow.down.right")
                 }
                 .help(L("Во весь экран (⌃⌘F)"))
@@ -111,12 +115,18 @@ struct RDPContent: View {
                     Button(L("Ctrl+Alt+Del")) { session.sendCtrlAltDel() }
                     Button(L("Клавиша Windows")) { session.sendWindowsKey() }
                     Button(L("Alt+Tab")) { session.sendAltTab() }
-                } label: { Label(L("Отправить сочетание"), systemImage: "keyboard") }
+                } label: {
+                    Label(L("Отправить сочетание"), systemImage: "keyboard")
+                }
                 .disabled(session.phase != .connected)
             }
             ToolbarItem {
-                Button { session.disconnect() } label: { Label(L("Отключить"), systemImage: "xmark.circle") }
-                    .disabled(session.phase != .connected && session.phase != .connecting)
+                Button {
+                    session.disconnect()
+                } label: {
+                    Label(L("Отключить"), systemImage: "xmark.circle")
+                }
+                .disabled(session.phase != .connected && session.phase != .connecting)
             }
         }
         .onAppear { user = session.desktop.user }
@@ -129,10 +139,14 @@ struct RDPContent: View {
             Text(L("Сертификат сервера")).font(.system(size: 15, weight: .bold))
             // R-4: вопрос называет узел — шлюз, сервер или сервер, куда перенаправил брокер.
             Text(trustNodeTitle).bold()
-            Text(session.trustPromptChanged
-                 ? L("Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):", trustNodeAddress)
-                 : L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", trustNodeAddress))
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                session.trustPromptChanged
+                    ? L(
+                        "Сертификат %@ изменился с прошлого подключения. Доверяйте, только если сервер переустанавливали. Новый отпечаток (SHA-256):",
+                        trustNodeAddress)
+                    : L("Первое подключение к %@. Сверьте отпечаток сертификата (SHA-256) с сервером:", trustNodeAddress)
+            )
+            .fixedSize(horizontal: false, vertical: true)
             Text(session.trustPrompt ?? "").font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
@@ -194,7 +208,9 @@ private struct RDPSoundButton: View {
     @State private var shown = false
 
     var body: some View {
-        Button { shown.toggle() } label: {
+        Button {
+            shown.toggle()
+        } label: {
             Label(L("Звук"), systemImage: session.volume == 0 ? "speaker.slash" : "speaker.wave.2")
         }
         .help(L("Громкость звука удалённого стола"))
@@ -245,13 +261,23 @@ private struct ResolutionMenu: View {
                 }
             }
             Divider()
-            Button { session.setRetina(true) } label: { check(session.retina, L("Масштаб Retina — крупный интерфейс")) }
-            Button { session.setRetina(false) } label: { check(!session.retina, L("Масштаб 100% — больше места")) }
+            Button {
+                session.setRetina(true)
+            } label: {
+                check(session.retina, L("Масштаб Retina — крупный интерфейс"))
+            }
+            Button {
+                session.setRetina(false)
+            } label: {
+                check(!session.retina, L("Масштаб 100% — больше места"))
+            }
         } label: {
             Label(L("Разрешение"), systemImage: "rectangle.dashed")
         }
-        .help(session.canResize ? L("Разрешение и масштаб рабочего стола — меняются без переподключения")
-                                : L("Сервер не поддерживает смену разрешения на лету — изменения применятся при следующем подключении"))
+        .help(
+            session.canResize
+                ? L("Разрешение и масштаб рабочего стола — меняются без переподключения")
+                : L("Сервер не поддерживает смену разрешения на лету — изменения применятся при следующем подключении"))
     }
 
     private func check(_ on: Bool, _ title: String) -> Text {

@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Окно встроенного VNC: экран удалённой машины, статус, ввод пароля.
 struct VNCWindow: View {
@@ -67,9 +67,11 @@ struct VNCContent: View {
         .frame(minWidth: 0, idealWidth: 400, maxWidth: .infinity, minHeight: 0, idealHeight: 300, maxHeight: .infinity)
         .sheet(isPresented: Binding(get: { session.credentialRequest != nil }, set: { if !$0 { session.cancelCredentials() } })) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(session.credentialRequest?.isAppleRemoteDesktop == true
-                     ? L("Вход на Mac (Apple Remote Desktop)") : L("Пароль VNC"))
-                    .font(.system(size: 15, weight: .bold))
+                Text(
+                    session.credentialRequest?.isAppleRemoteDesktop == true
+                        ? L("Вход на Mac (Apple Remote Desktop)") : L("Пароль VNC")
+                )
+                .font(.system(size: 15, weight: .bold))
                 Text(session.desktop.summary).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
                 if session.credentialRequest?.needsUsername == true {
                     TextField(L("Пользователь"), text: $username).textFieldStyle(.roundedBorder)
@@ -89,7 +91,7 @@ struct VNCContent: View {
                     Button(L("Отмена")) { session.cancelCredentials() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
                     Button(L("Войти")) { session.provide(username: username, password: password, save: save) }
                         .buttonStyle(.relayaPrimary).keyboardShortcut(.defaultAction)
-                        // Пустой пароль допустим: у некоторых серверов он такой (как в форме RDP).
+                    // Пустой пароль допустим: у некоторых серверов он такой (как в форме RDP).
                 }
             }
             .padding(20)
@@ -98,8 +100,12 @@ struct VNCContent: View {
         }
         .toolbar {
             ToolbarItem {
-                Picker(L("Масштаб"), selection: Binding(get: { session.scaleToFit },
-                                                    set: { fit in Task { await session.setScaleToFit(fit) } })) {
+                Picker(
+                    L("Масштаб"),
+                    selection: Binding(
+                        get: { session.scaleToFit },
+                        set: { fit in Task { await session.setScaleToFit(fit) } })
+                ) {
                     Text(L("По окну")).tag(true)
                     Text("1:1").tag(false)
                 }
@@ -111,14 +117,20 @@ struct VNCContent: View {
                     .disabled(session.phase != .connected)
             }
             ToolbarItem {
-                Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {
+                Button {
+                    NSApp.keyWindow?.toggleFullScreen(nil)
+                } label: {
                     Label(L("Во весь экран"), systemImage: "arrow.up.left.and.arrow.down.right")
                 }
                 .help(L("Во весь экран (⌃⌘F)"))
             }
             ToolbarItem {
-                Button { session.disconnect() } label: { Label(L("Отключить"), systemImage: "xmark.circle") }
-                    .disabled(session.phase != .connected)
+                Button {
+                    session.disconnect()
+                } label: {
+                    Label(L("Отключить"), systemImage: "xmark.circle")
+                }
+                .disabled(session.phase != .connected)
             }
         }
     }
