@@ -106,11 +106,25 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 
 ## Installation
 
+One command installs the latest release. The script picks your platform and language (`RELAYA_LANG=ru|en` overrides it), checks the package against the release `SHA256SUMS` and installs it.
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hvckfy/Relaya/main/scripts/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/hvckfy/Relaya/main/scripts/install.ps1 | iex
+```
+
+Every release asset is named `Relaya-<version>-<os>-<arch>-<lang>.<ext>`, for example `Relaya-0.18.0-macos-universal-en.zip`; verify a manual download with `shasum -a 256 -c SHA256SUMS --ignore-missing`.
+
 ### macOS
 
-1. Download `Relaya-vX.Y.Z-macos-en.zip` (English) or `Relaya-vX.Y.Z-macos-ru.zip` (Russian) from [Releases](https://github.com/hvckfy/Relaya/releases/latest).
-2. Unzip and move `Relaya.app` to `/Applications`.
-3. Builds are signed with a persistent self-signed certificate (Keychain permissions survive updates) but not notarized, so remove the quarantine flag once:
+The script puts `Relaya.app` in `/Applications`. By hand: download `Relaya-X.Y.Z-macos-universal-<lang>.zip` from [Releases](https://github.com/hvckfy/Relaya/releases/latest), unzip, move `Relaya.app` to `/Applications`. Builds are signed with a persistent self-signed certificate (Keychain permissions survive updates) but not notarized, so a browser download needs the quarantine flag removed once:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Relaya.app
@@ -120,7 +134,7 @@ Requires macOS 15 Sequoia or later; Liquid Glass needs macOS 26. Universal binar
 
 ### Windows (preview)
 
-1. Download `Relaya-X.Y.Z-windows-x64-en-setup.exe` (English) or `…-ru-setup.exe` (Russian) from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. Portable `…-windows-x64-<lang>.zip` builds are there too.
+1. The script runs the installer silently. By hand: download `Relaya-X.Y.Z-windows-x64-<lang>-setup.exe` from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. Portable `…-windows-x64-<lang>.zip` builds are there too.
 2. The installer isn't code-signed yet, so SmartScreen asks once: *More info → Run anyway*.
 3. Needs Windows 10 1809+ (Mica background on Windows 11) and the built-in **OpenSSH Client**. The installer offers it on an *Additional components* page (it asks for administrator rights only for that step) together with [Git for Windows](https://git-scm.com), which is needed only for sync through git — folder sync works without it. If a component can't be installed, the last page says how to add it by hand (*Settings → Apps → Optional features → OpenSSH Client*).
 
@@ -128,7 +142,7 @@ The Windows client shares the core with macOS: the same `~/.ssh/config`, snippet
 
 ### Linux (in progress)
 
-A Linux client on Uno Platform (X11, Wayland via XWayland) sharing the Windows C# code is being built: terminal, Secret Service passwords and the hardened askpass are done; packages (AppImage, .deb) will appear in Releases when it's ready.
+A Linux client on Uno Platform (X11, Wayland via XWayland) sharing the Windows C# code; x86_64 only. The script installs the `.deb` through apt when it can, otherwise the AppImage as `~/.local/bin/relaya`. Both are in [Releases](https://github.com/hvckfy/Relaya/releases/latest) as `Relaya-X.Y.Z-linux-x64-<lang>.deb` / `.AppImage`.
 
 ## Keyboard shortcuts
 
@@ -189,7 +203,7 @@ swift test
 swift run Relaya
 ```
 
-To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build/Relaya.app` with both languages, or `scripts/bundle-macos.sh 0.1.0 en` → `build/en/Relaya.app` with one. Releases are built by GitHub Actions on every `v*` tag.
+To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build/Relaya.app` with both languages, or `scripts/bundle-macos.sh 0.1.0 en` → `build/en/Relaya.app` with one. Releases are built by `.github/workflows/release.yml` on every `v*` tag: all platforms, one GitHub Release with `SHA256SUMS`.
 
 Windows (needs Rust, .NET 10 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild (add `-p:RelayaLang=en` or `ru` for a single-language build); `apps/dotnet/installer/Relaya.iss` (Inno Setup 6) builds the installer.
 
