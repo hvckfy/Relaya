@@ -107,7 +107,7 @@ pub fn tunnel_ssh_arguments(t: Tunnel, password_only: bool) -> Vec<String> {
     .map(|s| s.to_string())
     .collect();
     if password_only {
-        a.extend(PASSWORD_ONLY_OPTIONS.iter().map(|s| s.to_string()))
+        a.extend(askpass_ssh_options())
     } else {
         a.extend(["-o".into(), "BatchMode=yes".into()])
     }
@@ -124,6 +124,17 @@ pub fn tunnel_ssh_arguments(t: Tunnel, password_only: bool) -> Vec<String> {
 #[uniffi::export]
 pub fn password_only_options() -> Vec<String> {
     PASSWORD_ONLY_OPTIONS.iter().map(|s| s.to_string()).collect()
+}
+
+/// Background ssh calls whose password comes from askpass (tunnels, SFTP, host panels, agents): password only, and one
+/// prompt per process. Without the prompt limit OpenSSH asks three times for password and three more for
+/// keyboard-interactive, askpass returns the same wrong password each time, and one process becomes six failed logins
+/// (fail2ban bans after five by default). Interactive terminals keep `password_only_options`: a person types there.
+#[uniffi::export]
+pub fn askpass_ssh_options() -> Vec<String> {
+    let mut o = password_only_options();
+    o.extend(["-o".into(), "NumberOfPasswordPrompts=1".into()]);
+    o
 }
 
 // MARK: - Удалённые столы
@@ -412,5 +423,29 @@ mod sftp_tests {
         assert_eq!(f[2].size, 12);
         assert_eq!(f[2].modified, "Mar 3 2024");
         assert!(f[1].is_link);
+    }
+}
+
+#[cfg(test)]
+mod askpass_tests {
+    use super::*;
+
+    #[test]
+    fn background_calls_ask_for_the_password_once() {
+        let o = askpass_ssh_options();
+        assert!(o.windows(2).any(|w| w == ["-o", "NumberOfPasswordPrompts=1"]));
+        assert!(o.windows(2).any(|w| w == ["-o", "PubkeyAuthentication=no"]));
+        assert!(!password_only_options().iter().any(|s| s.starts_with("NumberOfPasswordPrompts")));
+        let t = Tunnel {
+            id: "t".into(),
+            name: "t".into(),
+            host_alias: "web".into(),
+            kind: TunnelKind::Local,
+            listen_port: 8080,
+            target_host: "localhost".into(),
+            target_port: 80,
+            auto_start: false,
+        };
+        assert!(tunnel_ssh_arguments(t, true).contains(&"NumberOfPasswordPrompts=1".to_string()));
     }
 }
