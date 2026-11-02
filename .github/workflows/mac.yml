@@ -17,7 +17,7 @@ on:
   pull_request:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: mac-${{ github.ref }}
   # Один прогон на ветку доходит до конца; из новых ждёт только самый свежий (GitHub заменяет ожидающий),
   # так проверка не отменяется частыми пушами, а очередь не копится.
   cancel-in-progress: false

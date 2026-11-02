@@ -13,7 +13,7 @@ runs:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
-          ~/.cargo/bin
+          ~/.cargo/bin/uniffi-bindgen-cs*
           core/target
         key: core-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('core/Cargo.lock', 'core/rust-toolchain.toml') }}
         restore-keys: core-${{ runner.os }}-${{ runner.arch }}-

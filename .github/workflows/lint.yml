@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      # actionlint 1.7.12 — бинарь релиза, сверка sha256 с закреплённым значением (без скриптов загрузки).
+      # actionlint 1.7.12: the release binary, checked against a pinned sha256 (no download scripts).
       - name: actionlint
         run: |
           curl -fsSL -o actionlint.tar.gz \
@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      # shellcheck есть в образе ubuntu-24.04.
+      # shellcheck ships with the ubuntu-24.04 image.
       - name: shellcheck
         run: shellcheck --version && shellcheck scripts/*.sh
 
