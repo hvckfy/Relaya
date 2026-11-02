@@ -690,7 +690,7 @@ final class AppModel {
         if usePassword {
             env = KeyInstaller(askpassExecutable: askpassExecutable)
                 .askpassEnvironment(.init(store: keychain, account: h.keychainAccount, kind: .password, alias: h.alias))
-            args += KeyInstaller.passwordOnlyOptions
+            args += KeyInstaller.askpassOptions
         } else {
             args += ["-o", "BatchMode=yes"]
         }

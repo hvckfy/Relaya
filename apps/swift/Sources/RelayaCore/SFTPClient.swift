@@ -49,7 +49,7 @@ public struct SFTPClient: Sendable {
         var env: [String: String] = [:]
         if let password {
             env = KeyInstaller(askpassExecutable: askpassExecutable).askpassEnvironment(password)
-            args += ["-o", "BatchMode=no"] + KeyInstaller.passwordOnlyOptions
+            args += ["-o", "BatchMode=no"] + KeyInstaller.askpassOptions
         } else {
             args += ["-o", "BatchMode=yes"]
         }

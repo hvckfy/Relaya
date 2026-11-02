@@ -152,11 +152,13 @@ public struct KeyInstaller: Sendable {
         }
     }
 
-    /// Сразу пароль, без перебора ключей: иначе ssh пробует все ключи из агента,
-    /// и сервер рвёт соединение («Too many authentication failures») раньше, чем спросит пароль.
-    public static let passwordOnlyOptions = [
-        "-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no",
-    ]
+    /// Password only, no agent keys: otherwise the server drops the connection ("Too many authentication failures")
+    /// before it asks for the password. Rules live in the core; interactive terminals use these.
+    public static var passwordOnlyOptions: [String] { RelayaRust.passwordOnlyOptions() }
+
+    /// Background calls with the password from askpass: also one prompt per process, so a wrong saved password costs
+    /// one failed login instead of six (B-1).
+    public static var askpassOptions: [String] { askpassSshOptions() }
 
     /// Понятная ошибка ssh — правила в ядре (ssh_explain), общие с терминалом и Windows/Linux (А2).
     static func explain(_ r: ProcessResult) -> String {
