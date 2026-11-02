@@ -36,7 +36,7 @@ jobs:
   publish:
     name: "Release · publish"
     needs: [mac, windows, linux]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: write # creates the release
@@ -53,7 +53,7 @@ jobs:
           [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || ver="0.0.0-${GITHUB_SHA:0:7}"
           mkdir dist
           # Exactly one input file per pattern, otherwise the release would be incomplete or ambiguous.
-          one() { local f; f=$(compgen -G "$1"); [ "$(printf '%s\n' "$f" | wc -l)" -eq 1 ] || { echo "::error::expected one $1"; exit 1; }; mv "$f" "dist/$2"; }
+          one() { local f; f=$(compgen -G "$1" || true); [ -n "$f" ] && [ "$(printf '%s\n' "$f" | wc -l)" -eq 1 ] || { echo "::error::expected one $1"; exit 1; }; mv "$f" "dist/$2"; }
           for l in ru en; do
             one "in/Relaya-macos-$l.zip" "Relaya-$ver-macos-universal-$l.zip"
             one "in/Relaya-windows-$l.zip" "Relaya-$ver-windows-x64-$l.zip"

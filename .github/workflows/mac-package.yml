@@ -50,11 +50,14 @@ jobs:
           ROYALVNC_DIR: ${{ steps.royalvnc.outputs.dir }}
         with:
           script: scripts/build-core-macos.sh
-      # ADR-002: две сборки — русская и английская; язык зашит в бандл (второй прогон берёт кэш SwiftPM).
+      # ADR-002: two builds, Russian and English; the language is fixed in the bundle (the second run reuses SwiftPM).
+      # Dry runs (PR, manual) are 0.0.0, like windows.yml and linux.yml.
       - name: Build app bundles (ru, en)
         run: |
-          scripts/bundle-macos.sh "${GITHUB_REF_NAME#v}" ru
-          scripts/bundle-macos.sh "${GITHUB_REF_NAME#v}" en
+          version=0.0.0
+          if [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then version="${BASH_REMATCH[1]}"; fi
+          scripts/bundle-macos.sh "$version" ru
+          scripts/bundle-macos.sh "$version" en
 
       - name: Sign
         env:
