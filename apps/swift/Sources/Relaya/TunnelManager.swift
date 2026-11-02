@@ -183,7 +183,9 @@ final class TunnelManager {
         let refused = SSHErrorText.loginRefused(stderr)
         guard let tunnel = tunnels.first(where: { $0.id == id }), tunnel.autoStart, !refused, wasUp.contains(id) else {
             retries[id] = nil
-            status[id] = .failed(refused ? reason + "\n" + L("Исправьте пароль или ключ в карточке хоста и запустите туннель снова.") : reason)
+            // V-3: the password hint only for a refused login; a cut before login says to wait in its own text.
+            let wrongCredentials = refused && !SSHErrorText.loginBlocked(stderr)
+            status[id] = .failed(wrongCredentials ? reason + "\n" + L("Исправьте пароль или ключ в карточке хоста и запустите туннель снова.") : reason)
             return
         }
         let attempt = (retries[id] ?? 0) + 1

@@ -21,7 +21,9 @@ internal static class LoginGate
     /// <summary>Records the outcome of a background ssh or sftp call; returns true when it was a refusal.</summary>
     public static bool Note(string alias, int status, string stderr)
     {
-        if (status == 0) { Open(alias); return false; }
+        // ssh and sftp exit with 255 when the connection or login fails; a failed command (a read-only folder,
+        // docker without the docker group) exits with its own code and proves the login worked (V-1).
+        if (status != 255) { Open(alias); return false; }
         if (!RelayaCoreMethods.SshAuthRefused(stderr) && !RelayaCoreMethods.SshBlocked(stderr)) return false;
         var reason = SshErrors.Describe(stderr, Strings.L("Сервер не принял вход."));
         if (Refused.TryAdd(alias, reason)) Closed?.Invoke(alias);

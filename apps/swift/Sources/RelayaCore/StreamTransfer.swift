@@ -26,7 +26,12 @@ public struct SSHInvocation: Sendable {
 public enum StreamTransfer {
     public struct Failure: Error, LocalizedError {
         public var message: String
-        public init(message: String) { self.message = message }
+        /// The server refused the login (exit code 255 and a refusal in stderr), not a failed command (V-1).
+        public var loginRefused: Bool
+        public init(message: String, loginRefused: Bool = false) {
+            self.message = message
+            self.loginRefused = loginRefused
+        }
         public var errorDescription: String? { message }
     }
 
@@ -80,7 +85,8 @@ public enum StreamTransfer {
                         } else if p.terminationStatus == 0 {
                             cont.resume()
                         } else {
-                            cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)")))
+                            cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)"),
+                                                    loginRefused: p.terminationStatus == 255 && SSHErrorText.loginRefused(err)))
                         }
                     }
                     if box.cancelled { cont.resume(throwing: CancellationError()); return }
@@ -139,7 +145,8 @@ public enum StreamTransfer {
                     } else if p.terminationStatus == 0 {
                         cont.resume()
                     } else {
-                        cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)")))
+                        cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)"),
+                                                    loginRefused: p.terminationStatus == 255 && SSHErrorText.loginRefused(err)))
                     }
                 }
                 if box.cancelled { try? input.close(); cont.resume(throwing: CancellationError()); return }

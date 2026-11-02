@@ -37,6 +37,8 @@ public struct SFTPClient: Sendable {
 
     public struct Failure: Error, LocalizedError {
         public var message: String
+        /// The server refused the login (exit code 255 and a refusal in stderr), not a failed command (V-1).
+        public var loginRefused = false
         public var errorDescription: String? { message }
     }
 
@@ -60,7 +62,9 @@ public struct SFTPClient: Sendable {
                                             environment: env, input: commands.joined(separator: "\n") + "\n")
         guard r.succeeded else {
             let lines = r.stderr.split(whereSeparator: \.isNewline).map(String.init).filter { !$0.hasPrefix("sftp>") }
-            throw Failure(message: SSHErrorText.describe(lines.joined(separator: "\n"), fallback: L("sftp завершился с кодом %@", "\(r.status)")))
+            let text = lines.joined(separator: "\n")
+            throw Failure(message: SSHErrorText.describe(text, fallback: L("sftp завершился с кодом %@", "\(r.status)")),
+                          loginRefused: r.status == 255 && SSHErrorText.loginRefused(text))
         }
         return r.stdout
     }
