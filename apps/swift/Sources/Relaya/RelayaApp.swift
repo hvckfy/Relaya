@@ -153,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        if let dir = DemoScreenshots.directory { DemoScreenshots.watchLaunch(into: dir) }
         // П-9: общие ssh-соединения хостов закрываются при сне и блокировке экрана, а не живут до таймаута.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil,
