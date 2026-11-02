@@ -6,56 +6,56 @@ pub fn demo_ssh_config() -> String {
     DEMO_CONFIG.to_string()
 }
 
-const DEMO_CONFIG: &str = r#"# Демо-конфигурация Relaya — вымышленные хосты.
+const DEMO_CONFIG: &str = r#"# Relaya demo configuration: fictional hosts.
 
-# relaya: group=Работа tags=prod,web os=ubuntu
+# relaya: group=Work tags=prod,web os=ubuntu
 Host web-1
     HostName 203.0.113.10
     User deploy
     IdentityFile ~/.ssh/id_ed25519_work
 
-# relaya: group=Работа tags=prod,web os=ubuntu
+# relaya: group=Work tags=prod,web os=ubuntu
 Host web-2
     HostName 203.0.113.11
     User deploy
     IdentityFile ~/.ssh/id_ed25519_work
 
-# relaya: group=Работа tags=prod,db os=debian
+# relaya: group=Work tags=prod,db os=debian
 Host db-primary
     HostName 10.20.0.5
     User postgres
     ProxyJump bastion
     IdentityFile ~/.ssh/id_ed25519_work
 
-# relaya: group=Работа tags=staging os=ubuntu
+# relaya: group=Work tags=staging os=ubuntu
 Host staging
     HostName staging.example.com
     User ubuntu
 
-# relaya: group=Работа tags=infra os=debian
+# relaya: group=Work tags=infra os=debian
 Host bastion
     HostName bastion.example.com
     User alex
     IdentityFile ~/.ssh/id_ed25519_work
 
-# relaya: group=Дом tags=homelab os=raspbian
+# relaya: group=Home tags=homelab os=raspbian
 Host pi-home
     HostName 192.168.1.20
     User pi
     IdentityFile ~/.ssh/id_ed25519_homelab
 
-# relaya: group=Дом tags=homelab,network os=openwrt
+# relaya: group=Home tags=homelab,network os=openwrt
 Host router
     HostName 192.168.1.1
     User root
 
-# relaya: group=Дом tags=homelab os=macos
+# relaya: group=Home tags=homelab os=macos
 Host mac-mini
     HostName mac-mini.local
     User alex
     IdentityFile ~/.ssh/id_ed25519_homelab
 
-# relaya: group=Дом tags=vpn os=alpine
+# relaya: group=Home tags=vpn os=alpine
 Host vps-fra
     HostName 198.51.100.7
     User root
