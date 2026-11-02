@@ -17,6 +17,8 @@ public static class Program
             return Platform.Askpass.Run(Environment.GetEnvironmentVariable("RELAYA_ASKPASS_PIPE") ?? "", token, string.Join(' ', args));
         if (Array.IndexOf(args, "--mcp") >= 0)
             return Platform.McpHost.Run();
+        // Fictional data for screenshots; before anything reads the ~/.ssh and Relaya folders.
+        Platform.Demo.Configure(args);
 
         // Самопроверка терминала в CI: настоящий TerminalView, Feed из фонового потока, отрисованный кадр.
 #if RELAYA_SELFTEST

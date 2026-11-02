@@ -22,8 +22,7 @@ internal sealed class SyncService
     private const string PassphraseAccount = "relaya-sync-keys";
     private static readonly string Support = Data.AppState.Support;
     private static readonly string Store = Path.Combine(Support, "sync-profiles.json");
-    private static readonly SyncPaths Paths = new(
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh"), Support);
+    private static readonly SyncPaths Paths = new(Data.AppState.SshDir, Support);
 
     // Таймер автосинхронизации и UI работают в разных потоках: состояния — потокобезопасные,
     // один прогон на профиль (SemaphoreSlim), список профилей меняется под замком, наружу — копия.
