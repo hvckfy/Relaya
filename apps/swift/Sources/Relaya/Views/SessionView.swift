@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Сессия: хлебные крошки · баннеры · терминал · статус-бар.
 struct SessionView: View {
@@ -106,15 +106,23 @@ private struct SessionBanners: View {
             if controller.hostKeyChanged {
                 BannerRow(tint: Theme.redTint, border: Theme.red) {
                     Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(Theme.red)
-                    Text(L("Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts."))
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        L(
+                            "Ключ сервера изменился! Это может быть атака «человек посередине». ssh не подключится, пока вы не проверите сервер и не удалите старую запись из ~/.ssh/known_hosts."
+                        )
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if controller.passwordOnly {
                 BannerRow(tint: Theme.accTint, border: Theme.line) {
                     Image(systemName: "key.slash").foregroundStyle(Theme.acc)
-                    Text(L("Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было."))
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        L(
+                            "Сервер оборвал вход после перебора ключей из ssh-agent — переподключились сразу по паролю. Настройте вход по ключу, чтобы так не было."
+                        )
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if let fp = controller.hostKeyPrompt {
@@ -221,7 +229,8 @@ private struct SessionBanners: View {
         // Все баннеры, которые рисует body, — иначе у части из них нет отступа от терминала (UI-M4).
         controller.passwordOnly || controller.hostKeyChanged || controller.hostKeyPrompt != nil || controller.savedPasswordRejected
             || controller.passwordPromptWithoutSaved || (controller.offerKeySetup && settings.offerKeySetup)
-            || controller.sudoPrompt || controller.passwordPromptAfterLogin || controller.stuckCommand != nil || (controller.secretPromptActive && model.broadcastInput)
+            || controller.sudoPrompt || controller.passwordPromptAfterLogin || controller.stuckCommand != nil
+            || (controller.secretPromptActive && model.broadcastInput)
     }
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import RelayaCore
 
 struct SyncTests {
@@ -12,17 +13,17 @@ struct SyncTests {
     func paths(_ dir: URL) -> Sync.Paths { Sync.Paths(ssh: dir, support: dir) }
 
     let config = """
-    # relaya: group=work
-    Host web
-        HostName 10.0.0.1
+        # relaya: group=work
+        Host web
+            HostName 10.0.0.1
 
-    # relaya: group=home
-    Host nas
-        HostName 192.168.1.5
+        # relaya: group=home
+        Host nas
+            HostName 192.168.1.5
 
-    Host github.com
-        User git
-    """
+        Host github.com
+            User git
+        """
 
     @Test func keyVaultRoundTripAndWrongPassword() throws {
         let data = Data("-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n".utf8)
@@ -47,8 +48,10 @@ struct SyncTests {
     @Test func profileScopeByGroupAndMergedImport() throws {
         let a = tempDir(), repo = tempDir(), b = tempDir()
         try Data(config.utf8).write(to: a.appending(path: "config"))
-        let tunnels = [Tunnel(name: "w", hostAlias: "web", listenPort: 1, targetHost: "x", targetPort: 2),
-                       Tunnel(name: "n", hostAlias: "nas", listenPort: 3, targetHost: "y", targetPort: 4)]
+        let tunnels = [
+            Tunnel(name: "w", hostAlias: "web", listenPort: 1, targetHost: "x", targetPort: 2),
+            Tunnel(name: "n", hostAlias: "nas", listenPort: 3, targetHost: "y", targetPort: 4),
+        ]
         try JSONEncoder().encode(tunnels).write(to: a.appending(path: "tunnels.json"))
         var p = Sync.Profile(name: "work")
         p.scope = Sync.Scope(allHosts: false, groups: ["work"])

@@ -1,7 +1,7 @@
 import AppKit
-import SwiftUI
 import Observation
 import RelayaCore
+import SwiftUI
 
 /// Открытая вкладка: терминал, файлы (SFTP), VNC или RDP.
 struct Session: Identifiable, Hashable {
@@ -188,14 +188,16 @@ final class AppModel {
     /// Раскладки — в общем с Windows/Linux файле layouts.json; старые из UserDefaults переносятся один раз.
     var savedLayouts: [SavedLayout] = {
         if let data = UserDefaults.standard.data(forKey: "savedLayouts"),
-           let old = try? JSONDecoder().decode([LegacySavedLayout].self, from: data) {
+            let old = try? JSONDecoder().decode([LegacySavedLayout].self, from: data)
+        {
             let merged = LayoutStore.load() + old.map { SavedLayout(id: $0.id, name: $0.name, layout: $0.layout) }
             LayoutStore.save(merged)
             UserDefaults.standard.removeObject(forKey: "savedLayouts")
             return merged
         }
         return LayoutStore.load()
-    }() {
+    }()
+    {
         didSet { LayoutStore.save(savedLayouts) }
     }
 
@@ -315,10 +317,11 @@ final class AppModel {
 
     /// Свёрнутые секции и группы боковой панели.
     func isExpanded(_ key: String) -> Binding<Bool> {
-        Binding(get: { [unowned self] in !self.searchText.isEmpty || !self.collapsedGroups.contains(key) },
-                set: { [unowned self] open in
-                    if open { self.collapsedGroups.remove(key) } else { self.collapsedGroups.insert(key) }
-                })
+        Binding(
+            get: { [unowned self] in !self.searchText.isEmpty || !self.collapsedGroups.contains(key) },
+            set: { [unowned self] open in
+                if open { self.collapsedGroups.remove(key) } else { self.collapsedGroups.insert(key) }
+            })
     }
 
     /// «Подключить» в тулбаре — по выбранному в текущем режиме.
@@ -423,8 +426,9 @@ final class AppModel {
         // Запись Keychain общая для всех хостов с тем же user@адрес:порт: копируем, только если у нового адреса
         // пароля нет, а старую удаляем, только если ею больше никто не пользуется.
         if let originalAlias, let old = hosts.first(where: { $0.alias == originalAlias }),
-           old.keychainAccount != host.keychainAccount,
-           let pw = try? keychain.password(for: old.keychainAccount) {
+            old.keychainAccount != host.keychainAccount,
+            let pw = try? keychain.password(for: old.keychainAccount)
+        {
             if !keychain.hasPassword(for: host.keychainAccount) { try? keychain.setPassword(pw, for: host.keychainAccount) }
             let stillUsed = hosts.contains { $0.alias != originalAlias && $0.keychainAccount == old.keychainAccount }
             if !stillUsed { try? keychain.deletePassword(for: old.keychainAccount) }
@@ -583,7 +587,11 @@ final class AppModel {
     /// Файлы хоста во вкладке (уже открытая вкладка того же хоста — активируется).
     func openFiles(_ host: SSHHost, newTab: Bool = false) {
         screen = .hosts
-        if !newTab, let existing = sessions.first(where: { if case .files(let t) = $0.kind { return t.host.alias == host.alias }; return false }) {
+        if !newTab,
+            let existing = sessions.first(where: {
+                if case .files(let t) = $0.kind { return t.host.alias == host.alias }; return false
+            })
+        {
             activeSessionID = existing.id
             return
         }
@@ -621,8 +629,9 @@ final class AppModel {
     /// Рассылка набранного пользователем во все другие терминалы, участвующие в рассылке.
     func broadcast(_ data: ArraySlice<UInt8>, from source: SessionController) {
         guard broadcastInput,
-              let sourceSession = sessions.first(where: { $0.controller === source }),
-              !broadcastExcluded.contains(sourceSession.id) else { return }
+            let sourceSession = sessions.first(where: { $0.controller === source }),
+            !broadcastExcluded.contains(sourceSession.id)
+        else { return }
         // Пароль, набранный в ответ на запрос (ssh, sudo, su), в другие терминалы не уходит.
         if source.secretPromptActive { return }
         for s in sessions where s.id != sourceSession.id && !broadcastExcluded.contains(s.id) {
@@ -668,8 +677,10 @@ final class AppModel {
 
     /// Неинтерактивная команда на хосте: ключ/агент или пароль из Keychain (после Touch ID).
     /// `interactive` — вызвано пользователем: можно спросить Touch ID; иначе пароль берём, только если уже подтверждён.
-    func exec(_ command: String, on host: SSHHost, interactive: Bool, reason: String,
-              timeout: Duration = .seconds(20)) async throws -> ProcessResult {
+    func exec(
+        _ command: String, on host: SSHHost, interactive: Bool, reason: String,
+        timeout: Duration = .seconds(20)
+    ) async throws -> ProcessResult {
         let alias = current(host).alias
         // B-4: until a login to this host has worked, background probes go one at a time; the first one also opens
         // the shared master connection, and if it is refused the rest stop with the same reason.
@@ -687,8 +698,9 @@ final class AppModel {
             if let finish { finish(); firstLogin[alias] = nil }
         }
         let ssh = await invocation(for: host, interactive: interactive, reason: reason)
-        let r = try await ProcessRunner.run("/usr/bin/ssh", ssh.options + [ssh.alias, command],
-                                            environment: ssh.environment, timeout: timeout)
+        let r = try await ProcessRunner.run(
+            "/usr/bin/ssh", ssh.options + [ssh.alias, command],
+            environment: ssh.environment, timeout: timeout)
         noteLogin(alias, r)
         return r
     }
@@ -777,8 +789,11 @@ final class AppModel {
         } else if let name = c.tmuxName {
             c.tmuxName = nil
             let host = c.host
-            Task { _ = try? await exec(Tmux.killCommand([name]), on: host, interactive: true,
-                                       reason: L("Завершить сессии tmux на %@", host.alias)) }
+            Task {
+                _ = try? await exec(
+                    Tmux.killCommand([name]), on: host, interactive: true,
+                    reason: L("Завершить сессии tmux на %@", host.alias))
+            }
         }
         c.terminate()
         c.reconnect()
@@ -788,8 +803,9 @@ final class AppModel {
     func detachKeeping(_ session: Session) async {
         guard let c = session.controller, let name = c.tmuxName else { return }
         do {
-            let r = try await exec(Tmux.keepCommand(name: name), on: c.host, interactive: true,
-                                   reason: L("Оставить сессию на %@", c.host.alias))
+            let r = try await exec(
+                Tmux.keepCommand(name: name), on: c.host, interactive: true,
+                reason: L("Оставить сессию на %@", c.host.alias))
             guard r.succeeded else { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message; return }
         } catch {
             alertMessage = error.localizedDescription
@@ -801,8 +817,9 @@ final class AppModel {
 
     func refreshTmux(_ host: SSHHost, interactive: Bool) async {
         do {
-            let r = try await exec(Tmux.listCommand, on: host, interactive: interactive,
-                                   reason: L("Показать сессии tmux на %@", host.alias))
+            let r = try await exec(
+                Tmux.listCommand, on: host, interactive: interactive,
+                reason: L("Показать сессии tmux на %@", host.alias))
             guard r.succeeded else {
                 tmuxError[host.alias] = L("Нет доступа к хосту без пароля.")
                 return
@@ -817,8 +834,9 @@ final class AppModel {
     /// Убрать брошенные и просроченные сессии хоста (подстраховка к таймеру на сервере).
     func cleanTmux(_ host: SSHHost) async {
         await refreshTmux(host, interactive: false)
-        let stale = Tmux.stale(tmux[host.alias] ?? [], alias: host.alias, open: openTmuxNames,
-                               ttlMinutes: settings.tmuxIdleMinutes)
+        let stale = Tmux.stale(
+            tmux[host.alias] ?? [], alias: host.alias, open: openTmuxNames,
+            ttlMinutes: settings.tmuxIdleMinutes)
         guard !stale.isEmpty else { return }
         _ = try? await exec(Tmux.killCommand(stale), on: host, interactive: false, reason: "")
         await refreshTmux(host, interactive: false)
@@ -828,8 +846,9 @@ final class AppModel {
         // Открытые вкладки с этими сессиями закрываем без повторного kill.
         for s in terminalSessions where names.contains(s.controller?.tmuxName ?? "") { close(s) }
         do {
-            _ = try await exec(Tmux.killCommand(names), on: host, interactive: true,
-                               reason: L("Завершить сессии tmux на %@", host.alias))
+            _ = try await exec(
+                Tmux.killCommand(names), on: host, interactive: true,
+                reason: L("Завершить сессии tmux на %@", host.alias))
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -864,9 +883,10 @@ final class AppModel {
         defer { finderMounting.remove(h.alias) }
         let ssh = await invocation(for: h, interactive: true, reason: L("Открыть файлы на %@", h.alias))
         let usePassword = !ssh.environment.isEmpty
-        let sftp = SFTPClient(alias: h.alias,
-                              password: usePassword ? .init(store: keychain, account: h.keychainAccount, kind: .password, alias: h.alias) : nil,
-                              askpassExecutable: askpassExecutable)
+        let sftp = SFTPClient(
+            alias: h.alias,
+            password: usePassword ? .init(store: keychain, account: h.keychainAccount, kind: .password, alias: h.alias) : nil,
+            askpassExecutable: askpassExecutable)
         let bridge = WebDAVBridge(host: h, remoteRoot: path, sftp: sftp, ssh: ssh)
         bridge.onStopped = { [weak self] in self?.finderBridges[h.alias] = nil }
         bridge.onRefused = { [weak self] reason in
@@ -877,8 +897,10 @@ final class AppModel {
             finderBridges[h.alias] = bridge
             if !unmountOnQuitInstalled {
                 unmountOnQuitInstalled = true
-                NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil,
-                                                       queue: .main) { [weak self] _ in
+                NotificationCenter.default.addObserver(
+                    forName: NSApplication.willTerminateNotification, object: nil,
+                    queue: .main
+                ) { [weak self] _ in
                     // Выход: диски отключаются, а не остаются привязанными к остановленному серверу; не дольше 3 с на диск.
                     MainActor.assumeIsolated { self?.finderBridges.values.forEach { $0.stop(wait: .seconds(3)) } }
                 }
@@ -904,9 +926,12 @@ final class AppModel {
     func openRemotePort(_ port: Int, on host: SSHHost) async {
         let h = current(host)
         let key = "\(h.alias):\(port)"
-        let tunnel = portTunnels[key] ?? Tunnel(name: "localhost:\(port)", hostAlias: h.alias,
-                                                 listenPort: RemoteDesktop.preferredLocalPort(for: port),
-                                                 targetHost: "localhost", targetPort: port)
+        let tunnel =
+            portTunnels[key]
+            ?? Tunnel(
+                name: "localhost:\(port)", hostAlias: h.alias,
+                listenPort: RemoteDesktop.preferredLocalPort(for: port),
+                targetHost: "localhost", targetPort: port)
         portTunnels[key] = tunnel
         if tunnels.status(of: tunnel) != .running {
             tunnels.start(tunnel, hosts: hosts)
@@ -932,8 +957,9 @@ final class AppModel {
             return
         }
         do {
-            let r = try await exec(Tmux.prepareControlCommand(name: name, ttlMinutes: settings.tmuxIdleMinutes), on: h,
-                                   interactive: true, reason: L("Открыть tmux на %@", h.alias))
+            let r = try await exec(
+                Tmux.prepareControlCommand(name: name, ttlMinutes: settings.tmuxIdleMinutes), on: h,
+                interactive: true, reason: L("Открыть tmux на %@", h.alias))
             if r.stdout.contains("RELAYA_NO_TMUX") { alertMessage = L("На %@ не установлен tmux.", h.alias); return }
             guard r.succeeded else { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message; return }
         } catch {
@@ -986,9 +1012,12 @@ final class AppModel {
         guard !hostPanelLoading.contains(h.alias) else { return }
         hostPanelLoading.insert(h.alias)
         defer { hostPanelLoading.remove(h.alias) }
-        guard let r = try? await exec(HostPanel.probeCommand(for: h.os), on: h, interactive: interactive,
-                                      reason: L("Показать сервисы на %@", h.alias), timeout: .seconds(30)),
-              r.status != 255 else { return }
+        guard
+            let r = try? await exec(
+                HostPanel.probeCommand(for: h.os), on: h, interactive: interactive,
+                reason: L("Показать сервисы на %@", h.alias), timeout: .seconds(30)),
+            r.status != 255
+        else { return }
         hostPanel[h.alias] = HostPanel.parse(r.stdout)
     }
 
@@ -1001,8 +1030,9 @@ final class AppModel {
         hostPanelBusy.insert(unit.id)
         defer { hostPanelBusy.remove(unit.id) }
         do {
-            let r = try await exec(command, on: h, interactive: true, reason: L("Управлять сервисами на %@", h.alias),
-                                   timeout: .seconds(60))
+            let r = try await exec(
+                command, on: h, interactive: true, reason: L("Управлять сервисами на %@", h.alias),
+                timeout: .seconds(60))
             if !r.succeeded { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message }
         } catch {
             alertMessage = error.localizedDescription
@@ -1022,8 +1052,9 @@ final class AppModel {
         dockerLoading.insert(host.alias)
         defer { dockerLoading.remove(host.alias) }
         do {
-            let r = try await exec(Docker.listCommand, on: host, interactive: interactive,
-                                   reason: L("Показать контейнеры на %@", host.alias))
+            let r = try await exec(
+                Docker.listCommand, on: host, interactive: interactive,
+                reason: L("Показать контейнеры на %@", host.alias))
             // Без доступа (нужен пароль, а Touch ID не подтверждён) — тихо, блок просто не показываем.
             if !r.succeeded, r.stderr.contains("Permission denied") || r.status == 255 {
                 if interactive { docker[host.alias] = .failed(SSHErrorText.describe(r.stderr, fallback: L("Нет доступа к хосту без пароля."))) }
@@ -1040,8 +1071,9 @@ final class AppModel {
         dockerBusy.insert(container.id)
         defer { dockerBusy.remove(container.id) }
         do {
-            let r = try await exec(Docker.actionCommand(action, container: container), on: host, interactive: true,
-                                   reason: L("Управлять контейнерами на %@", host.alias), timeout: .seconds(60))
+            let r = try await exec(
+                Docker.actionCommand(action, container: container), on: host, interactive: true,
+                reason: L("Управлять контейнерами на %@", host.alias), timeout: .seconds(60))
             if !r.succeeded { alertMessage = r.message.isEmpty ? L("Команда не выполнена.") : r.message }
         } catch {
             alertMessage = error.localizedDescription
@@ -1064,13 +1096,15 @@ final class AppModel {
         defer { hostStatsLoading.remove(h.alias) }
 
         do {
-            let r = try await exec(HostStats.probeCommand, on: h, interactive: interactive,
-                                   reason: L("Показать состояние %@", h.alias))
+            let r = try await exec(
+                HostStats.probeCommand, on: h, interactive: interactive,
+                reason: L("Показать состояние %@", h.alias))
             if let stats = HostStats.parse(r.stdout) {
                 hostStats[h.alias] = stats
                 hostStatsError[h.alias] = nil
             } else {
-                hostStatsError[h.alias] = r.succeeded
+                hostStatsError[h.alias] =
+                    r.succeeded
                     ? L("Сервер не отдаёт данные (нужен Linux с /proc).")
                     : L("Нет доступа без пароля: настройте ключ или нажмите «Обновить», чтобы использовать пароль из Keychain.")
             }
@@ -1086,7 +1120,8 @@ final class AppModel {
         defer { detectingOS.remove(alias) }
         let installer = KeyInstaller(askpassExecutable: askpassExecutable)
         // Фоновая проверка не вызывает Touch ID: пароль берём, только если доступ уже подтверждён.
-        let secret: KeyInstaller.SecretRef? = keychain.hasPassword(for: host.keychainAccount) && SecretGate.shared.isUnlocked
+        let secret: KeyInstaller.SecretRef? =
+            keychain.hasPassword(for: host.keychainAccount) && SecretGate.shared.isUnlocked
             ? .init(store: keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil
         if let os = await installer.detectOS(alias: alias, password: secret) {
             setOS(os, for: alias, onlyIfUnknown: false)

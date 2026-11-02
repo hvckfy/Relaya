@@ -1,6 +1,6 @@
+import RelayaCore
 import SwiftUI
 import UniformTypeIdentifiers
-import RelayaCore
 
 /// Файлы на сервере по SFTP: навигация, скачивание, загрузка (в т.ч. из Finder).
 struct SFTPView: View {
@@ -26,18 +26,34 @@ struct SFTPView: View {
     }
 
     private var host: SSHHost { tab.host }
-    private var path: String { get { tab.path } nonmutating set { tab.path = newValue } }
-    private var pathField: String { get { tab.pathField } nonmutating set { tab.pathField = newValue } }
-    private var files: [RemoteFile] { get { tab.files } nonmutating set { tab.files = newValue } }
-    private var selection: Set<RemoteFile.ID> { get { tab.selection } nonmutating set { tab.selection = newValue } }
+    private var path: String {
+        get { tab.path }
+        nonmutating set { tab.path = newValue }
+    }
+    private var pathField: String {
+        get { tab.pathField }
+        nonmutating set { tab.pathField = newValue }
+    }
+    private var files: [RemoteFile] {
+        get { tab.files }
+        nonmutating set { tab.files = newValue }
+    }
+    private var selection: Set<RemoteFile.ID> {
+        get { tab.selection }
+        nonmutating set { tab.selection = newValue }
+    }
     private var queue: TransferQueue { tab.queue }
-    private var edits: [RemoteEditSession] { get { tab.edits } nonmutating set { tab.edits = newValue } }
+    private var edits: [RemoteEditSession] {
+        get { tab.edits }
+        nonmutating set { tab.edits = newValue }
+    }
 
     private var client: SFTPClient {
         let usePassword = !host.usesKey && model.keychain.hasPassword(for: host.keychainAccount)
-        return SFTPClient(alias: host.alias,
-                          password: usePassword ? .init(store: model.keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil,
-                          askpassExecutable: model.askpassExecutable)
+        return SFTPClient(
+            alias: host.alias,
+            password: usePassword ? .init(store: model.keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil,
+            askpassExecutable: model.askpassExecutable)
     }
 
     private var selectedFiles: [RemoteFile] { files.filter { selection.contains($0.id) } }
@@ -71,7 +87,9 @@ struct SFTPView: View {
                     Button(L("Открыть в редакторе")) { edit(f) }
                 }
                 if ids.count == 1, let f = files.first(where: { ids.contains($0.id) }) {
-                    Button(L("Переименовать…")) { renameText = f.name; renaming = f }
+                    Button(L("Переименовать…")) {
+                        renameText = f.name; renaming = f
+                    }
                 }
                 if !ids.isEmpty {
                     Button(L("Скачать…")) { download() }
@@ -93,12 +111,15 @@ struct SFTPView: View {
             .dropDestination(for: URL.self) { urls, _ in
                 upload(urls: urls.filter(\.isFileURL))
                 return true
-            } isTargeted: { dropTargeted = $0 }
+            } isTargeted: {
+                dropTargeted = $0
+            }
             if !queue.items.isEmpty { TransferList(queue: queue) }
             statusBar
         }
         .background { shortcuts }
-        .frame(minWidth: embedded ? nil : 640, idealWidth: embedded ? nil : 860, minHeight: embedded ? nil : 420, idealHeight: embedded ? nil : 560)  // UI-M3: лист не больше экрана MacBook Air 13"
+        // UI-M3: the sheet never outgrows a 13" MacBook Air screen.
+        .frame(minWidth: embedded ? nil : 640, idealWidth: embedded ? nil : 860, minHeight: embedded ? nil : 420, idealHeight: embedded ? nil : 560)
         .frame(maxWidth: embedded ? .infinity : nil, maxHeight: embedded ? .infinity : nil)
         .background(embedded ? Theme.session : Theme.bg)
         .task { await start() }
@@ -110,7 +131,9 @@ struct SFTPView: View {
             Task { @MainActor in
                 if embedded {
                     try? await Task.sleep(for: .milliseconds(300))
-                    let open = model.sessions.contains { if case .files(let t) = $0.kind { return t.host.alias == alias }; return false }
+                    let open = model.sessions.contains {
+                        if case .files(let t) = $0.kind { return t.host.alias == alias }; return false
+                    }
                     if open { return }
                 }
                 queue.cancelAll()
@@ -169,8 +192,10 @@ struct SFTPView: View {
             }
             Button(L("Загрузить…")) { chooseUpload() }.buttonStyle(.relaya)
             Button(L("Скачать…")) { download() }.buttonStyle(.relaya).disabled(selection.isEmpty)
-            IconButton(systemImage: "folder.badge.plus", label: L("Новая папка")) { newFolderName = ""; newFolder = true }
-                .keyboardShortcut("n", modifiers: [.command, .option])
+            IconButton(systemImage: "folder.badge.plus", label: L("Новая папка")) {
+                newFolderName = ""; newFolder = true
+            }
+            .keyboardShortcut("n", modifiers: [.command, .option])
             if !embedded {
                 Button(L("Готово")) { dismiss() }.buttonStyle(.relayaPrimary).keyboardShortcut(.cancelAction)
             }
@@ -220,7 +245,8 @@ struct SFTPView: View {
     private func start() async {
         guard !tab.started else { return }
         if !host.usesKey, model.keychain.hasPassword(for: host.keychainAccount),
-           !(await SecretGate.shared.authorize(L("Открыть файлы на %@", host.alias))) {
+            !(await SecretGate.shared.authorize(L("Открыть файлы на %@", host.alias)))
+        {
             error = L("Touch ID не подтверждён — пароль из Keychain не использован.")
             return
         }

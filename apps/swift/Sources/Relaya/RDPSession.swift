@@ -130,7 +130,9 @@ final class RDPSession {
     /// Меню «Разрешение»: фиксированное значение или nil — по размеру окна.
     func setResolution(_ size: (width: Int, height: Int)?) {
         fixedSize = size
-        persist { $0.rdpWidth = size?.width; $0.rdpHeight = size?.height }
+        persist {
+            $0.rdpWidth = size?.width; $0.rdpHeight = size?.height
+        }
         scheduleResize(delay: .zero)
     }
 
@@ -178,7 +180,8 @@ final class RDPSession {
     private func savedPassword() -> String? {
         if let p = try? keychain.password(for: account) { return p }
         guard account != desktop.legacyKeychainAccount,
-              let old = try? keychain.password(for: desktop.legacyKeychainAccount) else { return nil }
+            let old = try? keychain.password(for: desktop.legacyKeychainAccount)
+        else { return nil }
         try? keychain.setPassword(old, for: account)
         return old
     }
@@ -311,16 +314,18 @@ final class RDPSession {
 
         let trusted = UserDefaults.standard.string(forKey: certificateKey)
         certificate = trusted
-        let engine = RDPEngine(config: .init(host: target.host, port: target.port, user: name, password: password,
-                                             domain: domain?.trimmingCharacters(in: .whitespaces), width: size.0, height: size.1,
-                                             scalePercent: scalePercent, trustedCertificate: trusted,
-                                             trustedNodes: trustedNodes,
-                                             gatewayHost: desktop.gatewayHost.flatMap { $0.isEmpty ? nil : $0 },
-                                             gatewayUser: desktop.gatewayUser.flatMap { $0.isEmpty ? nil : $0 },
-                                             gatewayPassword: try? keychain.password(for: desktop.gatewayKeychainAccount),
-                                             gatewayDomain: desktop.gatewayDomain.flatMap { $0.isEmpty ? nil : $0 },
-                                             h264LibraryPath: OpenH264.libraryPath),
-                               events: events)
+        let engine = RDPEngine(
+            config: .init(
+                host: target.host, port: target.port, user: name, password: password,
+                domain: domain?.trimmingCharacters(in: .whitespaces), width: size.0, height: size.1,
+                scalePercent: scalePercent, trustedCertificate: trusted,
+                trustedNodes: trustedNodes,
+                gatewayHost: desktop.gatewayHost.flatMap { $0.isEmpty ? nil : $0 },
+                gatewayUser: desktop.gatewayUser.flatMap { $0.isEmpty ? nil : $0 },
+                gatewayPassword: try? keychain.password(for: desktop.gatewayKeychainAccount),
+                gatewayDomain: desktop.gatewayDomain.flatMap { $0.isEmpty ? nil : $0 },
+                h264LibraryPath: OpenH264.libraryPath),
+            events: events)
         self.engine = engine
         canvas.engine = engine
         engine.connect()
@@ -328,7 +333,8 @@ final class RDPSession {
 
     private func askTrust(_ fingerprint: String, node: CertNode) {
         // «Изменился» — только если этому же узлу раньше доверяли; шлюз и перенаправление — свои первые вопросы.
-        trustPromptChanged = node.role == .target
+        trustPromptChanged =
+            node.role == .target
             ? UserDefaults.standard.string(forKey: certificateKey) != nil
             : trustedNodes[Self.nodeKey(node)] != nil
         trustNode = node
@@ -348,7 +354,7 @@ final class RDPSession {
     }
 
     private func finished(_ kind: RDPEngine.CloseKind, _ message: String) {
-        guard engine != nil else { return }   // закрыли сами
+        guard engine != nil else { return }  // закрыли сами
         engine = nil
         canvas.engine = nil
         audio.stop()
@@ -370,8 +376,10 @@ final class RDPSession {
             pendingSave = nil
             phase = .needsCredentials
         case .certRejected:
-            phase = certificateMismatch
-                ? .disconnected(L("Сертификат сервера изменился с прошлого подключения. Если это ожидаемо (сервер переустановили), сбросьте доверие и подключитесь снова."))
+            phase =
+                certificateMismatch
+                ? .disconnected(
+                    L("Сертификат сервера изменился с прошлого подключения. Если это ожидаемо (сервер переустановили), сбросьте доверие и подключитесь снова."))
                 : .disconnected(nil)
         default:
             phase = .disconnected(message.isEmpty ? nil : SSHErrorText.describeRemote(.rdp, message))

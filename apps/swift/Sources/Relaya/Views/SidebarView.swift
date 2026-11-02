@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Элемент боковой панели.
 enum SidebarItem: Hashable {
@@ -15,29 +15,31 @@ struct SidebarView: View {
     @Environment(\.openWindow) private var openWindow
 
     private var selection: Binding<SidebarItem?> {
-        Binding(get: {
-            if model.screen != .hosts { return .tool(model.screen) }
-            // Открыта вкладка — подсвечиваем её хост или рабочий стол, а не последний выбранный.
-            if let s = model.activeSession {
-                switch s.kind {
-                case .terminal(let c): return .host(c.host.id)
-                case .files(let t): return .host(t.host.id)
-                case .tmux(let w): return .host(w.client.host.id)
-                case .vnc(let v): return .desktop(v.desktop.id)
-                case .rdp(let r): return .desktop(r.desktop.id)
+        Binding(
+            get: {
+                if model.screen != .hosts { return .tool(model.screen) }
+                // Открыта вкладка — подсвечиваем её хост или рабочий стол, а не последний выбранный.
+                if let s = model.activeSession {
+                    switch s.kind {
+                    case .terminal(let c): return .host(c.host.id)
+                    case .files(let t): return .host(t.host.id)
+                    case .tmux(let w): return .host(w.client.host.id)
+                    case .vnc(let v): return .desktop(v.desktop.id)
+                    case .rdp(let r): return .desktop(r.desktop.id)
+                    }
                 }
-            }
-            if let id = model.selectedHostID { return .host(id) }
-            if let id = model.selectedDesktopID { return .desktop(id) }
-            return nil
-        }, set: { item in
-            switch item {
-            case .host(let id)?: model.select(host: id)
-            case .desktop(let id)?: if let d = model.desktops.first(where: { $0.id == id }) { model.select(desktop: d) }
-            case .tool(let screen)?: model.screen = screen
-            case nil: break
-            }
-        })
+                if let id = model.selectedHostID { return .host(id) }
+                if let id = model.selectedDesktopID { return .desktop(id) }
+                return nil
+            },
+            set: { item in
+                switch item {
+                case .host(let id)?: model.select(host: id)
+                case .desktop(let id)?: if let d = model.desktops.first(where: { $0.id == id }) { model.select(desktop: d) }
+                case .tool(let screen)?: model.screen = screen
+                case nil: break
+                }
+            })
     }
 
     var body: some View {
@@ -127,8 +129,10 @@ struct SidebarView: View {
                 Divider()
                 Button(L("Изменить…")) { model.desktopEditor = d }
                 Button(L("Удалить…"), role: .destructive) {
-                    model.pendingRemoval = PendingDelete(title: L("Удалить «%@»?", d.displayName),
-                                                        message: L("Подключение к рабочему столу и его сохранённые пароли будут удалены.")) {
+                    model.pendingRemoval = PendingDelete(
+                        title: L("Удалить «%@»?", d.displayName),
+                        message: L("Подключение к рабочему столу и его сохранённые пароли будут удалены.")
+                    ) {
                         model.deleteDesktop(d)
                     }
                 }
@@ -243,4 +247,3 @@ struct DesktopRow: View {
         .badge(Text(open ? "● " + desktop.kind.title : desktop.kind.title))
     }
 }
-

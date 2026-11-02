@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Мастер «Настроить вход по ключу».
 ///
@@ -152,8 +152,9 @@ final class KeyWizardModel {
                     }
                 }
                 note("append ~/.ssh/authorized_keys on \(host.alias)")
-                try await installer.install(publicKey: pub.trimmingCharacters(in: .whitespacesAndNewlines),
-                                            alias: host.alias, password: secret)
+                try await installer.install(
+                    publicKey: pub.trimmingCharacters(in: .whitespacesAndNewlines),
+                    alias: host.alias, password: secret)
             }
 
             // 3. Агент + passphrase в системный Keychain
@@ -196,9 +197,10 @@ final class KeyWizardModel {
                 undone.append(L("удалены созданные файлы %@*", "\(fileName)"))
             }
             let serverChanged = statuses["Сервер"] == .ok
-            undone.append(serverChanged
-                ? L("ключ на сервере остался в authorized_keys — удалите строку вручную, если она не нужна")
-                : L("на сервере ничего не изменено"))
+            undone.append(
+                serverChanged
+                    ? L("ключ на сервере остался в authorized_keys — удалите строку вручную, если она не нужна")
+                    : L("на сервере ничего не изменено"))
             undone.append(L("~/.ssh/config не менялся"))
             rollbackNote = undone.joined(separator: "; ")
         }
@@ -234,7 +236,8 @@ struct KeyWizardView: View {
             }
             footer
         }
-        .frame(minWidth: 560, idealWidth: 640, maxWidth: 900, minHeight: 460, idealHeight: 640, maxHeight: .infinity)  // UI-M3: лист не больше экрана MacBook Air 13"
+        // UI-M3: the sheet never outgrows a 13" MacBook Air screen.
+        .frame(minWidth: 560, idealWidth: 640, maxWidth: 900, minHeight: 460, idealHeight: 640, maxHeight: .infinity)
         .background(Theme.bg)
         .task { await wizard.loadKeys() }
         .interactiveDismissDisabled(wizard.running)
@@ -477,12 +480,16 @@ private struct DoneStep: View {
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
-            Text(wizard.passwordLogin
-                 ? L("На сервере ничего не меняем.")
-                 : L("После «Готово» откроется вкладка терминала и выполнит команду на сервере. Если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Вернуть вход по паролю: меню «Действия» в сессии."))
-                .font(.system(size: 12))
-                .foregroundStyle(wizard.passwordLogin ? Theme.tx2 : Theme.org)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                wizard.passwordLogin
+                    ? L("На сервере ничего не меняем.")
+                    : L(
+                        "После «Готово» откроется вкладка терминала и выполнит команду на сервере. Если ключ потеряется, а консоли провайдера нет — войти будет нельзя. Вернуть вход по паролю: меню «Действия» в сессии."
+                    )
+            )
+            .font(.system(size: 12))
+            .foregroundStyle(wizard.passwordLogin ? Theme.tx2 : Theme.org)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

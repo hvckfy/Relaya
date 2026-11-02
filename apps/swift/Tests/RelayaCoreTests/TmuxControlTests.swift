@@ -1,4 +1,5 @@
 import Testing
+
 @testable import RelayaCore
 
 struct TmuxControlTests {
@@ -11,13 +12,14 @@ struct TmuxControlTests {
         var p = TmuxControl.Parser()
         var events = p.feed(Array("\u{1B}P1000p%begin 1 2 0\n@1 %1 bash\n@2 %4 htop\n%end 1 2 0\n%out".utf8))
         events += p.feed(Array("put %1 hi\\015\\012\n%window-add @3\n%window-close @2\n%exit\n".utf8))
-        #expect(events == [
-            .reply(lines: ["@1 %1 bash", "@2 %4 htop"], error: false),
-            .output(pane: "%1", data: Array("hi\r\n".utf8)),
-            .windowAdd(window: "@3"),
-            .windowClose(window: "@2"),
-            .exit(reason: nil),
-        ])
+        #expect(
+            events == [
+                .reply(lines: ["@1 %1 bash", "@2 %4 htop"], error: false),
+                .output(pane: "%1", data: Array("hi\r\n".utf8)),
+                .windowAdd(window: "@3"),
+                .windowClose(window: "@2"),
+                .exit(reason: nil),
+            ])
     }
 
     @Test func commands() {

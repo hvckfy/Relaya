@@ -55,7 +55,8 @@ final class RDPCanvasView: NSView {
             for r in rects {
                 // Ядро клампит прямоугольники, но границы проверяем и здесь.
                 guard r.x >= 0, r.y >= 0, r.width > 0, r.height > 0, r.x + r.width <= w, r.y + r.height <= h,
-                      r.bgra.count >= r.width * r.height * 4 else { continue }
+                    r.bgra.count >= r.width * r.height * 4
+                else { continue }
                 r.bgra.withUnsafeBytes { src in
                     guard let s = src.baseAddress else { return }
                     for row in 0..<r.height {
@@ -74,10 +75,11 @@ final class RDPCanvasView: NSView {
         dirty = false
         let (w, h) = remote
         guard w > 0, h > 0, let provider = CGDataProvider(data: pixels as CFData) else { return }
-        image = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
-                        space: CGColorSpaceCreateDeviceRGB(),
-                        bitmapInfo: CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.noneSkipFirst.rawValue),
-                        provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+        image = CGImage(
+            width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.noneSkipFirst.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer?.contents = image
@@ -143,7 +145,11 @@ final class RDPCanvasView: NSView {
     }
 
     private static func otherButton(_ event: NSEvent) -> Int {
-        switch event.buttonNumber { case 3: 3; case 4: 4; default: 1 }
+        switch event.buttonNumber {
+        case 3: 3;
+        case 4: 4;
+        default: 1
+        }
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -237,7 +243,8 @@ final class RDPCanvasView: NSView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self, event.type == .keyDown else { return false }
         if event.modifierFlags.contains(.command),
-           let c = event.charactersIgnoringModifiers?.lowercased(), ["q", "w", "h", "m", "`", ","].contains(c) {
+            let c = event.charactersIgnoringModifiers?.lowercased(), ["q", "w", "h", "m", "`", ","].contains(c)
+        {
             return false
         }
         keyDown(with: event)
@@ -265,13 +272,14 @@ final class RDPCanvasView: NSView {
     override func flagsChanged(with event: NSEvent) {
         if let v = vnc {
             guard let sym = vncModifier(Int(event.keyCode)) else { return }
-            let flag: NSEvent.ModifierFlags = switch Int(event.keyCode) {
-            case kVK_Shift, kVK_RightShift: .shift
-            case kVK_Control, kVK_RightControl: .control
-            case kVK_Option, kVK_RightOption: .option
-            case kVK_CapsLock: .capsLock
-            default: .command
-            }
+            let flag: NSEvent.ModifierFlags =
+                switch Int(event.keyCode) {
+                case kVK_Shift, kVK_RightShift: .shift
+                case kVK_Control, kVK_RightControl: .control
+                case kVK_Option, kVK_RightOption: .option
+                case kVK_CapsLock: .capsLock
+                default: .command
+                }
             if flag == .capsLock {
                 // Caps Lock на Mac приходит одним событием на переключение.
                 v.key(sym, down: true); v.key(sym, down: false)
@@ -283,13 +291,15 @@ final class RDPCanvasView: NSView {
             return
         }
         guard let code = Self.scancodes[Int(event.keyCode)] else { return }
-        let flag: NSEvent.ModifierFlags? = switch Int(event.keyCode) {
-        case kVK_Shift, kVK_RightShift: .shift
-        case kVK_Control, kVK_RightControl, kVK_Command, kVK_RightCommand: event.keyCode == kVK_Command || event.keyCode == kVK_RightCommand ? .command : .control
-        case kVK_Option, kVK_RightOption: .option
-        case kVK_CapsLock: .capsLock
-        default: nil
-        }
+        let flag: NSEvent.ModifierFlags? =
+            switch Int(event.keyCode) {
+            case kVK_Shift, kVK_RightShift: .shift
+            case kVK_Control, kVK_RightControl, kVK_Command, kVK_RightCommand:
+                event.keyCode == kVK_Command || event.keyCode == kVK_RightCommand ? .command : .control
+            case kVK_Option, kVK_RightOption: .option
+            case kVK_CapsLock: .capsLock
+            default: nil
+            }
         guard let flag else { return }
         if Int(event.keyCode) == kVK_CapsLock {
             // Caps Lock на Mac приходит одним событием на переключение.

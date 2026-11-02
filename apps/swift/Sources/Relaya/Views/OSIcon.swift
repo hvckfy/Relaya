@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Значок ОС сервера: SF Symbol, где он есть, иначе бейдж в фирменном цвете дистрибутива.
 struct OSIcon: View {
@@ -14,19 +14,19 @@ struct OSIcon: View {
                         .fill(os.brandColor, style: FillStyle(eoFill: false))
                         .padding(size * 0.04)
                 } else {
-                switch os.style {
-                case .symbol(let name, let color):
-                    Image(systemName: name)
-                        .font(.system(size: size * 0.72, weight: .semibold))
-                        .foregroundStyle(color)
-                case .badge(let text, let color):
-                    Text(text)
-                        .font(.system(size: size * (text.count > 1 ? 0.42 : 0.56), weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.5)
-                        .frame(width: size, height: size)
-                        .background(color, in: .rect(cornerRadius: size * 0.28))
-                }
+                    switch os.style {
+                    case .symbol(let name, let color):
+                        Image(systemName: name)
+                            .font(.system(size: size * 0.72, weight: .semibold))
+                            .foregroundStyle(color)
+                    case .badge(let text, let color):
+                        Text(text)
+                            .font(.system(size: size * (text.count > 1 ? 0.42 : 0.56), weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                            .minimumScaleFactor(0.5)
+                            .frame(width: size, height: size)
+                            .background(color, in: .rect(cornerRadius: size * 0.28))
+                    }
                 }
             } else {
                 Image(systemName: "chevron.right.2")

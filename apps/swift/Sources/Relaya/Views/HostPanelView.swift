@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Лёгкая мини-панель хоста в карточке: сервисы systemd, слушающие порты, ошибки журнала, обновления.
 /// Всё — одной командой по ssh, без агента. Действия — только с подтверждением.
@@ -32,9 +32,11 @@ struct HostPanelView: View {
                 if let updates = panel.updates { updatesSection(updates) }
             }
         }
-        .confirmationDialog(confirm.map { L("%@ сервис «%@»?", actionTitle($0.action), $0.unit.shortName) } ?? "",
-                            isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }),
-                            presenting: confirm) { c in
+        .confirmationDialog(
+            confirm.map { L("%@ сервис «%@»?", actionTitle($0.action), $0.unit.shortName) } ?? "",
+            isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }),
+            presenting: confirm
+        ) { c in
             Button(actionTitle(c.action), role: c.action == "stop" ? .destructive : nil) {
                 Task { await model.serviceAction(c.action, c.unit, on: host) }
             }
@@ -55,7 +57,9 @@ struct HostPanelView: View {
             case .all: true
             }
         }
-        let filtered = query.isEmpty ? inScope
+        let filtered =
+            query.isEmpty
+            ? inScope
             : inScope.filter { $0.name.lowercased().contains(query) || $0.description.lowercased().contains(query) }
         let shown = showAllServices || !query.isEmpty ? filtered : Array(filtered.prefix(max(8, failed.count)))
         Section {
@@ -113,7 +117,9 @@ struct HostPanelView: View {
                     } else {
                         Button(L("Запустить…")) { confirm = ("start", u) }
                     }
-                } label: { Image(systemName: "ellipsis") }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             }
         }

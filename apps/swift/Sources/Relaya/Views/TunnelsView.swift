@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Экран «Туннели»: пробросы портов и их состояние.
 struct TunnelsView: View {
@@ -15,8 +15,9 @@ struct TunnelsView: View {
                 Text("\(manager.tunnels.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.tx2)
                 Spacer()
                 Button(L("Новый туннель…")) {
-                    editing = Tunnel(name: "", hostAlias: model.selectedHost?.alias ?? model.hosts.first?.alias ?? "",
-                                     listenPort: 8080, targetHost: "localhost", targetPort: 80)
+                    editing = Tunnel(
+                        name: "", hostAlias: model.selectedHost?.alias ?? model.hosts.first?.alias ?? "",
+                        listenPort: 8080, targetHost: "localhost", targetPort: 80)
                 }
                 .buttonStyle(.relayaPrimary)
                 .disabled(model.hosts.isEmpty)
@@ -115,8 +116,10 @@ private struct TunnelRow: View {
                 }
                 Divider()
                 Button(L("Удалить…"), role: .destructive) {
-                    model.pendingRemoval = PendingDelete(title: L("Удалить туннель «%@»?", tunnel.name.isEmpty ? tunnel.spec : tunnel.name),
-                                                        message: L("Если он запущен, он будет остановлен.")) {
+                    model.pendingRemoval = PendingDelete(
+                        title: L("Удалить туннель «%@»?", tunnel.name.isEmpty ? tunnel.spec : tunnel.name),
+                        message: L("Если он запущен, он будет остановлен.")
+                    ) {
                         model.tunnels.delete(tunnel.id)
                     }
                 }
@@ -164,8 +167,9 @@ struct TunnelEditor: View {
                 .pickerStyle(.segmented)
                 TextField(tunnel.kind == .remote ? L("Порт на сервере") : L("Локальный порт"), text: $listen)
                 if tunnel.kind != .dynamic {
-                    TextField(tunnel.kind == .remote ? L("Адрес на этом Mac") : L("Адрес (с точки зрения сервера)"),
-                              text: $tunnel.targetHost)
+                    TextField(
+                        tunnel.kind == .remote ? L("Адрес на этом Mac") : L("Адрес (с точки зрения сервера)"),
+                        text: $tunnel.targetHost)
                     TextField(L("Порт назначения"), text: $target)
                 }
                 Toggle(L("Запускать вместе с Relaya"), isOn: $tunnel.autoStart)

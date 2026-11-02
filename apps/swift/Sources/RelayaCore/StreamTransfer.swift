@@ -37,8 +37,10 @@ public enum StreamTransfer {
 
     /// Скачать `remotePath` в `localURL`: сначала в `.имя.part` рядом, каждая запись проверяется,
     /// и только после успеха файл переименовывается. Существующий `localURL` до этого не трогается.
-    public static func download(_ ssh: SSHInvocation, remotePath: String, to localURL: URL,
-                                progress: @escaping @Sendable (Int64) -> Void) async throws {
+    public static func download(
+        _ ssh: SSHInvocation, remotePath: String, to localURL: URL,
+        progress: @escaping @Sendable (Int64) -> Void
+    ) async throws {
         let part = localURL.deletingLastPathComponent().appending(path: ".\(localURL.lastPathComponent).\(UUID().uuidString.prefix(8)).part")
         guard FileManager.default.createFile(atPath: part.path, contents: nil) else {
             throw Failure(message: L("Не удалось создать файл %@", part.path))
@@ -85,8 +87,10 @@ public enum StreamTransfer {
                         } else if p.terminationStatus == 0 {
                             cont.resume()
                         } else {
-                            cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)"),
-                                                    loginRefused: p.terminationStatus == 255 && SSHErrorText.loginRefused(err)))
+                            cont.resume(
+                                throwing: Failure(
+                                    message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)"),
+                                    loginRefused: p.terminationStatus == 255 && SSHErrorText.loginRefused(err)))
                         }
                     }
                     if box.cancelled { cont.resume(throwing: CancellationError()); return }
@@ -114,14 +118,17 @@ public enum StreamTransfer {
     /// Загрузить файл в `remoteDirectory/name`: во временный файл с уникальным именем, проверить размер,
     /// перенести права существующего файла и только потом атомарно заменить. Обрыв, отмена или ошибка чтения
     /// оставляют оригинал на месте.
-    public static func upload(_ ssh: SSHInvocation, localURL: URL, remoteDirectory: String, name: String,
-                              progress: @escaping @Sendable (Int64) -> Void) async throws {
+    public static func upload(
+        _ ssh: SSHInvocation, localURL: URL, remoteDirectory: String, name: String,
+        progress: @escaping @Sendable (Int64) -> Void
+    ) async throws {
         if Task.isCancelled { throw CancellationError() }
         let target = join(remoteDirectory, name)
         let temp = join(remoteDirectory, ".\(name).\(UUID().uuidString.prefix(8).lowercased()).relaya-part")
         let size = (try FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? NSNumber)?.int64Value ?? -1
         let (t, g) = (quote(temp), quote(target))
-        let command = "cat > \(t) || { rm -f -- \(t); exit 1; }; "
+        let command =
+            "cat > \(t) || { rm -f -- \(t); exit 1; }; "
             + "if [ \"$(wc -c < \(t) | tr -d ' ')\" != \"\(size)\" ]; then rm -f -- \(t); echo 'relaya: size mismatch, upload incomplete' >&2; exit 1; fi; "
             + "if [ -e \(g) ]; then chmod --reference=\(g) \(t) 2>/dev/null || chmod \"$(stat -f %Lp \(g) 2>/dev/null || stat -c %a \(g))\" \(t) 2>/dev/null; fi; "
             + "mv -f -- \(t) \(g) || { rm -f -- \(t); exit 1; }"
@@ -145,8 +152,10 @@ public enum StreamTransfer {
                     } else if p.terminationStatus == 0 {
                         cont.resume()
                     } else {
-                        cont.resume(throwing: Failure(message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)"),
-                                                    loginRefused: p.terminationStatus == 255 && SSHErrorText.loginRefused(err)))
+                        cont.resume(
+                            throwing: Failure(
+                                message: SSHErrorText.describe(err, fallback: "ssh: \(p.terminationStatus)"),
+                                loginRefused: p.terminationStatus == 255 && SSHErrorText.loginRefused(err)))
                     }
                 }
                 if box.cancelled { try? input.close(); cont.resume(throwing: CancellationError()); return }
@@ -210,7 +219,11 @@ public enum StreamTransfer {
     final class Counter: @unchecked Sendable {
         private let lock = NSLock()
         private var value: Int64 = 0
-        func add(_ n: Int) -> Int64 { lock.withLock { value += Int64(n); return value } }
+        func add(_ n: Int) -> Int64 {
+            lock.withLock {
+                value += Int64(n); return value
+            }
+        }
     }
 
     public static func quote(_ s: String) -> String {

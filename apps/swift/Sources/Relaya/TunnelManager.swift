@@ -39,8 +39,10 @@ final class TunnelManager {
         self.askpassExecutable = askpassExecutable
         tunnels = store.load()
         // ssh-процессы не умирают вместе с приложением сами — гасим их при выходе.
-        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
-                                               object: nil, queue: .main) { [weak self] _ in
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
             MainActor.assumeIsolated { self?.stopAll() }
         }
     }

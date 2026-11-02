@@ -82,8 +82,9 @@ public struct KeyInstaller: Sendable {
             try fm.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         }
         // -N виден в списке процессов долю секунды; ssh-keygen не умеет брать passphrase из askpass.
-        let r = try await ProcessRunner.run("/usr/bin/ssh-keygen",
-                                            ["-t", "ed25519", "-f", path, "-C", comment, "-N", passphrase, "-q"])
+        let r = try await ProcessRunner.run(
+            "/usr/bin/ssh-keygen",
+            ["-t", "ed25519", "-f", path, "-C", comment, "-N", passphrase, "-q"])
         guard r.succeeded else { throw Failure("ssh-keygen: \(r.message)") }
     }
 
@@ -98,15 +99,17 @@ public struct KeyInstaller: Sendable {
         } else {
             args += ["-o", "BatchMode=yes"]
         }
-        let r = try await ProcessRunner.run("/usr/bin/ssh", args + [alias, remote],
-                                            environment: env, input: publicKey + "\n")
+        let r = try await ProcessRunner.run(
+            "/usr/bin/ssh", args + [alias, remote],
+            environment: env, input: publicKey + "\n")
         guard r.succeeded else { throw Failure(Self.explain(r)) }
     }
 
     /// Удалённый скрипт установки ключа (POSIX sh, работает и в busybox).
     /// Ключ читается из stdin. Дописывается в `~/.ssh/authorized_keys`, а для root на системах
     /// с Dropbear (OpenWrt и др.) — ещё и в `/etc/dropbear/authorized_keys`: Dropbear читает ключи root оттуда.
-    static let installScript = #"sh -c 'umask 077; read -r k || exit 1; add() { mkdir -p "${1%/*}" && touch "$1" && chmod 600 "$1" && { grep -qxF "$k" "$1" 2>/dev/null || printf "%s\n" "$k" >> "$1"; }; }; add "$HOME/.ssh/authorized_keys" && chmod 700 "$HOME/.ssh" || exit 1; if [ "$(id -u)" = 0 ] && [ -d /etc/dropbear ]; then add /etc/dropbear/authorized_keys || exit 1; fi'"#
+    static let installScript =
+        #"sh -c 'umask 077; read -r k || exit 1; add() { mkdir -p "${1%/*}" && touch "$1" && chmod 600 "$1" && { grep -qxF "$k" "$1" 2>/dev/null || printf "%s\n" "$k" >> "$1"; }; }; add "$HOME/.ssh/authorized_keys" && chmod 700 "$HOME/.ssh" || exit 1; if [ "$(id -u)" = 0 ] && [ -d /etc/dropbear ]; then add /etc/dropbear/authorized_keys || exit 1; fi'"#
 
     /// Определяет ОС сервера отдельным неинтерактивным входом (ключ, агент или пароль из Keychain).
     public func detectOS(alias: String, password: SecretRef?) async -> ServerOS? {
@@ -138,15 +141,19 @@ public struct KeyInstaller: Sendable {
 
     /// Вход только этим ключом, без пароля.
     public func verify(alias: String, keyPath: String) async throws {
-        let r = try await ProcessRunner.run("/usr/bin/ssh", [
-            "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "PasswordAuthentication=no",
-            "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15",
-            "-i", keyPath, alias, "true",
-        ])
+        let r = try await ProcessRunner.run(
+            "/usr/bin/ssh",
+            [
+                "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "PasswordAuthentication=no",
+                "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15",
+                "-i", keyPath, alias, "true",
+            ])
         guard r.succeeded else {
             var msg = L("Проверочный вход по ключу не прошёл: %@", "\(Self.explain(r))")
             if r.message.contains("Permission denied") {
-                msg += L(". Ключ на сервер добавлен, но сервер его не принимает — проверьте права (~/.ssh 700, authorized_keys 600, домашний каталог без записи для группы) и не отключён ли вход по ключу в настройках sshd.")
+                msg += L(
+                    ". Ключ на сервер добавлен, но сервер его не принимает — проверьте права (~/.ssh 700, authorized_keys 600, домашний каталог без записи для группы) и не отключён ли вход по ключу в настройках sshd."
+                )
             }
             throw Failure(msg)
         }

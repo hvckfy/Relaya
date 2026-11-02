@@ -45,8 +45,10 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
     /// Готовые разрешения для меню.
     public static let rdpResolutionPresets: [(Int, Int)] = [(1280, 720), (1440, 900), (1920, 1080), (2560, 1440), (3840, 2160)]
 
-    public init(name: String, kind: Kind, address: String, port: Int? = nil, user: String = "",
-                viaSSHHost: String? = nil, fullScreen: Bool = false) {
+    public init(
+        name: String, kind: Kind, address: String, port: Int? = nil, user: String = "",
+        viaSSHHost: String? = nil, fullScreen: Bool = false
+    ) {
         self.name = name
         self.kind = kind
         self.address = address
@@ -72,8 +74,9 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
     /// Туннель для подключения через SSH: локальный порт → address:port на сервере.
     public func tunnel(localPort: Int) -> Tunnel? {
         guard let via = viaSSHHost, !via.isEmpty else { return nil }
-        return Tunnel(name: "\(kind.title) \(name)", hostAlias: via, kind: .local,
-                      listenPort: localPort, targetHost: address, targetPort: port)
+        return Tunnel(
+            name: "\(kind.title) \(name)", hostAlias: via, kind: .local,
+            listenPort: localPort, targetHost: address, targetPort: port)
     }
 
     /// `vnc://user@host:port` для «Общего экрана».
@@ -88,10 +91,11 @@ public struct RemoteDesktop: Codable, Hashable, Identifiable, Sendable {
 
     /// Содержимое .rdp-файла для Windows App / Remote Desktop (Rust-ядро, `core/src/models.rs`).
     public func rdpFile(host: String, port: Int) -> String {
-        desktopRdpFile(d: RelayaRust.RemoteDesktop(
-            id: id.uuidString, name: name, kind: kind == .vnc ? .vnc : .rdp, address: address, port: Int64(port), user: user,
-            viaSshHost: viaSSHHost, fullScreen: fullScreen, scaleToFit: scaleToFit, rdpWidth: rdpWidth.map(Int64.init),
-            rdpHeight: rdpHeight.map(Int64.init), rdpRetina: rdpRetina, group: group), host: host, port: Int64(port))
+        desktopRdpFile(
+            d: RelayaRust.RemoteDesktop(
+                id: id.uuidString, name: name, kind: kind == .vnc ? .vnc : .rdp, address: address, port: Int64(port), user: user,
+                viaSshHost: viaSSHHost, fullScreen: fullScreen, scaleToFit: scaleToFit, rdpWidth: rdpWidth.map(Int64.init),
+                rdpHeight: rdpHeight.map(Int64.init), rdpRetina: rdpRetina, group: group), host: host, port: Int64(port))
     }
 
     /// Свободен ли порт на localhost.

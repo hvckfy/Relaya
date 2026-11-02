@@ -79,8 +79,9 @@ public struct MCPPolicy: Codable, Equatable, Sendable {
 
     /// Та же политика в Rust-ядре.
     var rust: McpPolicy {
-        McpPolicy(enabled: enabled, defaultMode: defaultMode.rust, hosts: hosts.mapValues(\.rust), allow: allow, deny: deny,
-                  grants: grants?.mapValues { McpGrant(mode: $0.mode.rust, until: $0.until.timeIntervalSinceReferenceDate) })
+        McpPolicy(
+            enabled: enabled, defaultMode: defaultMode.rust, hosts: hosts.mapValues(\.rust), allow: allow, deny: deny,
+            grants: grants?.mapValues { McpGrant(mode: $0.mode.rust, until: $0.until.timeIntervalSinceReferenceDate) })
     }
 }
 
@@ -150,8 +151,10 @@ public struct MCPLogEntry: Codable, Hashable, Identifiable, Sendable {
     /// Хвост вывода (до 2000 символов).
     public var output: String?
 
-    public init(date: Date = Date(), client: String, tool: String, host: String, detail: String,
-                decision: String, exitCode: Int32? = nil) {
+    public init(
+        date: Date = Date(), client: String, tool: String, host: String, detail: String,
+        decision: String, exitCode: Int32? = nil
+    ) {
         self.date = date
         self.client = client
         self.tool = tool
@@ -194,7 +197,8 @@ public struct MCPLog: Sendable {
 
     private func rotateIfNeeded() {
         guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue,
-              size > Self.maxBytes else { return }
+            size > Self.maxBytes
+        else { return }
         let old = url.appendingPathExtension("old")
         try? FileManager.default.removeItem(at: old)
         try? FileManager.default.moveItem(at: url, to: old)
@@ -226,9 +230,10 @@ public struct MCPLog: Sendable {
         let f = ISO8601DateFormatter()
         let byID = Dictionary(entries.map { ($0.id.uuidString, $0) }, uniquingKeysWith: { a, _ in a })
         let rust = entries.map { e in
-            McpLogEntry(id: e.id.uuidString, date: f.string(from: e.date), client: e.client, tool: e.tool, host: e.host,
-                        detail: e.detail, decision: e.decision, exitCode: e.exitCode, session: e.session?.uuidString,
-                        changes: e.changes, output: e.output)
+            McpLogEntry(
+                id: e.id.uuidString, date: f.string(from: e.date), client: e.client, tool: e.tool, host: e.host,
+                detail: e.detail, decision: e.decision, exitCode: e.exitCode, session: e.session?.uuidString,
+                changes: e.changes, output: e.output)
         }
         return mcpSummaries(entries: rust).compactMap { s in
             let changes = s.changes.compactMap { byID[$0.id] }

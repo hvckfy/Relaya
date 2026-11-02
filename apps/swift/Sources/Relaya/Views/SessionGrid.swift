@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Плитки терминалов: дерево разбиений с перетаскиваемыми границами, без наложений.
 /// Вкладку или заголовок плитки можно перетащить на край другой плитки — она прилипнет туда
@@ -21,8 +21,10 @@ struct SessionGrid: View {
                 .coordinateSpace(.named("tiles"))
                 .onPreferenceChange(TileFrames.self) { frames = $0 }
                 .overlay(alignment: .topLeading) { DockHint(rect: hint) }
-                .onDrop(of: [.plainText], delegate: TileDropDelegate(
-                    model: model, frames: { frames }, bounds: CGRect(origin: .zero, size: geo.size), hint: $hint))
+                .onDrop(
+                    of: [.plainText],
+                    delegate: TileDropDelegate(
+                        model: model, frames: { frames }, bounds: CGRect(origin: .zero, size: geo.size), hint: $hint))
             }
         }
         .background(ThemeStore.sessionOpacity < 1 ? Color.clear : Theme.bar)
@@ -32,11 +34,13 @@ struct SessionGrid: View {
         switch layout {
         case .leaf(let id):
             if let s = model.tileableSessions.first(where: { $0.id == id }) {
-                return AnyView(cell(s)
-                    .frame(minWidth: 160, maxWidth: .infinity, minHeight: 100, maxHeight: .infinity)
-                    .background(GeometryReader { g in
-                        Color.clear.preference(key: TileFrames.self, value: [id: g.frame(in: .named("tiles"))])
-                    }))
+                return AnyView(
+                    cell(s)
+                        .frame(minWidth: 160, maxWidth: .infinity, minHeight: 100, maxHeight: .infinity)
+                        .background(
+                            GeometryReader { g in
+                                Color.clear.preference(key: TileFrames.self, value: [id: g.frame(in: .named("tiles"))])
+                            }))
             }
             return AnyView(EmptyView())
         case .row(let children):
@@ -67,12 +71,15 @@ struct SessionGrid: View {
                 if controller?.ended == true { Text(L("отключён")).font(.system(size: 11)).foregroundStyle(Theme.red) }
                 Spacer()
                 if model.broadcastInput, controller != nil {
-                    Toggle(L("ввод"), isOn: Binding(
-                        get: { !model.broadcastExcluded.contains(session.id) },
-                        set: { if $0 { model.broadcastExcluded.remove(session.id) } else { model.broadcastExcluded.insert(session.id) } }))
-                        .toggleStyle(.checkbox)
-                        .font(.system(size: 11))
-                        .help(L("Получает рассылаемый ввод"))
+                    Toggle(
+                        L("ввод"),
+                        isOn: Binding(
+                            get: { !model.broadcastExcluded.contains(session.id) },
+                            set: { if $0 { model.broadcastExcluded.remove(session.id) } else { model.broadcastExcluded.insert(session.id) } })
+                    )
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11))
+                    .help(L("Получает рассылаемый ввод"))
                 }
                 IconButton(systemImage: "arrow.up.left.and.arrow.down.right", label: L("Развернуть"), size: 20) {
                     model.activeSessionID = session.id
@@ -111,8 +118,9 @@ struct SessionGrid: View {
         .relayaGlass(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(receiving ? Theme.red.opacity(0.8) : (active ? Theme.acc.opacity(0.45) : Theme.line),
-                              lineWidth: receiving ? 1.5 : active ? 1 : 0.5)
+                .strokeBorder(
+                    receiving ? Theme.red.opacity(0.8) : (active ? Theme.acc.opacity(0.45) : Theme.line),
+                    lineWidth: receiving ? 1.5 : active ? 1 : 0.5)
         }
     }
 }

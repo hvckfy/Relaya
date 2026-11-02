@@ -60,22 +60,27 @@ public enum Tmux {
     }
 
     /// Какие сессии хоста убрать: не подключённые, не открытые во вкладках и просроченные; сверх `cap` — самые старые.
-    public static func stale(_ sessions: [TmuxSession], alias: String, open: Set<String>,
-                             ttlMinutes: Int, now: Date = Date()) -> [String] {
-        tmuxStale(sessions: sessions.map(\.rust), alias: alias, open: Array(open), ttlMinutes: Int64(ttlMinutes),
-                  now: now.timeIntervalSince1970)
+    public static func stale(
+        _ sessions: [TmuxSession], alias: String, open: Set<String>,
+        ttlMinutes: Int, now: Date = Date()
+    ) -> [String] {
+        tmuxStale(
+            sessions: sessions.map(\.rust), alias: alias, open: Array(open), ttlMinutes: Int64(ttlMinutes),
+            now: now.timeIntervalSince1970)
     }
 }
 
 extension TmuxSession {
     init(rust s: RelayaRust.TmuxSession) {
-        self.init(name: s.name, attached: Int(s.attached), created: Date(timeIntervalSince1970: s.created),
-                  activity: Date(timeIntervalSince1970: s.activity),
-                  detachedAt: s.detachedAt.map { Date(timeIntervalSince1970: $0) }, keep: s.keep)
+        self.init(
+            name: s.name, attached: Int(s.attached), created: Date(timeIntervalSince1970: s.created),
+            activity: Date(timeIntervalSince1970: s.activity),
+            detachedAt: s.detachedAt.map { Date(timeIntervalSince1970: $0) }, keep: s.keep)
     }
 
     var rust: RelayaRust.TmuxSession {
-        RelayaRust.TmuxSession(name: name, attached: Int64(attached), created: created.timeIntervalSince1970,
-                               activity: activity.timeIntervalSince1970, detachedAt: detachedAt?.timeIntervalSince1970, keep: keep)
+        RelayaRust.TmuxSession(
+            name: name, attached: Int64(attached), created: created.timeIntervalSince1970,
+            activity: activity.timeIntervalSince1970, detachedAt: detachedAt?.timeIntervalSince1970, keep: keep)
     }
 }

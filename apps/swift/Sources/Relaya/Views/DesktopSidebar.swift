@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Карточка VNC/RDP-подключения.
 struct DesktopDetailView: View {
@@ -78,8 +78,9 @@ struct DesktopsEmptyView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label(model.desktops.isEmpty ? L("Добавьте первое подключение") : L("Выберите подключение"),
-                  systemImage: "display")
+            Label(
+                model.desktops.isEmpty ? L("Добавьте первое подключение") : L("Выберите подключение"),
+                systemImage: "display")
         } description: {
             Text(L("VNC и RDP открываются во вкладке Relaya. Пароль хранится в Keychain, можно подключаться через SSH-туннель."))
         } actions: {

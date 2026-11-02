@@ -12,7 +12,14 @@ public enum LineDiff {
 
     public static func diff(_ old: [String], _ new: [String]) -> [Line] {
         lineDiff(old: old, new: new).map { l in
-            Line(kind: { switch l.kind { case .same: .same; case .added: .added; case .removed: .removed } }(), text: l.text)
+            Line(
+                kind: {
+                    switch l.kind {
+                    case .same: .same;
+                    case .added: .added;
+                    case .removed: .removed
+                    }
+                }(), text: l.text)
         }
     }
 }

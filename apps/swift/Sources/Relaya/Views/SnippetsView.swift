@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Экран «Сниппеты»: библиотека команд, запуск на нескольких хостах.
 struct SnippetsView: View {
@@ -10,9 +10,11 @@ struct SnippetsView: View {
 
     private var visible: [Snippet] {
         let q = query.lowercased()
-        return q.isEmpty ? model.snippets : model.snippets.filter {
-            $0.name.lowercased().contains(q) || $0.command.lowercased().contains(q) || $0.tags.contains { $0.lowercased().contains(q) }
-        }
+        return q.isEmpty
+            ? model.snippets
+            : model.snippets.filter {
+                $0.name.lowercased().contains(q) || $0.command.lowercased().contains(q) || $0.tags.contains { $0.lowercased().contains(q) }
+            }
     }
 
     var body: some View {
@@ -49,12 +51,16 @@ struct SnippetsView: View {
                                 }
                                 Divider()
                                 Button(L("Удалить…"), role: .destructive) {
-                                    model.pendingRemoval = PendingDelete(title: L("Удалить сниппет «%@»?", s.name),
-                                                                        message: L("Сниппет будет удалён на всех машинах после синхронизации.")) {
+                                    model.pendingRemoval = PendingDelete(
+                                        title: L("Удалить сниппет «%@»?", s.name),
+                                        message: L("Сниппет будет удалён на всех машинах после синхронизации.")
+                                    ) {
                                         model.snippets.removeAll { $0.id == s.id }
                                     }
                                 }
-                            } label: { Image(systemName: "ellipsis") }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                            }
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                         }
                         .padding(12)
@@ -142,9 +148,11 @@ struct SnippetPalette: View {
 
     private var matches: [Snippet] {
         let q = query.lowercased()
-        return q.isEmpty ? model.snippets : model.snippets.filter {
-            $0.name.lowercased().contains(q) || $0.command.lowercased().contains(q)
-        }
+        return q.isEmpty
+            ? model.snippets
+            : model.snippets.filter {
+                $0.name.lowercased().contains(q) || $0.command.lowercased().contains(q)
+            }
     }
 
     var body: some View {
@@ -177,7 +185,9 @@ struct SnippetPalette: View {
                     }
                 }
                 .frame(height: 260)
-                HStack { Spacer(); Button(L("Закрыть")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction) }
+                HStack {
+                    Spacer(); Button(L("Закрыть")) { dismiss() }.buttonStyle(.relaya).keyboardShortcut(.cancelAction)
+                }
             }
         }
         .font(.system(size: 13))
@@ -212,9 +222,14 @@ private struct RunOnHostsSheet: View {
             Text(L("«%@» на хостах", "\(snippet.name)")).font(.system(size: 15, weight: .bold))
             VariablesForm(snippet: snippet, values: $values)
             List(model.hosts) { h in
-                Toggle(isOn: Binding(get: { chosen.contains(h.alias) },
-                                     set: { if $0 { chosen.insert(h.alias) } else { chosen.remove(h.alias) } })) {
-                    HStack { OSIcon(os: h.os, size: 16); Text(h.alias); Text(h.subtitle).foregroundStyle(Theme.tx2) }
+                Toggle(
+                    isOn: Binding(
+                        get: { chosen.contains(h.alias) },
+                        set: { if $0 { chosen.insert(h.alias) } else { chosen.remove(h.alias) } })
+                ) {
+                    HStack {
+                        OSIcon(os: h.os, size: 16); Text(h.alias); Text(h.subtitle).foregroundStyle(Theme.tx2)
+                    }
                 }
                 .toggleStyle(.checkbox)
             }

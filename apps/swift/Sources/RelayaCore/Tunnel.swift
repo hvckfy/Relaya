@@ -40,8 +40,10 @@ public struct Tunnel: Codable, Hashable, Identifiable, Sendable {
     /// Поднимать при запуске Relaya.
     public var autoStart: Bool
 
-    public init(name: String, hostAlias: String, kind: Kind = .local, listenPort: Int,
-                targetHost: String = "localhost", targetPort: Int = 0, autoStart: Bool = false) {
+    public init(
+        name: String, hostAlias: String, kind: Kind = .local, listenPort: Int,
+        targetHost: String = "localhost", targetPort: Int = 0, autoStart: Bool = false
+    ) {
         self.name = name
         self.hostAlias = hostAlias
         self.kind = kind
@@ -53,9 +55,16 @@ public struct Tunnel: Codable, Hashable, Identifiable, Sendable {
 
     /// Тот же туннель в Rust-ядре.
     var rust: RelayaRust.Tunnel {
-        RelayaRust.Tunnel(id: id.uuidString, name: name, hostAlias: hostAlias,
-                          kind: { switch kind { case .local: .local; case .remote: .remote; case .dynamic: .dynamic } }(),
-                          listenPort: Int64(listenPort), targetHost: targetHost, targetPort: Int64(targetPort), autoStart: autoStart)
+        RelayaRust.Tunnel(
+            id: id.uuidString, name: name, hostAlias: hostAlias,
+            kind: {
+                switch kind {
+                case .local: .local;
+                case .remote: .remote;
+                case .dynamic: .dynamic
+                }
+            }(),
+            listenPort: Int64(listenPort), targetHost: targetHost, targetPort: Int64(targetPort), autoStart: autoStart)
     }
 
     /// Спецификация проброса для ssh: `8080:localhost:80` или `1080`.

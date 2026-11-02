@@ -11,8 +11,10 @@ public struct RemoteFile: Identifiable, Hashable, Sendable {
     public var permissions: String
     public var modified: String
 
-    public init(name: String, isDirectory: Bool, isLink: Bool = false, size: Int64 = 0,
-                permissions: String = "", modified: String = "") {
+    public init(
+        name: String, isDirectory: Bool, isLink: Bool = false, size: Int64 = 0,
+        permissions: String = "", modified: String = ""
+    ) {
         self.name = name
         self.isDirectory = isDirectory
         self.isLink = isLink
@@ -58,13 +60,15 @@ public struct SFTPClient: Sendable {
         args += ["-b", "-", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"]
         // Переходы по папкам — через общее соединение хоста, а не новый вход на каждый шаг (П-9).
         args += SSHMux.options(alias: alias)
-        let r = try await ProcessRunner.run("/usr/bin/sftp", args + [alias],
-                                            environment: env, input: commands.joined(separator: "\n") + "\n")
+        let r = try await ProcessRunner.run(
+            "/usr/bin/sftp", args + [alias],
+            environment: env, input: commands.joined(separator: "\n") + "\n")
         guard r.succeeded else {
             let lines = r.stderr.split(whereSeparator: \.isNewline).map(String.init).filter { !$0.hasPrefix("sftp>") }
             let text = lines.joined(separator: "\n")
-            throw Failure(message: SSHErrorText.describe(text, fallback: L("sftp завершился с кодом %@", "\(r.status)")),
-                          loginRefused: r.status == 255 && SSHErrorText.loginRefused(text))
+            throw Failure(
+                message: SSHErrorText.describe(text, fallback: L("sftp завершился с кодом %@", "\(r.status)")),
+                loginRefused: r.status == 255 && SSHErrorText.loginRefused(text))
         }
         return r.stdout
     }
@@ -83,8 +87,10 @@ public struct SFTPClient: Sendable {
     }
 
     public func download(_ remotePath: String, to localDirectory: URL, recursive: Bool) async throws {
-        try await run(["lcd \(Self.quote(localDirectory.path))",
-                       "get \(recursive ? "-r " : "")\(Self.quote(remotePath))"])
+        try await run([
+            "lcd \(Self.quote(localDirectory.path))",
+            "get \(recursive ? "-r " : "")\(Self.quote(remotePath))",
+        ])
     }
 
     public func upload(_ localPath: String, to remoteDirectory: String) async throws {
@@ -112,8 +118,9 @@ public struct SFTPClient: Sendable {
     public static func parseListing(_ output: String) -> [RemoteFile] {
         // Логика — в Rust-ядре (`core/src/models.rs`).
         sftpParseListing(output: output).map {
-            RemoteFile(name: $0.name, isDirectory: $0.isDirectory, isLink: $0.isLink, size: $0.size,
-                       permissions: $0.permissions, modified: $0.modified)
+            RemoteFile(
+                name: $0.name, isDirectory: $0.isDirectory, isLink: $0.isLink, size: $0.size,
+                permissions: $0.permissions, modified: $0.modified)
         }
     }
 

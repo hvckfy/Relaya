@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 // Точка входа — main.swift (там askpass-режим).
 struct RelayaApp: App {
@@ -125,11 +125,14 @@ struct RelayaApp: App {
         // Туннели из строки меню — без открытого окна.
         // Значок показывается, только если есть туннели. macOS пишет в эту привязку при каждом
         // обновлении сцены — запись без изменения снова будила бы @Observable и зацикливала интерфейс.
-        MenuBarExtra(isInserted: Binding(get: { model.settings.menuBarIcon && !(model.tunnels.tunnels.isEmpty && model.tunnels.transient.isEmpty) },
-                                         set: { shown in
-                                             let current = model.settings.menuBarIcon && !model.tunnels.tunnels.isEmpty
-                                             if shown != current, !model.tunnels.tunnels.isEmpty { model.settings.menuBarIcon = shown }
-                                         })) {
+        MenuBarExtra(
+            isInserted: Binding(
+                get: { model.settings.menuBarIcon && !(model.tunnels.tunnels.isEmpty && model.tunnels.transient.isEmpty) },
+                set: { shown in
+                    let current = model.settings.menuBarIcon && !model.tunnels.tunnels.isEmpty
+                    if shown != current, !model.tunnels.tunnels.isEmpty { model.settings.menuBarIcon = shown }
+                })
+        ) {
             MenuBarTunnels().environment(model)
         } label: {
             Image(systemName: model.tunnels.activeCount > 0 ? "arrow.left.arrow.right.circle.fill" : "arrow.left.arrow.right.circle")
@@ -150,10 +153,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         // П-9: общие ssh-соединения хостов закрываются при сне и блокировке экрана, а не живут до таймаута.
-        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil,
-                                                          queue: .main) { _ in SSHMux.closeAll() }
-        DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsLocked"), object: nil,
-                                                            queue: .main) { _ in SSHMux.closeAll() }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil,
+            queue: .main
+        ) { _ in SSHMux.closeAll() }
+        DistributedNotificationCenter.default().addObserver(
+            forName: .init("com.apple.screenIsLocked"), object: nil,
+            queue: .main
+        ) { _ in SSHMux.closeAll() }
     }
 
     /// Работающие туннели живут в строке меню — закрытие последнего окна их не убивает.
@@ -227,8 +234,10 @@ struct LayoutsMenu: View {
                 Menu(L("Удалить")) {
                     ForEach(model.savedLayouts) { saved in
                         Button(saved.name) {
-                            model.pendingRemoval = PendingDelete(title: L("Удалить раскладку «%@»?", saved.name),
-                                                                message: L("Хосты и туннели не удаляются — только сохранённое расположение плиток.")) {
+                            model.pendingRemoval = PendingDelete(
+                                title: L("Удалить раскладку «%@»?", saved.name),
+                                message: L("Хосты и туннели не удаляются — только сохранённое расположение плиток.")
+                            ) {
                                 model.savedLayouts.removeAll { $0.id == saved.id }
                             }
                         }

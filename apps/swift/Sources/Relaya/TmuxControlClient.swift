@@ -1,7 +1,7 @@
 import AppKit
 import Observation
-import SwiftTerm
 import RelayaCore
+import SwiftTerm
 
 /// Окно tmux, показанное как вкладка Relaya (control mode).
 @MainActor

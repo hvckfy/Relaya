@@ -1,15 +1,16 @@
 import Testing
+
 @testable import RelayaCore
 
 @Suite struct HostStatsTests {
     @Test func parsesLinuxOutput() throws {
         let out = """
-        L 0.52 0.40 0.31 1/245 12345
-        N 4
-        M 8048576 6024288
-        D 41152736 18874368
-        U 3600.25
-        """
+            L 0.52 0.40 0.31 1/245 12345
+            N 4
+            M 8048576 6024288
+            D 41152736 18874368
+            U 3600.25
+            """
         let s = try #require(HostStats.parse(out))
         #expect(s.cores == 4)
         #expect(abs(s.loadPercent - 0.13) < 0.001)

@@ -1,36 +1,39 @@
 import Testing
+
 @testable import RelayaCore
 
 @Suite struct SSHConfigDocumentTests {
     static let sample = """
-    # мои хосты
-    Host *
-        ServerAliveInterval 60
+        # мои хосты
+        Host *
+            ServerAliveInterval 60
 
-    # relaya: group=prod env=prod
-    Host db-main
-        HostName db.internal
-        User postgres
-        LocalForward 5432 localhost:5432
+        # relaya: group=prod env=prod
+        Host db-main
+            HostName db.internal
+            User postgres
+            LocalForward 5432 localhost:5432
 
-    Host a b
-        User shared
-    """
+        Host a b
+            User shared
+        """
 
     @Test func addsHostAtEnd() throws {
         var doc = SSHConfigDocument(text: "Host x\n    User u\n")
-        try doc.upsert(SSHHost(alias: "new", hostName: "1.2.3.4", user: "root", group: "dev", tags: ["dev"]),
-                       originalAlias: nil)
-        #expect(doc.text == """
-        Host x
-            User u
+        try doc.upsert(
+            SSHHost(alias: "new", hostName: "1.2.3.4", user: "root", group: "dev", tags: ["dev"]),
+            originalAlias: nil)
+        #expect(
+            doc.text == """
+                Host x
+                    User u
 
-        # relaya: group=dev tags=dev
-        Host new
-            HostName 1.2.3.4
-            User root
+                # relaya: group=dev tags=dev
+                Host new
+                    HostName 1.2.3.4
+                    User root
 
-        """)
+                """)
     }
 
     @Test func addsToEmptyFile() throws {
@@ -47,24 +50,27 @@ import Testing
         try doc.upsert(host, originalAlias: "db-main")
 
         #expect(doc.text.contains("# мои хосты\nHost *\n    ServerAliveInterval 60\n"))
-        #expect(doc.text.contains("""
-        # relaya: group=prod tags=prod
-        Host db-primary
-            HostName db.internal
-            User postgres
-            Port 2222
-            LocalForward 5432 localhost:5432
+        #expect(
+            doc.text.contains(
+                """
+                # relaya: group=prod tags=prod
+                Host db-primary
+                    HostName db.internal
+                    User postgres
+                    Port 2222
+                    LocalForward 5432 localhost:5432
 
-        Host a b
-        """))
+                Host a b
+                """))
         #expect(!doc.text.contains("db-main"))
     }
 
     @Test func roundTripsThroughParser() throws {
         var doc = SSHConfigDocument(text: "")
-        let host = SSHHost(alias: "h", hostName: "x", user: "u", port: 2200, identityFile: "~/.ssh/k",
-                           proxyJump: "bastion", forwardAgent: true, serverAliveInterval: 30,
-                           compression: true, group: "g", tags: ["staging", "web"], color: "orange")
+        let host = SSHHost(
+            alias: "h", hostName: "x", user: "u", port: 2200, identityFile: "~/.ssh/k",
+            proxyJump: "bastion", forwardAgent: true, serverAliveInterval: 30,
+            compression: true, group: "g", tags: ["staging", "web"], color: "orange")
         try doc.upsert(host, originalAlias: nil)
         // Разбор дополнительно отдаёт значения как в конфиге (C1): все IdentityFile и явные yes/no.
         var parsed = host
@@ -116,7 +122,8 @@ import Testing
 
     @Test func diffMarksChanges() {
         let d = LineDiff.diff(["a", "b", "c"], ["a", "x", "c", "d"])
-        #expect(d.map(\.kind) == [.same, .added, .removed, .same, .added]
+        #expect(
+            d.map(\.kind) == [.same, .added, .removed, .same, .added]
                 || d.map(\.kind) == [.same, .removed, .added, .same, .added])
     }
 }

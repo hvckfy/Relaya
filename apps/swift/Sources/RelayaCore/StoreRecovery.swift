@@ -23,7 +23,9 @@ public enum StoreRecovery {
 
     /// Отложенные файлы с прошлого вызова (для окна-предупреждения); список очищается.
     public static func takeMoved() -> [String] {
-        lock.withLock { defer { moved = [] }; return moved }
+        lock.withLock {
+            defer { moved = [] }; return moved
+        }
     }
 
     /// Прочитать список: нет файла — `missing`; не разбирается — файл откладывается и возвращается `[]`;

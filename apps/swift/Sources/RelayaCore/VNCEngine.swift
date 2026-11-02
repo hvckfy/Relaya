@@ -21,9 +21,11 @@ public final class VNCEngine: @unchecked Sendable {
 
     public init(host: String, port: Int, user: String?, password: String?, events: Events) {
         listener = Listener(events)
-        session = VncSession.vnc(config: VncConfig(host: host, port: UInt16(clamping: port), user: user,
-                                                   password: password, shared: true),
-                                 listener: listener)
+        session = VncSession.vnc(
+            config: VncConfig(
+                host: host, port: UInt16(clamping: port), user: user,
+                password: password, shared: true),
+            listener: listener)
         session.setAuthListener(listener: listener)
     }
 
@@ -51,24 +53,26 @@ public final class VNCEngine: @unchecked Sendable {
         func onResize(width: UInt16, height: UInt16) { events.resized(Int(width), Int(height)) }
         func onCert(sha256: String, subject: String, node: CertNode) {}
         func onClosed(close: RemoteClose) {
-            let kind: RDPEngine.CloseKind = switch close.kind {
-            case .authFailed: .authFailed
-            case .network: .network
-            case .serverClosed: .serverClosed
-            case .certRejected: .certRejected
-            case .protocol: .protocolError
-            case .closedByUser: .closedByUser
-            case .credentialsRequired: .credentialsRequired
-            case .accountProblem: .accountProblem
-            }
+            let kind: RDPEngine.CloseKind =
+                switch close.kind {
+                case .authFailed: .authFailed
+                case .network: .network
+                case .serverClosed: .serverClosed
+                case .certRejected: .certRejected
+                case .protocol: .protocolError
+                case .closedByUser: .closedByUser
+                case .credentialsRequired: .credentialsRequired
+                case .accountProblem: .accountProblem
+                }
             events.closed(kind, close.message)
         }
         func onCredentials(kind: VncAuthKind, needsUser: Bool) {
-            let k: AuthKind = switch kind {
-            case .vnc: .vnc
-            case .appleRemoteDesktop: .appleRemoteDesktop
-            case .msLogon: .msLogon
-            }
+            let k: AuthKind =
+                switch kind {
+                case .vnc: .vnc
+                case .appleRemoteDesktop: .appleRemoteDesktop
+                case .msLogon: .msLogon
+                }
             events.credentials(k, needsUser)
         }
     }

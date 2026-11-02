@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Окно «Настройки» (⌘,): оформление и терминал.
 struct SettingsView: View {
@@ -39,32 +39,33 @@ private struct AppearanceSettings: View {
             .pickerStyle(.segmented)
 
             if !settings.nativeUI {
-            Section(L("Оформление интерфейса")) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
-                    ForEach(settings.allUIThemes) { theme in
-                        ThemeCard(theme: theme, selected: theme.id == settings.uiThemeID)
-                            .onTapGesture { settings.uiThemeID = theme.id }
+                Section(L("Оформление интерфейса")) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                        ForEach(settings.allUIThemes) { theme in
+                            ThemeCard(theme: theme, selected: theme.id == settings.uiThemeID)
+                                .onTapGesture { settings.uiThemeID = theme.id }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    HStack {
+                        Button(L("Создать свою на основе «%@»", "\(settings.uiTheme.name)")) { settings.duplicateCurrentTheme() }
+                        Spacer()
+                        if !settings.uiTheme.builtIn {
+                            Button(L("Удалить тему"), role: .destructive) { settings.deleteCustomTheme(settings.uiThemeID) }
+                        }
+                    }
+                    if let index = settings.customThemes.firstIndex(where: { $0.id == settings.uiThemeID }) {
+                        CustomThemeEditor(theme: $settings.customThemes[index])
                     }
                 }
-                .padding(.vertical, 4)
-                HStack {
-                    Button(L("Создать свою на основе «%@»", "\(settings.uiTheme.name)")) { settings.duplicateCurrentTheme() }
-                    Spacer()
-                    if !settings.uiTheme.builtIn {
-                        Button(L("Удалить тему"), role: .destructive) { settings.deleteCustomTheme(settings.uiThemeID) }
-                    }
-                }
-                if let index = settings.customThemes.firstIndex(where: { $0.id == settings.uiThemeID }) {
-                    CustomThemeEditor(theme: $settings.customThemes[index])
-                }
-            }
             }
 
             Toggle(L("Liquid Glass"), isOn: $settings.liquidGlass)
                 .disabled(!AppSettings.liquidGlassAvailable)
-                .help(AppSettings.liquidGlassAvailable
-                      ? L("Стеклянные вкладки, плитки и панели, как в macOS 26")
-                      : L("Нужна macOS 26 или новее"))
+                .help(
+                    AppSettings.liquidGlassAvailable
+                        ? L("Стеклянные вкладки, плитки и панели, как в macOS 26")
+                        : L("Нужна macOS 26 или новее"))
 
             Picker(L("Вид блока «Состояние»"), selection: $settings.statsStyle) {
                 ForEach(AppSettings.StatsStyle.allCases) { Text($0.title).tag($0) }
@@ -211,13 +212,23 @@ private struct BehaviorSettings: View {
             Toggle(L("Предлагать вход по ключу после входа по паролю"), isOn: $settings.offerKeySetup)
             Toggle(L("Значок туннелей в строке меню"), isOn: $settings.menuBarIcon)
             Section(L("Безопасность")) {
-                Toggle(SecretGate.biometryAvailable ? L("Touch ID перед использованием сохранённых паролей")
-                                                    : L("Пароль Mac перед использованием сохранённых паролей"),
-                       isOn: Binding(get: { SecretGate.enabled },
-                                     set: { UserDefaults.standard.set($0, forKey: "touchIDForPasswords"); settings.touch() }))
-                Picker(L("Не спрашивать повторно"), selection: Binding(
-                    get: { SecretGate.graceMinutes },
-                    set: { UserDefaults.standard.set($0, forKey: "touchIDGraceMinutes"); settings.touch() })) {
+                Toggle(
+                    SecretGate.biometryAvailable
+                        ? L("Touch ID перед использованием сохранённых паролей")
+                        : L("Пароль Mac перед использованием сохранённых паролей"),
+                    isOn: Binding(
+                        get: { SecretGate.enabled },
+                        set: {
+                            UserDefaults.standard.set($0, forKey: "touchIDForPasswords"); settings.touch()
+                        }))
+                Picker(
+                    L("Не спрашивать повторно"),
+                    selection: Binding(
+                        get: { SecretGate.graceMinutes },
+                        set: {
+                            UserDefaults.standard.set($0, forKey: "touchIDGraceMinutes"); settings.touch()
+                        })
+                ) {
                     Text(L("Каждый раз")).tag(0)
                     Text(L("1 минуту")).tag(1)
                     Text(L("5 минут")).tag(5)
@@ -267,9 +278,13 @@ private struct HighlightSettings: View {
         Form {
             Section {
                 Toggle(L("Подсвечивать вывод терминала"), isOn: $settings.highlightEnabled)
-                Text(L("Цвета берутся из палитры выбранной схемы терминала. Текст, который сервер уже раскрасил сам, и полноэкранные программы (vim, top, mc) не трогаются."))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                Text(
+                    L(
+                        "Цвета берутся из палитры выбранной схемы терминала. Текст, который сервер уже раскрасил сам, и полноэкранные программы (vim, top, mc) не трогаются."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
             }
             Section(L("Правила — сверху вниз, первое совпадение важнее")) {
                 ForEach($settings.highlightRules) { $rule in
@@ -309,7 +324,11 @@ private struct RuleRow: View {
                 Spacer()
                 Menu {
                     ForEach(0..<16, id: \.self) { i in
-                        Button { rule.color = i } label: { Text(Self.colorNames[i]) }
+                        Button {
+                            rule.color = i
+                        } label: {
+                            Text(Self.colorNames[i])
+                        }
                     }
                 } label: {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -347,9 +366,11 @@ private struct RuleRow: View {
         return rule.pattern.isEmpty || probe.compiled() != nil
     }
 
-    static let colorNames = [L("Чёрный"), L("Красный"), L("Зелёный"), L("Жёлтый"), L("Синий"), L("Пурпурный"), L("Голубой"), L("Белый"),
-                             L("Серый"), L("Ярко-красный"), L("Ярко-зелёный"), L("Ярко-жёлтый"), L("Ярко-синий"),
-                             L("Ярко-пурпурный"), L("Ярко-голубой"), L("Ярко-белый")]
+    static let colorNames = [
+        L("Чёрный"), L("Красный"), L("Зелёный"), L("Жёлтый"), L("Синий"), L("Пурпурный"), L("Голубой"), L("Белый"),
+        L("Серый"), L("Ярко-красный"), L("Ярко-зелёный"), L("Ярко-жёлтый"), L("Ярко-синий"),
+        L("Ярко-пурпурный"), L("Ярко-голубой"), L("Ярко-белый"),
+    ]
 }
 
 /// Карточка темы: мини-окно в светлом и тёмном варианте.

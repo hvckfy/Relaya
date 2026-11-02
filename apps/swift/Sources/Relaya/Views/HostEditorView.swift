@@ -1,5 +1,5 @@
-import SwiftUI
 import RelayaCore
+import SwiftUI
 
 /// Редактор хоста. Пишет прямо в ~/.ssh/config.
 struct HostEditorView: View {
@@ -33,8 +33,9 @@ struct HostEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if let block = existingBlock, block.isShared {
-                        Banner(text: L("Хост объявлен вместе с другими алиасами (Host a b). Чтобы не разорвать блок, отредактируйте ~/.ssh/config вручную."),
-                               color: Theme.org, tint: Theme.orgTint)
+                        Banner(
+                            text: L("Хост объявлен вместе с другими алиасами (Host a b). Чтобы не разорвать блок, отредактируйте ~/.ssh/config вручную."),
+                            color: Theme.org, tint: Theme.orgTint)
                     }
                     basics
                     auth
@@ -46,7 +47,8 @@ struct HostEditorView: View {
             }
             footer
         }
-        .frame(minWidth: 560, idealWidth: 640, maxWidth: 900, minHeight: 480, idealHeight: 760, maxHeight: .infinity)  // UI-M3: лист не больше экрана MacBook Air 13"
+        // UI-M3: the sheet never outgrows a 13" MacBook Air screen.
+        .frame(minWidth: 560, idealWidth: 640, maxWidth: 900, minHeight: 480, idealHeight: 760, maxHeight: .infinity)
         .background(Theme.bg)
         .onChange(of: host.alias) { _, v in splitDestination(v) }
         .onAppear {
@@ -142,8 +144,12 @@ struct HostEditorView: View {
                     ForEach(Array(extraKeys.enumerated()), id: \.offset) { i, f in
                         HStack(spacing: 6) {
                             Text(f).font(.system(size: 12, design: .monospaced))
-                            Button { removeExtraKey(at: i) } label: { Image(systemName: "minus.circle") }
-                                .buttonStyle(.borderless).accessibilityLabel(L("Убрать ключ %@", f))
+                            Button {
+                                removeExtraKey(at: i)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless).accessibilityLabel(L("Убрать ключ %@", f))
                         }
                     }
                     Menu(L("Добавить ключ")) {
@@ -292,7 +298,6 @@ struct HostEditorView: View {
 
     // MARK: - Данные
 
-
     private var existingBlock: SSHConfigDocument.Block? {
         guard let original else { return nil }
         return document?.block(for: original.alias)
@@ -376,7 +381,8 @@ struct HostEditorView: View {
     private static func scanKeyFiles() -> [String] {
         let dir = RelayaPaths.sshDirectory
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
-        return names
+        return
+            names
             .filter { names.contains($0 + ".pub") }
             .sorted()
             .map { "~/.ssh/\($0)" }
@@ -414,11 +420,12 @@ struct HostEditorView: View {
 
     /// Тристейт как в ssh_config: «Как в конфиге» (директивы нет — наследуется от Host *), «Да», «Нет».
     private func tri(_ value: WritableKeyPath<SSHHost, String?>, _ flag: WritableKeyPath<SSHHost, Bool?>) -> Binding<String> {
-        Binding(get: { host[keyPath: value] ?? (host[keyPath: flag] == true ? "yes" : "") },
-                set: {
-                    host[keyPath: value] = $0.isEmpty ? nil : $0
-                    host[keyPath: flag] = $0.isEmpty ? nil : $0 == "yes"
-                })
+        Binding(
+            get: { host[keyPath: value] ?? (host[keyPath: flag] == true ? "yes" : "") },
+            set: {
+                host[keyPath: value] = $0.isEmpty ? nil : $0
+                host[keyPath: flag] = $0.isEmpty ? nil : $0 == "yes"
+            })
     }
 
     @ViewBuilder private var triOptions: some View {
