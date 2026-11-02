@@ -3,20 +3,26 @@
 <h1 align="center">Relaya</h1>
 
 <p align="center">
-  A native SSH client for macOS and Windows (Linux in progress) where your keys live in <code>~/.ssh</code> — not in our vault.
+  A native SSH client for macOS, Windows and Linux where your keys live in <code>~/.ssh</code> — not in our vault.
 </p>
 
 <p align="center">
   <a href="https://github.com/hvckfy/Relaya/releases/latest"><img src="https://img.shields.io/github/v/release/hvckfy/Relaya" alt="Latest release"></a>
   <a href="https://github.com/hvckfy/Relaya/actions/workflows/mac.yml"><img src="https://github.com/hvckfy/Relaya/actions/workflows/mac.yml/badge.svg" alt="Mac"></a>
+  <a href="https://github.com/hvckfy/Relaya/actions/workflows/windows.yml"><img src="https://github.com/hvckfy/Relaya/actions/workflows/windows.yml/badge.svg" alt="Windows"></a>
+  <a href="https://github.com/hvckfy/Relaya/actions/workflows/linux.yml"><img src="https://github.com/hvckfy/Relaya/actions/workflows/linux.yml/badge.svg" alt="Linux"></a>
+  <a href="https://github.com/hvckfy/Relaya/actions/workflows/core.yml"><img src="https://github.com/hvckfy/Relaya/actions/workflows/core.yml/badge.svg" alt="Core"></a>
+  <br>
   <img src="https://img.shields.io/badge/macOS-15%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/Windows-10%2F11-blue" alt="Windows 10/11">
+  <img src="https://img.shields.io/badge/Linux-x86__64%20(beta)-blue" alt="Linux x86_64 (beta)">
+  <a href="https://hvckfy.github.io/Relaya/dev/bench/"><img src="https://img.shields.io/badge/benchmarks-history-informational" alt="Benchmarks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a>
 </p>
 
 ---
 
-Relaya is a free, open source alternative to Termius-style SSH managers: SwiftUI on macOS, WinUI 3 on Windows, Uno Platform on Linux (in progress), one shared Rust core. It has **no proprietary storage and no vendor cloud**:
+Relaya is a free, open source alternative to Termius-style SSH managers: SwiftUI on macOS, WinUI 3 on Windows, Uno Platform on Linux (beta), one shared Rust core. It has **no proprietary storage and no vendor cloud**:
 
 - your host list **is** your `~/.ssh/config`,
 - your keys are plain files in `~/.ssh`,
@@ -132,7 +138,7 @@ xattr -dr com.apple.quarantine /Applications/Relaya.app
 
 Requires macOS 15 Sequoia or later; Liquid Glass needs macOS 26. Universal binary (Apple Silicon and Intel).
 
-### Windows (preview)
+### Windows
 
 1. The script runs the installer without its wizard (SmartScreen may still ask once, see below). By hand: download `Relaya-X.Y.Z-windows-x64-<lang>-setup.exe` from [Releases](https://github.com/hvckfy/Relaya/releases/latest) and run it. It installs for the current user (no admin rights), adds a Start menu shortcut and an entry in *Settings → Apps* to uninstall. Portable `…-windows-x64-<lang>.zip` builds are there too.
 2. The installer isn't code-signed yet, so SmartScreen asks once: *More info → Run anyway*.
@@ -140,9 +146,9 @@ Requires macOS 15 Sequoia or later; Liquid Glass needs macOS 26. Universal binar
 
 The Windows client shares the core with macOS: the same `~/.ssh/config`, snippets, tunnels, remote desktops, AI-agent rules and sync format. It has its own native terminal (Rust emulator + Win2D), tiles, host card with live status, Docker, tmux and services, SFTP, keys, tunnels, Windows Hello confirmation, built-in RDP and VNC tabs on the same core engines as macOS (Remote Desktop Connection and an installed VNC viewer stay as fallbacks) and session recording.
 
-### Linux (in progress)
+### Linux (beta)
 
-A Linux client on Uno Platform (X11, Wayland via XWayland) sharing the Windows C# code; x86_64 only. The script installs the `.deb` through apt when it can, otherwise the AppImage as `~/.local/bin/relaya`. Both are in [Releases](https://github.com/hvckfy/Relaya/releases/latest) as `Relaya-X.Y.Z-linux-x64-<lang>.deb` / `.AppImage`.
+A Linux client on Uno Platform (X11, Wayland via XWayland) sharing the Windows C# code; x86_64 only. Passwords go to the Secret Service (GNOME Keyring, KWallet); `ssh` comes from the system OpenSSH client. The script installs the `.deb` through apt when it can, otherwise the AppImage as `~/.local/bin/relaya`. Both are in [Releases](https://github.com/hvckfy/Relaya/releases/latest) as `Relaya-X.Y.Z-linux-x64-<lang>.deb` / `.AppImage`.
 
 ## Keyboard shortcuts
 
@@ -182,7 +188,7 @@ core/                 Rust core (relaya-core): ~/.ssh/config, sync, MCP policy, 
 apps/swift/           Apple clients — SwiftPM package: macOS app now; iOS/iPadOS later share
                       RelayaCore (Swift facades over the core) and the SwiftUI code here
 apps/dotnet/          .NET clients: Relaya.Shared (pages, terminal, sync — common C#), Relaya.Windows (WinUI 3),
-                      Relaya.Linux (Uno Platform, in progress), installer (Inno Setup)
+                      Relaya.Linux (Uno Platform, beta), installer (Inno Setup)
 resources/            shared assets: localization (ru/en strings), app icon sources
 scripts/              build-core-{macos.sh,windows.ps1,linux.sh}, bundle-macos.sh [version] [ru|en], package-linux.sh,
                       install.sh / install.ps1 (one-command install, checks SHA256SUMS)
@@ -210,6 +216,16 @@ To produce a universal `.app` bundle: `scripts/bundle-macos.sh 0.1.0` → `build
 Windows (needs Rust, .NET 10 and Visual Studio 2022 with the WinUI workload): run `scripts/build-core-windows.ps1`, then build `apps/dotnet/Relaya.Windows/Relaya.Windows.csproj` with MSBuild (add `-p:RelayaLang=en` or `ru` for a single-language build); `apps/dotnet/installer/Relaya.iss` (Inno Setup 6) builds the installer.
 
 Linux (needs Rust and .NET 10): `scripts/build-core-linux.sh`, then `dotnet publish apps/dotnet/Relaya.Linux -r linux-x64 -p:RelayaLang=en` (or `ru`; without it the system language is used); `scripts/package-linux.sh <publish dir> <version> <ru|en>` builds the AppImage and .deb.
+
+## Quality checks
+
+Every pull request runs the same checks as a release, on every platform:
+
+- **Core:** `cargo test` on macOS, Linux and Windows, `cargo clippy -- -D warnings`, `cargo fmt --check`; Rust is pinned in `core/rust-toolchain.toml` and builds use `--locked`.
+- **Clients:** `swift build` / `swift test` on macOS, Windows and Linux builds of both languages with terminal smoke tests, translation checks.
+- **Linters:** swift-format, `dotnet format`, actionlint, shellcheck.
+- **Benchmarks:** core hot paths (`core/benches/core.rs`), with the public history at [hvckfy.github.io/Relaya/dev/bench](https://hvckfy.github.io/Relaya/dev/bench/).
+- **Supply chain:** GitHub Actions pinned by commit SHA, read-only tokens by default, downloaded tools checked against pinned hashes, weekly grouped Dependabot updates.
 
 ## Contributing
 
