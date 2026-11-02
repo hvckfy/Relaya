@@ -102,7 +102,8 @@ public sealed partial class MainWindow : Window
         AddShortcuts();
         ConfigPath.Text = AppState.ConfigPath;
         // Не хватает обязательного компонента (Linux: ssh, libsecret, хранилище паролей) — сказать на стартовом экране (Л5).
-        if (Platform.Components.List().Any(c => c.Required && !c.Found))
+        // The demo uses no system components, so a bare CI runner does not put this warning on the screenshots.
+        if (Platform.Demo.Root == null && Platform.Components.List().Any(c => c.Required && !c.Found))
         {
             var open = new Button { Content = L("Компоненты") };
             open.Click += (_, _) => ShowPage(Pages.ComponentsPage.Build());
