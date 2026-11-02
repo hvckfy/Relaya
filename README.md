@@ -38,10 +38,10 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 | macOS · host card | macOS · keys |
 |---|---|
 | <img src="https://hvckfy.github.io/Relaya/screenshots/mac-host.png" alt="macOS host card with live status, ports and connection details"> | <img src="https://hvckfy.github.io/Relaya/screenshots/mac-keys.png" alt="macOS keys screen with fingerprints"> |
-| **Windows · hosts** | **Windows · snippets** |
-| <img src="https://hvckfy.github.io/Relaya/screenshots/windows-hosts.png" alt="Windows client: host list"> | <img src="https://hvckfy.github.io/Relaya/screenshots/windows-snippets.png" alt="Windows client: snippets"> |
-| **Linux · keys** | **Linux · AI agents** |
-| <img src="https://hvckfy.github.io/Relaya/screenshots/linux-keys.png" alt="Linux client: keys"> | <img src="https://hvckfy.github.io/Relaya/screenshots/linux-agents.png" alt="Linux client: AI agent access"> |
+| **Windows · hosts** | **Windows · keys** |
+| <img src="https://hvckfy.github.io/Relaya/screenshots/windows-hosts.png" alt="Windows client: host list"> | <img src="https://hvckfy.github.io/Relaya/screenshots/windows-keys.png" alt="Windows client: keys"> |
+| **Linux · keys** | **Linux · settings** |
+| <img src="https://hvckfy.github.io/Relaya/screenshots/linux-keys.png" alt="Linux client: keys"> | <img src="https://hvckfy.github.io/Relaya/screenshots/linux-settings.png" alt="Linux client: settings"> |
 
 <sub>Taken automatically by CI from every release with `Relaya --demo --screenshots` — all hosts and keys are fictional.</sub>
 
