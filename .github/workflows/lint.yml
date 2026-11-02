@@ -1,6 +1,7 @@
 name: Lint
 
-# Linters that build nothing: workflows (actionlint), shell scripts (shellcheck), Swift (swift-format).
+# Linters that build nothing: workflows (actionlint), shell scripts (shellcheck), Swift (swift-format),
+# C# (dotnet format).
 # Rust clippy and rustfmt run in core.yml.
 
 on:
@@ -10,12 +11,14 @@ on:
       - ".github/**"
       - "scripts/**"
       - "apps/swift/**"
+      - "apps/dotnet/**"
       - ".swift-format"
   pull_request:
     paths:
       - ".github/**"
       - "scripts/**"
       - "apps/swift/**"
+      - "apps/dotnet/**"
       - ".swift-format"
 
 permissions:
@@ -64,3 +67,22 @@ jobs:
           sudo xcode-select -s "$XC"
           xcrun swift-format --version
           xcrun swift-format lint --strict --recursive --configuration .swift-format apps/swift/Sources apps/swift/Tests apps/swift/Package.swift
+
+  dotnet:
+    name: "Lint · C# (dotnet format)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.0.x
+      # Whitespace only, by folder: needs no restore or WinUI, so it runs on Linux for both clients.
+      - name: dotnet format
+        run: dotnet format whitespace apps/dotnet --folder --verify-no-changes -v diag || { dotnet format whitespace apps/dotnet --folder; git diff > dotnet-format.diff; exit 1; }
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dotnet-format-diff
+          path: dotnet-format.diff
+          if-no-files-found: ignore
