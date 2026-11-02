@@ -8,11 +8,11 @@ Push-Location "$root/core"
 # рядом с relaya_core.dll.
 $vnc = if ($env:ROYALVNC_DIR) { ",vnc-royal" } else { "" }
 if ($env:FREERDP_DIR) {
-    cargo build --release --features "rdp-freerdp$vnc"
+    cargo build --locked --release --features "rdp-freerdp$vnc"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Copy-Item "$env:FREERDP_DIR/bin/*.dll" target/release/ -Force
 } else {
-    cargo build --release --features "remote-desktop$vnc"
+    cargo build --locked --release --features "remote-desktop$vnc"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 if ($env:ROYALVNC_DIR) {
@@ -26,7 +26,7 @@ if ($env:ROYALVNC_DIR) {
     }
 }
 if (-not (Get-Command uniffi-bindgen-cs -ErrorAction SilentlyContinue)) {
-    cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
+    cargo install --locked uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
 }
 $out = "$root/apps/dotnet/Relaya.Shared/Core"
 New-Item -ItemType Directory -Force $out | Out-Null

@@ -11,6 +11,7 @@ on:
       - "core/**"
       - "resources/**"
       - "scripts/build-core-windows.ps1"
+      - ".github/actions/build-core/**"
       - ".github/workflows/windows.yml"
   pull_request:
 
@@ -59,8 +60,9 @@ jobs:
         shell: pwsh
         run: dotnet test apps/dotnet/Relaya.Shared.Tests -c Release
       - name: Build Rust core + C# bindings
-        shell: pwsh
-        run: scripts/build-core-windows.ps1
+        uses: ./.github/actions/build-core
+        with:
+          script: scripts/build-core-windows.ps1
       # ConPTY: вывод процесса доходит до подписчика (регрессия «чёрная вкладка, код 255»).
       # sshd в раннере для smoke-теста: вход по ключу на localhost. Не поднялся — ssh-часть теста пропускается.
       - name: Start local sshd for smoke test

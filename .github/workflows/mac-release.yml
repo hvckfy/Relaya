@@ -49,13 +49,13 @@ jobs:
         uses: ./.github/actions/royalvnc
 
       - name: Build Rust core (universal static library + Swift bindings)
+        uses: ./.github/actions/build-core
         env:
           FREERDP_DIR_ARM64: ${{ steps.freerdp_arm.outputs.dir }}
           FREERDP_DIR_X64: ${{ steps.freerdp_x64.outputs.dir }}
           ROYALVNC_DIR: ${{ steps.royalvnc.outputs.dir }}
-        run: |
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
-          scripts/build-core-macos.sh
+        with:
+          script: scripts/build-core-macos.sh
       # ADR-002: две сборки — русская и английская; язык зашит в бандл (второй прогон берёт кэш SwiftPM).
       - name: Build app bundles (ru, en)
         run: |

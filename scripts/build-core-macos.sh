@@ -26,11 +26,11 @@ if [[ -n "${FREERDP_DIR_ARM64:-}" && -n "${FREERDP_DIR_X64:-}" ]]; then
       aarch64-*) dir="$FREERDP_DIR_ARM64" ;;
       *) dir="$FREERDP_DIR_X64" ;;
     esac
-    FREERDP_DIR="$dir" cargo build --release --lib --target "$T" --features "rdp-freerdp$VNC_FEATURE"
+    FREERDP_DIR="$dir" cargo build --locked --release --lib --target "$T" --features "rdp-freerdp$VNC_FEATURE"
   done
   FREERDP_UNIVERSAL=1
 else
-  for T in "${TARGETS[@]}"; do cargo build --release --lib --target "$T" ${VNC_FEATURE:+--features "${VNC_FEATURE#,}"}; done
+  for T in "${TARGETS[@]}"; do cargo build --locked --release --lib --target "$T" ${VNC_FEATURE:+--features "${VNC_FEATURE#,}"}; done
   FREERDP_UNIVERSAL=0
 fi
 
@@ -55,7 +55,7 @@ if [[ -n "${ROYALVNC_DIR:-}" ]]; then
 fi
 
 # Обёртки из метаданных собранной библиотеки (library mode).
-cargo run --release --quiet --features bindgen --bin uniffi-bindgen -- generate \
+cargo run --locked --release --quiet --features bindgen --bin uniffi-bindgen -- generate \
   --library "target/${TARGETS[0]}/release/librelaya_core.dylib" --language swift --out-dir "$OUT/gen"
 cp "$OUT/gen/"*.h "$OUT/headers/"
 # SwiftPM/xcframework ищет module.modulemap.
