@@ -53,6 +53,9 @@ final class SessionController {
     /// Меняется при переподключении — пересоздаёт терминал.
     private(set) var generation = 0
 
+    /// Called once when the login succeeds: background probes and agents may log in again (B-7, V-12).
+    var onLogin: (() -> Void)?
+
     /// Отпечаток нового сервера, ждущий решения пользователя.
     var hostKeyPrompt: String?
     var hostKeyChanged = false
@@ -147,6 +150,7 @@ final class SessionController {
         // Первое приглашение shell — вход выполнен (по ключу или паролю).
         if !loggedIn, !passwordPrompt, ready() {
             loggedIn = true
+            onLogin?()
             secretPromptActive = false
             passwordPromptWithoutSaved = false
             if sawPasswordPrompt, !host.usesKey { offerKeySetup = true }
@@ -182,6 +186,7 @@ final class SessionController {
             text.contains(where: \.isLetter), !text.contains("Permission denied")
         {
             loggedIn = true
+            onLogin?()
             passwordPromptWithoutSaved = false
             if !host.usesKey { offerKeySetup = true }
         }

@@ -484,6 +484,8 @@ final class AppModel {
         let id = UUID()
         let name = tmuxSession ?? (useTmux ? Tmux.sessionName(alias: host.alias, id: id) : nil)
         let controller = SessionController(host: host, tmuxName: name, tmuxIdleMinutes: settings.tmuxIdleMinutes)
+        let loginAlias = current(host).alias
+        controller.onLogin = { [weak self] in self?.loginMayRetry(loginAlias) }
         if useTmux { Task { await cleanTmux(host) } }
         controller.onOSGuessed = { [weak self] os in self?.setOS(os, for: host.alias, onlyIfUnknown: true) }
         controller.onOpenServerPort = { [weak self] port in Task { await self?.openRemotePort(port, on: host) } }
