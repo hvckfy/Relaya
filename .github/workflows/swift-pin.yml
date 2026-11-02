@@ -1,0 +1,27 @@
+name: Swift · pin hash
+
+# Manual: download the Linux Swift toolchain that RoyalVNCKit is built with and print its sha256, which
+# .github/actions/royalvnc pins. Run it when the Swift version changes; the action checks the archive against it.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: [".github/workflows/swift-pin.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  hash:
+    name: "Swift · pin hash"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Download and hash
+        run: |
+          swift=$(awk '/^  swift:/{f=1} f && /default:/{gsub(/"/,"",$2); print $2; exit}' .github/actions/royalvnc/action.yml)
+          tag="swift-$swift-RELEASE"
+          curl -fsSL -o swift.tar.gz "https://download.swift.org/swift-$swift-release/ubuntu2404/$tag/$tag-ubuntu24.04.tar.gz"
+          echo "Swift $swift ubuntu24.04: $(sha256sum swift.tar.gz | cut -d' ' -f1)" | tee -a "$GITHUB_STEP_SUMMARY"
