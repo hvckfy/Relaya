@@ -1380,7 +1380,7 @@ fn tree(dir: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
 }
 
 /// Записать через временный файл и rename: облачная папка не увидит половину файла.
-fn write_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
+pub(crate) fn write_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)?;
     }

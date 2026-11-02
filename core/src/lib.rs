@@ -14,6 +14,7 @@ pub mod key_hosts;
 pub mod key_install;
 pub mod local_ports;
 pub mod localize;
+pub mod login_gate;
 pub mod mcp;
 pub mod models;
 pub mod openh264;

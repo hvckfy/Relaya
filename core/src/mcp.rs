@@ -625,6 +625,7 @@ pub enum McpDecision {
     ApprovedByUser,
     AllowedGrant,
     AllowedTrusted,
+    DeniedLoginRefused,
 }
 
 impl McpDecision {
@@ -639,6 +640,7 @@ impl McpDecision {
             McpDecision::ApprovedByUser => "одобрено пользователем",
             McpDecision::AllowedGrant => "разрешено: временный доступ",
             McpDecision::AllowedTrusted => "разрешено: доверенный",
+            McpDecision::DeniedLoginRefused => "запрещено: сервер не принял вход",
         }
     }
 }
@@ -749,6 +751,8 @@ pub trait McpBackend: Send + Sync {
     fn execute(&self, host: SshHost, command: String, timeout_seconds: u32) -> ExecResult;
     fn confirm(&self, host: SshHost, command: String, client: String) -> bool;
     fn log(&self, entry: McpLogEntry);
+    /// Path of the login gate file shared with the app (`login-gate.json`, B-7); empty turns the gate off.
+    fn login_gate_path(&self) -> String;
 }
 
 #[derive(uniffi::Object)]
@@ -898,6 +902,23 @@ impl McpServer {
                     return (format!("Команда запрещена правилом пользователя для {alias}."), true);
                 }
                 let mode = policy.mode(alias, now);
+                // B-7: after a refused login no call starts ssh until the user fixes the login in Relaya;
+                // every retry would be one more failure on the server, and fail2ban bans the address after a few.
+                let gate = self.backend.login_gate_path();
+                if mode != McpMode::Off && !gate.is_empty() {
+                    if let Some(reason) = crate::login_gate::login_gate_reason(gate.clone(), alias.into()) {
+                        self.record(
+                            name,
+                            alias,
+                            &command,
+                            McpDecision::DeniedLoginRefused,
+                            None,
+                            false,
+                            Some(reason.clone()),
+                        );
+                        return (login_refused_text(alias, &reason), true);
+                    }
+                }
                 // allow-правила действуют только на хостах «с подтверждением» и «доверенных»: на read-only изменяющая команда отклоняется.
                 let decision = if matches!(mode, McpMode::Confirm | McpMode::Trusted)
                     && !is_read
@@ -935,6 +956,22 @@ impl McpServer {
                     }
                 };
                 let r = self.backend.execute(host, command.clone(), timeout);
+                let mut gate_note = None;
+                if !gate.is_empty() {
+                    match crate::login_gate::login_gate_note(gate, alias.into(), r.status, false, r.stderr.clone()) {
+                        Ok(crate::login_gate::LoginOutcome::Refused) => {
+                            gate_note = Some(login_refused_text(
+                                alias,
+                                &crate::login_gate::login_refusal_reason(
+                                    r.stderr.clone(),
+                                    "Сервер не принял вход.".into(),
+                                ),
+                            ))
+                        }
+                        Ok(_) => {}
+                        Err(e) => gate_note = Some(format!("Relaya не смогла записать состояние входа: {e}")),
+                    }
+                }
                 let tail: String = {
                     let o = format!(
                         "{}{}",
@@ -959,11 +996,22 @@ impl McpServer {
                     text = text.chars().take(50_000).collect::<String>() + "\n…[вывод обрезан]";
                 }
                 text += &format!("\n[exit code: {}]", r.status);
+                if let Some(note) = gate_note {
+                    text += &format!("\n{note}");
+                }
                 (text, r.status != 0)
             }
             _ => (format!("Неизвестный инструмент {name}."), true),
         }
     }
+}
+
+/// What the agent reads after a refused login (B-7): the reason and why retrying is useless.
+fn login_refused_text(alias: &str, reason: &str) -> String {
+    format!(
+        "{reason}\nRelaya не повторяет вход на {alias}, чтобы сервер не заблокировал адрес; повторные вызовы ничего не изменят. \
+         Попросите пользователя проверить пароль или ключ для {alias} в Relaya и нажать «Обновить» в карточке хоста.\n[exit code: -1]"
+    )
 }
 
 #[cfg(test)]
@@ -976,6 +1024,8 @@ mod tests {
         confirm: bool,
         ran: Mutex<Vec<String>>,
         logged: Mutex<Vec<McpLogEntry>>,
+        gate: String,
+        reply: Mutex<ExecResult>,
     }
     impl McpBackend for Fake {
         fn hosts(&self) -> Vec<SshHost> {
@@ -986,7 +1036,7 @@ mod tests {
         }
         fn execute(&self, _h: SshHost, c: String, _t: u32) -> ExecResult {
             self.ran.locked().push(c);
-            ExecResult { status: 0, stdout: "ok".into(), stderr: "".into() }
+            self.reply.locked().clone()
         }
         fn confirm(&self, _h: SshHost, _c: String, _cl: String) -> bool {
             self.confirm
@@ -994,9 +1044,19 @@ mod tests {
         fn log(&self, e: McpLogEntry) {
             self.logged.locked().push(e);
         }
+        fn login_gate_path(&self) -> String {
+            self.gate.clone()
+        }
     }
     fn server(policy: McpPolicy, confirm: bool) -> (McpServer, Arc<Fake>) {
-        let f = Arc::new(Fake { policy, confirm, ran: Mutex::new(vec![]), logged: Mutex::new(vec![]) });
+        let f = Arc::new(Fake {
+            policy,
+            confirm,
+            ran: Mutex::new(vec![]),
+            logged: Mutex::new(vec![]),
+            gate: String::new(),
+            reply: Mutex::new(ExecResult { status: 0, stdout: "ok".into(), stderr: "".into() }),
+        });
         (McpServer::new(f.clone()), f)
     }
     fn call(s: &McpServer, tool: &str, args: Value) -> Value {
@@ -1004,6 +1064,46 @@ mod tests {
             json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": args}})
                 .to_string();
         serde_json::from_str::<Value>(&s.handle(line).unwrap()).unwrap()["result"].clone()
+    }
+
+    /// B-7: one refused login stops every later call to that host without starting ssh, until the gate opens.
+    #[test]
+    fn a_refused_login_stops_calls_until_the_gate_opens() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let gate = dir.path().join("login-gate.json").to_string_lossy().into_owned();
+        let policy = McpPolicy { enabled: true, default_mode: McpMode::Trusted, ..Default::default() };
+        let f = Arc::new(Fake {
+            policy,
+            confirm: true,
+            ran: Mutex::new(vec![]),
+            logged: Mutex::new(vec![]),
+            gate: gate.clone(),
+            reply: Mutex::new(ExecResult {
+                status: 255,
+                stdout: "".into(),
+                stderr: "root@web: Permission denied (password).".into(),
+            }),
+        });
+        let s = McpServer::new(f.clone());
+        let text = |v: Value| v["content"][0]["text"].as_str().unwrap_or_default().to_string();
+
+        let first = text(call(&s, "run_command", json!({"host": "web", "command": "uptime"})));
+        assert!(first.contains("повторные вызовы ничего не изменят"), "{first}");
+        for _ in 0..3 {
+            let again = text(call(&s, "read_file", json!({"host": "web", "path": "/etc/hostname"})));
+            assert!(again.contains("«Обновить»") && again.contains("[exit code: -1]"), "{again}");
+        }
+        assert_eq!(f.ran.locked().len(), 1);
+        assert_eq!(f.logged.locked().last().map(|e| e.decision_code), Some(Some(McpDecision::DeniedLoginRefused)));
+
+        // A command that prints "Permission denied" itself exits with its own code and does not close the gate.
+        crate::login_gate::login_gate_open(gate.clone(), "web".into()).expect("open");
+        *f.reply.locked() =
+            ExecResult { status: 1, stdout: "".into(), stderr: "cat: /root/x: Permission denied".into() };
+        call(&s, "run_command", json!({"host": "web", "command": "cat /root/x"}));
+        call(&s, "run_command", json!({"host": "web", "command": "cat /root/x"}));
+        assert_eq!(f.ran.locked().len(), 3);
+        assert_eq!(crate::login_gate::login_gate_reason(gate, "web".into()), None);
     }
 
     #[test]
