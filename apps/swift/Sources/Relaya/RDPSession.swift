@@ -121,8 +121,9 @@ final class RDPSession {
         resizeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self, let engine = self.engine else { return }
+            // lastSize follows the server's answer (events.resized), not the request: a request the server did not
+            // apply is sent again on the next window change.
             engine.resize(width: size.0, height: size.1)
-            self.lastSize = size
         }
     }
 
@@ -287,7 +288,14 @@ final class RDPSession {
         let owner = WeakSession(self)
         var events = RDPEngine.Events()
         events.connected = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.connected(w, h) } } }
-        events.resized = { w, h in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.reset(width: w, height: h) } } }
+        events.resized = { w, h in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    owner.value?.lastSize = (Int(w), Int(h))
+                    owner.value?.canvas.reset(width: w, height: h)
+                }
+            }
+        }
         events.frame = { rects in DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.canvas.apply(rects) } } }
         events.certificate = { sha, _, node in
             DispatchQueue.main.async { MainActor.assumeIsolated { owner.value?.askTrust(sha, node: node) } }
