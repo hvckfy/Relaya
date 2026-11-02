@@ -1,0 +1,26 @@
+name: Build core
+description: Restores the cargo cache and runs the platform core build script (Rust core + UniFFI bindings).
+inputs:
+  script:
+    description: Build script path relative to the repository root.
+    required: true
+runs:
+  using: composite
+  steps:
+    # One cache per OS and CPU; the key follows Cargo.lock and the pinned toolchain.
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          ~/.cargo/bin
+          core/target
+        key: core-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('core/Cargo.lock', 'core/rust-toolchain.toml') }}
+        restore-keys: core-${{ runner.os }}-${{ runner.arch }}-
+    - name: Build Rust core + bindings
+      shell: bash
+      run: |
+        case "${{ inputs.script }}" in
+          *.ps1) pwsh -NoProfile -File "${{ inputs.script }}" ;;
+          *) "${{ inputs.script }}" ;;
+        esac

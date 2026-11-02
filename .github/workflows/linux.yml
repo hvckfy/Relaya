@@ -11,6 +11,7 @@ on:
       - "core/**"
       - "resources/**"
       - "scripts/*linux*"
+      - ".github/actions/build-core/**"
       - ".github/workflows/linux.yml"
   pull_request:
 
@@ -40,17 +41,12 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
-      # Кэш cargo и NuGet (Т5): ядро и Uno не собираются с нуля каждый прогон.
+      # NuGet cache; the cargo cache lives in the build-core action.
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.cargo/bin
-            core/target
-            ~/.nuget/packages
-          key: linux-${{ hashFiles('core/Cargo.lock', 'apps/dotnet/**/*.csproj') }}
-          restore-keys: linux-
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('apps/dotnet/**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
       # RDP на FreeRDP 3 из vcpkg с нашим overlay (OpenH264 по пути), как на Mac и Windows: action выставит FREERDP_DIR,
       # скрипт ядра соберёт с rdp-freerdp и положит .so FreeRDP рядом с ядром. Первая сборка ~25 минут, дальше кэш.
       - name: FreeRDP
@@ -61,7 +57,9 @@ jobs:
       - name: RoyalVNCKit
         uses: ./.github/actions/royalvnc
       - name: Build Rust core + C# bindings
-        run: scripts/build-core-linux.sh
+        uses: ./.github/actions/build-core
+        with:
+          script: scripts/build-core-linux.sh
       # pty: вывод, управляющий терминал, размер окна, ввод, ssh из PATH.
       - name: pty smoke test
         run: dotnet run --project apps/dotnet/Relaya.Linux.Smoke -c Release

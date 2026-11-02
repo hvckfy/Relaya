@@ -11,14 +11,14 @@ cd "$ROOT/core"
 features=remote-desktop
 [[ -n "${FREERDP_DIR:-}" ]] && features=rdp-freerdp
 [[ -n "${ROYALVNC_DIR:-}" ]] && features="$features,vnc-royal"
-cargo build --release --lib --features "$features"
+cargo build --locked --release --lib --features "$features"
 [[ -n "${ROYALVNC_DIR:-}" ]] && cp "$ROYALVNC_DIR/libRoyalVNCKit.so" target/release/
 if [[ -n "${FREERDP_DIR:-}" ]]; then
   # Только .so и их ссылки (cp -P сохраняет цепочку libfoo.so -> libfoo.so.3 -> libfoo.so.3.x).
   find "$FREERDP_DIR/lib" -maxdepth 1 -name '*.so*' -exec cp -P {} target/release/ \;
 fi
 if ! command -v uniffi-bindgen-cs >/dev/null; then
-  cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
+  cargo install --locked uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.9.0+v0.28.3
 fi
 OUT="$ROOT/apps/dotnet/Relaya.Shared/Core"
 mkdir -p "$OUT"
