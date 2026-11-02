@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   hashes:
+    name: "OpenH264 · pin hashes"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

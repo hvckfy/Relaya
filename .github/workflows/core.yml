@@ -19,6 +19,7 @@ permissions:
 
 jobs:
   test:
+    name: "Core · test on ${{ matrix.os }}"
     strategy:
       fail-fast: false
       matrix:
@@ -54,7 +55,7 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo fmt --check
       # Встроенный RDP/VNC: Windows и Linux сейчас, Mac — позже; проверяем, что собирается и на darwin.
-      # Mac-сборка приложения (build-core-macos.sh, ci.yml) фичу не включает.
+      # Mac-сборка приложения (build-core-macos.sh, mac.yml) фичу не включает.
       - name: Test with remote-desktop
         run: cargo test --features remote-desktop
       # RDP на FreeRDP: пока только Windows. FreeRDP — из общего кэша или собирается тут же (Т1: без артефактов).

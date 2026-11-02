@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   check:
+    name: "FreeRDP · new release check"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

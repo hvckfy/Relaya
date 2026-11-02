@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   build:
+    name: "Linux · build (${{ matrix.lang }})"
     # 24.04: toolchain Swift для RoyalVNCKit собран под неё (libxml2.so.2).
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -91,6 +92,7 @@ jobs:
             build/relaya_*.deb
 
   release:
+    name: "Linux · publish release"
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest

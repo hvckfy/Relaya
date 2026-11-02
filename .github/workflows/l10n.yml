@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   check:
+    name: "Localization · translations"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
