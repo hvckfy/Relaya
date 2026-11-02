@@ -1,0 +1,19 @@
+# Weekly dependency updates, grouped so each ecosystem opens at most one PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups: { actions: { patterns: ["*"] } }
+  - package-ecosystem: cargo
+    directory: /core
+    schedule: { interval: weekly }
+    groups: { cargo: { patterns: ["*"] } }
+  - package-ecosystem: nuget
+    directory: /apps/dotnet
+    schedule: { interval: weekly }
+    groups: { nuget: { patterns: ["*"] } }
+  - package-ecosystem: swift
+    directory: /apps/swift
+    schedule: { interval: weekly }
+    groups: { swift: { patterns: ["*"] } }
