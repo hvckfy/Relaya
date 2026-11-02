@@ -2,7 +2,7 @@
 //!
 //! After ssh refuses a login, background calls to that host stop until the user acts: Refresh, a new password or
 //! key, or a successful login. The app and the MCP server are separate processes, so the gate lives in a small
-//! JSON file (`login-gate.json`: alias → reason and time, no secrets) next to the other Relaya state.
+//! JSON file (`login-gate.json`: alias → raw ssh error line and time, no secrets, owner-only) next to the other Relaya state.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -11,7 +11,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::ssh_errors::{ssh_auth_refused, ssh_blocked, ssh_explain};
-use crate::sync::write_atomic;
+use crate::sync::write_private_atomic;
 use crate::CoreError;
 
 /// What one ssh or sftp call says about the login.
@@ -73,6 +73,14 @@ struct Refusal {
     date: String,
 }
 
+/// Owner-only (0600 on Unix): the raw ssh lines name users and addresses.
+fn save(path: &Path, gate: &GateFile) -> Result<(), CoreError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    write_private_atomic(path, &serde_json::to_vec_pretty(gate)?)
+}
+
 fn load(path: &Path) -> GateFile {
     // A missing or damaged file means no host is stopped: the worst case is one more login attempt.
     fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
@@ -99,7 +107,7 @@ pub fn login_gate_close(path: String, alias: String, reason: String) -> Result<(
     }
     let date = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     gate.refused.insert(alias, Refusal { reason, date });
-    write_atomic(path, &serde_json::to_vec_pretty(&gate)?)
+    save(path, &gate)
 }
 
 /// Allows background calls to `alias` again: Refresh, a new password or key, a successful login.
@@ -115,7 +123,7 @@ pub fn login_gate_open(path: String, alias: String) -> Result<(), CoreError> {
     if gate.refused.remove(&alias).is_none() {
         return Ok(());
     }
-    write_atomic(path, &serde_json::to_vec_pretty(&gate)?)
+    save(path, &gate)
 }
 
 /// Records one call's outcome in the gate file; returns the outcome.
@@ -183,7 +191,13 @@ mod tests {
         assert_eq!(login_gate_reason(path.clone(), "web".into()), None);
         assert!(login_gate_close(path.clone(), "db".into(), "x".into()).is_ok());
         assert!(login_gate_open(path.clone(), "db".into()).is_ok());
-        assert_eq!(login_gate_reason(path, "db".into()), None);
+        assert_eq!(login_gate_reason(path.clone(), "db".into()), None);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).map(|m| m.permissions().mode() & 0o777).unwrap_or(0);
+            assert_eq!(mode, 0o600);
+        }
     }
 
     #[test]

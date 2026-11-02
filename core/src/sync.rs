@@ -577,7 +577,7 @@ where
     Ok(changed)
 }
 /// Временный файл рядом → права 0600 → rename: ssh никогда не прочтёт половину конфига, а ключ не будет открыт.
-fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
+pub(crate) fn write_private_atomic(dest: &Path, data: &[u8]) -> Result<(), CoreError> {
     let tmp = dest
         .with_file_name(format!(".{}.relaya-tmp", dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
     fs::write(&tmp, data)?;
