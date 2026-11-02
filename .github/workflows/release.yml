@@ -43,8 +43,11 @@ jobs:
   publish:
     name: "Release · publish"
     needs: [mac, mac-dry-run, windows, linux]
-    # One of the two Mac jobs is always skipped; run when nothing failed or was cancelled.
-    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    # One of the two Mac jobs is always skipped. Run when nothing failed or was cancelled, and outside a PR only
+    # when the signed Mac build really succeeded: a skipped one must not publish an unsigned or partial release.
+    if: >-
+      ${{ !cancelled() && !contains(needs.*.result, 'failure')
+          && (github.event_name == 'pull_request' || needs.mac.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
