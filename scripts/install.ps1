@@ -1,6 +1,9 @@
 # Installs the latest Relaya release (or $env:RELAYA_VERSION) on Windows x64.
-# The installer is checked against the release SHA256SUMS before it runs.
+# The installer is checked against the release SHA256SUMS before it runs. The download keeps its Mark of the Web,
+# so SmartScreen may still ask once for the unsigned installer.
 # Language: $env:RELAYA_LANG = ru|en, default from the Windows UI language.
+# Runs in its own scope: with `irm | iex` nothing (ErrorActionPreference, variables) stays in the user's session.
+& {
 $ErrorActionPreference = "Stop"
 $repo = "hvckfy/Relaya"
 
@@ -34,4 +37,5 @@ try {
     Write-Host "Installed Relaya $ver"
 } finally {
     Remove-Item -Recurse -Force $dir
+}
 }

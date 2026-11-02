@@ -69,7 +69,15 @@ case "$ext" in
     sudo apt-get install -y "$tmp/$name"
     echo "Installed: run relaya" ;;
   AppImage)
-    mkdir -p "$HOME/.local/bin"
-    install -m 0755 "$tmp/$name" "$HOME/.local/bin/relaya"
-    echo "Installed $HOME/.local/bin/relaya" ;;
+    bin="$HOME/.local/bin/relaya"
+    data="${XDG_DATA_HOME:-$HOME/.local/share}"
+    mkdir -p "$HOME/.local/bin" "$data/applications" "$data/icons/hicolor/256x256/apps"
+    install -m 0755 "$tmp/$name" "$bin"
+    # Menu entry and icon from inside the AppImage (the .deb installs its own).
+    (cd "$tmp" && APPIMAGE_EXTRACT_AND_RUN=1 "$bin" --appimage-extract 'app.relaya.Relaya.desktop' >/dev/null \
+      && APPIMAGE_EXTRACT_AND_RUN=1 "$bin" --appimage-extract 'relaya.png' >/dev/null) \
+      || die "cannot read the menu entry from the AppImage"
+    sed "s|^Exec=.*|Exec=$bin %U|" "$tmp/squashfs-root/app.relaya.Relaya.desktop" > "$data/applications/app.relaya.Relaya.desktop"
+    cp "$tmp/squashfs-root/relaya.png" "$data/icons/hicolor/256x256/apps/relaya.png"
+    echo "Installed $bin with a menu entry" ;;
 esac
