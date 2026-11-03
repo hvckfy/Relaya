@@ -27,8 +27,9 @@ internal static class Demo
 
     private static string Prepare()
     {
-        var root = Path.Combine(Path.GetTempPath(), "relaya-demo");
-        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        // A fresh owner-only folder with a unique name: a fixed name in a shared /tmp could be pre-created by
+        // another user (Relaya-audit-security, v0.18.2).
+        var root = Directory.CreateTempSubdirectory("relaya-demo-").FullName;
         var ssh = Path.Combine(root, "ssh");
         Directory.CreateDirectory(ssh);
         Directory.CreateDirectory(Path.Combine(root, "support"));
