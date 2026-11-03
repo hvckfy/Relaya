@@ -31,8 +31,9 @@ internal static class DemoScreenshots
     {
         Directory.CreateDirectory(dir);
         var os = System.OperatingSystem.IsWindows() ? "windows" : "linux";
-        // Hosted Windows runners have a 1024x768 screen: the window must fit it to be captured whole.
-        window.AppWindow.MoveAndResize(new RectInt32 { X = 0, Y = 0, Width = 1024, Height = 740 });
+        // Hosted Windows runners have a 1024x768 screen with a taskbar at the bottom: the window, invisible borders
+        // included, must stay clear of both to be captured clean (E-8).
+        window.AppWindow.MoveAndResize(new RectInt32 { X = 0, Y = 0, Width = 1000, Height = 700 });
         var scenes = new (string Name, System.Action Show)[]
         {
             ("hosts", window.ShowNothing),
