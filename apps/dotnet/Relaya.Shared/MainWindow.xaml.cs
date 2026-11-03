@@ -241,7 +241,7 @@ public sealed partial class MainWindow : Window
         var header = HostsHeader();
         Nav.MenuItems.Add(header is TextBlock t
             ? new NavigationViewItemHeader { Content = t.Text }
-            : new NavigationViewItem { Content = header, SelectsOnInvoked = false, IsTabStop = false });
+            : new NavigationViewItem { Content = header, SelectsOnInvoked = false });
         var shown = AppState.Hosts.Where(h => (query.Length == 0
             || RelayaCoreMethods.FuzzyScoreFields(query, Fields(h)) != null) && (tagFilter == null || h.tags.Contains(tagFilter)));
         foreach (var group in shown.GroupBy(h => h.group ?? "").OrderBy(g => g.Key.Length == 0 ? "" : "~" + g.Key))
