@@ -38,8 +38,8 @@ Everything you set up in Relaya keeps working from Terminal, PowerShell, VS Code
 | macOS · host card | macOS · AI agents |
 |---|---|
 | <img src="https://hvckfy.github.io/Relaya/screenshots/mac-host.png" alt="macOS host card with live status, Docker containers and services"> | <img src="https://hvckfy.github.io/Relaya/screenshots/mac-agents.png" alt="macOS AI agent access per host"> |
-| **Windows · hosts** | **Windows · keys** |
-| <img src="https://hvckfy.github.io/Relaya/screenshots/windows-hosts.png" alt="Windows client: host list"> | <img src="https://hvckfy.github.io/Relaya/screenshots/windows-keys.png" alt="Windows client: keys"> |
+| **Windows · hosts** | **Windows · settings** |
+| <img src="https://hvckfy.github.io/Relaya/screenshots/windows-hosts.png" alt="Windows client: host list"> | <img src="https://hvckfy.github.io/Relaya/screenshots/windows-settings.png" alt="Windows client: settings"> |
 | **Linux · keys** | **Linux · settings** |
 | <img src="https://hvckfy.github.io/Relaya/screenshots/linux-keys.png" alt="Linux client: keys"> | <img src="https://hvckfy.github.io/Relaya/screenshots/linux-settings.png" alt="Linux client: settings"> |
 

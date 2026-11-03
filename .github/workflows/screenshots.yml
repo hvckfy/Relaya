@@ -280,7 +280,7 @@ jobs:
           TAG: ${{ github.event.workflow_run.head_branch }}
         run: |
           # Never replace the published set with a partial one: every README picture must be there (E-1).
-          for f in mac-tiles mac-host mac-agents windows-hosts windows-keys linux-keys linux-settings; do
+          for f in mac-tiles mac-host mac-agents windows-hosts windows-settings linux-keys linux-settings; do
             [ -s "new/$f.png" ] || { echo "::error::missing $f.png, gh-pages left as it is"; exit 1; }
           done
           rm -rf screenshots && mkdir screenshots && mv new/*.png screenshots/
