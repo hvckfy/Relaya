@@ -15,7 +15,19 @@ namespace Relaya.Platform;
 /// </remarks>
 internal static class DemoScreenshots
 {
+    /// <summary>Runs the scenes; any error ends the run with a <c>failed</c> marker that names it (E-3).</summary>
     public static async Task RunAsync(MainWindow window, string dir)
+    {
+        try { await RunScenesAsync(window, dir); }
+        catch (System.Exception e)
+        {
+            System.Console.Error.WriteLine($"screenshots: {e}");
+            File.WriteAllText(Path.Combine(dir, "failed"), e.Message);
+            Microsoft.UI.Xaml.Application.Current.Exit();
+        }
+    }
+
+    private static async Task RunScenesAsync(MainWindow window, string dir)
     {
         Directory.CreateDirectory(dir);
         var os = System.OperatingSystem.IsWindows() ? "windows" : "linux";
