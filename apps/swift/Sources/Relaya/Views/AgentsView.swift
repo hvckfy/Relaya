@@ -12,7 +12,10 @@ struct AgentsView: View {
     @State private var rulesHost: String?
     @State private var logHost = ""
 
-    private var command: String { model.askpassExecutable }
+    // The demo shows the installed path, not wherever this build runs from (a CI runner for screenshots, E-9).
+    private var command: String {
+        RelayaPaths.isDemo ? "/Applications/Relaya.app/Contents/MacOS/Relaya" : model.askpassExecutable
+    }
 
     @State private var addResult: String?
 
