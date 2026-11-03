@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793653717621,
+  "lastUpdate": 1793672202107,
   "repoUrl": "https://github.com/hvckfy/Relaya",
   "entries": {
     "Relaya core": [
@@ -97,6 +97,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "terminal: feed 2000 colored lines",
             "value": 1368.13,
+            "unit": "us"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ruslan.miftakhov@dizzaract.com",
+            "name": "Ruslan",
+            "username": "ruslanmiftakhov-tech"
+          },
+          "committer": {
+            "email": "ruslan.miftakhov@dizzaract.com",
+            "name": "Ruslan",
+            "username": "ruslanmiftakhov-tech"
+          },
+          "distinct": false,
+          "id": "49ae03b51fe7fa73111a14ab085c9af90771ebfe",
+          "message": "README: macOS host card and AI agents screenshots",
+          "timestamp": "2026-11-03T04:24:32+03:00",
+          "tree_id": "7ca1e88a06bb53e96eecb6f15ec645beaa67952b",
+          "url": "https://github.com/hvckfy/Relaya/commit/49ae03b51fe7fa73111a14ab085c9af90771ebfe"
+        },
+        "date": 1793672201336,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ssh_config: parse 500 hosts",
+            "value": 797.04,
+            "unit": "us"
+          },
+          {
+            "name": "fuzzy: rank 500 hosts",
+            "value": 206.14,
+            "unit": "us"
+          },
+          {
+            "name": "diff: 2000 lines, 40 changed",
+            "value": 29306.71,
+            "unit": "us"
+          },
+          {
+            "name": "ssh_errors: explain a failed login",
+            "value": 12.27,
+            "unit": "us"
+          },
+          {
+            "name": "terminal: feed 2000 colored lines",
+            "value": 4004.07,
             "unit": "us"
           }
         ]
