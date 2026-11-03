@@ -20,7 +20,9 @@ enum DemoScreenshots {
             guard let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else {
                 throw Failure("no main window")
             }
-            window.setFrame(NSRect(x: 80, y: 80, width: 1280, height: 800), display: true)
+            // Hosted Mac runners have a 1024x768 screen: the window must fit under the menu bar.
+            let visible = window.screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 740)
+            window.setFrame(NSRect(x: visible.minX, y: visible.minY, width: min(1024, visible.width), height: visible.height), display: true)
             await settle()
             let hosts = model.hosts
 
@@ -112,29 +114,21 @@ enum DemoScreenshots {
         try? await Task.sleep(for: .seconds(seconds))
     }
 
-    /// The real window through `screencapture` (Liquid Glass included); without the screen recording permission
-    /// it saves nothing, so the view's own rendering is the fallback.
+    /// Hands the window to CI: writes `mac-<name>.ready` with its rectangle in screen points (top-left origin)
+    /// and waits for CI's `screencapture -R` to save `mac-<name>.png`. The app itself may not capture the screen
+    /// (no screen recording permission), the runner's shell may.
     private static func shoot(_ window: NSWindow, _ dir: URL, _ name: String) async throws {
         await settle()
         FileHandle.standardError.write(Data("screenshots: \(name)\n".utf8))
         let file = dir.appending(path: "mac-\(name).png")
         try? FileManager.default.removeItem(at: file)
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        p.arguments = ["-x", "-o", "-l\(window.windowNumber)", file.path]
-        try p.run()
-        // Without the screen recording permission screencapture may wait for a prompt nobody answers.
-        for _ in 0..<60 where p.isRunning { try? await Task.sleep(for: .milliseconds(250)) }
-        if p.isRunning { p.terminate() }
-        p.waitUntilExit()
-        let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0
-        if p.terminationStatus == 0, size > 10_000 { return }
-        guard let view = window.contentView?.superview ?? window.contentView,
-            let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
-        else { throw Failure("cannot render \(name)") }
-        view.cacheDisplay(in: view.bounds, to: rep)
-        guard let png = rep.representation(using: .png, properties: [:]) else { throw Failure("cannot encode \(name)") }
-        try png.write(to: file)
-        FileHandle.standardError.write(Data("screenshots: \(name) rendered in-process (screencapture gave \(size) bytes)\n".utf8))
+        let screenHeight = window.screen?.frame.height ?? NSScreen.main?.frame.height ?? 0
+        let f = window.frame
+        let rect = "\(Int(f.minX)) \(Int(screenHeight - f.maxY)) \(Int(f.width)) \(Int(f.height))\n"
+        try rect.write(to: dir.appending(path: "mac-\(name).ready"), atomically: true, encoding: .utf8)
+        for _ in 0..<240 where !FileManager.default.fileExists(atPath: file.path) {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        guard FileManager.default.fileExists(atPath: file.path) else { throw Failure("no capture for \(name)") }
     }
 }

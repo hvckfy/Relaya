@@ -67,8 +67,19 @@ jobs:
           # Through LaunchServices like a user launch: started as a bare binary the app never opened its window.
           open -W -n --stderr "$PWD/shots-log.txt" build/en/Relaya.app --args --demo --screenshots "$PWD/shots" &
           pid=$!
-          # The app quits by itself after the last scene; give it five minutes.
-          for _ in $(seq 300); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          # The app announces each scene with <scene>.ready ("x y width height", top-left origin) and quits after
+          # the last one; the runner's shell may capture the screen, the app may not.
+          for _ in $(seq 1200); do
+            kill -0 "$pid" 2>/dev/null || break
+            for ready in shots/*.ready; do
+              [ -e "$ready" ] || continue
+              read -r x y w h < "$ready" || true
+              png="${ready%.ready}.png"
+              screencapture -x -R "$x,$y,$w,$h" "$png.tmp.png" && mv "$png.tmp.png" "$png"
+              rm -f "$ready"
+            done
+            sleep 0.25
+          done
           cat shots-log.txt
           if kill -0 "$pid" 2>/dev/null; then screencapture -x debug-mac.png || true; kill "$pid"; echo "::error::screenshots timed out"; exit 1; fi
           wait "$pid"
