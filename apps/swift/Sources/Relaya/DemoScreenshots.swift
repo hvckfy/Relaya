@@ -13,7 +13,6 @@ enum DemoScreenshots {
         return URL(fileURLWithPath: args[i + 1], isDirectory: true)
     }()
 
-    /// Runs the scenes one by one; exits with 1 when a window could not be saved, so CI fails visibly.
     /// Set by the first entry (the WindowGroup task or the fallback window): only one run per launch (E-2).
     private static var started = false
 
