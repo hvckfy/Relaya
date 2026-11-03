@@ -82,6 +82,10 @@ jobs:
           done
           cat shots-log.txt
           if kill -0 "$pid" 2>/dev/null; then screencapture -x debug-mac.png || true; kill "$pid"; echo "::error::screenshots timed out"; exit 1; fi
+          # open -W exits with 0 whatever the app returns: trust the markers and the file set instead (E-1).
+          if [ -e shots/failed ]; then echo "::error::$(cat shots/failed)"; exit 1; fi
+          [ -e shots/done ] || { echo "::error::the app quit without finishing"; exit 1; }
+          for s in host tiles keys snippets tunnels agents; do [ -s "shots/mac-$s.png" ] || { echo "::error::missing mac-$s.png"; exit 1; }; done
           wait "$pid"
           ls -l shots
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -141,7 +145,7 @@ jobs:
           $dir = Join-Path $PWD "shots"
           New-Item -ItemType Directory $dir -Force | Out-Null
           $exe = Get-ChildItem apps/dotnet/Relaya.Windows/bin/x64/Release -Recurse -Filter Relaya.exe | Select-Object -First 1
-          $p = Start-Process $exe.FullName -ArgumentList "--demo", "--screenshots", "`"$dir`"" -PassThru
+          $p = Start-Process $exe.FullName -ArgumentList "--demo", "--screenshots", "`"$dir`"" -PassThru -RedirectStandardError shots-log.txt
           $deadline = (Get-Date).AddMinutes(5)
           while (-not (Test-Path "$dir/done") -and (Get-Date) -lt $deadline) {
             foreach ($ready in Get-ChildItem $dir -Filter *.ready) {
@@ -160,6 +164,9 @@ jobs:
           if (-not $p.HasExited) { $p.Kill() }
           if (Test-Path "$dir/failed") { Write-Error (Get-Content "$dir/failed"); exit 1 }
           if (-not (Test-Path "$dir/done")) { Write-Error "screenshots timed out"; exit 1 }
+          foreach ($s in "hosts", "keys", "snippets", "tunnels", "agents", "settings") {
+            if (-not (Test-Path "$dir/windows-$s.png")) { Write-Error "missing windows-$s.png"; exit 1 }
+          }
           Get-ChildItem $dir
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -229,6 +236,7 @@ jobs:
           kill "$pid" 2>/dev/null || true
           if [ -e "$dir/failed" ]; then echo "::error::$(cat "$dir/failed")"; exit 1; fi
           [ -e "$dir/done" ] || { echo "::error::screenshots timed out"; exit 1; }
+          for s in hosts keys snippets tunnels agents settings; do [ -s "$dir/linux-$s.png" ] || { echo "::error::missing linux-$s.png"; exit 1; }; done
           ls -l "$dir"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -271,6 +279,10 @@ jobs:
         env:
           TAG: ${{ github.event.workflow_run.head_branch }}
         run: |
+          # Never replace the published set with a partial one: every README picture must be there (E-1).
+          for f in mac-tiles mac-host mac-agents windows-hosts windows-keys linux-keys linux-settings; do
+            [ -s "new/$f.png" ] || { echo "::error::missing $f.png, gh-pages left as it is"; exit 1; }
+          done
           rm -rf screenshots && mkdir screenshots && mv new/*.png screenshots/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

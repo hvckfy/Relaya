@@ -14,7 +14,14 @@ enum DemoScreenshots {
     }()
 
     /// Runs the scenes one by one; exits with 1 when a window could not be saved, so CI fails visibly.
+    /// Set by the first entry (the WindowGroup task or the fallback window): only one run per launch (E-2).
+    private static var started = false
+
+    /// Runs the scenes one by one and writes `done`, or `failed` with the reason, for CI: `open -W` always
+    /// exits with 0, so the exit code alone would hide a partial run (E-1).
     static func run(_ model: AppModel, into dir: URL) async {
+        guard !started else { return }
+        started = true
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             guard let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else {
@@ -49,9 +56,11 @@ enum DemoScreenshots {
                 model.screen = screen
                 try await shoot(window, dir, name)
             }
+            try "".write(to: dir.appending(path: "done"), atomically: true, encoding: .utf8)
             exit(0)
         } catch {
             FileHandle.standardError.write(Data("screenshots: \(error)\n".utf8))
+            try? "\(error)".write(to: dir.appending(path: "failed"), atomically: true, encoding: .utf8)
             exit(1)
         }
     }
@@ -75,7 +84,7 @@ enum DemoScreenshots {
                 }
                 // On a fresh runner SwiftUI opened no main window at launch (only the menu bar extra), so the
                 // scenes never started; host the same MainView in a window of our own and run them there.
-                if second == 3, !NSApp.windows.contains(where: { $0.canBecomeMain }) { openFallbackWindow(dir) }
+                if second == 3, !started, !NSApp.windows.contains(where: { $0.canBecomeMain }) { openFallbackWindow(dir) }
                 try? await Task.sleep(for: .seconds(1))
             }
         }
