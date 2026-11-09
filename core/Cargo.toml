@@ -26,22 +26,22 @@ rdp-freerdp = ["remote-desktop", "dep:cc"]
 vnc-royal = ["remote-desktop"]
 
 [dependencies]
-uniffi = "0.28"
+uniffi = "0.32"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
-alacritty_terminal = "0.25"
+alacritty_terminal = "0.26"
 regex = "1"
 glob = "0.3"
-thiserror = "1"
-chacha20poly1305 = "0.10"
-pbkdf2 = { version = "0.12", features = ["hmac"] }
-sha2 = "0.10"
-rand = "0.8"
+thiserror = "2"
+chacha20poly1305 = "0.11"
+pbkdf2 = { version = "0.13", features = ["hmac"] }
+sha2 = "0.11"
+rand = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
 
 [build-dependencies]
 cc = { version = "1", optional = true }
