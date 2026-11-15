@@ -167,6 +167,10 @@ public struct KeyInstaller: Sendable {
     /// one failed login instead of six (B-1).
     public static var askpassOptions: [String] { askpassSshOptions() }
 
+    /// Background ssh to a host with an explicit `IdentityFile` offers only that key: ssh-agent's other keys would
+    /// use up the server's `MaxAuthTries` first ("Too many authentication failures"). The rule is the core's.
+    public static func keyOptions(for host: SSHHost) -> [String] { keySshOptions(host: host.rust) }
+
     /// Понятная ошибка ssh — правила в ядре (ssh_explain), общие с терминалом и Windows/Linux (А2).
     static func explain(_ r: ProcessResult) -> String {
         SSHErrorText.describe(r.message, fallback: L("ssh завершился с кодом %@", "\(r.status)"))

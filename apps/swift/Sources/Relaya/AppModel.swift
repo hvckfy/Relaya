@@ -755,6 +755,7 @@ final class AppModel {
         let h = current(host)
         var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10"]
         if multiplex { args += SSHMux.options(alias: h.alias) }
+        args += KeyInstaller.keyOptions(for: h)
         var env: [String: String] = [:]
         var usePassword = false
         if !h.usesKey, keychain.hasPassword(for: h.keychainAccount) {

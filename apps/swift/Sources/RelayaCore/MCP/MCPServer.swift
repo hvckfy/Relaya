@@ -43,6 +43,7 @@ public final class MCPServer {
             log: MCPLog(),
             execute: { host, command, timeout in
                 var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15"]
+                args += KeyInstaller.keyOptions(for: host)
                 var env: [String: String] = [:]
                 if !host.usesKey, keychain.hasPassword(for: host.keychainAccount) {
                     env = KeyInstaller(askpassExecutable: askpassExecutable)
