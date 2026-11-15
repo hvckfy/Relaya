@@ -137,6 +137,21 @@ pub fn askpass_ssh_options() -> Vec<String> {
     o
 }
 
+/// Background ssh calls to a host with an explicit `IdentityFile` offer only that key (`IdentitiesOnly=yes`).
+///
+/// Without it ssh first offers every key in ssh-agent, and a server with the default `MaxAuthTries 6` cuts the login
+/// with "Too many authentication failures" before the configured key's turn. That happens to probes right after
+/// launch, before a terminal login has added the host's key to the agent. A host without `IdentityFile` gets nothing:
+/// there the agent's keys are the only ones ssh has. Interactive terminals keep the user's config as it is.
+#[uniffi::export]
+pub fn key_ssh_options(host: crate::ssh_config::SshHost) -> Vec<String> {
+    if host.identity_file.is_some() || !host.identity_files.is_empty() {
+        vec!["-o".into(), "IdentitiesOnly=yes".into()]
+    } else {
+        Vec::new()
+    }
+}
+
 // MARK: - Удалённые столы
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
@@ -429,6 +444,14 @@ mod sftp_tests {
 #[cfg(test)]
 mod askpass_tests {
     use super::*;
+
+    #[test]
+    fn a_host_with_an_identity_file_offers_only_that_key() {
+        let mut h = crate::ssh_config::SshHost::new("timeweb");
+        assert!(key_ssh_options(h.clone()).is_empty());
+        h.identity_file = Some("~/.ssh/id_ed25519_timeweb".into());
+        assert_eq!(key_ssh_options(h), ["-o", "IdentitiesOnly=yes"]);
+    }
 
     #[test]
     fn background_calls_ask_for_the_password_once() {
