@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793672202107,
+  "lastUpdate": 1794780369362,
   "repoUrl": "https://github.com/hvckfy/Relaya",
   "entries": {
     "Relaya core": [
@@ -146,6 +146,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "terminal: feed 2000 colored lines",
             "value": 4004.07,
+            "unit": "us"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ruslan.miftakhov@dizzaract.com",
+            "name": "Ruslan",
+            "username": "ruslanmiftakhov-tech"
+          },
+          "committer": {
+            "email": "ruslan.miftakhov@dizzaract.com",
+            "name": "Ruslan",
+            "username": "ruslanmiftakhov-tech"
+          },
+          "distinct": false,
+          "id": "6d3f13acc385468a879f411fda9165f725825fbe",
+          "message": "Terminals retry a key host with its own key; OS check respects the gate",
+          "timestamp": "2026-11-16T00:37:49+03:00",
+          "tree_id": "2d48d6add5900b921d353795114e1f3a7617eabf",
+          "url": "https://github.com/hvckfy/Relaya/commit/6d3f13acc385468a879f411fda9165f725825fbe"
+        },
+        "date": 1794780368750,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ssh_config: parse 500 hosts",
+            "value": 560.58,
+            "unit": "us"
+          },
+          {
+            "name": "fuzzy: rank 500 hosts",
+            "value": 170.14,
+            "unit": "us"
+          },
+          {
+            "name": "diff: 2000 lines, 40 changed",
+            "value": 10812.53,
+            "unit": "us"
+          },
+          {
+            "name": "ssh_errors: explain a failed login",
+            "value": 7.45,
+            "unit": "us"
+          },
+          {
+            "name": "terminal: feed 2000 colored lines",
+            "value": 1124.96,
             "unit": "us"
           }
         ]
