@@ -59,6 +59,10 @@ internal static class Askpass
 
     public static void Configure(ProcessStartInfo info, string alias, bool interactive = false)
     {
+        // Background calls to a host with an explicit IdentityFile offer only that key: ssh-agent's other keys would
+        // use up the server's MaxAuthTries first ("Too many authentication failures"). Terminals keep the config.
+        if (!interactive && Data.AppState.Host(alias) is { } host)
+            foreach (var o in uniffi.relaya_core.RelayaCoreMethods.KeySshOptions(host).Reverse<string>()) info.ArgumentList.Insert(0, o);
         if (CanAutofill(alias))
         {
             // B-1: one password prompt per background process, so a wrong saved password costs one failed login,
