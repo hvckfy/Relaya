@@ -180,7 +180,11 @@ internal sealed class SshSession : IDisposable
             // Только пароль: сохранён пароль, а ключа у хоста нет — ssh-agent не перебирает ключи,
             // и сервер не рвёт вход с «Too many authentication failures» до запроса пароля.
             var host = Relaya.Data.AppState.Host(alias);
-            var options = passwordOnly || Askpass.PasswordOnly(alias)
+            // After "Too many authentication failures" a host with IdentityFile retries with its own key only:
+            // a password-only retry there was a second certain failure for fail2ban.
+            var keyRetry = passwordOnly && host != null && (host.identityFile != null || host.identityFiles.Count > 0);
+            var options = keyRetry ? uniffi.relaya_core.RelayaCoreMethods.KeySshOptions(host!).ToArray()
+                : passwordOnly || Askpass.PasswordOnly(alias)
                 ? uniffi.relaya_core.RelayaCoreMethods.PasswordOnlyOptions().ToArray()
                 : [];
             string[] argv = [ssh, .. options, alias];

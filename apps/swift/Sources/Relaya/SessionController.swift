@@ -59,7 +59,9 @@ final class SessionController {
     /// Отпечаток нового сервера, ждущий решения пользователя.
     var hostKeyPrompt: String?
     var hostKeyChanged = false
-    /// Сервер оборвал вход после перебора ключей — переподключились сразу по паролю.
+    /// The server cut the login after ssh-agent's keys: reconnected once with the host's own key only
+    /// (`IdentitiesOnly`), or password only for a host without `IdentityFile`. A password-only retry on a key host
+    /// was a second certain failure for fail2ban.
     private(set) var passwordOnly = false
     /// ssh спрашивает пароль, а в Keychain его нет.
     var passwordPromptWithoutSaved = false
@@ -511,7 +513,9 @@ struct TerminalView: NSViewRepresentable {
         view.onOpenServerPort = { [weak controller] port in controller?.onOpenServerPort?(port) }
         let autoReconnect = settings.autoReconnect
         view.onExit = { [weak controller] code in controller?.processEnded(code: code, autoReconnect: autoReconnect) }
-        let options = controller.passwordOnly ? KeyInstaller.passwordOnlyOptions : []
+        let host = controller.host
+        let options =
+            !controller.passwordOnly ? [] : host.usesKey ? KeyInstaller.keyOptions(for: host) : KeyInstaller.passwordOnlyOptions
         if RelayaPaths.isDemo {
             // Демо: локальная оболочка с приглашением «как на сервере», без сетевых подключений.
             view.startProcess(

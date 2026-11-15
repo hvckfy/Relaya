@@ -494,7 +494,8 @@ final class AppModel {
             self.broadcast(data, from: controller)
         }
         let session = Session(kind: .terminal(controller))
-        if host.os == nil, !RelayaPaths.isDemo { Task { await detectOS(for: host.alias) } }
+        // Not after a refused login: this separate ssh would be one more failure for fail2ban (B-4).
+        if host.os == nil, !RelayaPaths.isDemo, loginRefused[host.alias] == nil { Task { await detectOS(for: host.alias) } }
         sessions.append(session)
         activeSessionID = session.id
     }
@@ -1126,7 +1127,7 @@ final class AppModel {
         let secret: KeyInstaller.SecretRef? =
             keychain.hasPassword(for: host.keychainAccount) && SecretGate.shared.isUnlocked
             ? .init(store: keychain, account: host.keychainAccount, kind: .password, alias: host.alias) : nil
-        if let os = await installer.detectOS(alias: alias, password: secret) {
+        if let os = await installer.detectOS(alias: alias, password: secret, keyOptions: KeyInstaller.keyOptions(for: host)) {
             setOS(os, for: alias, onlyIfUnknown: false)
         }
     }

@@ -112,8 +112,10 @@ public struct KeyInstaller: Sendable {
         #"sh -c 'umask 077; read -r k || exit 1; add() { mkdir -p "${1%/*}" && touch "$1" && chmod 600 "$1" && { grep -qxF "$k" "$1" 2>/dev/null || printf "%s\n" "$k" >> "$1"; }; }; add "$HOME/.ssh/authorized_keys" && chmod 700 "$HOME/.ssh" || exit 1; if [ "$(id -u)" = 0 ] && [ -d /etc/dropbear ]; then add /etc/dropbear/authorized_keys || exit 1; fi'"#
 
     /// Определяет ОС сервера отдельным неинтерактивным входом (ключ, агент или пароль из Keychain).
-    public func detectOS(alias: String, password: SecretRef?) async -> ServerOS? {
+    /// - Parameter keyOptions: `keyOptions(for:)` of the host, so ssh-agent's other keys do not use up `MaxAuthTries`.
+    public func detectOS(alias: String, password: SecretRef?, keyOptions: [String] = []) async -> ServerOS? {
         var args = ["-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=10", "-o", "NumberOfPasswordPrompts=1"]
+        args += keyOptions
         var env: [String: String] = [:]
         if let password {
             env = askpassEnvironment(password)
