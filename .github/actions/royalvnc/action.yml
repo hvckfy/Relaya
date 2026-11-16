@@ -30,7 +30,7 @@ runs:
     - name: Cache Swift (Linux)
       if: runner.os == 'Linux'
       id: swiftcache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/swift-toolchain
         key: swift-${{ inputs.swift }}-${{ runner.os }}-ubuntu24.04-${{ inputs.swift-sha256 }}
@@ -49,9 +49,9 @@ runs:
           rm "$RUNNER_TEMP/swift.tar.gz"
         fi
         echo "$HOME/swift-toolchain/usr/bin" >> "$GITHUB_PATH"
-    - uses: compnerd/gha-setup-vsdevenv@f1ba60d553a3216ce1b89abe0201213536bc7557 # v6
+    - uses: compnerd/gha-setup-vsdevenv@452f99effa381b81c025ccfbdccaca509bff1b29 # v7
       if: runner.os == 'Windows'
-    - uses: compnerd/gha-setup-swift@581df1ffa3f3e786ddc73ff37364ee231f9644c5 # v0.3.0
+    - uses: compnerd/gha-setup-swift@9ff1ee4c44888c5817fc14d1b257ac8cabb4935f # v0.5.1
       if: runner.os == 'Windows'
       with:
         branch: swift-${{ inputs.swift }}-release
@@ -65,7 +65,7 @@ runs:
         echo "id=$id" >> "$GITHUB_OUTPUT"
     - name: Cache RoyalVNCKit
       id: cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/royalvnc-out
         key: royalvnc-${{ inputs.commit }}-swift-${{ steps.toolchain.outputs.id }}-${{ runner.os }}-macos15
